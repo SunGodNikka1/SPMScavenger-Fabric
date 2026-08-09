@@ -53,7 +53,18 @@ public enum ExecutionBlocker {
     CAPABILITY_MISSING(BlockerClass.HARD, MiningProjectEnd.TOOL_FAILURE),
 
     /** Admissible, but another non-critical goal owns {@code MOVE}. Arbitration is MI-14C2. */
-    CONTENTION(BlockerClass.CONTENTION, MiningProjectEnd.LEASE_EXPIRED);
+    CONTENTION(BlockerClass.CONTENTION, MiningProjectEnd.LEASE_EXPIRED),
+
+    /**
+     * Cooperative Resource Handoff — a downstream consumer is executing on the project's behalf.
+     *
+     * <p>Never revokes, and pauses the progress clock. The invariant it exists for:
+     * <b>productive downstream work must never age the upstream executor's no-progress lease.</b>
+     * Without it, a mob doing exactly what Tunnel Search wanted — walking to the diamond the tunnel
+     * exposed and mining the vein — spends {@code PROGRESS_LEASE_TICKS} recording no tunnel
+     * progress, and the project is revoked {@code NO_PROGRESS} mid-success.
+     */
+    COOPERATIVE_WORK(BlockerClass.PROTECTED_PAUSE, null);
 
     /** How the control plane should respond, independent of the specific cause. */
     public enum BlockerClass {

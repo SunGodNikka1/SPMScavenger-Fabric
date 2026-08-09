@@ -20,6 +20,16 @@ public enum MoveHolderClassification {
     ORDINARY_HOST_WORK,
     /** Unclassified {@code MOVE} owner — must not silently permit healthy execution. */
     UNKNOWN_MOVE_HOLDER,
+    /**
+     * Cooperative Resource Handoff — a participating goal that holds the executor's flags while
+     * doing work the <em>active project wants done</em>.
+     *
+     * <p>Distinct from {@link #PARTICIPATING_YIELD} (a chore competing with mining) and from
+     * {@link #NOT_MOVE_HOLDER} (nothing in the way). Tunnel Search exposes ore so that
+     * {@code GatherResourcesGoal} can take it; while gather runs, tunnelling is not blocked, not
+     * failing, and not contending — it is being served.
+     */
+    COOPERATIVE_PROJECT_WORK,
     /** Does not intersect the designated executor's required flags. */
     NOT_MOVE_HOLDER
 }
