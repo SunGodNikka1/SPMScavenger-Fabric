@@ -26,7 +26,7 @@ class ToolTierPolicyTest {
     void lootedStonePickSkipsUpgradeAtStoneCap() {
         SimpleContainer backpack = new SimpleContainer(BACKPACK_SIZE);
         backpack.setItem(0, new ItemStack(Items.STONE_PICKAXE));
-        ScavengerConfig cfg = new ScavengerConfig();
+        ScavengerConfig cfg = stoneCapConfig();
 
         assertFalse(ToolTierPolicy.needsPickUpgrade(backpack, cfg));
         assertEquals(ToolTier.STONE, ToolTierPolicy.tierOfPick(backpack));
@@ -36,7 +36,7 @@ class ToolTierPolicyTest {
     void woodOnlyBackpackNeedsStonePickWhenCapIsStone() {
         SimpleContainer backpack = new SimpleContainer(BACKPACK_SIZE);
         backpack.setItem(0, new ItemStack(Items.WOODEN_PICKAXE));
-        ScavengerConfig cfg = new ScavengerConfig();
+        ScavengerConfig cfg = stoneCapConfig();
 
         assertTrue(ToolTierPolicy.needsPickUpgrade(backpack, cfg));
     }
@@ -58,7 +58,7 @@ class ToolTierPolicyTest {
         ItemStack broken = new ItemStack(Items.STONE_PICKAXE);
         broken.setDamageValue(broken.getMaxDamage());
         backpack.setItem(0, broken);
-        ScavengerConfig cfg = new ScavengerConfig();
+        ScavengerConfig cfg = stoneCapConfig();
 
         assertTrue(ToolTierPolicy.needsPickUpgrade(backpack, cfg));
     }
@@ -66,7 +66,7 @@ class ToolTierPolicyTest {
     @Test
     void mainHandPickCountsTowardOwnership() {
         SimpleContainer backpack = new SimpleContainer(BACKPACK_SIZE);
-        ScavengerConfig cfg = new ScavengerConfig();
+        ScavengerConfig cfg = stoneCapConfig();
         ItemStack stonePick = new ItemStack(Items.STONE_PICKAXE);
 
         assertFalse(ToolTierPolicy.needsPickUpgrade(backpack, stonePick, cfg));
@@ -77,7 +77,7 @@ class ToolTierPolicyTest {
         SimpleContainer backpack = new SimpleContainer(BACKPACK_SIZE);
         backpack.setItem(0, new ItemStack(Items.STONE_PICKAXE));
         backpack.setItem(1, new ItemStack(Items.STONE_AXE));
-        ScavengerConfig cfg = new ScavengerConfig();
+        ScavengerConfig cfg = stoneCapConfig();
 
         assertFalse(ToolTierPolicy.cobbleBelowTarget(backpack, cfg));
     }
@@ -86,7 +86,7 @@ class ToolTierPolicyTest {
     void cobbleTargetAppliesWhileStoneUpgradePending() {
         SimpleContainer backpack = new SimpleContainer(BACKPACK_SIZE);
         backpack.setItem(0, new ItemStack(Items.WOODEN_PICKAXE));
-        ScavengerConfig cfg = new ScavengerConfig();
+        ScavengerConfig cfg = stoneCapConfig();
 
         assertTrue(ToolTierPolicy.cobbleBelowTarget(backpack, cfg));
     }
@@ -111,7 +111,7 @@ class ToolTierPolicyTest {
     void u9b_goldenAxeStillNeedsStoneUpgradeAtStoneCap() {
         SimpleContainer backpack = new SimpleContainer(BACKPACK_SIZE);
         backpack.setItem(0, new ItemStack(Items.GOLDEN_AXE));
-        ScavengerConfig cfg = new ScavengerConfig();
+        ScavengerConfig cfg = stoneCapConfig();
 
         assertEquals(ToolTier.WOOD, ToolTierPolicy.tierOfAxe(Items.GOLDEN_AXE));
         assertTrue(ToolTierPolicy.needsAxeUpgrade(backpack, cfg));
@@ -122,7 +122,7 @@ class ToolTierPolicyTest {
     void goldenPickAtStoneCapStillNeedsStoneUpgrade() {
         SimpleContainer backpack = new SimpleContainer(BACKPACK_SIZE);
         backpack.setItem(0, new ItemStack(Items.GOLDEN_PICKAXE));
-        ScavengerConfig cfg = new ScavengerConfig();
+        ScavengerConfig cfg = stoneCapConfig();
 
         assertTrue(ToolTierPolicy.needsPickUpgrade(backpack, cfg));
     }
@@ -135,7 +135,7 @@ class ToolTierPolicyTest {
     void u11a_equippedStonePickPlusBackpackStoneAxeStopsCobbleDemand() {
         SimpleContainer backpack = new SimpleContainer(BACKPACK_SIZE);
         backpack.setItem(0, new ItemStack(Items.STONE_AXE));
-        ScavengerConfig cfg = new ScavengerConfig();
+        ScavengerConfig cfg = stoneCapConfig();
         ItemStack stonePick = new ItemStack(Items.STONE_PICKAXE);
 
         assertTrue(ToolTierPolicy.cobbleBelowTarget(backpack, cfg));
@@ -147,7 +147,7 @@ class ToolTierPolicyTest {
     void u11b_woodenPickInHandDoesNotStopCobbleDemand() {
         SimpleContainer backpack = new SimpleContainer(BACKPACK_SIZE);
         backpack.setItem(0, new ItemStack(Items.WOODEN_AXE));
-        ScavengerConfig cfg = new ScavengerConfig();
+        ScavengerConfig cfg = stoneCapConfig();
         ItemStack woodenPick = new ItemStack(Items.WOODEN_PICKAXE);
 
         assertTrue(ToolTierPolicy.cobbleBelowTarget(backpack, woodenPick, cfg));
@@ -177,5 +177,12 @@ class ToolTierPolicyTest {
 
         assertTrue(ToolTierPolicy.needsPickUpgrade(
                 backpack, ItemStack.EMPTY, broken, cfg));
+    }
+
+    private static ScavengerConfig stoneCapConfig() {
+        ScavengerConfig cfg = new ScavengerConfig();
+        cfg.maxPickTier = ToolTier.STONE;
+        cfg.maxAxeTier = ToolTier.STONE;
+        return cfg;
     }
 }

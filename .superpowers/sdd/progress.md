@@ -70,6 +70,7 @@ safety pause; player-order prevention/revocation; pre-start pause NBT v4; 400-ti
 C3-F1…F7; 321 tests/clean build; MAIBS static PASS; runtime unverified). Post-GREEN review also
 repaired a same-observer CommandedAction revoke→reassign loop. No Tunnel Search work performed.
 
-GA-OPINION: RFC created (`PROPOSED` / deferred) — `plans/RFC-ADAPTIVE-OPINION-MOOD-AND-ENGAGEMENT.md`; author Agent_ChatGPT; no implementation
+GA-OPINION: RFC `RESEARCHING` — GAO-0 evidence pass started; brainstorm + ActivityClass map in
+`plans/RFC-ADAPTIVE-OPINION-MOOD-AND-ENGAGEMENT.md`; PD-GAO-01…04 open; no implementation.
 
 No commits. No Minecraft launches (separate approval required).

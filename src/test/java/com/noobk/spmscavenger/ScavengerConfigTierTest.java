@@ -22,7 +22,15 @@ class ScavengerConfigTierTest {
         assertEquals(ToolTier.DIAMOND, cfg.maxAxeTier);
     }
 
-    /** Null caps still fail closed to the highest implemented craft tier. */
+    /** Fresh config targets diamond progression when tool crafting is enabled. */
+    @Test
+    void freshDefaultsTargetDiamond() {
+        ScavengerConfig cfg = new ScavengerConfig();
+        assertEquals(ToolTier.DIAMOND, cfg.maxPickTier);
+        assertEquals(ToolTier.DIAMOND, cfg.maxAxeTier);
+    }
+
+    /** Null caps still fail closed to the conservative default, not the field default. */
     @Test
     void u10b_nullCapsFailClosedToTheDefault() {
         ScavengerConfig cfg = new ScavengerConfig();

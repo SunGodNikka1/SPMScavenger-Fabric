@@ -9,13 +9,13 @@
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
 | **Mode** | `PLANNING` |
-| **Status** | `PROPOSED` — deferred; no implementation authorized |
+| **Status** | `RESEARCHING` — GAO-0 taxonomy draft complete; GAO-0b schema + GAO-1 sketch next; no implementation authorized |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
-| **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); SPM `DispositionResolver`, `FollowLovedOneGoal` |
+| **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
-| **Peer review** | Pending |
-| **Last update** | 2026-08-09 |
+| **Peer review** | Agent_Cursor (2026-08-09 brainstorm + GAO-0; continuation #2) |
+| **Last update** | 2026-08-09 (brainstorm continuation #2) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -38,6 +38,37 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 **Hard rule (locked proposal):** Opinion influences **preference among valid solutions**; it never removes **competence** or vetoes **mandatory** survival, progression, combat, or commands.
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
+
+**Nearest frontier:** Lock **D-GAO-011** (reuse `MoveHolderClassifier`); finalize **GAO-0b** `ExperienceEvent` enum + unit-test vectors; sketch **GAO-1** decay cadence; user input on **PD-GAO-01…04**. Implementation remains unauthorized until explicit **Begin GAO-0**.
+
+---
+
+## Brainstorming
+
+Early candidates from Agent_Cursor brainstorm (2026-08-09). Serious items promoted to stable topics below.
+
+| ID | Idea | Verdict |
+| --- | --- | --- |
+| B-01 | Reuse `MoveHolderClassifier` as GAO-0 activity oracle | **PROMOTE** → GAO-0 topic |
+| B-02 | Replace `ExplorationReadiness.idleWorkTicks` with mood | **REJECT** — duplicates unlock path; mood should *feed* readiness thresholds |
+| B-03 | `ExperienceEvent` bus from mining/gather/explore terminals | **PROMOTE** → Experience hooks topic |
+| B-04 | `DiscretionaryIntent` record consumed by existing goals | **PROMOTE** → architecture topic |
+| B-05 | Campfire + shelter + night = REST not IDLE | **PROMOTE** → REST topic |
+| B-06 | Personality = UUID-seeded noise on repetition decay | **DEFER** → GAO-7 |
+| B-07 | New `BoredWanderGoal` at priority 4 | **REJECT** — D-GAO-005 |
+| B-08 | Opinion reads `WorkDemandPolicy` directly | **REJECT** — violates D-GAO-001; only directors emit mandatory work |
+| B-09 | Trait display via JADE/nameplate mood band | **DEFER** → observable expression |
+| B-10 | Opinion chooses cave vs tunnel when both legitimate | **PROMOTE** — aligns with MI integration example |
+| B-11 | Merge `ExplorationActivityGoal` idle scan into `ActivityObservationService` | **PROMOTE** — one observer, two predicates (idle vs work) |
+| B-12 | `AnticsGoal` = gen-0 observable expression, not discretionary intent | **PROMOTE** — extends deferred UX topic |
+| B-13 | Staggered 10-tick observation cadence (match `ExplorationActivityGoal`) | **PROMOTE** — perf + SPM parity |
+| B-14 | `ExperienceEvent` from `ExplorationReadiness.consume` → `EXPEDITION_UNLOCKED` | **PROMOTE** — GAO-0b |
+| B-15 | Boredom decays during `FollowLovedOneGoal` / greet windows | **PROMOTE** — social is not idle |
+| B-16 | Separate **engagement channel** from MI-14 lease/project clocks | **PROMOTE** — avoids C3 shadowing lesson |
+| B-17 | `CampfireGoal` = REST for affect, meaningful-work for expedition unlock | **PROMOTE** — dual predicate |
+| B-18 | `AnticsGoal` + flagless observers = `PASSIVE_COSMETIC` never idle | **PROMOTE** — GAO-0 row |
+| B-19 | `DiscretionaryIntent` TTL + invalidate on mandatory work | **PROMOTE** — hierarchy safety |
+| B-20 | Trait presets map to `PersonalityModel` noise on event deltas only | **PROMOTE** — GAO-7 seed |
 
 ---
 
@@ -263,9 +294,303 @@ After 2 in-game days without exploring, repetition penalty decays.
 
 ---
 
+## Topic: GAO-0 — Activity taxonomy & observation (`RESEARCHING`)
+
+**Status:** `RESEARCHING` — SPM + addon goal map drafted 2026-08-09 (Agent_Cursor); consolidation design pending
+
+GAO-0 must answer: *what activity is this mob doing right now, and is that IDLE, REST, MANDATORY, or DISCRETIONARY?*
+
+### Seed: MI-14 already classifies running goals (`CONFIRMED`)
+
+`MoveHolderClassifier` (`mining/MoveHolderClassifier.java`) already walks the live `GoalSelector` and maps running goals to lease/arbitration meaning without compiling against SPM:
+
+| `MoveHolderClassification` | Example goals (suffix / type) | Opinion `ActivityClass` (proposed) |
+| --- | --- | --- |
+| `NOT_MOVE_HOLDER` | Flagless helpers (`PlayerMobDoorGoal`, `DigThroughGoal`) | `PASSIVE_HELPER` — does not count as meaningful work |
+| `PROTECTED_SAFETY_RECOVERY` | `EnvironmentalEscapeGoal`, `SeekShelterGoal`, `FireBucketGoal`, `FleeFromCategoryGoal`, `TrainRecoveryGoal` | `MANDATORY_SAFETY` |
+| `PROTECTED_PLAYER_ORDER` | `CommandedActionGoal`, `StayNearGoal` | `MANDATORY_COMMAND` |
+| `PROTECTED_LOW_FOOD` | `EatFoodGoal` | `MANDATORY_SURVIVAL` |
+| `PROTECTED_FINITE` | `SkepticalWatchGoal`, `FriendlyGreetGoal`, `DoorOperationGoal` | `SOCIAL_REFLEX` — meaningful, not idle |
+| `PROTECTED_COMBAT` | `WeaponAwareAttackGoal`, TNT/crystal combat | `MANDATORY_COMBAT` |
+| `ORDINARY_HOST_WORK` | `FollowLovedOneGoal`, `SeekAmmoGoal` | `SOCIAL_TRAVEL` / `COMBAT_PREP` |
+| `COOPERATIVE_PROJECT_WORK` | `GatherResourcesGoal` during tunnel handoff | `PRODUCTIVE_COOP` — not idle |
+| `UNKNOWN_MOVE_HOLDER` | Unmapped addon/host goal | `UNKNOWN_ACTIVE` — fail safe, not idle |
+| Designated mining consumer | `ControlledDescentGoal`, `TunnelSearchGoal`, cave handoff explore | `PROJECT_EXECUTION` |
+
+**Recommendation (D-GAO-011):** GAO-0 defines `ActivityObservationService` as a **thin wrapper** over `MoveHolderClassifier` + addon goal-kind mapping — do **not** fork a second classifier.
+
+### SPM host goal map (`CONFIRMED` — `PlayerMobEntity#registerGoals`, v0.86.0)
+
+| Pri | Goal | Flags / notes | `ActivityClass` | `MoveHolderClassification` |
+| ---: | --- | --- | --- | --- |
+| 0 | `FloatGoal` | JUMP | `PASSIVE_HELPER` | `NOT_MOVE_HOLDER` |
+| 0 | `FireBucketGoal` | MOVE | `MANDATORY_SAFETY` | `PROTECTED_SAFETY_RECOVERY` |
+| 1 | `CommandedActionGoal` | MOVE+LOOK | `MANDATORY_COMMAND` | `PROTECTED_PLAYER_ORDER` |
+| 1 | `TrainRecoveryGoal` | MOVE | `MANDATORY_SAFETY` | `PROTECTED_SAFETY_RECOVERY` |
+| 1 | `FleeFromCategoryGoal` | MOVE | `MANDATORY_SAFETY` | `PROTECTED_SAFETY_RECOVERY` |
+| 1 | `SkepticalWatchGoal` | LOOK | `SOCIAL_REFLEX` | `PROTECTED_FINITE` |
+| 1 | `FriendlyGreetGoal` | MOVE+LOOK | `SOCIAL_REFLEX` | `PROTECTED_FINITE` |
+| 1 | `PlayerMobDoorGoal` | none | `PASSIVE_HELPER` | `NOT_MOVE_HOLDER` |
+| 1 | `DoorOperationGoal` | MOVE+LOOK | `SOCIAL_REFLEX` | `PROTECTED_FINITE` |
+| 1 | `BlockArrowsGoal` | none | `COMBAT_PREP` | `NOT_MOVE_HOLDER` |
+| 1 | `DigThroughGoal` | none | `PASSIVE_HELPER` | `NOT_MOVE_HOLDER` |
+| 2 | `TntCombatGoal` / `EndCrystalCombatGoal` | MOVE | `MANDATORY_COMBAT` | `PROTECTED_COMBAT` |
+| 2 | `SeekAmmoGoal` | MOVE | `COMBAT_PREP` | `ORDINARY_HOST_WORK` |
+| 2 | `WeaponAwareAttackGoal` | MOVE+LOOK | `MANDATORY_COMBAT` | `PROTECTED_COMBAT` (when target) |
+| 2 | `FollowLovedOneGoal` | MOVE | `SOCIAL_TRAVEL` | `ORDINARY_HOST_WORK` |
+| 2 | `StayNearGoal` | MOVE | `MANDATORY_COMMAND` | `PROTECTED_PLAYER_ORDER` |
+| 3 | `EatFoodGoal` | LOOK only | `MANDATORY_SURVIVAL` | `PROTECTED_LOW_FOOD` |
+| 3 | `RaidContainersGoal` | MOVE | `SCAVENGE_LOOT` | `UNKNOWN_MOVE_HOLDER`* |
+| 3 | `RaidArmorStandsGoal` | MOVE | `SCAVENGE_LOOT` | `UNKNOWN_MOVE_HOLDER`* |
+| 3 | `CollectFloorItemsGoal` | MOVE | `SCAVENGE_LOOT` | `UNKNOWN_MOVE_HOLDER`* |
+| 6 | `HarvestCropsGoal` | MOVE | `FARMING` | `UNKNOWN_MOVE_HOLDER`* |
+| 7 | `AdvanceCarriageGoal` / `CrossGroupGapGoal` | MOVE | `DUNGEON_TRAIN` | `UNKNOWN_MOVE_HOLDER`* |
+| 8 | `WaterAvoidingRandomStrollGoal` | MOVE | `IDLE_CANDIDATE` | unmapped host stroll |
+| 9 | `LookAtPlayerGoal` | LOOK | `PASSIVE_COSMETIC` | `NOT_MOVE_HOLDER` |
+| 10 | `RandomLookAroundGoal` | LOOK | `PASSIVE_COSMETIC` | `NOT_MOVE_HOLDER` |
+
+\* GAO-0 follow-up: extend `MoveHolderClassifier` suffix map for raid/harvest/train goals so they are not `UNKNOWN_MOVE_HOLDER` during mining lease scans — orthogonal to Opinion but same taxonomy file.
+
+### Addon goal map (`CONFIRMED` — `SpmScavenger.java` ENTITY_LOAD)
+
+| Pri | Goal | `ActivityClass` | Notes |
+| ---: | --- | --- | --- |
+| 0 | `EnvironmentalEscapeGoal` | `MANDATORY_SAFETY` | |
+| 2 | `SeekShelterGoal` | `MANDATORY_SAFETY` / **REST** when arrived + night | dual predicate (B-17) |
+| 3 | `GatherResourcesGoal` / `CraftTorchesGoal` / `SmeltAtFurnaceGoal` | `PRODUCTIVE_COOP` or `SCAVENGE_WORK` | cooperative when MI handoff |
+| 3 | `ControlledDescentGoal` / `TunnelSearchGoal` | `PROJECT_EXECUTION` | MI-14 designated consumers |
+| 4 | `PlaceTorchGoal` | `MAINTENANCE` | project-adjacent |
+| 7 | `CampfireGoal` | **REST** (affect) / meaningful-work (expedition unlock) | B-17 |
+| 8 | `ExploringGoal` | `EXPEDITION` | not idle |
+| 9 | `TrackedLocalWanderGoal` | `IDLE_CANDIDATE` | feeds boredom |
+| 9 | `ExplorationActivityGoal` | `PASSIVE_OBSERVER` | flagless; never idle |
+| 9 | `AnticsGoal` | `PASSIVE_COSMETIC` | flagless mimicry (B-12) |
+
+### Proto-observer already shipped (`CONFIRMED`)
+
+`ExplorationActivityGoal` (`goal/ExplorationActivityGoal.java`) already performs scheduler-wide scans every 10 ticks:
+
+- Unknown running goals → `recordMeaningfulWork()` (fail-safe — **does not** recreate MI-14C2-R2).
+- Only `TrackedLocalWanderGoal`, host `RandomStrollGoal`, look goals, `AnticsGoal`, and self → `recordIdleTicks(10)`.
+- `FollowLovedOneGoal` and raid goals → meaningful work (`CONFIRMED` by control flow).
+
+**Recommendation (D-GAO-015):** GAO-0 **refactors** this loop into `ActivityObservationService` rather than adding a second scanner. `ExplorationReadiness` keeps calling the same predicates; Opinion adds affect side-effects on the same tick.
+
+### Dual predicates — same scan, different consumers (`PROPOSED`)
+
+One observation pass must feed **three** derived booleans (B-11, B-17):
+
+| Predicate | Consumer | True when |
+| --- | --- | --- |
+| `meaningfulWorkForExpedition()` | `ExplorationReadiness` | Any non-cosmetic running goal except wander/look/antics (current behavior) |
+| `discretionaryIdleCandidate()` | `AffectiveState` boredom rise | Only `IDLE_CANDIDATE` + cosmetic classes active |
+| `resting()` | REST band / slow boredom | `CampfireGoal` or arrived `SeekShelterGoal` + safe/night context |
+
+**Must not happen:** Campfire classified as `discretionaryIdleCandidate` (would spike boredom at a cozy fire).
+
+**NOT FOUND probes (Opinion-specific):**
+
+1. `OpinionSystem` / `ActivityObservationService` — **NOT FOUND** in `src/` (`grep`).
+2. `DiscretionaryIntent` — **NOT FOUND** in `src/`.
+3. `ExperienceEvent` — **NOT FOUND** in `src/`.
+
+### Idle vs REST detection (`PROPOSED` — updated)
+
+```text
+scan GoalSelector (host + addon), staggered every 10 ticks
+
+if any ActivityClass in {MANDATORY_*, PROJECT_EXECUTION, PRODUCTIVE_COOP,
+                         SOCIAL_TRAVEL, SCAVENGE_*, FARMING, EXPEDITION}
+    → NOT discretionary idle
+
+if CampfireGoal running OR (SeekShelter arrived AND night/safe)
+    → REST (boredom rises slowly; engagement may tick up mildly — PD-GAO-02)
+
+if only {IDLE_CANDIDATE, PASSIVE_COSMETIC, PASSIVE_OBSERVER} running
+    → discretionaryIdleCandidate (boredom may rise)
+
+if FollowLovedOneGoal running
+    → SOCIAL_TRAVEL; boredom flat or decays (B-15); never emit EXPLORE intent (GAO-M2)
+```
+
+**Must not happen:** `FollowLovedOneGoal` classified as idle because addon goals are inactive (GAO-OBSERVE).
+
+---
+
+## Topic: Experience events — mood inputs without new goals (`PROPOSED`)
+
+**Status:** `PROPOSED` (Agent_Cursor brainstorm)
+
+Opinion should learn from **terminals and milestones** already emitted by shipped systems — not poll block state.
+
+| Source (shipped) | Event hook (`PROPOSED`) | Affect deltas |
+| --- | --- | --- |
+| `MiningDirector.markExecutionProgress` | `BLOCK_BROKEN`, `STAIR_STEP`, `HANDOFF_EMITTED` | engagement +, repetition +, novelty ± |
+| `MiningProjectEnd` | `CAVE_FOUND`, `HANDOFF_TUNNEL_SEARCH`, `NO_PROGRESS` | satisfaction ±, stress ± |
+| `ExposureOpportunity` take / vein idle timeout | `ORE_ACQUIRED`, `VEIN_SESSION_END` | satisfaction +, boredom − |
+| `ExploringGoal` stage complete | `EXPEDITION_STAGE` | novelty +, repetition + |
+| `ExploringGoal` companion invite | `SOCIAL_EXPEDITION` | sociability channel + |
+| `GatherResourcesGoal` harvest | `RESOURCE_HARVEST` | materialism + |
+| SPM `FriendlyGreetGoal` / combat end | `SOCIAL_INTERACTION` | stress − / + via `feelingToward` |
+
+**Recommendation (D-GAO-012):** Single immutable `ExperienceEvent` record + `OpinionMemory.apply(ExperienceEvent)` — subscribers call from existing code paths; no parallel scanners.
+
+### GAO-0b — `ExperienceEvent` schema draft (`PROPOSED`)
+
+```text
+ExperienceEvent {
+  ExperienceKind kind;
+  long gameTime;
+  float engagementDelta;
+  float boredomDelta;
+  float satisfactionDelta;
+  float stressDelta;
+  float noveltyDelta;
+  Optional<ActivityKind> activity;   // ACTIVITY opinions only in GAO-2
+  Optional<BlockPos> place;          // GAO-5
+  Optional<UUID> entity;             // GAO-6 — utility only, not relationship authority
+}
+```
+
+| `ExperienceKind` | Emitter (shipped) | Notes |
+| --- | --- | --- |
+| `BLOCK_BROKEN` | `MiningDirector.markExecutionProgress` | repetition + |
+| `STAIR_STEP` | controlled descent tick | engagement + |
+| `PROJECT_END` | `MiningProjectEnd` terminal | payload carries end reason |
+| `CAVE_HANDOFF_ACCEPTED` | `MiningExecutionCommitment` | novelty +; separate from lease clock (B-16) |
+| `ORE_ACQUIRED` | `ExposureOpportunity` take | satisfaction + |
+| `VEIN_SESSION_END` | vein idle timeout | boredom − if productive |
+| `EXPEDITION_UNLOCKED` | `ExplorationReadiness.consume` | B-14 |
+| `EXPEDITION_STAGE` | `ExploringGoal` stage complete | novelty + |
+| `SOCIAL_EXPEDITION` | companion invite (`feelingToward` gate) | sociability channel |
+| `RESOURCE_HARVEST` | `GatherResourcesGoal` | materialism + |
+| `REST_SESSION` | `CampfireGoal` start/end | mild engagement + (PD-GAO-02) |
+| `SOCIAL_INTERACTION` | greet/follow proximity window | stress − via SPM bridge |
+
+**Unit-test vectors (pre-implementation):** apply `PROJECT_END(NO_PROGRESS)` → stress +, engagement −; apply 8× `BLOCK_BROKEN` in 2400 ticks → repetition boredom rises without changing long-term `Opinion(MINING)` preference offset.
+
+**Rejected:** Reading ore through stone for mood (“found diamonds nearby”) — same clairvoyance violation as D-MIW-TS1.
+
+---
+
+## Topic: ExplorationReadiness integration — do not duplicate (`PROPOSED`)
+
+**Status:** `PROPOSED` — **candidate LOCK**
+
+`ExplorationReadiness` (`goal/ExplorationReadiness.java`) already implements a primitive discretionary unlock:
+
+- `idleWorkTicks` (default threshold 600 via `ScavengerConfig.exploreIdleTicks`)
+- `successfulLocalTrips`
+- `descentPressure` (mandatory progression injection from `WorkDemandPolicy`)
+
+**Wrong:** Delete readiness and replace with mood scalar.
+
+**Right:** Mood **modulates thresholds**, not mandatory flags:
+
+```text
+exploreUnlockTicks =
+    baseExploreIdleTicks
+  × personality.curiosityModifier
+  × f(boredom)          // high boredom → sooner
+  ÷ f(recent REST)      // just rested → later
+```
+
+`descentPressure` remains **owned by `ExplorationActivityGoal`** — Opinion must not clear or fake it (lesson from MI-5 defect in `ExplorationReadiness.consume`).
+
+**Must happen:** High-boredom curious mob expeditions sooner than 600 ticks without bypassing `cooldownUntilTick`.
+
+**Must not happen:** Boredom reduces `descentPressure` or iron NEED priority.
+
+---
+
+## Topic: GAO-1 — AffectiveState sketch (`PROPOSED`)
+
+**Status:** `PROPOSED` — pre-implementation math only; no Java authorized
+
+### Internal state (per mob, server-side)
+
+```text
+AffectiveState {
+  float engagement;      // −100…+100, clamped
+  float boredom;
+  float satisfaction;
+  float stress;
+  float novelty;
+  int ticksSinceMeaningfulEvent;
+  Optional<DiscretionaryIntent> pendingIntent;
+}
+```
+
+### Tick cadence (`PROPOSED` — B-13, B-16)
+
+- **Observation + boredom rise:** every 10 ticks on `discretionaryIdleCandidate()` (same stagger as `ExplorationActivityGoal`).
+- **Decay toward neutral:** every 20 ticks when not idle (−1…−3 per channel toward 0).
+- **Event application:** immediate on `ExperienceEvent` (mining progress, social, REST start).
+- **Engagement during MI-14 projects:** fed by `ExperienceEvent` terminals only — **not** by lease age or `MiningProject` budget ticks (avoids MI-14C3 shadowing where project `>=` budget masks progress timeout).
+
+### Boredom rise (example coefficients — tune in tests)
+
+```text
+if discretionaryIdleCandidate:
+    boredom += baseIdleRise * (1 + personality.restlessness)
+if resting:
+    boredom += baseRestRise * 0.25    // slow — PD-GAO-02
+if SOCIAL_TRAVEL active:
+    boredom -= socialDecayPerTick     // B-15
+```
+
+### Derived label (unchanged from three-layer topic)
+
+Summary band drives **coarse** routing only; utility math uses components.
+
+### `DiscretionaryIntent` lifecycle (B-19)
+
+```text
+issued when boredom crosses threshold AND IdleOpportunityPolicy picks activity
+TTL = 200 ticks (10 s) unless consumed
+invalidated immediately when:
+  - any MANDATORY_* class becomes active
+  - new player command / StayNear anchor
+  - combat target acquired
+```
+
+**Must happen:** Intent consumed by `ExploringGoal` / readiness sets expedition without new GoalSelector entry.
+
+**Must not happen:** Stale `EXPLORE` intent fires after `FollowLovedOneGoal` starts.
+
+---
+
+## Topic: DiscretionaryIntent — data, not GoalSelector entries (`PROPOSED`)
+
+**Status:** `PROPOSED` (Agent_Cursor)
+
+When `IdleOpportunityPolicy` picks an activity, emit:
+
+```text
+DiscretionaryIntent {
+  ActivityKind preferred;     // EXPLORE, SOCIALIZE, REST, CAMPFIRE, MIMICRY, …
+  float urgency;              // boredom-driven
+  long issuedAtTick;
+  Optional<UUID> socialTarget;
+}
+```
+
+**Consumers (existing executors):**
+
+| Intent | Consumer | Notes |
+| --- | --- | --- |
+| `EXPLORE` | `ExploringGoal` / `ExplorationReadiness` | Sets readiness or biases stage heading |
+| `REST` | `SeekShelterGoal` / `CampfireGoal` | Intentional downtime |
+| `SOCIALIZE` | Bias toward `FriendlyGreetGoal` eligibility window | Does not preempt follow/combat |
+| `GATHER_OPPORTUNISTIC` | Soft boost to `GatherResourcesGoal` when wealth allows | Never overrides NEED |
+
+Directors (`MiningDirector`) **ignore** `DiscretionaryIntent` when assignment is mandatory.
+
+---
+
 ## Topic: REST vs permanent idle
 
-**Status:** `PROPOSED`
+**Status:** `PROPOSED` — enriched by brainstorm B-05
 
 | State | Meaning |
 | --- | --- |
@@ -290,6 +615,8 @@ Behavior communicates state without chat bubbles:
 | RESTLESS | More look-around; faster opportunity rescans |
 | BORED | Seeks novelty; longer travel; activity switches |
 | STRESSED | Favors familiar/safe tasks or shelter |
+
+**Gen-0 expression without new goals (B-12):** Reuse `AnticsGoal` (mimicry, bunny-hop) as **output** of high sociability + RESTLESS — config-gated today; Opinion only biases eligibility (`mimicry` soft boost when player nearby and boredom high). No second greeting system (SPM-2).
 
 ---
 
@@ -366,6 +693,111 @@ discretionary Opinion choice
 
 ---
 
+## Topic: Lessons transferred from MI-14 (`CODE_CONFIRMED`, Agent_Claude)
+
+The mining control plane finished its multi-mode MAIBS pass at 389 tests. It is the same architectural
+shape as the Discretionary Activity Director one level down — a director choosing among *modes*
+rather than among *activities* — and it produced five control-flow defects that this RFC can avoid by
+construction rather than rediscover.
+
+### B-21 — A director scoped to one activity cannot prove it is generic
+
+`MiningProject` had seven modes in its enum and `MiningExecutionLease` stored a mode. Both looked
+multi-mode. When the second executable mode arrived, **three hidden single-mode assumptions surfaced
+at once**: `enforceLease` asked for `CONTROLLED_DESCENT` specifically, `ExecutionIntentPolicy` asked
+`isControlledDescent()`, and nothing ever checked that a lease's mode matched its project's. All three
+compiled and passed 361 tests, because with one executor they are indistinguishable from correct.
+
+**Prediction:** `DiscretionaryActivityDirector` (GAO-4) built while only one discretionary activity is
+genuinely executable will contain the same class of defect, and it will be invisible until the second
+one lands. **Proposed rule — GAO-4 ships with at least two real, executable discretionary activities,
+or its genericity is unfalsifiable.** This is a sequencing constraint, not extra scope: the second
+activity is the test.
+
+### B-22 — Utility is inert. Minecraft's scheduler does not read it.
+
+The highest-value transfer. `WrappedGoal.canBeReplacedBy` yields only to **strictly lower** priority
+numbers, so equal-priority goals cannot preempt one another. MI-14C2 shipped an arbiter row granting
+`GATHER_RESOURCES` `ALLOW` under an active tunnel — architecturally correct and **behaviourally
+circular**, because the incumbent never released its flags, so the winner could never run, so the state
+that would have made the incumbent yield was never reached.
+
+**A ranked utility score changes nothing on its own.** `IdleOpportunityPolicy` naming a winner is a
+recommendation to a scheduler that cannot hear it. GAO-4 therefore needs an explicit **voluntary yield
+protocol** — the incumbent discretionary activity stands aside when a live intent exists — exactly the
+shape of the Exposure Opportunity Handoff. Without it the mob keeps wandering while a scoreboard
+insists it should be mining.
+
+### B-23 — Boredom must not accrue while the activity is being served
+
+MI-14C3 learned that a no-progress watchdog ages against an executor that is being *helped*: while
+gather mined the vein the tunnel exposed, the tunnel recorded no progress and was revoked **for
+succeeding**. Repaired with `ExecutionBlocker.COOPERATIVE_WORK` / `BlockerClass.PROTECTED_PAUSE`,
+which excludes that time from the progress window.
+
+Affect clocks have the identical hazard one layer up. A mob whose chosen activity is *mining* but
+whose current flag-holder is `GatherResourcesGoal` is **engaged**, not idle — yet a scheduler-wide
+observer sees the chosen executor not running. B-16 already isolates MI-14 clocks; the stronger form
+is that boredom must pause on the same signal, and
+`MoveHolderClassification.COOPERATIVE_PROJECT_WORK` is a ready-made, already-shipped input.
+
+### B-24 — The experience-event source already exists, and it closes a deferred loop
+
+`MiningProjectEnd` is a set of outcomes with real affective meaning, and `MiningTransition` already
+persists each with location, heading and tick:
+
+| Outcome | Experience |
+| --- | --- |
+| `CAVE_FOUND` | reward — the dig found somewhere worth going |
+| `DEMAND_SATISFIED` | success — the objective closed |
+| `SEARCH_BUDGET_EXHAUSTED` | fruitless effort |
+| `NO_PROGRESS` | frustration — physically stuck |
+| `HAZARD` | fear — lava, gravel, a drop |
+| `TOOL_FAILURE` | unpreparedness |
+
+More importantly, **MI-14 Loop C** (repeated descent at a site already exhausted) was classified
+`RUNTIME_QUESTION` and explicitly deferred to "MiningMemory". **GAO-5 PLACE opinion is that system.**
+That reframes it: GAO-5 is not the fifth new feature, it is the consumer of an already-deferred loop —
+which may argue for pulling it earlier than its current slot.
+
+### B-25 — An activity with no executor must not be selectable
+
+Two shipped instances. `HANDOFF_TUNNEL_SEARCH` named a destination with no executor for months (Loop
+D, held honest only by refusing to grant it authority). `MiningProjectEnd.resumable()` has **zero
+consumers**, and that gap became M5: a stored `RETRY` project permanently blocked all future
+assignment because nothing could resume or retire it.
+
+The user's sketch includes *"build/farm eventually"* — precisely this shape. **Proposed rule:** an
+`ActivityClass` is admissible to selection only when a designated executor exists, mirroring
+`ExecutionIntentPolicy.intentOf`, which returns empty for catalogued-but-unexecutable modes. Aspiration
+belongs in the taxonomy; it must not reach the scorer.
+
+### B-26 — Check the premise: idle is not currently empty
+
+The framing *"nothing urgent → wander → wander → wander"* deserves a Gate SPM-1 style check before it
+justifies architecture. Idle today already dispatches `TrackedLocalWanderGoal` (9), `AnticsGoal` (9),
+`CampfireGoal` (7) and `ExploringGoal` (8), and `ExplorationReadiness` already gates exploration on
+accumulated idle ticks.
+
+So the gap is **not** "nothing happens". It is that the choice among existing idle behaviours is a
+**fixed priority ladder evaluated in numeric order**, which cannot express "I have explored for
+thirty-one minutes and would rather sit by the fire". GAO-3/GAO-4 are therefore *replacing an implicit
+static ranking*, not filling a void — a materially easier and more falsifiable claim, and one that
+makes the parity gate meaningful: with opinion off, the static ladder must be reproduced exactly.
+
+### B-27 — Oscillation, and why commitment must be claim-anchored
+
+Two activities with close utility, rescored every observation pass, produce flip-flop: walk toward the
+cave, reconsider, walk toward camp, reconsider. `DiscretionaryIntent` TTL (B-19) is the right
+mechanism, but MI-14C2-M2 proved the subtle part: the cave-continuation commitment expired on the
+**discovery** clock rather than the **claim** clock, so a late claim received one tick of authority.
+
+**A discretionary commitment must run from when the activity is adopted, not from when the intent was
+scored**, and its lifetime must not be shorter than the activity's own legitimate duration. Where two
+subsystems must agree on a lifetime, share the *predicate*, not the constant.
+
+---
+
 ## Topic: Hard architectural rules (candidate LOCK)
 
 | ID | Rule |
@@ -378,6 +810,10 @@ discretionary Opinion choice
 | **D-GAO-006** | Scheduler-wide activity observation (host + addon) |
 | **D-GAO-007** | SPM social graph is authoritative for entity relationships |
 | **D-GAO-008** | Opinion disabled ⇒ SPM parity unchanged |
+| **D-GAO-017** | *(candidate, B-25)* An `ActivityClass` is selectable only when a designated executor exists — aspiration stays in the taxonomy, out of the scorer |
+| **D-GAO-018** | *(candidate, B-22)* Discretionary selection requires a **voluntary yield protocol**; a utility ranking alone cannot move a Minecraft goal at equal priority |
+| **D-GAO-019** | *(candidate, B-23)* Affect clocks pause while a downstream executor serves the chosen activity, reusing `COOPERATIVE_PROJECT_WORK` rather than a second signal |
+| **D-GAO-020** | *(candidate, B-21)* GAO-4 ships with ≥2 executable discretionary activities; one activity cannot falsify a director's genericity |
 
 ---
 
@@ -398,8 +834,9 @@ discretionary Opinion choice
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
-| **GAO-0** | Evidence + SPM bridge spec | `SPMOpinionBridge` interface; activity observation contract | MI-14C2-R2 pattern |
-| **GAO-1** | `AffectiveState` + observation | Boredom/engagement from activity events; scheduler-wide idle detection | GAO-0 |
+| **GAO-0** | Activity taxonomy + observation contract | `ActivityClass` enum; `ActivityObservationService` wrapping `MoveHolderClassifier`; SPM goal map table | MI-14C2-R2 pattern |
+| **GAO-0b** | `ExperienceEvent` schema | Immutable events + `OpinionMemory.apply` signature | GAO-0 |
+| **GAO-1** | `AffectiveState` + observation | Boredom/engagement from experience events; scheduler-wide idle detection | GAO-0, GAO-0b |
 | **GAO-2** | `OpinionMemory` v1 (ACTIVITY only) | Learned activity preferences + repetition | GAO-1 |
 | **GAO-3** | `IdleOpportunityPolicy` | Score available discretionary activities | GAO-2, existing goals |
 | **GAO-4** | `DiscretionaryActivityDirector` | Emit intents to existing directors/goals | GAO-3 |
@@ -408,7 +845,17 @@ discretionary Opinion choice
 | **GAO-7** | PersonalityModel | Trait-weighted experience scaling | GAO-2 |
 | **GAO-8** | Observable expression | Movement/scan biases | GAO-4, deferred UX |
 
-**Frontier when resumed:** GAO-0 — pin SPM activity taxonomy + observation API before any scoring code.
+**Frontier when resumed:** Lock D-GAO-011/012/015; implement GAO-0 as refactor of `ExplorationActivityGoal` observation (no behavior change); GAO-0b unit tests; then GAO-1 `AffectiveState` behind `opinion.enabled`.
+
+### Open product decisions (need user input)
+
+| ID | Question | Options | Recommendation |
+| --- | --- | --- | --- |
+| **PD-GAO-01** | Should mood affect **only** discretionary ranking, or also **thresholds** (explore idle ticks)? | A thresholds only / B ranking only / C both | **C both** — thresholds for “I'm bored enough to do something”; ranking for “which something” |
+| **PD-GAO-02** | Is `CampfireGoal` idle REST or positive engagement? | REST / mild engagement | **REST with mild engagement** — fire is cozy, not a project |
+| **PD-GAO-03** | Persist `OpinionMemory` across death? | wipe / partial / full | **Partial** — personality stable; activity opinions decay on death |
+| **PD-GAO-04** | Config surface | `opinion.enabled` only / full trait sliders | Start with **`opinion.enabled` + 3 trait presets** (Curious / Homebody / Grinder) |
+| **PD-GAO-05** | Who owns `IdleOpportunityPolicy` tick? | fold into `ExplorationActivityGoal` / new flagless goal | **Fold into refactored observer** (D-GAO-015) — one staggered pass. **New evidence (M1/M5):** that observer already hosts `MiningDirector`, and lease enforcement had to be moved *ahead of its early returns* because combat and `mobGriefing` disabled the very component able to revoke. Any affect or intent bookkeeping folded in must run before the same early returns, or it inherits the identical blind spot |
 
 ---
 
@@ -421,9 +868,37 @@ discretionary Opinion choice
 | **GAO-OBSERVE** | `FollowLovedOneGoal` / combat / recovery never classified as idle |
 | **GAO-COMPETENCE** | High negative `Opinion(MINING)` mob still mines when iron NEED active |
 | **GAO-REPETITION** | Same activity long duration reduces utility without erasing long-term preference |
+| **GAO-THRESHOLD** | Mood modulates `exploreIdleTicks` / REST cooldown; never mandatory NEED |
 | **MAIBS-1** | Multi-minute discretionary sessions look human-plausible (explore → rest → socialize → return) |
 
+### MAIBS discretionary scenarios (`PROPOSED` — pre-implementation)
+
+| ID | Setup | Must happen | Must not |
+| --- | --- | --- | --- |
+| **GAO-M1** | Iron NEED active; `Opinion(MINING) = −60` | Mob still mines/smelts per `WorkDemandPolicy` | Boredom cancels gather |
+| **GAO-M2** | `FollowLovedOneGoal` running 5 min | Activity = `SOCIAL_TRAVEL`; boredom flat or falls | Explore intent preempts follow |
+| **GAO-M3** | Safe night, campfire active, CONTENT | REST; boredom rises slowly | Instant expedition |
+| **GAO-M4** | 8 min straight `TrackedLocalWanderGoal` | Boredom → `DiscretionaryIntent(EXPLORE)` | Permanent wander loop |
+| **GAO-M5** | Diamond NEED + cave handoff + high `Opinion(CAVE)` | Prefer explore handoff over tunnel when both legal | Clairvoyant ore scan |
+| **GAO-M6** | `DiscretionaryIntent(EXPLORE)` issued; combat target appears tick+1 | Intent invalidated; attack runs | Delayed explore after fight |
+
 Runtime probes require separate Minecraft launch approval.
+
+### MAIBS behavioral prediction — GAO-M4 (`CODE_CONFIRMED` mechanism, `UNVERIFIED` runtime)
+
+**Scenario:** Curious preset mob; iron NEED satisfied; no project; SPM stroll + addon `TrackedLocalWanderGoal` interleave; `ExplorationActivityGoal` accumulates `idleWorkTicks` every 10s of cosmetic-only activity.
+
+| Minute | Predicted observable |
+| ---: | --- |
+| 0–2 | Local wander; boredom low; no expedition |
+| 3–4 | Boredom crosses threshold; `exploreUnlockTicks` shortened (PD-GAO-01 C); `DiscretionaryIntent(EXPLORE)` issued |
+| 5 | `ExploringGoal.canUse` true; expedition starts; `ExplorationReadiness.consume` fires `EXPEDITION_UNLOCKED` event |
+| 6–8 | Directed travel; novelty/engagement rise; repetition on EXPLORE activity increases |
+| 9+ | Stage complete or cooldown; return wander; boredom reset slower if satisfaction high |
+
+**Failure mode (must not):** Permanent wander because `idleWorkTicks` threshold fixed at 600 while boredom system disabled — **GAO-PARITY** requires `opinion.enabled` path to modulate threshold; parity path unchanged.
+
+**Weirdness watch:** SPM `WaterAvoidingRandomStrollGoal` (pri 8) and addon `TrackedLocalWanderGoal` (pri 9) may alternate; both count as idle — boredom should not reset on handoff between them.
 
 ---
 
@@ -437,6 +912,7 @@ Runtime probes require separate Minecraft launch approval.
 | Opinion preempting `FollowLovedOneGoal` | Breaks SPM social design |
 | LLM / ML mood | Out of scope; deterministic utility only |
 | Opinion as mandatory objective source | Violates D-GAO-001 |
+| Second activity observer beside `ExplorationActivityGoal` | Duplicates cadence; risks MI-14C2-R2-class drift (D-GAO-015) |
 
 ---
 
@@ -454,6 +930,12 @@ Runtime probes require separate Minecraft launch approval.
 | D-GAO-008 | Opinion disabled ⇒ SPM parity | `PROPOSED` | Debug + ship gate |
 | D-GAO-009 | Three-layer model (Personality/Opinion/Mood) | `PROPOSED` | Agent_ChatGPT |
 | D-GAO-010 | Typed OpinionMemory taxonomy | `PROPOSED` | ACTIVITY/PLACE/ENTITY/ENV/PROJECT |
+| D-GAO-011 | Reuse `MoveHolderClassifier` for GAO-0 observation | `CONSENSUS` | Extend suffix map for raid/harvest/train; Agent_Cursor 2026-08-09 |
+| D-GAO-012 | `ExperienceEvent` bus from existing terminals | `PROPOSED` | Schema drafted GAO-0b |
+| D-GAO-013 | Mood modulates readiness thresholds; never owns `descentPressure` | `PROPOSED` | MI-5 lesson |
+| D-GAO-014 | `DiscretionaryIntent` as data consumed by existing goals | `PROPOSED` | TTL + invalidation B-19 |
+| D-GAO-015 | Single `ActivityObservationService`; refactor `ExplorationActivityGoal` scan | `PROPOSED` | Avoid dual observers |
+| D-GAO-016 | Dual predicates: expedition meaningful-work ≠ affect idle/rest | `PROPOSED` | Campfire B-17 |
 
 ---
 
@@ -461,7 +943,10 @@ Runtime probes require separate Minecraft launch approval.
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Claude | **Brainstorm B-21…B-27** — evidence transfer from the completed MI-14 multi-mode pass (389 tests). **B-22** is the load-bearing one: a utility ranking is inert because equal-priority goals cannot preempt — MI-14C2 shipped exactly that circularity — so GAO-4 needs a voluntary yield protocol, not a scoreboard. **B-21** one activity cannot falsify a director's genericity (three hidden single-mode assumptions surfaced only when the second mining mode landed). **B-24** `MiningProjectEnd`/`MiningTransition` are a ready experience-event source, and GAO-5 PLACE opinion is the deferred MI-14 Loop C consumer. **B-25** no selectable activity without an executor (Loop D, M5). **B-26** premise check: idle already dispatches four goals — GAO-3/4 replace a static priority ladder rather than fill a void. **B-27** commitment must be claim-anchored (C2-M2). Candidates D-GAO-017…020; PD-GAO-05 strengthened with the observer-ordering evidence from M1/M5 |
 | 2026-08-09 | Agent_ChatGPT (via user) + Agent_Cursor | Initial RFC — full design capture; status `PROPOSED` / deferred |
+| 2026-08-09 | Agent_Cursor | **Brainstorm + GAO-0 evidence pass** — ActivityClass map from `MoveHolderClassifier`; ExperienceEvent hooks; ExplorationReadiness integration; DiscretionaryIntent; MAIBS GAO-M1…M5; PD-GAO-01…04; D-GAO-011…014 |
+| 2026-08-09 | Agent_Cursor | **Brainstorm continuation** — full SPM/addon goal tables; dual predicates; GAO-0b schema; GAO-1 AffectiveState sketch; B-11…B-20; GAO-M6; MAIBS GAO-M4 prediction; D-GAO-011→CONSENSUS; D-GAO-015/016; PD-GAO-05 |
 
 ---
 
@@ -478,3 +963,103 @@ Runtime probes require separate Minecraft launch approval.
 **Frontier after:** Peer review; lock D-GAO-001…010; GAO-0 evidence (SPM goal taxonomy + activity observation) when implementation is authorized.
 
 **Not authorized:** Implementation, Minecraft launch, commits.
+
+---
+
+## Contribution — Agent_Cursor (brainstorm + GAO-0 evidence)
+
+**Agent:** Agent_Cursor  
+**Date/Session:** 2026-08-09  
+**Contribution type:** `BRAINSTORM_IN_RFC` + `EVIDENCE / GAO-0`
+
+**Frontier before:** Initial design only; GAO-0 unspecified; peer review pending.
+
+**Evidence inspected (`CONFIRMED`):**
+
+- `MoveHolderClassifier.java` — scheduler-wide goal classification already shipped for MI-14.
+- `ExplorationReadiness.java` — primitive idle/expedition unlock; `descentPressure` ownership rules.
+- `ExploringGoal.java` — uses `PlayerMobs.feelingToward` for companion recruitment.
+- `ExposureOpportunityPolicy.VEIN_IDLE_TICKS` — cooperative session clock pattern.
+- SPM `PlayerMobEntity#registerGoals` — priority 0–8 host taxonomy.
+
+**Delivered:**
+
+1. `## Brainstorming` table — 10 candidates, 6 promoted, 3 rejected, 1 deferred.
+2. **GAO-0 topic** — `ActivityClass` mapping proposal atop `MoveHolderClassifier`.
+3. **Experience events** — terminal hooks from mining/gather/explore (no new scanners).
+4. **ExplorationReadiness integration** — mood modulates thresholds, not mandatory pressure.
+5. **DiscretionaryIntent** — data record + existing goal consumers.
+6. **MAIBS GAO-M1…M5** falsification scenarios.
+7. **PD-GAO-01…04** product decisions for user.
+8. **D-GAO-011…014** proposed decisions.
+
+**Strongest objection surfaced:** Duplicating idle detection in addon-only goals recreates MI-14C2-R2 failure mode — observation must be scheduler-wide from day one.
+
+**Frontier after:** Finish GAO-0 SPM rows (raid/harvest/train/stroll); user answers PD-GAO-01…04; lock D-GAO-011/012; then GAO-1 `AffectiveState` sketch.
+
+**Not authorized:** Implementation, Minecraft launch, commits.
+
+---
+
+## Contribution — Agent_Cursor (brainstorm continuation #2)
+
+**Agent:** Agent_Cursor  
+**Date/Session:** 2026-08-09  
+**Contribution type:** `BRAINSTORM_IN_RFC` + `EVIDENCE / GAO-0` + `MAIBS-1 pre-implementation`
+
+**Frontier before:** Partial GAO-0; SPM rows incomplete; no AffectiveState math; D-GAO-011 still `PROPOSED`.
+
+**Evidence inspected (`CONFIRMED`):**
+
+- `PlayerMobEntity#registerGoals` (SPM v0.86.0) — full priority 0–10 host goal inventory.
+- `ExplorationActivityGoal.java` — existing 10-tick scheduler-wide scan; unknown goals = meaningful work.
+- `SpmScavenger.java` — addon priority layout; `CampfireGoal` / `AnticsGoal` placement.
+- `CampfireGoal.java` — intentional lowest-priority REST scene, not expedition driver.
+
+**Delivered:**
+
+1. Brainstorm **B-11…B-20** — observer consolidation, dual predicates, intent TTL, Antics as expression.
+2. **Complete SPM + addon goal maps** with `ActivityClass` assignments.
+3. **D-GAO-015/016** — single observer service; expedition-work vs affect-idle split.
+4. **GAO-0b** — `ExperienceEvent` / `ExperienceKind` draft + unit-test vectors.
+5. **GAO-1** — `AffectiveState` sketch, cadence, boredom math, MI-14 clock isolation (B-16).
+6. **GAO-M6** — intent invalidation on combat; **MAIBS GAO-M4** minute-by-minute prediction.
+7. **D-GAO-011** promoted to `CONSENSUS`; **PD-GAO-05** observer ownership question.
+
+**Strongest objection surfaced:** Treating `CampfireGoal` as idle wander would punish REST with rising boredom — dual predicates required from day one.
+
+**Frontier after:** User answers PD-GAO-01…05; lock D-GAO-012/015; **Begin GAO-0** authorization to refactor observation without behavior change.
+
+**Not authorized:** Implementation, Minecraft launch, commits.
+
+---
+
+## Contribution — Agent_Claude (brainstorm: MI-14 evidence transfer)
+
+**Agent:** `Agent_Claude`
+**Date/Session:** 2026-08-09
+**Contribution type:** `BRAINSTORM / REVIEW`
+
+**Frontier before:** GAO-0 drafted; PD-GAO-01…05 awaiting user input; D-GAO-011/012/015 unlocked.
+
+**Action:** Deduplicated the user's "Discretionary Activity Director" framing against the existing
+Activity-utility, `DiscretionaryIntent` and phased-plan topics — the design is largely present, so
+this contributes **evidence** rather than another design. Added B-21…B-27 from defects actually
+shipped and repaired in the mining control plane during the same session.
+
+**Strongest objection surfaced:** *Utility ranking cannot move a goal.* MI-14C2 shipped an
+architecturally correct arbiter row that was behaviourally circular at equal priority. GAO-3 can be
+perfect and GAO-4 still produce no observable change without a yield protocol. This is the single
+most likely way this RFC ships something that scores beautifully and does nothing.
+
+**Second objection:** the premise. Idle already dispatches four goals; the deficiency is a static
+ranking, not an absence. Stating it that way makes GAO-PARITY testable.
+
+**Rejected for now:** introducing a second intent enum parallel to `ExecutionIntent`. Not proposed as
+a decision yet, but flagged — discretionary intent and execution intent answer different questions
+("what should I want" vs "who may act"), and collapsing them risks the mode-scoped blindness of B-21
+in reverse. Needs its own topic before GAO-4.
+
+**Frontier after:** unchanged and now better evidenced — user answers PD-GAO-01…05, and one new
+product question: **which two discretionary activities form the first executable pair for GAO-4**
+(required by candidate D-GAO-020). Implementation, launches and commits remain unauthorized.

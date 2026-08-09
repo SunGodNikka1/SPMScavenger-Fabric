@@ -109,9 +109,9 @@ public final class ScavengerConfig {
      */
     public boolean craftTools = true;
     /** Highest pick tier mobs will craft toward when {@link #craftTools} is on. */
-    public ToolTier maxPickTier = ToolTier.STONE;
+    public ToolTier maxPickTier = ToolTier.DIAMOND;
     /** Highest axe tier mobs will craft toward when {@link #craftTools} is on. */
-    public ToolTier maxAxeTier = ToolTier.STONE;
+    public ToolTier maxAxeTier = ToolTier.DIAMOND;
     /**
      * Cobble to stock while stone-tier tools are still wanted. Six is exactly one stone pick plus
      * one stone axe with no hoard buffer.
@@ -232,8 +232,8 @@ public final class ScavengerConfig {
                 if (cfg != null) {
                     if (cfg.normalizeCraftTargets()) {
                         SpmScavenger.LOGGER.warn(
-                                "[spmscavenger] unsupported maxPickTier/maxAxeTier clamped to IRON "
-                                        + "(implemented craftable caps are NONE, WOOD, STONE, IRON)");
+                                "[spmscavenger] unsupported maxPickTier/maxAxeTier clamped to the "
+                                        + "highest implemented craftable cap");
                         cfg.save();
                     }
                     return cfg;
@@ -249,7 +249,7 @@ public final class ScavengerConfig {
     }
 
     /**
-     * Clamps unsupported or null craft-target caps to the highest implemented tier, IRON.
+     * Clamps unsupported or null craft-target caps to the highest implemented tier.
      *
      * @return {@code true} if either field changed
      */
@@ -268,7 +268,7 @@ public final class ScavengerConfig {
         return changed;
     }
 
-    /** Maps unsupported or null craft targets to {@link ToolTier#IRON}. */
+    /** Maps unsupported or null craft targets to {@link #DEFAULT_CRAFT_TIER}. */
     public static ToolTier sanitizeCraftTarget(ToolTier tier) {
         if (tier == null) {
             // Absent or unparseable. Fail *closed* to the conservative default rather than to the

@@ -120,10 +120,10 @@ public final class ScavengerConfigScreen {
                         Component.literal("Max pick tier"),
                         craftableCaps,
                         ScavengerConfig.sanitizeCraftTarget(cfg.maxPickTier))
-                .setDefaultValue(ToolTier.STONE)
+                .setDefaultValue(ToolTier.DIAMOND)
                 .setNameProvider(tier -> Component.literal(tier.name()))
                 .setTooltip(Component.literal("Highest pick tier to craft toward."),
-                        Component.literal("Phase 1 caps: NONE, WOOD, STONE."),
+                        Component.literal("Caps: NONE, WOOD, STONE, IRON, DIAMOND."),
                         Component.literal("Only applies when tool crafting is enabled."),
                         Component.literal("Click to cycle.").withStyle(ChatFormatting.GRAY))
                 .setSaveConsumer(v -> cfg.maxPickTier = ScavengerConfig.sanitizeCraftTarget(v))
@@ -133,10 +133,10 @@ public final class ScavengerConfigScreen {
                         Component.literal("Max axe tier"),
                         craftableCaps,
                         ScavengerConfig.sanitizeCraftTarget(cfg.maxAxeTier))
-                .setDefaultValue(ToolTier.STONE)
+                .setDefaultValue(ToolTier.DIAMOND)
                 .setNameProvider(tier -> Component.literal(tier.name()))
                 .setTooltip(Component.literal("Highest axe tier to craft toward."),
-                        Component.literal("Phase 1 caps: NONE, WOOD, STONE."),
+                        Component.literal("Caps: NONE, WOOD, STONE, IRON, DIAMOND."),
                         Component.literal("Only applies when tool crafting is enabled."),
                         Component.literal("Click to cycle.").withStyle(ChatFormatting.GRAY))
                 .setSaveConsumer(v -> cfg.maxAxeTier = ScavengerConfig.sanitizeCraftTarget(v))
