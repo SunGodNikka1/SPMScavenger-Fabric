@@ -13,7 +13,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * MI-7A — immutable bounded mining session state. Physical dig remains in {@code GatherResourcesGoal}.
+ * MI-7A — immutable bounded mining session state. Physical dig remains in goal executors.
  */
 public record MiningProject(
         MiningProjectMode mode,
@@ -22,6 +22,7 @@ public record MiningProject(
         int depthBelowOrigin,
         Direction heading,
         MiningBudget budget,
+        MiningBudgetUsage budgetUsage,
         TaskLifecycle lifecycle,
         @Nullable MiningProjectEnd endReason,
         long startedGameTime,
@@ -33,6 +34,9 @@ public record MiningProject(
         origin = origin.immutable();
         lastSafeAnchor = lastSafeAnchor.immutable();
         coarseReturnRoute = List.copyOf(coarseReturnRoute);
+        if (budgetUsage == null) {
+            budgetUsage = MiningBudgetUsage.EMPTY;
+        }
     }
 
     public static MiningProject start(
@@ -48,6 +52,7 @@ public record MiningProject(
                 0,
                 heading,
                 budget,
+                MiningBudgetUsage.EMPTY,
                 TaskLifecycle.RUNNING,
                 null,
                 startedGameTime,
@@ -78,6 +83,11 @@ public record MiningProject(
                 || lifecycle == TaskLifecycle.RETRY;
     }
 
+    public boolean isBudgetExhausted() {
+        return budget.isSearchBudgetConsumed(budgetUsage)
+                || budget.isBlocksExhausted(budgetUsage);
+    }
+
     public MiningProject withLastSafeAnchor(BlockPos anchor) {
         return new MiningProject(
                 mode,
@@ -86,6 +96,7 @@ public record MiningProject(
                 depthBelowOrigin,
                 heading,
                 budget,
+                budgetUsage,
                 lifecycle,
                 endReason,
                 startedGameTime,
@@ -100,6 +111,22 @@ public record MiningProject(
                 Math.max(0, depth),
                 heading,
                 budget,
+                budgetUsage,
+                lifecycle,
+                endReason,
+                startedGameTime,
+                coarseReturnRoute);
+    }
+
+    public MiningProject withBudgetUsage(MiningBudgetUsage usage) {
+        return new MiningProject(
+                mode,
+                origin,
+                lastSafeAnchor,
+                depthBelowOrigin,
+                heading,
+                budget,
+                usage,
                 lifecycle,
                 endReason,
                 startedGameTime,
@@ -119,6 +146,7 @@ public record MiningProject(
                 depthBelowOrigin,
                 heading,
                 budget,
+                budgetUsage,
                 lifecycle,
                 endReason,
                 startedGameTime,
@@ -133,6 +161,7 @@ public record MiningProject(
                 depthBelowOrigin,
                 heading,
                 budget,
+                budgetUsage,
                 end.lifecycle(),
                 end,
                 startedGameTime,
@@ -151,6 +180,7 @@ public record MiningProject(
         tag.putInt("depth", depthBelowOrigin);
         tag.putString("heading", heading.getName());
         tag.put("budget", saveBudget(budget));
+        tag.put("usage", saveUsage(budgetUsage));
         tag.putString("lifecycle", lifecycle.name());
         if (endReason != null) {
             tag.putString("end", endReason.name());
@@ -178,6 +208,9 @@ public record MiningProject(
             heading = Direction.NORTH;
         }
         MiningBudget budget = loadBudget(tag.getCompound("budget"));
+        MiningBudgetUsage usage = tag.contains("usage")
+                ? loadUsage(tag.getCompound("usage"))
+                : MiningBudgetUsage.EMPTY;
         TaskLifecycle lifecycle = TaskLifecycle.valueOf(tag.getString("lifecycle"));
         MiningProjectEnd end = tag.contains("end")
                 ? MiningProjectEnd.valueOf(tag.getString("end"))
@@ -190,7 +223,7 @@ public record MiningProject(
             route.add(new BlockPos(entry.getInt("x"), entry.getInt("y"), entry.getInt("z")));
         }
         return new MiningProject(
-                mode, origin, anchor, depth, heading, budget, lifecycle, end, started, route);
+                mode, origin, anchor, depth, heading, budget, usage, lifecycle, end, started, route);
     }
 
     private static CompoundTag saveBudget(MiningBudget budget) {
@@ -205,6 +238,25 @@ public record MiningProject(
 
     private static MiningBudget loadBudget(CompoundTag tag) {
         return new MiningBudget(
+                tag.getInt("blocks"),
+                tag.getInt("dist"),
+                tag.getInt("ticks"),
+                tag.getInt("fails"),
+                tag.getInt("vert"));
+    }
+
+    private static CompoundTag saveUsage(MiningBudgetUsage usage) {
+        CompoundTag tag = new CompoundTag();
+        tag.putInt("blocks", usage.blocksMined());
+        tag.putInt("dist", usage.maxHorizontalDistance());
+        tag.putInt("ticks", usage.ticksElapsed());
+        tag.putInt("fails", usage.failedSteps());
+        tag.putInt("vert", usage.verticalDescent());
+        return tag;
+    }
+
+    private static MiningBudgetUsage loadUsage(CompoundTag tag) {
+        return new MiningBudgetUsage(
                 tag.getInt("blocks"),
                 tag.getInt("dist"),
                 tag.getInt("ticks"),

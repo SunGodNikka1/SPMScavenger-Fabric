@@ -2,10 +2,16 @@ package com.noobk.spmscavenger.goal;
 
 import com.noobk.spmscavenger.CaveContextPolicy;
 import com.noobk.spmscavenger.CaveLandingResolver;
+import com.noobk.spmscavenger.CaveOpportunityPolicy;
+import com.noobk.spmscavenger.CaveOpportunitySelection;
+import com.noobk.spmscavenger.DescentHeadingPolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.SpmScavenger;
+import com.noobk.spmscavenger.mining.NaturalDescentExhaustionPolicy;
+import com.noobk.spmscavenger.mining.NaturalDescentSearchState;
+import com.noobk.spmscavenger.mining.NaturalDescentStatus;
 import com.noobk.spmscavenger.mixin.MobGoalSelectorAccessor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -26,7 +32,9 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 
@@ -83,6 +91,7 @@ public final class ExploringGoal extends Goal {
     private ExpeditionState expedition;
     private NavigationState navigationState;
     private long retryAfterTick;
+    private final NaturalDescentSearchState descentSearch = new NaturalDescentSearchState();
 
     public ExploringGoal(PathfinderMob mob, ExplorationReadiness readiness) {
         this.mob = mob;
@@ -99,6 +108,9 @@ public final class ExploringGoal extends Goal {
         }
 
         long now = level.getGameTime();
+        if (!readiness.hasDescentPressure()) {
+            descentSearch.reset();
+        }
         if (yieldToStayAnchor(level, now)) {
             return false;
         }
@@ -184,6 +196,10 @@ public final class ExploringGoal extends Goal {
             return;
         }
         long now = level.getGameTime();
+        if (readiness.hasDescentPressure() && descentSearch.isActive()) {
+            descentSearch.recordTick();
+            descentSearch.recordPosition(mob.blockPosition());
+        }
         if (now - expedition.startedTick > MAX_EXPEDITION_TICKS) {
             abandon(EndReason.STALE, now);
             return;
@@ -371,6 +387,12 @@ public final class ExploringGoal extends Goal {
         ChunkInterest interest = forced ? null : new ChunkInterest(level);
 
         RouteCandidate best = null;
+        if (!forced && readiness.hasDescentPressure()) {
+            best = buildDescentRoute(
+                    level, interest, maximumDistance, minimumStage, maximumStage, random);
+        }
+
+        if (best == null) {
         int attempts = forced ? 1 : ROUTE_CANDIDATES;
         for (int candidateIndex = 0; candidateIndex < attempts; candidateIndex++) {
             double angle = random.nextDouble() * Math.PI * 2.0;
@@ -432,6 +454,7 @@ public final class ExploringGoal extends Goal {
                 best = candidate;
             }
         }
+        }
 
         if (best == null) {
             return null;
@@ -441,9 +464,76 @@ public final class ExploringGoal extends Goal {
         ExplorationIntent intent = readiness.hasDescentPressure()
                 ? ExplorationIntent.DESCENT
                 : ExplorationIntent.NORMAL;
+        if (intent == ExplorationIntent.DESCENT) {
+            descentSearch.beginSearch(mob.blockPosition());
+        }
         return new ExpeditionState(
                 intent, mob.getX(), mob.getZ(), best.headingX, best.headingZ,
                 best.headingSector, List.copyOf(best.waypoints), now);
+    }
+
+    /**
+     * MI-5H — terrain-scored macro heading for descent expeditions instead of novelty roulette.
+     */
+    private RouteCandidate buildDescentRoute(
+            ServerLevel level,
+            ChunkInterest interest,
+            double maximumDistance,
+            double minimumStage,
+            double maximumStage,
+            RandomSource random) {
+        int mobY = mob.blockPosition().getY();
+        DescentHeadingPolicy.Heading chosen = DescentHeadingPolicy.chooseBest(
+                mob.getX(),
+                mob.getZ(),
+                mobY,
+                (x, z) -> new int[] {
+                    level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z),
+                    sampleLocalRim(level, x, z)
+                },
+                0,
+                recentCompletedHeadings::contains,
+                HEADING_SECTORS,
+                random);
+        double headingX = chosen.x();
+        double headingZ = chosen.z();
+        int midInterest = 0;
+        if (interest != null) {
+            int midX = DescentHeadingPolicy.projectedBlock(
+                    mob.getX(), headingX, DescentHeadingPolicy.SAMPLE_DISTANCES[1]);
+            int midZ = DescentHeadingPolicy.projectedBlock(
+                    mob.getZ(), headingZ, DescentHeadingPolicy.SAMPLE_DISTANCES[1]);
+            midInterest = interest.at(midX, midZ);
+        }
+        int stageCount = MIN_STAGES + random.nextInt(MAX_STAGES - MIN_STAGES + 1);
+        List<IntendedWaypoint> waypoints = new ArrayList<>(stageCount);
+        double forward = 0.0;
+        for (int stage = 0; stage < stageCount; stage++) {
+            double stageDistance = minimumStage
+                    + random.nextDouble() * (maximumStage - minimumStage);
+            if (forward + stageDistance > maximumDistance) {
+                if (waypoints.size() >= MIN_STAGES) {
+                    break;
+                }
+                stageDistance = maximumDistance - forward;
+            }
+            forward += stageDistance;
+            int x = DescentHeadingPolicy.projectedBlock(mob.getX(), headingX, (int) forward);
+            int z = DescentHeadingPolicy.projectedBlock(mob.getZ(), headingZ, (int) forward);
+            if (!chunkGuardTicking(level, new ChunkPos(x >> 4, z >> 4), mobY)) {
+                if (waypoints.size() >= MIN_STAGES) {
+                    break;
+                }
+                return null;
+            }
+            waypoints.add(new IntendedWaypoint(x, z, forward));
+        }
+        if (waypoints.size() < MIN_STAGES) {
+            return null;
+        }
+        int sector = chosen.sector(HEADING_SECTORS);
+        int score = 1_000 + ExplorationInterest.routeScore(midInterest);
+        return new RouteCandidate(headingX, headingZ, sector, waypoints, score);
     }
 
     /** Preserve the original heading and route; only skip or insert a temporary rejoin when needed. */
@@ -497,6 +587,8 @@ public final class ExploringGoal extends Goal {
         if (expedition == null) {
             return PlanResult.PATH_FAILURE;
         }
+        expedition.lastPlanHadReachableLanding = false;
+        expedition.lastPlanHadBlockedOpportunity = false;
         IntendedWaypoint intended = expedition.rejoin != null
                 ? expedition.rejoin
                 : expedition.waypoints.get(expedition.waypointIndex);
@@ -530,7 +622,7 @@ public final class ExploringGoal extends Goal {
             if (aimTicking) {
                 int rungProbes = 0;
                 for (BlockPos candidate
-                        : landingCandidates(level, aimX, aimZ, direct, expedition.attemptedLandings)) {
+                        : landingCandidates(level, aimX, aimZ, direct, expedition.attemptedLandings, now)) {
                     if (probes >= LANDING_PROBES_PER_PLAN || rungProbes >= LANDING_PROBES_PER_HOP) {
                         break;
                     }
@@ -555,6 +647,7 @@ public final class ExploringGoal extends Goal {
                     }
                     navigationState = new NavigationState(path, candidate, distanceSqr, now, !direct);
                     expedition.lastProgressTick = now;
+                    expedition.lastPlanHadReachableLanding = true;
                     return PlanResult.READY;
                 }
             }
@@ -563,6 +656,9 @@ public final class ExploringGoal extends Goal {
                 break;
             }
             step *= 0.5;
+        }
+        if (probes > 0) {
+            expedition.lastPlanHadBlockedOpportunity = true;
         }
         return crossedSimulationFrontier ? PlanResult.SIMULATION_FRONTIER : PlanResult.PATH_FAILURE;
     }
@@ -596,7 +692,7 @@ public final class ExploringGoal extends Goal {
      */
     private List<BlockPos> landingCandidates(
             ServerLevel level, int centreX, int centreZ, boolean allowResolvedTarget,
-            Set<Long> alreadyAttempted) {
+            Set<Long> alreadyAttempted, long now) {
         List<BlockPos> result = new ArrayList<>();
         if (allowResolvedTarget && expedition.hasResolvedTarget) {
             BlockPos resolved = new BlockPos(
@@ -653,6 +749,7 @@ public final class ExploringGoal extends Goal {
         }
 
         int terrainRef = Math.max(columnSurface, localRim);
+        Map<Long, Integer> preferenceKeys = CaveOpportunitySelection.preferenceKeyMap();
         ring.sort(Comparator.comparingInt(position -> {
             int landingTerrain = level.getHeight(
                     Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
@@ -661,10 +758,66 @@ public final class ExploringGoal extends Goal {
             int ref = mode == CaveContextPolicy.LandingMode.NORMAL
                     ? landingTerrain
                     : Math.max(landingTerrain, terrainRef);
-            return CaveContextPolicy.landingPreferenceKey(mode, position.getY(), mobY, ref);
+            int key = CaveContextPolicy.landingPreferenceKey(mode, position.getY(), mobY, ref);
+            preferenceKeys.put(position.asLong(), key);
+            return key;
         }));
         result.addAll(ring);
+
+        if (expedition != null && (caveOrRavine || descending) && result.size() >= 2) {
+            CaveOpportunitySelection.CommitmentResult committed = CaveOpportunitySelection.commitBestScored(
+                    result,
+                    preferenceKeys,
+                    expedition.caveCommitment,
+                    id -> {
+                        if (!preferenceKeys.containsKey(id)) {
+                            return false;
+                        }
+                        return safeStand(level, BlockPos.of(id));
+                    },
+                    now);
+            expedition.caveCommitment = committed.commitment();
+            return committed.candidates();
+        }
         return result;
+    }
+
+    /** MI-6F — whether a short-lived cave branch commitment is still active. */
+    public boolean hasActiveCaveCommitment(ServerLevel level, long now) {
+        if (expedition == null || expedition.caveCommitment == null) {
+            return false;
+        }
+        BlockPos committed = BlockPos.of(expedition.caveCommitment.id());
+        boolean stillValid = safeStand(level, committed);
+        return CaveOpportunityPolicy.holds(
+                expedition.caveCommitment,
+                stillValid,
+                now,
+                CaveOpportunityPolicy.COMMIT_TICKS);
+    }
+
+    /**
+     * MI-7C — current natural-descent exhaustion evidence. Does not start controlled descent.
+     */
+    public NaturalDescentStatus naturalDescentStatus(ServerLevel level, long now) {
+        if (!readiness.hasDescentPressure()) {
+            return NaturalDescentStatus.SEARCHING;
+        }
+        boolean activeCave = hasActiveCaveCommitment(level, now);
+        boolean reachable = expedition != null && expedition.lastPlanHadReachableLanding;
+        boolean blocked = expedition != null && expedition.lastPlanHadBlockedOpportunity;
+        boolean searchActive = expedition != null && expedition.intent == ExplorationIntent.DESCENT;
+        return NaturalDescentExhaustionPolicy.evaluate(
+                descentSearch.budget(),
+                descentSearch.usage(),
+                activeCave,
+                reachable,
+                blocked,
+                searchActive || descentSearch.isActive());
+    }
+
+    NaturalDescentSearchState descentSearchState() {
+        return descentSearch;
     }
 
     private static int sampleLocalRim(ServerLevel level, int originX, int originZ) {
@@ -775,6 +928,9 @@ public final class ExploringGoal extends Goal {
             expedition.perWaypointFailures++;
             expedition.expeditionFailures++;
             expedition.resetResolvedTargetOnly();
+            if (expedition.intent == ExplorationIntent.DESCENT && descentSearch.isActive()) {
+                descentSearch.recordFailure();
+            }
         }
         ExplorationPolicy.FailureAction action = ExplorationPolicy.failureAction(
                 result == PlanResult.SIMULATION_FRONTIER,
@@ -930,6 +1086,10 @@ public final class ExploringGoal extends Goal {
         int resolvedX;
         int resolvedY;
         int resolvedZ;
+
+        CaveOpportunityPolicy.CaveOpportunity caveCommitment;
+        boolean lastPlanHadReachableLanding;
+        boolean lastPlanHadBlockedOpportunity;
 
         ExpeditionState(
                 ExplorationIntent intent,

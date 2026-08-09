@@ -39,4 +39,18 @@ Task 19: complete with concerns (looted diamond pick ownership across backpack/m
 MI-7A: complete with concerns (MiningProject session types + SavedData; 200 tests; no goal wire;
 runtime unverified; MI-7B/C next)
 
+MI-6F: complete with concerns (CaveOpportunity wired to explore landing arbitration; 213 tests;
+runtime branch anti-thrash unverified)
+
+MI-7B+C: complete with concerns (MiningBudgetUsage + NaturalDescentExhaustionPolicy + search state
+on ExploringGoal; 213 tests; MI-7E gate unwired; runtime unverified)
+
+MI-5H: complete with concerns (DescentHeadingPolicy + descent expedition routes; 218 tests;
+runtime heading unverified)
+
+MI-7D: complete with concerns (StairStepPlan/Planner/Safety; 218 tests; runtime unverified)
+
+MI-7E: complete with concerns (ControlledDescentGoal + MiningProject usage; 218 tests; runtime
+staircase/cave-mouth probe unverified)
+
 No commits. No Minecraft launches (separate approval required).

@@ -2,6 +2,7 @@ package com.noobk.spmscavenger;
 
 import com.noobk.spmscavenger.goal.AnticsGoal;
 import com.noobk.spmscavenger.goal.CampfireGoal;
+import com.noobk.spmscavenger.goal.ControlledDescentGoal;
 import com.noobk.spmscavenger.goal.CraftTorchesGoal;
 import com.noobk.spmscavenger.goal.GatherResourcesGoal;
 import com.noobk.spmscavenger.goal.ExplorationActivityGoal;
@@ -144,6 +145,7 @@ public class SpmScavenger implements ModInitializer {
 
         selector.removeGoal(originalStroll);
         ExplorationReadiness readiness = new ExplorationReadiness();
+        selector.addGoal(3, new ControlledDescentGoal(pathfinderMob, 0.9, readiness));
         selector.addGoal(8, new ExploringGoal(pathfinderMob, readiness));
         selector.addGoal(9, new TrackedLocalWanderGoal(
                 pathfinderMob, Math.max(0.5, Math.min(1.2, cfg.localWanderSpeed)), readiness));
@@ -166,6 +168,7 @@ public class SpmScavenger implements ModInitializer {
                     || goal instanceof SmeltAtFurnaceGoal
                     || goal instanceof CampfireGoal
                     || goal instanceof AnticsGoal
+                    || goal instanceof ControlledDescentGoal
                     || goal instanceof ExploringGoal
                     || goal instanceof TrackedLocalWanderGoal
                     || goal instanceof ExplorationActivityGoal) {

@@ -49,3 +49,26 @@ round-trip. No goal wiring or excavation executor.
 - Types + session API + SavedData: done
 - Goal wiring / dig / exhaustion: correctly deferred
 - Handoff enums `CAVE_FOUND`, `HANDOFF_TUNNEL_SEARCH` added for MI-7E (RFC-aligned)
+
+## MAIBS-1 semantic-drift review (2026-08-09)
+
+**Scope:** MI-7A post-implementation + live descent stack (MI-5, MI-6A/D/B/C).
+
+```text
+PLANNED (MI-7A)  → session types + SavedData for CONTROLLED_DESCENT
+IMPLEMENTED      → mining/* records; zero goal/director references
+PREDICTED RUNTIME → identical to pre-MI-7A; no observable world change
+```
+
+**NOT FOUND (3 probes):** `MiningProjectSavedData.get` in goals; `MiningProject` in
+`goal/*`; `CONTROLLED_DESCENT` outside `mining` package.
+
+**Gate MI-7A:** `CONDITIONAL — ACCEPTABLE_STEPPING_STONE` (foundation only; authorized).
+
+**Gate full controlled descent:** `UNVERIFIED` / blocked until MI-7B–E + MI-7C wire.
+
+**Must happen (7A):** SavedData round-trip — `CONFIRMED` unit.
+**Must not (7A):** mob digs staircase — `CONFIRMED` absent (no executor).
+
+**Falsifying probe (7A):** launch + log — project store must stay empty unless test code
+writes it; after MI-7E, log `MiningProject.mode` on each descent step.

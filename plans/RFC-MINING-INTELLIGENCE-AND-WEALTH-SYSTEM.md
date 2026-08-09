@@ -8,15 +8,15 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Target progression** | **Vanilla Minecraft 1.21.1 mining + resource wealth** (overworld ore tiers through diamond/deepslate; not Nether/endgame mining in gen-1) |
 | **Scope** | Autonomous *where* to mine, *how much* to stockpile (wealth), prerequisite planning hooks, capability gaps, integration methods, phased plan, validation — **design until implementation authorized** |
-| **Mode** | `PROGRESSIVE_CONTINUATION` (Agent_Cursor — MI-7 redesign + phase reorder) |
-| **Status** | MI-7A `IMPLEMENTED` (task 20; 200 tests); **MI-7B `READY`**; runtime `UNVERIFIED` |
+| **Mode** | `PROGRESSIVE_CONTINUATION` (User — MI-7B+C bundle + MI-5H + dependency reorder) |
+| **Status** | MI-7A `IMPLEMENTED` (task 20); **MI-6F → MI-7B+C `READY`**; MI-5H before MI-7D; runtime `UNVERIFIED` |
 | **User constraint** | No Minecraft launch, commit, or push unless separately asked; implementation only after explicit Begin authorization |
 | **Baseline version** | `1.9.2` |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `TaskLifecycle.java` |
 | **Former name** | `RFC-MINING-INTELLIGENCE-AND-RESOURCE-GREED.md` — merged into this file (2026-08-08); “resource greed” → **wealth system** |
 | **Owners** | User (product) |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Cursor 2` · `Agent_Codex` · `Agent_Claude` |
-| **Last update** | 2026-08-09 ~00:10 PDT |
+| **Last update** | 2026-08-09 ~00:25 PDT |
 | **Gate** | MRFC-1 |
 
 ### Naming
@@ -31,6 +31,8 @@
 | **Mining intelligence** | `MiningDirector` + `MiningProject` + legitimate discovery; physical dig in `GatherResourcesGoal` |
 | **MiningProject** | Bounded mining session (mode, budget, anchors) — policy state, not a registered Goal |
 | **DiscoveryMode** | How an ore became a legitimate target (`VISIBLE`, `NEWLY_EXPOSED`, …) |
+| **CaveContextSnapshot** | Classifies **current position** (enclosure, rim depth, sky) — MI-6G direction |
+| **CaveOpportunity** | Classifies a **possible route/opening** to commit to — MI-6F; not mob posture alone |
 
 ---
 
@@ -53,19 +55,17 @@ PlayerMobs should progress through **vanilla mining** using **deterministic clas
 
 **Mining architecture (`CONSENSUS`, D-MIW-001):** `MiningDirector` / `MiningProject` / `MiningMemory` are policy + session state; `GatherResourcesGoal` owns physical dig; no clairvoyant ore map.
 
-**Continuation result (`CONSENSUS`, user + Agent_Cursor):** MI-7 is **not** a standalone
-“staircase max N blocks” goal. It is **Controlled Excavation Descent** — a `MiningProject` mode that
-starts only when `NaturalDescentStatus == EXHAUSTED`, uses shared `MiningBudget`, `StairStepPlan`
-geometry, and minimum pre-break safety, then hands off to `CAVE_EXPLORATION` / `TUNNEL_SEARCH` /
-gather — it does **not** find buried ore. Implementation order: **MI-7A→B→C→D→E** before MI-7E
-digging; full `MiningDirector` (MI-14), hazards (MI-18), and budget generalization (MI-19) extend
-later. Nearest frontier: **MI-6A falsifying probe** (runtime, separate approval) or **Begin MI-7A**.
+**Continuation result (`CONSENSUS`, user 2026-08-09):** MI-7A done. **Next package:**
+**MI-6F live wiring** → **MI-7B+C** (budget accounting + `NaturalDescentStatus` — one semantic unit)
+→ **MI-5H** (`DescentHeadingPolicy` — macro heading, not landing micro-sort) → **MI-7D** → **MI-7E**.
+`CaveContextSnapshot` ≠ `CaveOpportunity`. Primary open descent defect is **heading chosen by
+novelty before terrain** (MI-5H), not MI-7 session types alone.
 
 ---
 
 ## Collaboration Protocol
 
-- This continuation is **`Agent_Cursor`** (MI-7 Controlled Excavation Descent redesign; phase reorder).
+- This continuation is **`User` + `Agent_Cursor`** (MI-7B+C bundle, MI-5H, dependency reorder).
 - Evidence: `CONFIRMED` / `INFERRED` / `UNVERIFIED` (Gate AV-1); behavior gate **MAIBS-1**.
 - Reuse SPM + Scavenger executors; no duplicate scanners (Gate SPM-2).
 - **Anti-clairvoyance (D-MIW-008 `CONSENSUS`):** undiscovered ore behind solid stone is never an exact path target from server block query alone.
@@ -100,10 +100,10 @@ later. Nearest frontier: **MI-6A falsifying probe** (runtime, separate approval)
 | [Integration methods](#topic-integration-methods) | `CONSENSUS` | Per-capability ladder; SPI deferred |
 | [Task lifecycle](#topic-task-lifecycle) | `CONSENSUS` | RUNNING/SUCCESS/FAILURE/… |
 | [Utility scale (F-1…F-6)](#topic-utility-scale-and-policy-boundaries-5-blocking-findings) | F-1 Option A `LOCKED` + MI-4S `IMPLEMENTED` | Scale repair landed |
-| [MI-5 behavioural prediction](#topic-mi-5-behavioural-prediction-gate-maibs-1) | `FAIL` defects; partial code repair | Descent intent / depression-hunt |
-| [MI-6 behavioural prediction](#topic-mi-6-behavioural-prediction-gate-maibs-1) | Code repair `IMPLEMENTED`; runtime `UNVERIFIED` | 6A/D/B/C done; 6E/F/G deferred |
-| [MI-7 controlled excavation descent](#topic-mi-7-controlled-excavation-descent-gate-maibs-1) | **`CONSENSUS` redesign** | MI-7A…E; `EXHAUSTED` gate; not buried-ore search |
-| [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order (revised) | **Next: MI-6A probe or Begin MI-7A** |
+| [MI-5 behavioural prediction](#topic-mi-5-behavioural-prediction-gate-maibs-1) | `FAIL` heading blindness | **MI-5H `READY`** — `DescentHeadingPolicy` |
+| [MI-6 behavioural prediction](#topic-mi-6-behavioural-prediction-gate-maibs-1) | 6A/D/B/C `IMPLEMENTED`; runtime `UNVERIFIED` | **MI-6F wire before MI-7B+C** |
+| [MI-7 controlled excavation descent](#topic-mi-7-controlled-excavation-descent-gate-maibs-1) | MI-7A `IMPLEMENTED` | **MI-6F → MI-7B+C → MI-5H → MI-7D → MI-7E** |
+| [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order (revised) | **Next: Begin MI-6F or MI-7B+C** |
 | [Validation](#topic-validation) | `PARTIAL` | Policy units green; gather wealth + runtime open |
 | [Deferred](#topic-deferred-and-unverified) | — | Nether, branch mines, portfolio gen-1 |
 
@@ -408,10 +408,59 @@ revised).
 
 ## Topic: MI-5 behavioural prediction (Gate MAIBS-1)
 
-**Status:** `FAIL — ARCHITECTURE_DEFECT` (two defects, both small and precise).
-**Analyst:** `Agent_Claude`, snapshot 21:5x. Mechanism read from source, not inferred.
+**Status:** `FAIL — ARCHITECTURE_DEFECT` (heading blindness remains; defect 1 **repaired** in code).
+**Analyst:** `Agent_Claude` + user MAIBS review (2026-08-09).
+**Repair task:** **MI-5H** — `DescentHeadingPolicy` (before MI-7D executor).
 
-### Intent vs mechanism vs predicted behaviour
+### Repaired since original review (`CODE_CONFIRMED`)
+
+- **Defect 1 (consume cleared pressure):** `ExplorationReadiness.consume` no longer clears
+  `descentPressure`; `ExpeditionState` captures `ExplorationIntent.DESCENT` at creation
+  (`ExploringGoal` ~441–446).
+- **Defect 2 (no descent identity):** partially addressed — `ExplorationIntent` on expedition;
+  completion/handoff semantics still open.
+
+### Primary open defect — heading blindness (`CODE_CONFIRMED` + user `CONSENSUS`)
+
+| Layer | Result |
+| --- | --- |
+| Intended | Under diamond progression pressure, choose a **macro direction** with legitimate descent opportunity |
+| Implemented | `createExpedition` scores headings by novelty/interest/randomness; MI-5 only biases **landing** sort along an already-chosen heading |
+| Predicted | "Descend" → novelty heading **EAST** → nearest 1-block depression along that heading |
+| Confidence | `CODE_CONFIRMED` |
+
+```text
+Need diamonds → descentPressure
+      ↓
+choose novelty heading EAST          ← MI-5H missing here
+      ↓
+within heading, prefer Y69 over Y60  ← MI-5 landing sort (depression-hunt)
+```
+
+**MI-5H (`DescentHeadingPolicy`) — `READY`:**
+
+```text
+DescentPressure
+      ↓
+candidate headings (N, NE, E, …)
+      ↓
+bounded geometry evidence per heading (no ore clairvoyance)
+      ↓
+score: meaningful descent + cave/ravine opportunity + reachability + unexplored value
+       − path cost − hazard
+      ↓
+commit heading (shared by natural descent, CONTROLLED_DESCENT, TUNNEL_SEARCH later)
+```
+
+**Must not:** score buried ore; replace MI-6F opportunity commitment.
+
+### Landing-sort defect (secondary — tuning, not heading)
+
+`DescentPressurePolicy.landingPreferenceKey` still prefers **smallest** descent step (Y69 beats Y60).
+`ACCEPTABLE_STEPPING_STONE` until MI-5H provides macro direction; may revisit landing key after 5H
+probes.
+
+### Original defect notes (historical)
 
 | Layer | Result |
 | --- | --- |
@@ -570,7 +619,7 @@ should apply (`DESCENT_IN_CAVE`).
 | Enclosed cave Y=32, surface Y=70 | caveLike true | landings ≈ Y70 (± elev clamp) | all `isCaveLike(landing)=false`; preference useless |
 | Open ravine Y=25, rim Y=68 | caveLike **false** (delta 0 at column) | surface/floor tops | no cave path at all |
 | Surface plains | caveLike false | normal | MI-6 inert (OK) |
-| Cave mouth, ore inside | mob outside | gather caveLike false | exposed cave ore scored as surface |
+| Cave mouth at Y=68, ore inside | mob may be `caveOrRavine=true` via **local rim** on hillside geometry — not guaranteed (`LIKELY_ARCHITECTURE_GAP`, not proven for every mouth) | gather `caveOpportunity` per-candidate helps; **route/opening** still needs `CaveOpportunity` (MI-6F) |
 
 ### Time loop (prolonged)
 
@@ -608,7 +657,7 @@ Gather ore-bonus while caveLike remains the only **partial** useful MI-6 piece
 | **MI-6D** | Combine MI-5+MI-6 → `NORMAL` / `DESCENT` / `CAVE_CONTINUATION` / `DESCENT_IN_CAVE` | Stops if/else exclusion | **`IMPLEMENTED`** (task 18) |
 | **MI-6B** | Local-rim / open-ravine detection (sample N/E/S/W…; rim − mobY) | Fixes ravine classifier | **`IMPLEMENTED`** (task 18) |
 | **MI-6C** | Candidate-specific cave context (not only mob origin) | Honest ore opportunity ranking | **`IMPLEMENTED`** (task 18) |
-| **MI-6F** | Short-lived `CaveOpportunity` commitment | Stops branch thrash | **`DEFERRED`** (user) |
+| **MI-6F** | Short-lived `CaveOpportunity` commitment | Stops branch thrash; **prerequisite for MI-7C** | **`READY`** — wire before MI-7B+C |
 | **MI-6G** | `CaveContextSnapshot` (belowLocalTerrain, skyVisible, enclosureDepth, localRimDepth) | Extensible classifier | **`DEFERRED`** (user) |
 | **MI-6E** | Replace flat +15 with ranked comparator dimensions | Prep for MI-17 | **`DEFERRED`** (MI-17; user) |
 
@@ -688,29 +737,66 @@ buried ore (D-MIW-008 unchanged).
 | No heading policy | Random downward dig | Shared heading selection with `TUNNEL_SEARCH` |
 | Depth without search | Y=−52, no exposed diamond, “success” | Handoff to `TUNNEL_SEARCH` / `CAVE_EXPLORATION` |
 
-### NaturalDescentStatus (`CONSENSUS` — D-MIW-033)
+### CaveContext vs CaveOpportunity (`CONSENSUS` — user 2026-08-09)
+
+| Concept | Answers | Owner | Status |
+| --- | --- | --- | --- |
+| **CaveContextSnapshot** | "What kind of space am I standing in?" | `CaveContextPolicy` | Partial in code; MI-6G deferred |
+| **CaveOpportunity** | "Which traversable opening/route should I commit to?" | `CaveOpportunityPolicy` + MI-6F wire | Policy exists; **not wired** to explore |
+
+**Do not conflate.** Position classification (`mob outside → caveOrRavine=false`) is insufficient for
+mouth geometry in all cases; opportunity classification must evaluate **candidate routes/openings**.
+
+### NaturalDescentStatus (`CONSENSUS` — D-MIW-034, revised user 2026-08-09)
+
+Bundled with **MI-7B+C** — budget counters alone are meaningless without exhaustion evidence.
 
 ```java
 public enum NaturalDescentStatus {
-    AVAILABLE,            // MI-6 has a viable natural route now
-    SEARCHING,            // explore/MI-6 attempts in progress; not exhausted
-    TEMPORARILY_BLOCKED,  // path/combat/hazard; back off — do NOT start MI-7
-    EXHAUSTED             // bounded natural search failed; MI-7 may start
+    SEARCHING,            // valid descent expedition still has unexplored opportunities
+    AVAILABLE,            // legitimate reachable natural descent exists right now
+    TEMPORARILY_BLOCKED,  // opportunity exists but combat/path/hazard blocks use
+    EXHAUSTED             // may start CONTROLLED_DESCENT (MI-7E) — all gates below
 }
 ```
 
-**`EXHAUSTED` requires evidence**, not one failed probe:
+| Status | Meaning | MI-7 may start? |
+| --- | --- | --- |
+| **SEARCHING** | Active descent expedition; unexplored headings/landings remain within search budget | No |
+| **AVAILABLE** | Reachable natural descent (cave floor, ravine continuation, committed `CaveOpportunity`) | No — use MI-6 |
+| **TEMPORARILY_BLOCKED** | Candidate exists; path/combat/hazard/interrupt prevents use | No — backoff |
+| **EXHAUSTED** | All below satisfied | Yes (MI-7E) |
 
-| Signal | Example |
+**`EXHAUSTED` requires ALL (`CONSENSUS`):**
+
+1. Bounded **search budget** consumed (`MiningBudget` / natural-descent budget — MI-7B).
+2. **No** valid natural descent found (no `AVAILABLE` route under evidence rules).
+3. **No** active `CaveOpportunity` commitment (MI-6F must be live before exhaustion runs).
+4. **Spatial progress / coverage** occurred — not merely N path failures while standing still.
+
+**Rejected exhaustion triggers:**
+
+| Trigger | Why rejected |
 | --- | --- |
-| Bounded explore hops | N descent-biased landings with no under-surface progress |
-| Repeated `TEMPORARILY_BLOCKED` | Path failures without new cave floor admission |
-| Optional MI-6F commitment | Branch chosen then failed — counts toward exhaustion |
-| Cooldown | Re-enter `SEARCHING` after reposition, not instant MI-7 |
+| `candidate == null` on one tick | Perception failure ≠ area exhausted |
+| `maxFailedSteps` alone while mob barely moved | Declares exhaustion without search |
+| elapsed time only | No evidence about what was searched |
 
-**Must not:** start `CONTROLLED_DESCENT` from `candidate == null` on a single tick.
+**Must not:** mob stands still, fails path creation 5×, declares `EXHAUSTED`, digs through floor.
 
-### MiningProject slice (MI-7A — `READY`)
+### MI-7B+C — one semantic unit (`CONSENSUS` — D-MIW-036)
+
+| Part | Deliverable |
+| --- | --- |
+| **MI-7B** | `MiningBudget` usage counters + per-axis exhaustion predicates |
+| **MI-7C** | `NaturalDescentExhaustionPolicy` — status machine above; feeds MI-7E gate |
+
+**Why bundle:** MI-7B counters are only meaningful when MI-7C interprets them as *"we looked enough;
+natural descent is genuinely exhausted."* Neither alone changes observable behaviour until MI-7E.
+
+**Depends on:** MI-7A `IMPLEMENTED`; **MI-6F live wiring** (exhaustion must see committed opportunity).
+
+### MiningProject slice (MI-7A — `IMPLEMENTED`)
 
 Minimal session state **before** any deliberate dig (not full MI-14 director):
 
@@ -731,7 +817,7 @@ MiningProject {
 
 `GatherResourcesGoal` still owns each physical break; project owns **intent and budgets**.
 
-### MiningBudget (MI-7B — `READY`)
+### MiningBudget (MI-7B — part of MI-7B+C package)
 
 Shared abstraction (D-MIW-010 constants; MI-19 **generalizes**, does not invent):
 
@@ -772,31 +858,47 @@ StairStepPlan {
 - Safe standing cell + 2-high headroom after step?
 - Return path to `lastSafeAnchor` preserved (D-MIW-009)?
 
-### Heading selection (`CONSENSUS`)
+### Heading selection (`CONSENSUS` — shared primitive)
 
-Same policy shape as `TUNNEL_SEARCH` (no clairvoyant ore):
+**MI-5H** owns macro heading for descent expeditions. **MI-7D** reuses the same primitive for
+`CONTROLLED_DESCENT` and later `TUNNEL_SEARCH` — do not bury heading only inside staircase executor.
 
 ```text
 candidate headings (cardinal + continue travel vector)
-  → reject hazards / protected / fluid
-  → prefer continuation of current expedition heading
-  → prefer lower adjacent terrain when tie
-  → deterministic tie-break (e.g. mob entity id + origin hash)
-  → commit for project duration (until hazard or budget)
+  → bounded geometry evidence per heading
+  → score: descent opportunity + cave/ravine opportunity + reachability + novelty
+           − path cost − hazard
+  → deterministic tie-break → commit
 ```
 
-### Task split (implementation order)
+### Revised implementation order (`CONSENSUS` — user 2026-08-09)
+
+```text
+DONE     MI-7A  MiningProject foundation
+         ↓
+NEXT     MI-6F  CaveOpportunity live wiring (policy exists; explore/gather integration)
+         ↓
+NEXT     MI-7B+C  budget accounting + NaturalDescentExhaustionPolicy (one package)
+         ↓
+         MI-5H  DescentHeadingPolicy (before executor geometry)
+         ↓
+         MI-7D  StairStepPlan + min excavation safety
+         ↓
+         MI-7E  Controlled-descent executor
+```
 
 | ID | Deliverable | Depends | Status |
 | --- | --- | --- | --- |
-| **MI-7A** | Minimal `MiningProject` + `CONTROLLED_DESCENT` mode enum | MI-6A/D | **`READY`** |
-| **MI-7B** | `MiningBudget` record + exhaustion checks | MI-7A | **`READY`** |
-| **MI-7C** | `NaturalDescentExhaustionPolicy` / `NaturalDescentStatus` | MI-5, MI-6A | **`READY`** |
-| **MI-7D** | `StairStepPlan` + min excavation safety validator | MI-7B | **`READY`** |
-| **MI-7E** | Controlled staircase executor wired to project lifecycle | MI-7A–D | **BLOCKED** until 7A–D + MI-6 runtime probe |
+| **MI-7A** | Minimal `MiningProject` + `CONTROLLED_DESCENT` | MI-6A/D | **`IMPLEMENTED`** (task 20) |
+| **MI-6F** | `CaveOpportunityPolicy` wired to explore branch choice | MI-6A/D | **`READY`** — **before MI-7B+C** |
+| **MI-7B+C** | `MiningBudget` usage + `NaturalDescentExhaustionPolicy` | MI-7A, MI-6F | **`READY`** — one Begin package |
+| **MI-5H** | `DescentHeadingPolicy` — macro heading under descent pressure | MI-5, MI-6 | **`READY`** — before MI-7D |
+| **MI-7D** | `StairStepPlan` + min excavation safety | MI-7B+C, MI-5H | **`READY`** |
+| **MI-7E** | Controlled staircase executor | MI-7A, MI-7B+C, MI-5H, MI-7D | **BLOCKED** |
 
-**Later extensions (do not block MI-7E design):** MI-11 torch pairing; MI-18 full hazard intelligence;
-MI-19 budget telemetry + abandon-reason expansion; MI-14 full `MiningDirector`.
+**Later:** MI-11 torch; MI-18 hazards; MI-19 budget expansion; MI-14 director; MI-6G snapshot.
+
+### Task split (superseded table — retained for traceability)
 
 ### Behavioral Prediction — MI-7E (Gate before implement)
 
@@ -1852,11 +1954,12 @@ Gen-1 uses **Java policy records** only; SPI when a second mod needs hooks.
 | **P4** | Wire wealth into gather (MI-4) | P2b, P3a | **`IMPLEMENTED`** — MI-4R candidate-aware repair (task 13) |
 | **P5** | Explore downward bias (MI-5) | P3 | **`IMPLEMENTED`** (task 16) |
 | **P6** | Cave opportunism + `MiningMemory` (MI-6, MI-15) | P5 | **PARTIAL** — MI-6A/D/B/C done; MI-15 deferred |
-| **P7a** | Minimal `MiningProject` session (MI-7A) | P6 | **`READY`** |
-| **P7b** | `MiningBudget` shared type (MI-7B) | P7a | **`READY`** |
-| **P7c** | `NaturalDescentExhaustionPolicy` (MI-7C) | P5, P6 | **`READY`** |
-| **P7d** | `StairStepPlan` + min excavation safety (MI-7D) | P7b | **`READY`** |
-| **P7e** | Controlled staircase descent (MI-7E) | P7a–d, P7c | **BLOCKED** — needs 7A–D + MI-6 runtime probe |
+| **P7a** | Minimal `MiningProject` session (MI-7A) | P6 | **`IMPLEMENTED`** (task 20) |
+| **P6f** | `CaveOpportunity` live wiring (MI-6F) | P6 | **`READY`** — before MI-7B+C |
+| **P7bc** | Budget + natural-descent exhaustion (MI-7B+C) | P7a, P6f | **`READY`** |
+| **P5h** | `DescentHeadingPolicy` (MI-5H) | P5, P6 | **`READY`** — before MI-7D |
+| **P7d** | `StairStepPlan` + min excavation safety (MI-7D) | P7bc, P5h | **`READY`** |
+| **P7e** | Controlled staircase descent (MI-7E) | P7a, P7bc, P5h, P7d | **BLOCKED** |
 | **P8** | `MiningDirector` orchestration (MI-14) | P7e | **PARTIAL** — MI-7A is minimal project slice |
 | **P9** | `VeinFrontier` + ore utility (MI-16, MI-17, MI-21) | P8 | **FULL** |
 | **P10** | Hazards + durability + tool switch (MI-18, MI-20) | P7d, P8 | **PARTIAL** — MI-7D min safety first |
@@ -1871,11 +1974,10 @@ Gen-1 uses **Java policy records** only; SPI when a second mod needs hooks.
 ### Gen-1 slice (D-MIW-025 `CONSENSUS`, revised)
 
 ```text
-DONE:     … → MI-6 → MI-6A/D/B/C (task 18; 178 tests; runtime UNVERIFIED)
-DESIGN:   MI-7 → Controlled Excavation Descent (MI-7A…E); D-MIW-033/034 locked
-NEXT:     MI-6A falsifying probe (runtime, separate approval) OR Begin MI-7A
-DEFER:    MI-6E/F/G; MI-15 MiningMemory; full MI-14 director
-BLOCKED:  MI-7E until MI-7A–D + natural-descent runtime evidence
+DONE:     MI-7A (task 20; 200 tests)
+NEXT:     MI-6F live wiring → MI-7B+C (one package) → MI-5H → MI-7D → MI-7E
+DEFER:    MI-6E/G; MI-15 MiningMemory; full MI-14 director
+BLOCKED:  MI-7E until 6F + 7B+C + 5H + 7D
 ```
 
 `greed=0` / `wealthLevel=0` must reproduce today's exact-consumer behaviour (must-not regress iron/diamond craft).
@@ -1949,14 +2051,16 @@ boundary. Focused tests and `gradlew.bat clean build` pass (148/148); runtime re
 | MI-6D | P6a | `DESCENT_IN_CAVE` combined sort (not if/else) | **`IMPLEMENTED`** (task 18) |
 | MI-6B | P6b | Local-rim open-ravine detection | **`IMPLEMENTED`** (task 18) |
 | MI-6C | P6b | Candidate-specific cave context for gather | **`IMPLEMENTED`** (task 18) |
-| MI-6F | P6c | Short-lived CaveOpportunity commitment | **`DEFERRED`** (user) |
-| MI-6G | P6c | CaveContextSnapshot fields | **`DEFERRED`** (user) |
-| MI-6E | P6d | Replace +15 with ranked comparator | **`DEFERRED`** (MI-17 prep; user) |
-| MI-7A | P7a | Minimal `MiningProject` + `CONTROLLED_DESCENT` mode | **`IMPLEMENTED`** (task 20; 200 tests; runtime `UNVERIFIED`) |
-| MI-7B | P7b | `MiningBudget` usage + exhaustion checks | **`READY`** |
-| MI-7C | P7c | `NaturalDescentExhaustionPolicy` | **`READY`** |
+| MI-6F | P6f | `CaveOpportunityPolicy` wired to explore | **`READY`** — before MI-7B+C |
+| MI-6G | P6c | `CaveContextSnapshot` fields | **`DEFERRED`** |
+| MI-6E | P6d | Replace +15 with ranked comparator | **`DEFERRED`** (MI-17 prep) |
+| MI-7A | P7a | Minimal `MiningProject` + `CONTROLLED_DESCENT` mode | **`IMPLEMENTED`** (task 20) |
+| MI-7B+C | P7bc | Budget usage + `NaturalDescentExhaustionPolicy` | **`READY`** — one package |
+| MI-5H | P5h | `DescentHeadingPolicy` — macro descent heading | **`READY`** — before MI-7D |
 | MI-7D | P7d | `StairStepPlan` + min excavation safety | **`READY`** |
-| MI-7E | P7e | Controlled staircase executor | **BLOCKED** until 7A–D + MI-6 runtime probe |
+| MI-7E | P7e | Controlled staircase executor | **BLOCKED** until 6F + 7B+C + 5H + 7D |
+| MI-7B | — | *(merged into MI-7B+C)* | — |
+| MI-7C | — | *(merged into MI-7B+C)* | — |
 | MI-7 | — | *(superseded)* | Split into MI-7A…E (2026-08-09) |
 | MI-8 | P12 | `RequirementResolver` v1 | `BLOCKED` |
 | MI-9 | P13 | Unit tests U-MIW-* | `PARTIAL` — MI-13/MI-2 policy tests added; full U-MIW matrix open |
@@ -2085,7 +2189,9 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 | D-MIW-031 | F-2 band signal split | `CONSENSUS` | ProgressionDemand vs LocalGatherEligibility |
 | D-MIW-032 | F-6 perception budget | `PROPOSED` | Cadence, positions, probes, stagger, cross-tick |
 | D-MIW-033 | Controlled excavation descent | **`CONSENSUS`** | MI-7 is `MiningProject` mode; MI-7A…E order; not standalone dig goal |
-| D-MIW-034 | Natural descent exhaustion | **`CONSENSUS`** | MI-7 only from `EXHAUSTED`; not `candidate == null` |
+| D-MIW-034 | Natural descent exhaustion | **`CONSENSUS` revised** | Evidence-based `EXHAUSTED`; spatial coverage required; MI-6F prerequisite |
+| D-MIW-035 | Descent heading policy | **`CONSENSUS`** | MI-5H before MI-7D; shared heading primitive |
+| D-MIW-036 | MI-7B+C bundle | **`CONSENSUS`** | Budget counters + exhaustion policy ship together |
 
 ---
 
@@ -2131,7 +2237,7 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] **MI-6** cave opportunistic ore (task 17; 169 tests) — MAIBS FAIL on landings → repair package
 - [x] **MI-6A + MI-6D + MI-6B + MI-6C** (task 18; 178 tests) — code repair; runtime `UNVERIFIED`
 - [x] **Accept MI-7 redesign** — Controlled Excavation Descent MI-7A…E; D-MIW-033/034 (user 2026-08-09)
-- [ ] **Begin implementation for MI-7A** — minimal `MiningProject` session state (recommended next code)
+- [ ] **Begin implementation for MI-6F or MI-7B+C** (6F first per dependency)
 - [ ] U-MIW matrix / runtime datapack (MI-9/MI-10)
 - [ ] **MI-7E** controlled staircase (blocked until MI-7A–D + MI-6 runtime probe)
 
@@ -2142,7 +2248,7 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [ ] MI-6A falsifying probe (scripted cave Y=32 under Y=70; log landing Y)
 - [ ] MI-7E falsifying probe (`NaturalDescentStatus` transitions; no dig beside cave mouth)
 
-**MRFC-1 status:** **PASS (continuation)** — MI-7 redesigned; **MI-7A `READY`**; runtime probes open.
+**MRFC-1 status:** **PASS (continuation)** — MI-7A done; frontier **MI-6F → MI-7B+C → MI-5H → MI-7D → MI-7E**.
 
 ---
 
@@ -2166,8 +2272,11 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] **Begin implementation for MI-6A, 6D, 6B, 6C** — task 18; defer 6E/6F/6G
 - [x] **Accept MI-7 redesign** — Controlled Excavation Descent; MI-7A…E; exhaustion gate (user 2026-08-09)
 - [x] **Begin implementation for MI-7A** — minimal `MiningProject` (task 20; 200 tests)
-- [ ] **Begin implementation for MI-7B** — `MiningBudget` exhaustion (recommended next code)
-- [ ] **Begin implementation for MI-6F** — CaveOpportunity commitment (deferred)
+- [x] **Accept MI-7B+C bundle** + revised `NaturalDescentStatus` + dependency order (user 2026-08-09)
+- [x] **Accept MI-5H** — `DescentHeadingPolicy` before MI-7D (user 2026-08-09)
+- [ ] **Begin implementation for MI-6F** — live `CaveOpportunity` wiring (**before MI-7B+C**)
+- [ ] **Begin implementation for MI-7B+C** — budget + exhaustion (recommended next after 6F)
+- [ ] **Begin implementation for MI-5H** — descent heading selection
 - [ ] Runtime launch / MI-6A + MI-7E falsifying probes (separate)
 
 ---
@@ -2196,7 +2305,8 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
-| 2026-08-09 | Agent_Cursor | **MI-7 redesign** — Controlled Excavation Descent MI-7A…E; D-MIW-033/034; phase reorder; MI-7A READY |
+| 2026-08-09 | User + Agent_Cursor | **MI-7B+C bundle**, revised `NaturalDescentStatus`, **MI-5H**, MI-6F→7B+C dependency; cave-mouth downgrade |
+| 2026-08-09 | Agent_Cursor | **MI-7A implemented** (task 20; 200 tests) |
 | 2026-08-08 | Agent_Cursor | **MI-6A/D/B/C implemented** (task 18; 178 tests); defer 6E/F/G; MI-7 still blocked on runtime |
 | 2026-08-08 | Agent_Cursor | MAIBS-1 on MI-6: landing no-op `FAIL`; package MI-6A…G; MI-6A READY; MI-7 blocked behind 6A |
 | 2026-08-08 | Agent_Claude | MI-5 behavioural simulation (MAIBS-1): confirmed smallest-descent-first and descent-intent leak; found the first stage never sorts for descent (`consume()` clears pressure before the first plan) and that `MAX_LANDING_ELEVATION` already bounds deep drops; 5 weird behaviours classified; gate `FAIL — ARCHITECTURE_DEFECT`, correctness-before-scoring recommended |
@@ -2777,3 +2887,34 @@ approved MI-6A runtime probe). MI-7E blocked until 7A–D + natural-descent runt
 **RFC fields updated:** Identity, Executive Summary, Collaboration, Topic Index, new MI-7 topic,
 MiningProject modes, capabilities, MiningDirector flow, Phased plan, Tasks, Decision Registry,
 Gates, User approval, Change Log, this contribution.
+
+---
+
+### Contribution — User + Agent_Cursor (MI-7B+C bundle + MI-5H frontier)
+
+**Agent:** User (product) + Agent_Cursor
+**Date/Session:** 2026-08-09 ~00:25 PDT
+**Contribution type:** `REVIEW / DESIGN / DECISION`
+
+**Frontier before:** MI-7A `IMPLEMENTED`; MI-7B and MI-7C listed separately; MI-6F deferred; MI-5
+heading blindness noted in MAIBS but no task ID.
+
+**Action:** Locked revised frontier and dependencies:
+
+```text
+MI-7A DONE → MI-6F wire → MI-7B+C → MI-5H → MI-7D → MI-7E
+```
+
+- **D-MIW-036:** MI-7B+C one semantic unit (budget + exhaustion evidence).
+- **D-MIW-034 revised:** `EXHAUSTED` requires search budget + no natural route + no active
+  `CaveOpportunity` + spatial coverage — not path-fail count alone.
+- **D-MIW-035:** MI-5H `DescentHeadingPolicy` before MI-7D; shared heading for descent/staircase/tunnel.
+- **CaveContextSnapshot** ≠ **CaveOpportunity** naming locked.
+- Cave-mouth blindness downgraded to `LIKELY_ARCHITECTURE_GAP` (hillside rim can classify subterranean).
+- Primary descent defect elevated: novelty heading before terrain (MI-5H), not MI-7A.
+
+**Frontier after:** **MI-6F `READY`** (before MI-7B+C). Ask `Begin implementation for MI-6F` or
+`Begin implementation for MI-7B+C` after 6F.
+
+**RFC fields updated:** Identity, Naming, Executive Summary, Collaboration, Topic Index, MI-5/MI-6/MI-7
+topics, Phased plan, Tasks, Decision Registry, Gates, User approval, Change Log, this contribution.
