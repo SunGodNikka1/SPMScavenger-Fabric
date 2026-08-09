@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.experience;
 
 import com.noobk.spmscavenger.opinion.AffectiveState;
+import com.noobk.spmscavenger.opinion.DiscretionaryDirectorState;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.opinion.OpinionMemory;
 import com.noobk.spmscavenger.opinion.OpinionMemoryService;
@@ -20,6 +21,7 @@ public final class MobExperienceContext {
     private final UUID mobId;
     private final AffectiveState affectiveState = new AffectiveState();
     private final OpinionMemory opinionMemory = new OpinionMemory();
+    private final DiscretionaryDirectorState discretionaryDirector = new DiscretionaryDirectorState();
     private final OpinionExperienceSinks sinks;
     private final EpisodeRoutingPipeline pipeline;
     private final Map<UUID, ActivityEpisode> episodes = new HashMap<>();
@@ -61,6 +63,10 @@ public final class MobExperienceContext {
         return opinionMemory;
     }
 
+    public DiscretionaryDirectorState discretionaryDirector() {
+        return discretionaryDirector;
+    }
+
     public long episodeDuration(UUID episodeId, long closeTime) {
         ActivityEpisode episode = episodes.get(episodeId);
         if (episode == null) {
@@ -84,6 +90,7 @@ public final class MobExperienceContext {
     public void freeze() {
         frozen = true;
         affectiveState.freeze();
+        discretionaryDirector.onFreeze();
         invalidateEphemeral();
     }
 

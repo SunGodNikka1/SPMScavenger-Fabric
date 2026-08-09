@@ -3,6 +3,8 @@ package com.noobk.spmscavenger.goal;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
+import com.noobk.spmscavenger.opinion.DiscretionaryAuthority;
+import com.noobk.spmscavenger.opinion.IntentLifecycle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
@@ -77,6 +79,10 @@ public class CampfireGoal extends Goal {
         if (!cfg.enabled || !cfg.campfire) {
             return false;
         }
+        if (DiscretionaryAuthority.opinionGatesConsumers()
+                && !DiscretionaryAuthority.mayStartDiscretionaryRest(mob.getUUID())) {
+            return false;
+        }
         if (!scanClock.claim(mob.level().getGameTime())) {
             return false;
         }
@@ -103,6 +109,11 @@ public class CampfireGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
+        if (DiscretionaryAuthority.mustYieldDiscretionaryRest(mob.getUUID())) {
+            DiscretionaryAuthority.onRestYieldedForExplore(
+                    mob.getUUID(), mob.level().getGameTime());
+            return false;
+        }
         return ScavengerConfig.get().campfire
                 && mob.getTarget() == null
                 && approachTicks < MAX_APPROACH_TICKS
@@ -114,6 +125,9 @@ public class CampfireGoal extends Goal {
         approachTicks = 0;
         placeTicks = 0;
         restClaimOpened = false;
+        if (DiscretionaryAuthority.opinionGatesConsumers()) {
+            DiscretionaryAuthority.onRestAdopted(mob.getUUID(), mob.level().getGameTime());
+        }
         if (idlePos != null) {
             mob.getNavigation().moveTo(idlePos.getX() + 0.5, idlePos.getY(), idlePos.getZ() + 0.5, speed);
         }
@@ -121,6 +135,13 @@ public class CampfireGoal extends Goal {
 
     @Override
     public void stop() {
+        if (DiscretionaryAuthority.opinionGatesConsumers()) {
+            DiscretionaryAuthority.onRestTerminal(
+                    mob.getUUID(),
+                    IntentLifecycle.INTERRUPTED,
+                    mob.level().getGameTime(),
+                    "campfire-stop");
+        }
         firePos = null;
         idlePos = null;
         approachTicks = 0;

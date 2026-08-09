@@ -9,7 +9,7 @@
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
 | **Mode** | `PLANNING` |
-| **Status** | GAO-0 through GAO-3 `IMPLEMENTED / STATIC VERIFIED`; GAO-4 contract `LOCKED` (preflight); implementation **not authorized**; runtime `UNVERIFIED` |
+| **Status** | GAO-0 through GAO-4 `IMPLEMENTED / STATIC VERIFIED`; runtime `UNVERIFIED` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
@@ -1191,7 +1191,7 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-1** | `AffectiveState` + observation | **IMPLEMENTED:** per-mob mood channels, 10-tick observation, pulse wiring, rate-based boredom, REST/stalled/social semantics, decay, freeze-on-unload, `opinion.enabled` | GAO-0, GAO-0b, GAO-0c |
 | **GAO-2** | `OpinionMemory` v1 (ACTIVITY only) | **IMPLEMENTED:** `ActivityOpinionMemory`, `OpinionMemory`, `OpinionLearningPolicy`, normalized-evidence wiring, PD-GAO-03 death reset | GAO-1 |
 | **GAO-3** | `IdleOpportunityPolicy` | **IMPLEMENTED:** EXPLORE + REST utility scoring, normalized components, ranked `ScoringResult`, no execution | GAO-2, existing goals |
-| **GAO-4** | `DiscretionaryActivityDirector` | **CONTRACT LOCKED** — intent lifecycle, abstention, voluntary yield, consumer gates; implementation pending authorization | GAO-3 |
+| **GAO-4** | `DiscretionaryActivityDirector` | **IMPLEMENTED:** intent lifecycle, abstention, voluntary yield, consumer gates, trace | GAO-3 |
 | **GAO-5** | PLACE / ENVIRONMENT opinions | World gains meaning for choice | GAO-4, spatial memory TBD |
 | **GAO-6** | ENTITY bridge | SPM `feelingToward` integration | GAO-4 |
 | **GAO-7** | PersonalityModel | Trait-weighted experience scaling | GAO-2 |
@@ -2324,3 +2324,36 @@ no intent gate; `ExploringGoal.canUse` readiness-independent discretionary start
 | GAO-4 Director | **CONTRACT LOCKED** | — | **not wired** | UNVERIFIED |
 
 **Frontier after:** user authorization to implement GAO-4 per this contract.
+
+---
+
+## Contribution — Agent_Cursor (GAO-4 DiscretionaryActivityDirector)
+
+**Agent:** `Agent_Cursor` **Date/Session:** 2026-08-09 **Type:** `IMPLEMENTATION`
+
+**Delivered:** `DiscretionaryIntent`, `IntentLifecycle`, `InvalidationCause`,
+`DiscretionaryDirectorConstants`, `DiscretionaryDirectorState`, `DiscretionaryActivityDirector`,
+`DiscretionaryEligibility`, `DiscretionaryAuthority`, `OpinionDecisionTrace`; consumer gates on
+`CampfireGoal`, `ExploringGoal`, `TrackedLocalWanderGoal`; director tick in
+`ExplorationActivityGoal`; tests `DiscretionaryActivityDirectorTest` (GAO-4-M1…M12),
+`DiscretionaryDirectorConstantsTest`.
+
+**Tuning constants (tunable, evidence-anchored):**
+
+| Constant | Value | Rationale |
+| --- | ---: | --- |
+| `ACTIVATION_THRESHOLD` | `0f` | Top utility must be positive appeal; both negative abstain (M7) |
+| `SWITCH_MARGIN` | `8f` | ~20% band on ±100 utility scale; blocks jitter (M11) |
+| `MIN_COMMITMENT_TICKS` | `600` | Matches `ExploringGoal.COOLDOWN_TICKS` expedition horizon |
+| `PENDING_INTENT_TTL_TICKS` | `200` | 20 × 10-tick observation passes (legacy B-19) |
+| `TRACE_CAPACITY` | `24` | D-GAO-025 bounded ring |
+
+**Evidence (`CONFIRMED`):** `.\gradlew.bat clean build` — BUILD SUCCESSFUL; 461 tests, 0 failures.
+
+**MAIBS (`CODE_CONFIRMED`, runtime `UNVERIFIED`):** GAO-4-M1…M12 static scenarios pass; voluntary
+REST→EXPLORE yield flag proven in director tests; consumer gates compile against locked paths.
+
+**Not delivered:** runtime launch, disk persistence, PLACE/ENTITY opinions, PersonalityModel,
+`ExplorationReadiness` threshold modulation.
+
+**Frontier after:** runtime validation with `opinion.enabled=true`; optional GAO-5+ scope.

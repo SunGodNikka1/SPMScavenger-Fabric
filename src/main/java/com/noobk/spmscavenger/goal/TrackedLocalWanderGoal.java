@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.goal;
 
 import com.noobk.spmscavenger.ScavengerConfig;
+import com.noobk.spmscavenger.opinion.DiscretionaryAuthority;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 
@@ -39,6 +40,9 @@ public final class TrackedLocalWanderGoal extends WaterAvoidingRandomStrollGoal 
 
     @Override
     public boolean canContinueToUse() {
+        if (DiscretionaryAuthority.mustYieldWander(mob.getUUID())) {
+            return false;
+        }
         boolean continuing = super.canContinueToUse();
         if (!continuing && mob.getNavigation().isDone()) {
             double dx = mob.getX() - startX;

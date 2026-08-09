@@ -5,6 +5,8 @@ import com.noobk.spmscavenger.DescentPressurePolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.opinion.AffectiveStateService;
+import com.noobk.spmscavenger.opinion.DiscretionaryActivityDirector;
+import com.noobk.spmscavenger.opinion.DiscretionaryAvailability;
 import com.noobk.spmscavenger.ScavengerConfig;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.GameRules;
@@ -114,6 +116,13 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
 
         RestSessionCoordinator.validate(mob, observation, mob.level().getGameTime());
         AffectiveStateService.observe(mob.getUUID(), observation, OBSERVE_INTERVAL);
+        DiscretionaryAvailability availability = new DiscretionaryAvailability(cfg.exploring, cfg.campfire);
+        DiscretionaryActivityDirector.tick(
+                mob.getUUID(),
+                mob.level().getGameTime(),
+                observation,
+                availability,
+                mob.getTarget() != null);
 
         boolean mayCreateWork = permitsNewMiningWork(cfg.enabled, allowNewMiningWork);
         if (mayCreateWork) {

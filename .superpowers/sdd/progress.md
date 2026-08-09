@@ -70,9 +70,7 @@ safety pause; player-order prevention/revocation; pre-start pause NBT v4; 400-ti
 C3-F1…F7; 321 tests/clean build; MAIBS static PASS; runtime unverified). Post-GREEN review also
 repaired a same-observer CommandedAction revoke→reassign loop. No Tunnel Search work performed.
 
-GA-OPINION: GAO-0 through GAO-3 `IMPLEMENTED / STATIC VERIFIED`; GAO-4 preflight contract
-`LOCKED` (abstention, intent lifecycle, voluntary yield, consumer gates, 12 MAIBS scenarios);
-implementation **not authorized**;
-`plans/RFC-ADAPTIVE-OPINION-MOOD-AND-ENGAGEMENT.md`; 445 tests/build pass; runtime unverified.
+GA-OPINION: GAO-0 through GAO-4 `IMPLEMENTED / STATIC VERIFIED` — scoring, director, intent
+lifecycle, voluntary yield, consumer gates; 461 tests/clean build pass; runtime unverified.
 
 No commits. No Minecraft launches (separate approval required).

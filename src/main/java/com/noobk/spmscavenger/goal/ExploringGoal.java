@@ -16,6 +16,8 @@ import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.SpmScavenger;
 import com.noobk.spmscavenger.experience.ExperienceEmitters;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
+import com.noobk.spmscavenger.opinion.DiscretionaryAuthority;
+import com.noobk.spmscavenger.opinion.IntentLifecycle;
 import com.noobk.spmscavenger.mining.NaturalDescentExhaustionPolicy;
 import com.noobk.spmscavenger.mining.NaturalDescentSearchState;
 import com.noobk.spmscavenger.mining.NaturalDescentStatus;
@@ -173,8 +175,15 @@ public final class ExploringGoal extends Goal {
             if (!readiness.eligible(now, cfg.exploreLocalTripsThreshold, cfg.exploreIdleTicks)) {
                 return false;
             }
+            if (isDiscretionaryExplorePath()
+                    && !DiscretionaryAuthority.mayStartDiscretionaryExplore(mob.getUUID())) {
+                return false;
+            }
             expedition = createExpedition(level, cfg);
             if (expedition == null) {
+                if (isDiscretionaryExplorePath()) {
+                    DiscretionaryAuthority.onExploreFailedToStart(mob.getUUID(), now);
+                }
                 readiness.consume(now + COOLDOWN_TICKS);
                 return false;
             }
@@ -198,15 +207,31 @@ public final class ExploringGoal extends Goal {
                 expedition.companionsInvited = true;
                 inviteCompanions(level, cfg, now);
             }
+            if (isDiscretionaryExplorePath()) {
+                DiscretionaryAuthority.onExploreAdopted(mob.getUUID(), now);
+            }
             return true;
+        }
+        if (isDiscretionaryExplorePath()) {
+            DiscretionaryAuthority.onExploreFailedToStart(mob.getUUID(), now);
         }
         handlePlanFailure(result, now);
         return false;
     }
 
+    private boolean isDiscretionaryExplorePath() {
+        return DiscretionaryAuthority.opinionGatesConsumers() && !readiness.hasDescentPressure();
+    }
+
     @Override
     public boolean canContinueToUse() {
         if (expedition == null) {
+            return false;
+        }
+        if (DiscretionaryAuthority.mustYieldDiscretionaryExplore(mob.getUUID())) {
+            if (mob.level() instanceof ServerLevel level) {
+                DiscretionaryAuthority.onExploreYieldedForRest(mob.getUUID(), level.getGameTime());
+            }
             return false;
         }
         if (mob.level() instanceof ServerLevel level
@@ -240,6 +265,13 @@ public final class ExploringGoal extends Goal {
         navigationState = null;
         if (expedition != null && mob.level() instanceof ServerLevel level) {
             expedition.lastInterruptedTick = level.getGameTime();
+            if (isDiscretionaryExplorePath() && !expedition.caveHandoffContinuation) {
+                DiscretionaryAuthority.onExploreTerminal(
+                        mob.getUUID(),
+                        IntentLifecycle.INTERRUPTED,
+                        level.getGameTime(),
+                        "explore-stop");
+            }
         }
     }
 
@@ -1075,6 +1107,7 @@ public final class ExploringGoal extends Goal {
         if (expedition == null) {
             return;
         }
+        boolean discretionaryTerminal = isDiscretionaryExplorePath() && !expedition.caveHandoffContinuation;
         if (mob.level() instanceof ServerLevel level) {
             clearCaveContinuationCommitment(level);
         }
@@ -1089,6 +1122,10 @@ public final class ExploringGoal extends Goal {
         expedition = null;
         navigationState = null;
         readiness.consume(now + COOLDOWN_TICKS);
+        if (discretionaryTerminal) {
+            DiscretionaryAuthority.onExploreTerminal(
+                    mob.getUUID(), IntentLifecycle.SUCCEEDED, now, "expedition-complete");
+        }
     }
 
     private void emitExpeditionUnlocked(ExpeditionState state, long now) {
@@ -1107,6 +1144,9 @@ public final class ExploringGoal extends Goal {
 
     private void abandon(EndReason reason, long now) {
         // A simulation frontier is not evidence that the heading or unseen destination was bad.
+        boolean discretionaryTerminal = expedition != null
+                && isDiscretionaryExplorePath()
+                && !expedition.caveHandoffContinuation;
         if (expedition != null) {
             if (mob.level() instanceof ServerLevel level) {
                 clearCaveContinuationCommitment(level);
@@ -1121,6 +1161,15 @@ public final class ExploringGoal extends Goal {
         expedition = null;
         navigationState = null;
         mob.getNavigation().stop();
+        if (discretionaryTerminal) {
+            DiscretionaryAuthority.onExploreTerminal(
+                    mob.getUUID(),
+                    reason == EndReason.SIMULATION_FRONTIER
+                            ? IntentLifecycle.INTERRUPTED
+                            : IntentLifecycle.FAILED,
+                    now,
+                    reason.name());
+        }
         readiness.consume(now + (reason == EndReason.SIMULATION_FRONTIER
                 ? COOLDOWN_TICKS / 2 : COOLDOWN_TICKS));
     }
