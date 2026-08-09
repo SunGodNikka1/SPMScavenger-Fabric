@@ -9,6 +9,8 @@ import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.DimensionDataStorage;
 
+import net.minecraft.core.BlockPos;
+import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -29,6 +31,15 @@ public final class MiningProjectSavedData extends SavedData {
      * only RUNNING / INTERRUPTED / RETRY, so the outcome would vanish in the same call that made it.
      */
     private final Map<UUID, MiningTransition> pendingTransitions = new HashMap<>();
+
+    /**
+     * D-MIW-TS2 - exposure offered by an active project to a downstream consumer.
+     *
+     * <p>Runtime-only: an opportunity is worth at most {@code OFFER_LIFETIME_TICKS}, so persisting
+     * it across a restart would only ever resurrect something stale. The project it belongs to is
+     * persisted, so the tunnel resumes correctly and simply offers the next cell it cuts.
+     */
+    private final Map<UUID, ExposureOpportunity> exposures = new HashMap<>();
 
     /** MI-14C1 - execution lifecycle per mob, kept beside the project it authorizes. */
     private final Map<UUID, MiningExecutionLease> leases = new HashMap<>();
@@ -167,6 +178,68 @@ public final class MiningProjectSavedData extends SavedData {
             UUID mobId, MiningProjectEnd end, MiningTransition transition) {
         recordTransition(mobId, transition);
         return completeProject(mobId, end);
+    }
+
+    /** D-MIW-TS2 - the exposure this mob's active project is currently offering, if any. */
+    public Optional<ExposureOpportunity> exposureOf(UUID mobId) {
+        return Optional.ofNullable(exposures.get(mobId));
+    }
+
+    /**
+     * Records a fresh excavation boundary, replacing any earlier offer.
+     *
+     * <p>An unprobed offer being overwritten by the next cut is correct: the newer boundary is the
+     * one the mob is standing at. An offer that is already {@code ACQUIRING} is left alone, because
+     * the consumer is mid-vein and the producer should not be cutting anyway.
+     */
+    public void offerExposure(UUID mobId, MiningProject project, List<BlockPos> openedCells,
+            long now) {
+        ExposureOpportunity existing = exposures.get(mobId);
+        if (existing != null
+                && existing.phase() == ExposureOpportunity.Phase.ACQUIRING
+                && existing.belongsTo(project)) {
+            return;
+        }
+        exposures.put(mobId, ExposureOpportunity.offer(project, openedCells, now));
+    }
+
+    /**
+     * Consumes the single probe this offer grants.
+     *
+     * <p>Consumed when the probe <b>executes</b>, not when the consumer is merely scheduled - an
+     * earlier admission failure must never destroy an opportunity nothing inspected. The caller
+     * follows with {@link #beginCooperativeAcquisition} if it found a legitimate target, or
+     * {@link #clearExposure} if it did not.
+     *
+     * @return the boundary to inspect, or empty when no probe is on offer
+     */
+    public Optional<ExposureOpportunity> consumeExposureProbe(UUID mobId, MiningProject project,
+            long now) {
+        ExposureOpportunity offer = exposures.get(mobId);
+        if (!ExposureOpportunityPolicy.offersProbe(offer, project, now)) {
+            return Optional.empty();
+        }
+        return Optional.of(offer);
+    }
+
+    /** The probe found something: hold the session so vein-follow can finish. */
+    public void beginCooperativeAcquisition(UUID mobId, long now) {
+        ExposureOpportunity offer = exposures.get(mobId);
+        if (offer != null) {
+            exposures.put(mobId, offer.acquiring(now));
+        }
+    }
+
+    /** A cooperative take happened; restart the vein idle clock. */
+    public void noteCooperativeAcquisition(UUID mobId, long now) {
+        ExposureOpportunity offer = exposures.get(mobId);
+        if (offer != null) {
+            exposures.put(mobId, offer.withActivity(now));
+        }
+    }
+
+    public void clearExposure(UUID mobId) {
+        exposures.remove(mobId);
     }
 
     /** MI-14C1 - the lease authorizing this mob's assignment, if one was issued. */
