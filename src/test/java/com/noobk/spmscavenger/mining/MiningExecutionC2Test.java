@@ -101,20 +101,21 @@ class MiningExecutionC2Test {
     }
 
     @Test
-    void c2g_intentChangeYieldsGatherForContinuation() {
+    void c2g_intentChangeYieldsGatherAfterHandoffClaimed() {
         MiningProjectSavedData store = MiningProjectSavedData.createEmpty();
-        store.recordTransition(
-                MOB,
-                new MiningTransition(
-                        MiningProjectMode.CONTROLLED_DESCENT,
-                        MiningProjectEnd.CAVE_FOUND,
-                        new BlockPos(1, 32, 2),
-                        Direction.SOUTH,
-                        new BlockPos(1, 30, 2),
-                        500L));
+        MiningTransition handoff = new MiningTransition(
+                MiningProjectMode.CONTROLLED_DESCENT,
+                MiningProjectEnd.CAVE_FOUND,
+                new BlockPos(1, 32, 2),
+                Direction.SOUTH,
+                new BlockPos(1, 30, 2),
+                500L);
+        store.recordTransition(MOB, handoff);
+        assertTrue(store.claimCaveContinuation(MOB, handoff, 600L));
 
-        ExecutionIntent intent = ExecutionIntentPolicy.derive(store, MOB, 600L);
+        ExecutionIntent intent = ExecutionIntentPolicy.derive(store, MOB, 601L);
         assertEquals(ExecutionIntent.CAVE_HANDOFF, intent);
+        assertTrue(store.pendingTransition(MOB).isEmpty());
         assertEquals(
                 ArbitrationDecision.YIELD,
                 MiningExecutionArbiter.decide(intent, MiningGoalKind.GATHER_RESOURCES));

@@ -10,8 +10,8 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 /**
- * MI-14C2 — detects when an actionable mining intent exists but a chore that should yield still
- * holds {@code MOVE} in the physical scheduler.
+ * MI-14C2 — detects when an actionable mining intent exists but another goal still holds
+ * {@code MOVE} in the physical scheduler.
  */
 public final class MoveContentionPolicy {
 
@@ -21,7 +21,7 @@ public final class MoveContentionPolicy {
     /**
      * @param excluded running goal to ignore, usually the executor asking for admission
      */
-    public static boolean hasYieldingMoveHolder(
+    public static boolean hasBlockingMoveHolder(
             Mob mob,
             @Nullable Goal excluded,
             MiningProjectSavedData store,
@@ -43,15 +43,22 @@ public final class MoveContentionPolicy {
             if (goal == excluded) {
                 continue;
             }
-            MiningGoalKind kind =
-                    MiningGoalKind.classify(goal, store, mobId, now).orElse(null);
-            if (kind == null) {
-                continue;
-            }
-            if (MiningExecutionArbiter.decide(intent, kind) == ArbitrationDecision.YIELD) {
+            MoveHolderClassification classification =
+                    MoveHolderClassifier.classify(goal, mob, store, mobId, now);
+            if (MoveHolderClassifier.blocksMiningExecution(intent, classification)) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** @deprecated use {@link #hasBlockingMoveHolder} */
+    @Deprecated
+    public static boolean hasYieldingMoveHolder(
+            Mob mob,
+            @Nullable Goal excluded,
+            MiningProjectSavedData store,
+            long now) {
+        return hasBlockingMoveHolder(mob, excluded, store, now);
     }
 }

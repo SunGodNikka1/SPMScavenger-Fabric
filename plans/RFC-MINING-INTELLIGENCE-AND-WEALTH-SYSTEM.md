@@ -9,7 +9,7 @@
 | **Target progression** | **Vanilla Minecraft 1.21.1 mining + resource wealth** (overworld ore tiers through diamond/deepslate; not Nether/endgame mining in gen-1) |
 | **Scope** | Autonomous *where* to mine, *how much* to stockpile (wealth), prerequisite planning hooks, capability gaps, integration methods, phased plan, validation — **design until implementation authorized** |
 | **Mode** | `PROGRESSIVE_CONTINUATION` (User — Continue the RFC) |
-| **Status** | MI-14C2 unit `IMPLEMENTED`; **MAIBS C2 `FAIL — ARCHITECTURE_DEFECT`** (M1–M3); repair package MI-14C2-R1/R2 + C1-R2 before C3 |
+| **Status** | MI-14C2 repair `IMPLEMENTED` (task-29); **MAIBS C2 `PASS_WITH_RUNTIME_UNVERIFIED`**; MI-14C3 ready |
 | **User constraint** | No Minecraft launch, commit, or push unless separately asked; implementation only after explicit Begin authorization |
 | **Baseline version** | `1.9.2` |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `TaskLifecycle.java` |
@@ -103,7 +103,7 @@ novelty before terrain** (MI-5H), not MI-7 session types alone.
 | [MI-5 behavioural prediction](#topic-mi-5-behavioural-prediction-gate-maibs-1) | `FAIL` heading blindness | **MI-5H `READY`** — `DescentHeadingPolicy` |
 | [MI-6 behavioural prediction](#topic-mi-6-behavioural-prediction-gate-maibs-1) | 6A/D/B/C `IMPLEMENTED`; runtime `UNVERIFIED` | **MI-6F wire before MI-7B+C** |
 | [MI-7 controlled excavation descent](#topic-mi-7-controlled-excavation-descent-gate-maibs-1) | MI-7R `IMPLEMENTED` | MI-14C control plane active |
-| [MI-14C execution control](#topic-mi-14c--execution-control-plane-proposed-user--agent_claude) | C2 unit done; **MAIBS C2 FAIL** (M1–M3) | **Next: MI-14C2-R1/R2 + C1-R2** |
+| [MI-14C execution control](#topic-mi-14c--execution-control-plane-proposed-user--agent_claude) | C2 repair done; MAIBS C2 pass (static) | **Next: Begin MI-14C3** |
 | [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order (revised) | **Next: C2 repair → MAIBS re-pass → C3** |
 | [Validation](#topic-validation) | `PARTIAL` | Policy units green; gather wealth + runtime open |
 | [Deferred](#topic-deferred-and-unverified) | — | Nether, branch mines, portfolio gen-1 |
@@ -624,33 +624,18 @@ replacing `GoalSelector` and **without** allowing mining to override combat/surv
 `SmeltAtFurnaceGoal`, `CraftTorchesGoal`, `ExploringGoal` — arbiter consulted in **both**
 `canUse()` and `canContinueToUse()`.
 
-#### MAIBS C2 static pass (Gate MAIBS-1, post-implementation)
+#### MAIBS C2 static pass (Gate MAIBS-1, post-repair task-29)
 
-**Verdict:** **`FAIL — ARCHITECTURE_DEFECT`** — policy matrices correct; multi-cycle lifecycle
-defective. Full report: `.superpowers/sdd/task-27-maibs-report.md`.
+**Verdict:** **`PASS_WITH_RUNTIME_UNVERIFIED`** — M1–M3 repaired; full report in
+`.superpowers/sdd/task-29-report.md`. Prior FAIL documented in `task-27-maibs-report.md`.
 
-| ID | Defect | Classification | Repair task |
-| --- | --- | --- | --- |
-| **M1** | `CAVE_HANDOFF` authority evaporates after `consumeTransition()` in `acceptCaveHandoff` | `ARCHITECTURE_DEFECT` | **MI-14C2-R1** — persistent `CAVE_CONTINUATION` commitment |
-| **M2** | `MoveContentionPolicy` ignores host SPM MOVE goals (`FollowLovedOneGoal` priority 2) | `ARCHITECTURE_DEFECT` | **MI-14C2-R2** — scheduler-wide MOVE holder classification |
-| **M3** | `ControlledDescentGoal.stop()` resurrects director-revoked `RUNNING` project | `ARCHITECTURE_DEFECT` | **MI-14C1-R2** — revocation-safe stop |
-
-#### C2-A…G MAIBS verdict (revised)
-
-| Case | Static result | Why |
+| ID | Repair | Static re-pass |
 | --- | --- | --- |
-| **C2-A** | **FAIL** E2E | Gather yields initially; authority → `NONE` after handoff consumption |
-| **C2-B** | **PASS_WITH_CONCERNS** | Participating goals only; host MOVE invisible |
-| **C2-C** | **PASS** | `COMBAT_TARGET` TEMPORARY |
-| **C2-D** | **PASS** static | Episode clock clears; runtime `UNVERIFIED` |
-| **C2-E** | **PASS** | Tunnel pending neutral |
-| **C2-F** | **FAIL** | Only scavenger goals visible |
-| **C2-G** | **PARTIAL/FAIL** E2E | Initial yield; sustained cave authority lost |
+| **M1** | `MiningExecutionCommitment` + `claimCaveContinuation` | C2-A/G **PASS** |
+| **M2** | `MoveHolderClassifier` + `hasBlockingMoveHolder` | C2-F **PASS** static |
+| **M3** | `shouldPersistExecutorCheckpoint` + guarded `stop()` | C1-R2 tests **PASS** |
 
-**Method lesson:** C2 unit tests prove matrices while transitions remain pending; they do not
-simulate post-accept arbitration or host-goal MOVE ownership.
-
-**Do not start MI-14C3** until R1/R2/R2 ship and MAIBS C2 re-passes.
+**Do not claim runtime CONFIRMED** without launch approval probes (RT-C2-A/F in task-27-maibs-report).
 
 #### Separation of concerns (`CONSENSUS` — D-MIW-037)
 
@@ -795,10 +780,10 @@ Do **not** classify combat as contention when combat already has `TEMPORARY` cla
 `MiningExecutionArbiter.decide(intent, goalKind)` → goals call arbiter in `canUse` + `canContinueToUse`;
 `MiningDirector` observes `MOVE` ownership for `CONTENTION` when lease would otherwise `AUTHORIZE`.
 
-### MI-14C3 — Progress Lease (fixes stale-active Loop A) — `LOCKED` contract — **BLOCKED**
+### MI-14C3 — Progress Lease (fixes stale-active Loop A) — `LOCKED` contract — **READY**
 
-**Status:** `BLOCKED` — do not implement until MAIBS C2 re-passes after MI-14C2-R1/R2 + C1-R2.
-**Prerequisite:** MI-14C2 repair package (task-29-brief).
+**Status:** `READY` — requires `Begin implementation for MI-14C3` (MAIBS C2 repair complete).
+**Prerequisite:** MI-14C2 repair package (task-29) `IMPLEMENTED`.
 
 Two clocks — start lease (C1) and progress lease (C3) — because an executor that starts once and
 then starves forever is still a zombie assignment:

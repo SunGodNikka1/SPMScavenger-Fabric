@@ -419,10 +419,13 @@ public final class ExploringGoal extends Goal {
             return false;
         }
 
-        store.consumeTransition(mob.getUUID());
+        if (!store.claimCaveContinuation(mob.getUUID(), handoff, now)) {
+            return false;
+        }
         mob.getNavigation().stop();
         navigationState = null;
         expedition = rebased;
+        expedition.caveHandoffContinuation = true;
         expedition.companionsInvited = true; // a handoff is not a recruiting opportunity
         readiness.consume(now + COOLDOWN_TICKS);
         SpmScavenger.LOGGER.info(
@@ -1039,6 +1042,9 @@ public final class ExploringGoal extends Goal {
         if (expedition == null) {
             return;
         }
+        if (mob.level() instanceof ServerLevel level) {
+            clearCaveContinuationCommitment(level);
+        }
         remember(recentExpeditionDestinations,
                 ExplorationPolicy.regionKey(actualEnd.getX(), actualEnd.getZ(), REGION_SIZE_CHUNKS),
                 REGION_MEMORY_LIMIT);
@@ -1052,9 +1058,18 @@ public final class ExploringGoal extends Goal {
         readiness.consume(now + COOLDOWN_TICKS);
     }
 
+    private void clearCaveContinuationCommitment(ServerLevel level) {
+        if (expedition != null && expedition.caveHandoffContinuation) {
+            MiningProjectSavedData.get(level).clearCommitment(mob.getUUID());
+        }
+    }
+
     private void abandon(EndReason reason, long now) {
         // A simulation frontier is not evidence that the heading or unseen destination was bad.
         if (expedition != null) {
+            if (mob.level() instanceof ServerLevel level) {
+                clearCaveContinuationCommitment(level);
+            }
             SpmScavenger.LOGGER.info(
                     "[spmscavenger] exploration ended entity={} intent={} reason={} waypoint={}/{} "
                             + "hops={} waypointFailures={} expeditionFailures={}",
@@ -1162,6 +1177,7 @@ public final class ExploringGoal extends Goal {
         CaveOpportunityPolicy.CaveOpportunity caveCommitment;
         boolean lastPlanHadReachableLanding;
         boolean lastPlanHadBlockedOpportunity;
+        boolean caveHandoffContinuation;
 
         ExpeditionState(
                 ExplorationIntent intent,

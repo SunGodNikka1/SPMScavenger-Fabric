@@ -143,8 +143,13 @@ public final class ControlledDescentGoal extends Goal {
     @Override
     public void stop() {
         if (project != null && mob.level() instanceof ServerLevel level) {
-            MiningProjectSavedData.get(level).putProject(mob.getUUID(), project);
+            MiningProjectSavedData store = MiningProjectSavedData.get(level);
+            if (MiningDirector.shouldPersistExecutorCheckpoint(
+                    store, mob.getUUID(), project)) {
+                store.putProject(mob.getUUID(), project);
+            }
         }
+        project = null;
         currentStep = null;
         breakTarget = null;
         breakIndex = 0;

@@ -33,6 +33,9 @@ public final class MiningProjectSavedData extends SavedData {
     /** MI-14C1 - execution lifecycle per mob, kept beside the project it authorizes. */
     private final Map<UUID, MiningExecutionLease> leases = new HashMap<>();
 
+    /** MI-14C2-R1 — authority that survives transition consumption until completion or expiry. */
+    private final Map<UUID, MiningExecutionCommitment> commitments = new HashMap<>();
+
     public MiningProjectSavedData() {
     }
 
@@ -73,6 +76,16 @@ public final class MiningProjectSavedData extends SavedData {
                     wrapped.getUUID("mob"),
                     MiningExecutionLease.load(wrapped.getCompound("lease")));
         }
+        ListTag commitmentList = tag.getList("commitments", Tag.TAG_COMPOUND);
+        for (int index = 0; index < commitmentList.size(); index++) {
+            CompoundTag wrapped = commitmentList.getCompound(index);
+            if (!wrapped.hasUUID("mob")) {
+                continue;
+            }
+            data.commitments.put(
+                    wrapped.getUUID("mob"),
+                    MiningExecutionCommitment.load(wrapped.getCompound("commitment")));
+        }
         return data;
     }
 
@@ -108,6 +121,15 @@ public final class MiningProjectSavedData extends SavedData {
             leaseList.add(wrapped);
         }
         tag.put("leases", leaseList);
+
+        ListTag commitmentList = new ListTag();
+        for (Map.Entry<UUID, MiningExecutionCommitment> entry : commitments.entrySet()) {
+            CompoundTag wrapped = new CompoundTag();
+            wrapped.putUUID("mob", entry.getKey());
+            wrapped.put("commitment", entry.getValue().save());
+            commitmentList.add(wrapped);
+        }
+        tag.put("commitments", commitmentList);
         return tag;
     }
 
@@ -161,6 +183,53 @@ public final class MiningProjectSavedData extends SavedData {
         if (leases.remove(mobId) != null) {
             setDirty();
         }
+    }
+
+    /** MI-14C2-R1 — active execution commitment, if any. */
+    public Optional<MiningExecutionCommitment> commitmentOf(UUID mobId) {
+        return Optional.ofNullable(commitments.get(mobId));
+    }
+
+    public void putCommitment(UUID mobId, MiningExecutionCommitment commitment) {
+        commitments.put(mobId, commitment);
+        setDirty();
+    }
+
+    public void clearCommitment(UUID mobId) {
+        if (commitments.remove(mobId) != null) {
+            setDirty();
+        }
+    }
+
+    /**
+     * Atomically consumes a {@code CAVE_FOUND} transition and installs the continuation commitment.
+     *
+     * @return false when the expected handoff is no longer pending
+     */
+    public boolean claimCaveContinuation(UUID mobId, MiningTransition expected, long now) {
+        Optional<MiningTransition> pending = pendingTransition(mobId);
+        if (pending.isEmpty() || !pending.get().equals(expected)) {
+            return false;
+        }
+        consumeTransition(mobId);
+        putCommitment(mobId, MiningExecutionCommitment.caveContinuation(expected, now));
+        return true;
+    }
+
+    /** Drops expired commitments so intent derivation does not resurrect stale authority. */
+    public void pruneExpiredCommitments(UUID mobId, long now) {
+        MiningExecutionCommitment commitment = commitments.get(mobId);
+        if (commitment != null && !commitment.isActive(now)) {
+            clearCommitment(mobId);
+        }
+    }
+
+    public boolean hasActiveCaveContinuation(UUID mobId, long now) {
+        pruneExpiredCommitments(mobId, now);
+        return commitmentOf(mobId)
+                .filter(commitment -> commitment.kind() == ExecutionCommitmentKind.CAVE_CONTINUATION)
+                .filter(commitment -> commitment.isActive(now))
+                .isPresent();
     }
 
     public Optional<MiningProject> projectOf(UUID mobId) {

@@ -14,8 +14,12 @@ public final class ExecutionIntentPolicy {
     }
 
     public static ExecutionIntent derive(MiningProjectSavedData store, UUID mobId, long now) {
+        store.pruneExpiredCommitments(mobId, now);
         if (store.projectOf(mobId).filter(MiningProject::isControlledDescent).isPresent()) {
             return ExecutionIntent.CONTROLLED_DESCENT;
+        }
+        if (store.hasActiveCaveContinuation(mobId, now)) {
+            return ExecutionIntent.CAVE_HANDOFF;
         }
         return store.pendingTransition(mobId)
                 .map(transition -> fromPending(transition, now))

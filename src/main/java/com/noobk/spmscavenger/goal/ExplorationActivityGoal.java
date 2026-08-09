@@ -151,7 +151,7 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         long now = level.getGameTime();
         NaturalDescentStatus status = exploring.naturalDescentStatus(level, now);
         if (!MiningDirector.mayStartControlledDescent(
-                store, mob.getUUID(), status, readiness.hasDescentPressure())) {
+                store, mob.getUUID(), status, readiness.hasDescentPressure(), now)) {
             return;
         }
         DescentHeadingPolicy.Heading heading = DescentHeadingPolicy.chooseBest(

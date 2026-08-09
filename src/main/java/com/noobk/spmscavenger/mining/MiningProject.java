@@ -77,6 +77,14 @@ public record MiningProject(
         return mode == MiningProjectMode.CONTROLLED_DESCENT && isActive();
     }
 
+    /** Whether {@code other} refers to the same assigned session, not merely the same mode. */
+    public boolean matchesSession(MiningProject other) {
+        return other != null
+                && mode == other.mode
+                && origin.equals(other.origin)
+                && startedGameTime == other.startedGameTime;
+    }
+
     public boolean shouldPersist() {
         return lifecycle == TaskLifecycle.RUNNING
                 || lifecycle == TaskLifecycle.INTERRUPTED

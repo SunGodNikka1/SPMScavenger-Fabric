@@ -54,7 +54,7 @@ public final class MiningDirector {
      */
     public static boolean mayStartControlledDescent(
             MiningProjectSavedData store, UUID mobId, NaturalDescentStatus status,
-            boolean descentPressure) {
+            boolean descentPressure, long now) {
         if (store.projectOf(mobId).isPresent()) {
             return false;
         }
@@ -64,6 +64,9 @@ public final class MiningDirector {
         if (store.pendingTransition(mobId)
                 .filter(MiningTransition::blocksControlledDescentRestart)
                 .isPresent()) {
+            return false;
+        }
+        if (store.hasActiveCaveContinuation(mobId, now)) {
             return false;
         }
         return NaturalDescentExhaustionPolicy.mayStartControlledDescent(status);
@@ -170,7 +173,7 @@ public final class MiningDirector {
         if (!blocker.permitsExecution()) {
             return blocker;
         }
-        if (MoveContentionPolicy.hasYieldingMoveHolder(
+        if (MoveContentionPolicy.hasBlockingMoveHolder(
                 mob, callingGoal, store, level.getGameTime())) {
             return ExecutionBlocker.CONTENTION;
         }
@@ -258,6 +261,14 @@ public final class MiningDirector {
                         mob.getUUID(), lease.started(level.getGameTime())));
     }
 
+    /** MI-14C1-R2 — whether an executor may persist interruption state after {@code stop()}. */
+    public static boolean shouldPersistExecutorCheckpoint(
+            MiningProjectSavedData store, UUID mobId, MiningProject localCopy) {
+        return store.projectOf(mobId)
+                .filter(MiningProject::isActive)
+                .filter(stored -> stored.matchesSession(localCopy))
+                .isPresent();
+    }
     /** The project this mob is assigned, if any. Executors ask; they do not create. */
     public static Optional<MiningProject> assignedProject(
             MiningProjectSavedData store, UUID mobId, MiningProjectMode mode) {

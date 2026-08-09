@@ -49,6 +49,9 @@ public enum MiningGoalKind {
 
     public static MiningGoalKind classifyExploring(
             MiningProjectSavedData store, UUID mobId, long now) {
+        if (store.hasActiveCaveContinuation(mobId, now)) {
+            return EXPLORING_CAVE_HANDOFF;
+        }
         if (MiningTransition.acceptableCaveHandoff(
                         store.pendingTransition(mobId),
                         now,
