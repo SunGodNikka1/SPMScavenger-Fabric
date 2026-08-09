@@ -187,3 +187,16 @@ approval is required.
 | Single allocation | Each carried unit satisfies at most one layer | Shortfalls double-count one stack | `ResourceWealthPolicyTest` `CONFIRMED` |
 | Input safety | Negative quantities fail fast | Negative utility silently propagates | `ResourceWealthPolicyTest` `CONFIRMED` |
 | Scope boundary | NEED utility contains no wealth score | Example curve values become defaults | Static inspection `CONFIRMED` |
+
+## Mining wealth MI-4R — candidate-aware gather integration
+
+| Check | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Candidate cost | A nearby profitable resource may enter pass one | A distant negative-utility wealth candidate enters the bounded buffer | `GatherIntentWealthTest` `CONFIRMED` |
+| Scan activation | Low-stock wealth can start a bounded scan | Saturated inventory causes perpetual global scanning | `GatherIntentWealthTest` `CONFIRMED` |
+| Plausibility | Diamond wealth exists only at the established generation depth | Surface mobs scan for diamond solely from wealth | `GatherIntentWealthTest` `CONFIRMED` |
+| Resource category | Every item in the log tag contributes to log holdings | Wealth accounting treats only oak as wood | Injectable tag-equivalent regression `CONFIRMED`; packaged tag runtime `UNVERIFIED` |
+| Existing safety | Tool and exposure remain pass-one gates; protection remains pass two | Wealth bypasses existing safety filters | Static call-path inspection `CONFIRMED`; runtime `UNVERIFIED` |
+
+Build evidence: `gradlew.bat clean build` passed with 148 tests and no failures, errors, or skips.
+Runtime mining and performance remain `UNVERIFIED` pending separate launch approval.

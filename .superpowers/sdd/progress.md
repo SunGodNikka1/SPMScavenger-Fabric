@@ -15,4 +15,10 @@ MI-13a: complete with concerns (ore exposure in pass-one candidate; 138 tests; r
 
 MI-24 + MI-25 policy: complete with concerns (marginal curves + opportunity bonus; gather wire deferred MI-4; runtime unverified)
 
+MI-4R: complete with concerns (candidate-aware wealth admission, plausible diamond depth,
+tag-aware log stock; 148 tests/build pass; runtime/performance unverified)
+
+MI-13 + MI-2: complete with concerns (DiscoveryMode classification, GatherTargetPolicy blocking>wealth
+priority sort, harvest-reveal for NEWLY_EXPOSED; 155 tests/build pass; runtime unverified)
+
 No commits. No Minecraft launches (separate approval required).

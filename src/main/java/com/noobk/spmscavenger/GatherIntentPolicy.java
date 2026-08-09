@@ -1,12 +1,14 @@
 package com.noobk.spmscavenger;
 
 import net.minecraft.util.Mth;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.EnumSet;
+import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * Pure, immutable snapshot of why the gather executor should scan right now (MI-1).
@@ -17,25 +19,53 @@ import java.util.EnumSet;
  */
 public final class GatherIntentPolicy {
 
+    /** Normalized cost required before wealth alone may start a bounded world scan. */
+    private static final float SCAN_ACTIVATION_COST = 0.25F;
+
     public enum Resource { LOGS, COAL, COBBLESTONE, RAW_IRON, DIAMOND }
 
     public record GatherIntent(
-            EnumSet<Resource> resources, ScavengerCrafting.Step readyCraftStep) {
+            EnumSet<Resource> requiredResources,
+            Map<Resource, ResourceWealthPolicy.ResourceWealthContext> wealthContexts,
+            ScavengerCrafting.Step readyCraftStep) {
         public GatherIntent {
-            resources = resources.clone();
+            requiredResources = requiredResources.clone();
+            wealthContexts = Map.copyOf(wealthContexts);
         }
 
-        @Override
+        /** Compatibility constructor for consumer-only callers and focused policy tests. */
+        public GatherIntent(EnumSet<Resource> resources, ScavengerCrafting.Step readyCraftStep) {
+            this(resources, Map.of(), readyCraftStep);
+        }
+
         public EnumSet<Resource> resources() {
-            return resources.clone();
+            EnumSet<Resource> resources = requiredResources.clone();
+            resources.addAll(wealthContexts.keySet());
+            return resources;
         }
 
         public boolean wants(Resource resource) {
-            return resources.contains(resource);
+            return requiredResources.contains(resource) || wealthContexts.containsKey(resource);
+        }
+
+        /** Candidate-aware admission: needs are unconditional; wealth must pay its actual cost. */
+        public boolean wants(Resource resource, float acquisitionCost) {
+            if (requiredResources.contains(resource)) {
+                return true;
+            }
+            ResourceWealthPolicy.ResourceWealthContext context = wealthContexts.get(resource);
+            return context != null
+                    && ResourceWealthPolicy.evaluateWealth(context, acquisitionCost).netUtility() > 0.0F;
         }
 
         public boolean hasDemand() {
-            return !resources.isEmpty();
+            if (!requiredResources.isEmpty()) {
+                return true;
+            }
+            return wealthContexts.values().stream().anyMatch(context ->
+                    ResourceWealthPolicy.evaluateWealth(context, SCAN_ACTIVATION_COST)
+                                    .netUtility()
+                            > 0.0F);
         }
 
         /** Crafting is the cheaper next action when an existing recipe can commit immediately. */
@@ -49,6 +79,15 @@ public final class GatherIntentPolicy {
 
     public static GatherIntent evaluate(
             Container backpack, ItemStack mainHand, ScavengerConfig cfg, int mobBlockY) {
+        return evaluate(backpack, mainHand, cfg, mobBlockY, stack -> stack.is(ItemTags.LOGS));
+    }
+
+    static GatherIntent evaluate(
+            Container backpack,
+            ItemStack mainHand,
+            ScavengerConfig cfg,
+            int mobBlockY,
+            Predicate<ItemStack> isLog) {
         EnumSet<Resource> resources = EnumSet.noneOf(Resource.class);
 
         boolean wantsTorches =
@@ -75,16 +114,24 @@ public final class GatherIntentPolicy {
             resources.add(Resource.DIAMOND);
         }
 
-        // MI-4: wealth is strictly additive. Consumer deficits above have already decided what the
-        // mob *needs*; this only adds what it would *like*. At greed=0 or wealthLevel=0 every wealth
-        // term is zero and this loop adds nothing, which is the exact-consumer parity guarantee.
-        for (Resource resource : Resource.values()) {
-            if (!resources.contains(resource) && wealthWants(backpack, resource, cfg)) {
-                resources.add(resource);
+        Map<Resource, ResourceWealthPolicy.ResourceWealthContext> wealthContexts =
+                new java.util.EnumMap<>(Resource.class);
+        float greed = (float) Mth.clamp(cfg.greed, 0.0, 1.0);
+        float wealthLevel = (float) Math.max(0.0, cfg.wealthLevel);
+        if (greed > 0.0F && wealthLevel > 0.0F) {
+            for (Resource resource : Resource.values()) {
+                // Do not advertise ore that cannot plausibly generate at the mob's current height.
+                if (resource == Resource.DIAMOND
+                        && mobBlockY > WorkDemandPolicy.DIAMOND_GENERATION_CEILING_Y) {
+                    continue;
+                }
+                wealthContexts.put(resource, new ResourceWealthPolicy.ResourceWealthContext(
+                        categoryOf(resource), countResource(backpack, resource, isLog), greed, wealthLevel));
             }
         }
 
-        return new GatherIntent(resources, ScavengerCrafting.nextStep(backpack, cfg, mainHand));
+        return new GatherIntent(
+                resources, wealthContexts, ScavengerCrafting.nextStep(backpack, cfg, mainHand));
     }
 
     /**
@@ -95,24 +142,6 @@ public final class GatherIntentPolicy {
      * the candidate scorer's job, and keeping it out of here stops wealth from silently becoming a
      * second targeting system (Gate SPM-2).
      */
-    private static boolean wealthWants(
-            Container backpack, Resource resource, ScavengerConfig cfg) {
-        float greed = (float) Mth.clamp(cfg.greed, 0.0, 1.0);
-        float wealthLevel = (float) Math.max(0.0, cfg.wealthLevel);
-        if (greed <= 0.0F || wealthLevel <= 0.0F) {
-            return false;
-        }
-        ResourceWealthPolicy.ResourceCategory category = categoryOf(resource);
-        if (category == null) {
-            return false;
-        }
-        int held = ScavengerCrafting.count(backpack, stockItem(resource));
-        ResourceWealthPolicy.WealthUtility utility = ResourceWealthPolicy.evaluateWealth(
-                new ResourceWealthPolicy.ResourceWealthContext(category, held, greed, wealthLevel),
-                0.0F);
-        return utility.netUtility() > 0.0F;
-    }
-
     /** Gather resources map onto wealth categories; the two enums are deliberately separate. */
     private static ResourceWealthPolicy.ResourceCategory categoryOf(Resource resource) {
         return switch (resource) {
@@ -124,14 +153,24 @@ public final class GatherIntentPolicy {
         };
     }
 
-    /** The stack a mob actually accumulates for each gather resource. */
-    private static Item stockItem(Resource resource) {
-        return switch (resource) {
-            case LOGS -> Items.OAK_LOG;
-            case COAL -> Items.COAL;
-            case COBBLESTONE -> Items.COBBLESTONE;
-            case RAW_IRON -> Items.RAW_IRON;
-            case DIAMOND -> Items.DIAMOND;
-        };
+    static int countResource(
+            Container backpack, Resource resource, Predicate<ItemStack> isLog) {
+        int count = 0;
+        for (int slot = 0; slot < backpack.getContainerSize(); slot++) {
+            ItemStack stack = backpack.getItem(slot);
+            boolean matches = switch (resource) {
+                case LOGS -> isLog.test(stack);
+                case COAL -> stack.is(Items.COAL) || stack.is(Items.CHARCOAL);
+                case COBBLESTONE -> stack.is(Items.COBBLESTONE);
+                case RAW_IRON -> stack.is(Items.RAW_IRON)
+                        || stack.is(Items.IRON_ORE)
+                        || stack.is(Items.DEEPSLATE_IRON_ORE);
+                case DIAMOND -> stack.is(Items.DIAMOND);
+            };
+            if (matches) {
+                count += stack.getCount();
+            }
+        }
+        return count;
     }
 }

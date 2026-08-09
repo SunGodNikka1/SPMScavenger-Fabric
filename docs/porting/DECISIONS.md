@@ -769,3 +769,18 @@ an exclusive resource enum would introduce prioritization before MI-2 owns that 
 snapshot is evaluated once per bounded scan and reused for candidate filtering and retained drops.
 `WorkDemandPolicy` remains furnace arbitration, and no wealth stock target or second scanner was
 introduced. Runtime behavior remains `UNVERIFIED`.
+
+## 2026-08-08 — MI-4R candidate-aware wealth admission
+
+Selected candidate-aware wealth scoring over a hard saturation cutoff. Consumer NEED remains an
+unconditional resource set; optional wealth is retained as immutable category context and evaluated
+against normalized candidate distance before pass-one admission. This preserves marginal utility
+and allows genuinely nearby opportunities without letting the nonzero saturation floor keep every
+resource scanner active forever.
+
+The alternative hard cutoff was smaller but rejected because it would recreate stock targets and
+discard the already accepted opportunity-cost model. The current cost covers discovery distance
+only; path, dig-time, and danger costs remain later RFC work and must not be claimed implemented.
+Diamond wealth is bounded by the existing generation-height rule, and log stock uses the Minecraft
+log tag rather than a species list. Static tests/build are `CONFIRMED`; runtime and performance are
+`UNVERIFIED`.

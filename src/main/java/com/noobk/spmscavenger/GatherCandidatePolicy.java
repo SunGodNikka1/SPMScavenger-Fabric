@@ -36,23 +36,33 @@ public final class GatherCandidatePolicy {
             BlockState state,
             GatherIntentPolicy.GatherIntent intent,
             Predicate<BlockState> ownsToolFor) {
+        return isPassOneCandidate(level, pos, state, intent, ownsToolFor, 0.0F);
+    }
+
+    public static boolean isPassOneCandidate(
+            BlockGetter level,
+            BlockPos pos,
+            BlockState state,
+            GatherIntentPolicy.GatherIntent intent,
+            Predicate<BlockState> ownsToolFor,
+            float acquisitionCost) {
         if (state.is(BlockTags.LOGS)) {
-            return intent.wants(GatherIntentPolicy.Resource.LOGS);
+            return intent.wants(GatherIntentPolicy.Resource.LOGS, acquisitionCost);
         }
         if (state.is(Blocks.COAL_ORE) || state.is(Blocks.DEEPSLATE_COAL_ORE)) {
-            return intent.wants(GatherIntentPolicy.Resource.COAL)
+            return intent.wants(GatherIntentPolicy.Resource.COAL, acquisitionCost)
                     && ownsToolFor.test(state)
                     && GatherProtection.isExposedToAir(level, pos);
         }
-        if (intent.wants(GatherIntentPolicy.Resource.DIAMOND)
+        if (intent.wants(GatherIntentPolicy.Resource.DIAMOND, acquisitionCost)
                 && (state.is(Blocks.DIAMOND_ORE) || state.is(Blocks.DEEPSLATE_DIAMOND_ORE))) {
             return ownsToolFor.test(state) && GatherProtection.isExposedToAir(level, pos);
         }
-        if (intent.wants(GatherIntentPolicy.Resource.RAW_IRON)
+        if (intent.wants(GatherIntentPolicy.Resource.RAW_IRON, acquisitionCost)
                 && (state.is(Blocks.IRON_ORE) || state.is(Blocks.DEEPSLATE_IRON_ORE))) {
             return ownsToolFor.test(state) && GatherProtection.isExposedToAir(level, pos);
         }
-        if (intent.wants(GatherIntentPolicy.Resource.COBBLESTONE)
+        if (intent.wants(GatherIntentPolicy.Resource.COBBLESTONE, acquisitionCost)
                 && (state.is(Blocks.STONE) || state.is(Blocks.COBBLESTONE))) {
             return ownsToolFor.test(state);
         }

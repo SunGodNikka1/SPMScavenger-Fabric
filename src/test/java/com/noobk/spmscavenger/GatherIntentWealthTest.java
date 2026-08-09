@@ -124,4 +124,52 @@ class GatherIntentWealthTest {
         assertFalse(intentOf(satisfiedPack(), cfg).isEmpty(),
                 "an out-of-range greed must be clamped by the wiring, not thrown from the policy");
     }
+
+    @Test
+    void mustNotHappen_wealthAddsDiamondAtSurface() {
+        ScavengerConfig cfg = baseConfig();
+        cfg.greed = 1.0;
+        cfg.wealthLevel = 1.0;
+        assertFalse(intentOf(satisfiedPack(), cfg).contains(GatherIntentPolicy.Resource.DIAMOND));
+    }
+
+    @Test
+    void mustNotHappen_saturatedStockActivatesGlobalGatherScan() {
+        ScavengerConfig cfg = baseConfig();
+        cfg.greed = 1.0;
+        cfg.wealthLevel = 1.0;
+        SimpleContainer pack = new SimpleContainer(8);
+        pack.setItem(0, new ItemStack(Items.OAK_LOG, 64));
+        pack.setItem(1, new ItemStack(Items.COAL, 64));
+        pack.setItem(2, new ItemStack(Items.COBBLESTONE, 64));
+        pack.setItem(3, new ItemStack(Items.RAW_IRON, 64));
+        pack.setItem(4, new ItemStack(Items.DIAMOND, 64));
+        pack.setItem(5, new ItemStack(Items.DIAMOND_PICKAXE));
+        pack.setItem(6, new ItemStack(Items.DIAMOND_AXE));
+        pack.setItem(7, new ItemStack(Items.TORCH, 64));
+
+        GatherIntentPolicy.GatherIntent intent = GatherIntentPolicy.evaluate(
+                pack, ItemStack.EMPTY, cfg, 0, stack -> stack.is(Items.OAK_LOG));
+        assertFalse(intent.shouldGather(), "saturated stock must not start a global wealth scan");
+    }
+
+    @Test
+    void mustHappen_nonOakLogsCountThroughTheLogCategory() {
+        SimpleContainer pack = new SimpleContainer(8);
+        pack.setItem(0, new ItemStack(Items.BIRCH_LOG, 17));
+        assertEquals(17, GatherIntentPolicy.countResource(
+                pack, GatherIntentPolicy.Resource.LOGS, stack -> stack.is(Items.BIRCH_LOG)));
+    }
+
+    @Test
+    void mustHappen_candidateDistanceChangesWealthDecision() {
+        ScavengerConfig cfg = baseConfig();
+        cfg.greed = 1.0;
+        cfg.wealthLevel = 1.0;
+        GatherIntentPolicy.GatherIntent intent = GatherIntentPolicy.evaluate(
+                satisfiedPack(), ItemStack.EMPTY, cfg, 0);
+
+        assertTrue(intent.wants(GatherIntentPolicy.Resource.RAW_IRON, 0.125F));
+        assertFalse(intent.wants(GatherIntentPolicy.Resource.RAW_IRON, 3.0F));
+    }
 }

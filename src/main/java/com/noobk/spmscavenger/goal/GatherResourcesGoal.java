@@ -1,9 +1,12 @@
 package com.noobk.spmscavenger.goal;
 
+import com.noobk.spmscavenger.DiscoveryMode;
+import com.noobk.spmscavenger.DiscoveryPolicy;
 import com.noobk.spmscavenger.FurnacePolicy;
 import com.noobk.spmscavenger.GatherCandidatePolicy;
 import com.noobk.spmscavenger.GatherIntentPolicy;
 import com.noobk.spmscavenger.GatherProtection;
+import com.noobk.spmscavenger.GatherTargetPolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.ScavengerConfig;
@@ -95,6 +98,8 @@ public class GatherResourcesGoal extends Goal {
     /** Last pass-one/pass-two outcome when {@link #findTarget} found nothing — diagnostics (MI-13a). */
     private GatherCandidatePolicy.ScanFailureReason lastScanFailure =
             GatherCandidatePolicy.ScanFailureReason.NONE;
+    /** Most recent break position for {@link DiscoveryMode#NEWLY_EXPOSED} vein follow (MI-13). */
+    private DiscoveryPolicy.HarvestReveal lastHarvest;
 
     private static final int SCAN_INTERVAL = 60;
     /** Match craft/smelt goals — partial tree paths need longer than ~7s. */
@@ -326,6 +331,7 @@ public class GatherResourcesGoal extends Goal {
             mob.spawnAtLocation(drop);   // backpack full, or nothing the chain can use
         }
         serverLevel.destroyBlock(target, /* dropBlock */ false, mob);
+        lastHarvest = new DiscoveryPolicy.HarvestReveal(target.immutable(), serverLevel.getGameTime());
     }
 
     /** What the torch and tool chains consume. Cobble is kept when stone upgrades are pending. */
@@ -395,8 +401,17 @@ public class GatherResourcesGoal extends Goal {
     }
 
     private boolean isCandidate(Level level, BlockPos pos, BlockState state) {
+        return isCandidate(level, pos, state, 0.0F);
+    }
+
+    private boolean isCandidate(Level level, BlockPos pos, BlockState state, float acquisitionCost) {
         return GatherCandidatePolicy.isPassOneCandidate(
-                level, pos, state, currentIntent(), toolState -> ToolBox.ownsToolFor(mob, toolState));
+                level,
+                pos,
+                state,
+                currentIntent(),
+                toolState -> ToolBox.ownsToolFor(mob, toolState),
+                acquisitionCost);
     }
 
     /**
@@ -479,7 +494,10 @@ public class GatherResourcesGoal extends Goal {
                 for (int dy = -4; dy <= 4; dy++) {
                     BlockPos pos = origin.offset(dx, dy, dz);
                     BlockState state = level.getBlockState(pos);
-                    if (!isCandidate(level, pos, state)) {
+                    double dist = pos.distSqr(origin);
+                    // MI-4R: normalized discovery cost. Path/dig/danger costs remain later RFC work.
+                    float acquisitionCost = (float) (Math.sqrt(dist) / 8.0D);
+                    if (!isCandidate(level, pos, state, acquisitionCost)) {
                         continue;
                     }
                     // Initial tree acquisition is base-only. Selecting internal/canopy logs is
@@ -490,7 +508,6 @@ public class GatherResourcesGoal extends Goal {
                                     true, level.getBlockState(pos.below()).is(BlockTags.LOGS))) {
                         continue;
                     }
-                    double dist = pos.distSqr(origin);
                     if (found == MAX_CANDIDATES && dist >= dists[found - 1]) {
                         continue;
                     }
@@ -512,12 +529,32 @@ public class GatherResourcesGoal extends Goal {
             return null;
         }
 
+        int[] probeOrder = GatherTargetPolicy.sortIndicesByPriority(
+                nearest,
+                dists,
+                found,
+                level,
+                currentIntent(),
+                lastHarvest,
+                level.getGameTime());
+
         GatherTarget partialFallback = null;
         int pathProbes = 0;
         boolean sawPassOneCandidate = false;
-        for (int i = 0; i < found && pathProbes < MAX_PATH_PROBES; i++) {
+        for (int orderIndex = 0; orderIndex < found && pathProbes < MAX_PATH_PROBES; orderIndex++) {
+            int i = probeOrder[orderIndex];
             BlockPos pos = nearest[i];
             BlockState state = level.getBlockState(pos);
+            float acquisitionCost = (float) (Math.sqrt(dists[i]) / 8.0D);
+            if (GatherTargetPolicy.priority(
+                            currentIntent(),
+                            state,
+                            DiscoveryPolicy.classify(
+                                    level, pos, state, lastHarvest, level.getGameTime()),
+                            acquisitionCost)
+                    == Integer.MIN_VALUE) {
+                continue;
+            }
             BlockPos candidateFailureKey = state.is(BlockTags.LOGS)
                     ? treeFailureKey(level, pos)
                     : pos;
