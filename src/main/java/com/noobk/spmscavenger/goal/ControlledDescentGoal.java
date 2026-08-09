@@ -212,8 +212,14 @@ public final class ControlledDescentGoal extends Goal {
             mob.swing(InteractionHand.MAIN_HAND);
         }
         if (breakTicks >= breakTotal) {
-            level.destroyBlock(breakTarget, true, mob);
+            boolean removed = level.destroyBlock(breakTarget, true, mob);
+            if (!removed) {
+                // A denied/changed break is not progress. Keep the same target so the C3 lease can
+                // distinguish a physically stuck executor from one that is merely ticking.
+                return;
+            }
             project = project.withBudgetUsage(project.budgetUsage().withBlocksMined(1));
+            MiningDirector.markExecutionProgress(level, mob);
             advanceBreak(level);
         }
     }
@@ -287,6 +293,7 @@ public final class ControlledDescentGoal extends Goal {
                         horizontalDistance(project.origin(), mob.blockPosition()),
                         project.origin().getY() - mob.blockPosition().getY()));
         persist(level);
+        MiningDirector.markExecutionProgress(level, mob);
         // MI-14-R2: report the opening, not the fact of being underground. A staircase is
         // subterranean by construction; only a standable space outside the corridor it just cut
         // counts as a discovery.
@@ -298,6 +305,7 @@ public final class ControlledDescentGoal extends Goal {
                 : ControlledDescentCaveHandoff.findOpenedCave(
                         level, completed, project.heading(), this::canPass, this::canStand);
         if (opening.isPresent()) {
+            MiningDirector.markExecutionProgress(level, mob);
             MiningDirector.completeWithOpening(
                     level, mob, project, opening.get(), mob.blockPosition());
             project = null;
@@ -365,6 +373,11 @@ public final class ControlledDescentGoal extends Goal {
     private void finish(ServerLevel level, MiningProjectEnd end) {
         // MI-14B: the executor reports the execution fact it observed. Persistence, the transition
         // payload and what happens next belong to the director.
+        if (end == MiningProjectEnd.SEARCH_BUDGET_EXHAUSTED
+                || end == MiningProjectEnd.HANDOFF_TUNNEL_SEARCH
+                || end == MiningProjectEnd.CAVE_FOUND) {
+            MiningDirector.markExecutionProgress(level, mob);
+        }
         MiningDirector.completeProject(level, mob, project, end, mob.blockPosition());
         project = null;
         currentStep = null;

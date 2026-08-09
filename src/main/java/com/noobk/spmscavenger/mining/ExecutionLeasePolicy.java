@@ -22,6 +22,9 @@ public final class ExecutionLeasePolicy {
     /** How long a temporary blocker episode may persist before the assignment is released. */
     public static final int TEMPORARY_GRACE_TICKS = 1200; // 60s
 
+    /** Admissible time a started executor may spend without observable dig progress. */
+    public static final int PROGRESS_LEASE_TICKS = 2400;  // 120s
+
     private ExecutionLeasePolicy() {
     }
 
@@ -100,6 +103,37 @@ public final class ExecutionLeasePolicy {
                 return SUSPEND;
             }
         }
+    }
+
+    /**
+     * MI-14C3 evaluation with the complete persisted lease.
+     *
+     * <p>The C1 blocker/start decision runs first. Progress expiry is intentionally considered only
+     * when execution is admissible; TEMPORARY and CONTENTION episodes are settled into
+     * {@link MiningExecutionLease#progressPausedTicks()} when they clear.
+     */
+    public static LeaseOutcome evaluate(
+            ExecutionBlocker blocker, MiningExecutionLease lease, long now) {
+        LeaseOutcome base = evaluate(
+                blocker,
+                lease.everStarted(),
+                lease.assignedAt(),
+                lease.blockedSince(),
+                now);
+        if (!base.authorized() || !lease.everStarted()) {
+            return base;
+        }
+
+        long progressBaseline = lease.lastExecutionProgressAt()
+                == MiningExecutionLease.NO_PROGRESS_RECORDED
+                ? lease.executorStartedAt()
+                : lease.lastExecutionProgressAt();
+        long wallElapsed = Math.max(0L, now - progressBaseline);
+        long admissibleElapsed = Math.max(0L, wallElapsed - lease.progressPausedTicks());
+        if (admissibleElapsed > PROGRESS_LEASE_TICKS) {
+            return new LeaseOutcome(LeaseDecision.REVOKE, MiningProjectEnd.NO_PROGRESS);
+        }
+        return base;
     }
 
     private static LeaseOutcome revoke(ExecutionBlocker blocker) {

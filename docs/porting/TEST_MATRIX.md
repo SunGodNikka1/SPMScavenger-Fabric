@@ -212,3 +212,17 @@ Runtime mining and performance remain `UNVERIFIED` pending separate launch appro
 
 Build evidence: clean build passed 181 tests. Runtime loot placement, combat interruption/re-arm,
 animation, save/reload, and multi-mob behavior remain `UNVERIFIED`.
+
+## MI-14C3 controlled-descent progress lease
+
+| Check | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Started then stuck | Revoke `NO_PROGRESS` after more than 2400 admissible ticks | Eternal ACTIVE assignment | `MiningExecutionC3Test.c3A_*` `CONFIRMED` (unit); runtime `UNVERIFIED` |
+| Combat pause | Exclude the exact TEMPORARY episode from progress age | Timeout during/promptly after a short combat interruption | `c3B_*` `CONFIRMED`; C1's separate 1200-tick combat grace remains |
+| Observable refresh | Successful planned break and completed step call the progress marker | Goal tick, path replan, rejection, or executor start counts as progress | C3-C test + `ControlledDescentGoal` call-site inspection `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| Never started | C1 start lease remains the only expiry clock | C3 double revoke or invented progress | `c3D_*` `CONFIRMED` |
+| Contention pause | A completed CONTENTION episode contributes exact paused ticks | Immediate C3 expiry when the MOVE holder yields | `c3E_*` `CONFIRMED`; runtime `UNVERIFIED` |
+| Persistence | v3 round-trip preserves progress/pause; v2 migration records neither | Reload resets or invents progress | C3 persistence/migration tests `CONFIRMED` |
+
+Build evidence: `gradlew.bat clean build` passed 310 tests with no failures/errors/skips. Runtime
+falsification requires separate launch approval; see `.superpowers/sdd/task-28-report.md`.

@@ -9,14 +9,14 @@
 | **Target progression** | **Vanilla Minecraft 1.21.1 mining + resource wealth** (overworld ore tiers through diamond/deepslate; not Nether/endgame mining in gen-1) |
 | **Scope** | Autonomous *where* to mine, *how much* to stockpile (wealth), prerequisite planning hooks, capability gaps, integration methods, phased plan, validation — **design until implementation authorized** |
 | **Mode** | `PROGRESSIVE_CONTINUATION` (User — Continue the RFC) |
-| **Status** | MI-14C2 repair `IMPLEMENTED` (task-29); **MAIBS C2 `PASS_WITH_RUNTIME_UNVERIFIED`**; MI-14C3 ready |
+| **Status** | MI-14C3 `IMPLEMENTED` (task-28; 310 tests); **MAIBS C3 `BEHAVIORALLY_PLAUSIBLE / RUNTIME_UNVERIFIED`** |
 | **User constraint** | No Minecraft launch, commit, or push unless separately asked; implementation only after explicit Begin authorization |
 | **Baseline version** | `1.9.2` |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `TaskLifecycle.java` |
 | **Former name** | `RFC-MINING-INTELLIGENCE-AND-RESOURCE-GREED.md` — merged into this file (2026-08-08); “resource greed” → **wealth system** |
 | **Owners** | User (product) |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Cursor 2` · `Agent_Codex` · `Agent_Claude` |
-| **Last update** | 2026-08-09 ~02:50 PDT |
+| **Last update** | 2026-08-09 ~03:15 PDT |
 | **Gate** | MRFC-1 |
 
 ### Naming
@@ -103,7 +103,7 @@ novelty before terrain** (MI-5H), not MI-7 session types alone.
 | [MI-5 behavioural prediction](#topic-mi-5-behavioural-prediction-gate-maibs-1) | `FAIL` heading blindness | **MI-5H `READY`** — `DescentHeadingPolicy` |
 | [MI-6 behavioural prediction](#topic-mi-6-behavioural-prediction-gate-maibs-1) | 6A/D/B/C `IMPLEMENTED`; runtime `UNVERIFIED` | **MI-6F wire before MI-7B+C** |
 | [MI-7 controlled excavation descent](#topic-mi-7-controlled-excavation-descent-gate-maibs-1) | MI-7R `IMPLEMENTED` | MI-14C control plane active |
-| [MI-14C execution control](#topic-mi-14c--execution-control-plane-proposed-user--agent_claude) | C2 repair done; MAIBS C2 pass (static) | **Next: Begin MI-14C3** |
+| [MI-14C execution control](#topic-mi-14c--execution-control-plane-proposed-user--agent_claude) | C1/C2/C3 implemented; runtime open | **Next: Tunnel-search consumer for Loop D** |
 | [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order (revised) | **Next: C2 repair → MAIBS re-pass → C3** |
 | [Validation](#topic-validation) | `PARTIAL` | Policy units green; gather wealth + runtime open |
 | [Deferred](#topic-deferred-and-unverified) | — | Nether, branch mines, portfolio gen-1 |
@@ -780,9 +780,9 @@ Do **not** classify combat as contention when combat already has `TEMPORARY` cla
 `MiningExecutionArbiter.decide(intent, goalKind)` → goals call arbiter in `canUse` + `canContinueToUse`;
 `MiningDirector` observes `MOVE` ownership for `CONTENTION` when lease would otherwise `AUTHORIZE`.
 
-### MI-14C3 — Progress Lease (fixes stale-active Loop A) — `LOCKED` contract — **READY**
+### MI-14C3 — Progress Lease (fixes stale-active Loop A) — **`IMPLEMENTED` (task-28)**
 
-**Status:** `READY` — requires `Begin implementation for MI-14C3` (MAIBS C2 repair complete).
+**Status:** `IMPLEMENTED / STATICALLY VERIFIED / RUNTIME UNVERIFIED` — 310 tests; clean build pass.
 **Prerequisite:** MI-14C2 repair package (task-29) `IMPLEMENTED`.
 
 Two clocks — start lease (C1) and progress lease (C3) — because an executor that starts once and
@@ -791,7 +791,7 @@ then starves forever is still a zombie assignment:
 | Clock | Measures | Timeout constant | Revoke reason |
 | --- | --- | --- | --- |
 | **Start lease** (C1, shipped) | `assignedAt` → first `executorStartedAt` | `START_LEASE_TICKS` (600) | `LEASE_EXPIRED` via `CONTENTION` / never-started path |
-| **Progress lease** (C3) | `lastExecutionProgressAt` → `now` while executor should advance | `PROGRESS_LEASE_TICKS` (proposed **2400** / 120s) | `NO_PROGRESS` |
+| **Progress lease** (C3) | `lastExecutionProgressAt` → `now` while executor should advance | `PROGRESS_LEASE_TICKS` (**2400** / 120s) | `NO_PROGRESS` |
 
 #### Separation (D-MIW-039)
 
@@ -832,6 +832,10 @@ MiningExecutionLease.lastExecutionProgressAt
   NEVER_PROGRESS = -1L sentinel (mirrors NEVER_STARTED pattern)
   set on first observable progress event
   persisted in lease NBT v3
+
+MiningExecutionLease.progressPausedTicks
+  exact completed TEMPORARY / CONTENTION episode time for the current progress window
+  resets only on observable progress; persisted in lease NBT v3
 ```
 
 `markExecutorStarted` does **not** set `lastExecutionProgressAt`.
@@ -846,15 +850,19 @@ MiningExecutionLease.lastExecutionProgressAt
 | **C3-D** | Never started (C1 domain) | Start lease still governs; progress lease inactive | Double-revoke races |
 | **C3-E** | CONTENTION starved after start | Progress clock paused while `CONTENTION` blocker active | Revoke while waiting for C2 yield |
 
+**Static/unit result:** C3-A…E **PASS** in `MiningExecutionC3Test`; persistence and v2→v3
+migration regressions pass. Full evidence: `.superpowers/sdd/task-28-report.md`. Runtime rows remain
+`UNVERIFIED` because no Minecraft launch was authorized.
+
 #### Non-goals (`LOCKED`)
 
 - No progress lease for modes without an executor (tunnel search deferred).
 - Do not treat `enforceLease` observer ticks as progress.
 - Do not change C2 matrices or priority integers.
 
-**Implementation sketch:** extend `MiningExecutionLease` + `ExecutionLeasePolicy.evaluate`;
-add `MiningDirector.markExecutionProgress`; wire progress marks in `ControlledDescentGoal` break
-and `completeStep` paths; unit tests C3-A…E in `MiningExecutionC3Test` or extend lease suite.
+**Implemented:** `MiningExecutionLease` + `ExecutionLeasePolicy.evaluate`;
+`MiningDirector.markExecutionProgress`; successful-break, complete-step, and terminal-handoff marks
+in `ControlledDescentGoal`; C3-A…E plus persistence/migration tests.
 
 ### Loop D stays outside MI-14C (`LOCKED`)
 
@@ -2560,7 +2568,7 @@ Gen-1 uses **Java policy records** only; SPI when a second mod needs hooks.
 | **P5h** | `DescentHeadingPolicy` (MI-5H) | P5, P6 | **`READY`** — before MI-7D |
 | **P7d** | `StairStepPlan` + min excavation safety (MI-7D) | P7bc, P5h | **`READY`** |
 | **P7e** | Controlled staircase descent (MI-7E) | P7a, P7bc, P5h, P7d | **BLOCKED** |
-| **P8** | `MiningDirector` orchestration (MI-14) | P7e | **PARTIAL** — MI-7A is minimal project slice |
+| **P8** | `MiningDirector` orchestration (MI-14) | P7e | **PARTIAL** — C1/C2/C3 control plane implemented; tunnel-search executor absent |
 | **P9** | `VeinFrontier` + ore utility (MI-16, MI-17, MI-21) | P8 | **FULL** |
 | **P10** | Hazards + durability + tool switch (MI-18, MI-20) | P7d, P8 | **PARTIAL** — MI-7D min safety first |
 | **P11** | Search budget expansion + abandon reasons (MI-19) | P7b, P8 | **FULL** — extends MI-7B `MiningBudget` |
@@ -2670,6 +2678,9 @@ boundary. Focused tests and `gradlew.bat clean build` pass (148/148); runtime re
 | MI-13a | P3a | Exposure in pass-one for ore | `IMPLEMENTED` (task 11) |
 | MI-13 | P7b | `DiscoveryMode` classification enum + diagnostics | `IMPLEMENTED` (task 14) |
 | MI-14 | P8 | `MiningDirector` orchestration (extends MI-7A project) | `BLOCKED` until MI-7A |
+| MI-14C1 | P8 | Assignment/start lease and revocation | **`IMPLEMENTED`** |
+| MI-14C2 | P8 | Intent arbitration + scheduler contention | **`IMPLEMENTED`** (task-29 repair; runtime `UNVERIFIED`) |
+| MI-14C3 | P8 | Observable-progress lease | **`IMPLEMENTED`** (task-28; 310 tests; runtime `UNVERIFIED`) |
 | MI-15 | P6 | `MiningMemory` store | `BLOCKED` |
 | MI-16 | P9 | `VeinFrontier` + `ResourceTarget` | `BLOCKED` |
 | MI-17 | P9 | Ore utility scoring | `BLOCKED` |
@@ -2840,6 +2851,7 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] **MI-6** cave opportunistic ore (task 17; 169 tests) — MAIBS FAIL on landings → repair package
 - [x] **MI-6A + MI-6D + MI-6B + MI-6C** (task 18; 178 tests) — code repair; runtime `UNVERIFIED`
 - [x] **Accept MI-7 redesign** — Controlled Excavation Descent MI-7A…E; D-MIW-033/034 (user 2026-08-09)
+- [x] **MI-14C3 progress lease** — task-28; C3-A…E + persistence/migration green; 310 tests
 - [ ] **Begin implementation for MI-6F or MI-7B+C** (6F first per dependency)
 - [ ] U-MIW matrix / runtime datapack (MI-9/MI-10)
 - [ ] **MI-7E** controlled staircase (blocked until MI-7A–D + MI-6 runtime probe)
@@ -2850,8 +2862,10 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [ ] Dedicated-server smoke
 - [ ] MI-6A falsifying probe (scripted cave Y=32 under Y=70; log landing Y)
 - [ ] MI-7E falsifying probe (`NaturalDescentStatus` transitions; no dig beside cave mouth)
+- [ ] MI-14C3 runtime probe: >2400-tick CONTENTION resume, then admissible obstruction → one `NO_PROGRESS`
 
-**MRFC-1 status:** **PASS (continuation)** — MI-7A done; frontier **MI-6F → MI-7B+C → MI-5H → MI-7D → MI-7E**.
+**MRFC-1 status:** **PASS (continuation)** — MI-14C3 static gate passed; runtime proof remains
+open. Execution-control frontier is the missing tunnel-search handoff consumer (Loop D).
 
 ---
 
@@ -2877,6 +2891,7 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] **Begin implementation for MI-7A** — minimal `MiningProject` (task 20; 200 tests)
 - [x] **Accept MI-7B+C bundle** + revised `NaturalDescentStatus` + dependency order (user 2026-08-09)
 - [x] **Accept MI-5H** — `DescentHeadingPolicy` before MI-7D (user 2026-08-09)
+- [x] **Begin implementation for MI-14C3** — implemented as task-28; runtime probe remains separate
 - [ ] **Begin implementation for MI-6F** — live `CaveOpportunity` wiring (**before MI-7B+C**)
 - [ ] **Begin implementation for MI-7B+C** — budget + exhaustion (recommended next after 6F)
 - [ ] **Begin implementation for MI-5H** — descent heading selection
@@ -2908,6 +2923,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Codex | **MI-14C3 `IMPLEMENTED`** — observable break/step/handoff progress; exact TEMPORARY/CONTENTION pause accumulator; NBT v3 + v2 migration; C3-A…E pass; 310-test clean build; runtime `UNVERIFIED`; task-28-report |
 | 2026-08-09 | User + Agent_Cursor | **MAIBS C2 FAIL** — M1 handoff authority lifetime, M2 host MOVE invisible to contention, M3 stop() resurrects revoked project; task-27-maibs-report; task-29-brief (R1/R2/R2); C3 blocked |
 | 2026-08-09 | Agent_Cursor | **MI-14C2 `IMPLEMENTED`** (task-27; MAIBS C2 static `PASS_WITH_CONCERNS` superseded); **MI-14C3 contract LOCKED** (D-MIW-039; C3-A…E; task-28-brief); frontier → Begin MI-14C3 |
 | 2026-08-09 | User + Agent_Cursor | **MI-14C2 contract LOCKED** — D-MIW-037 (intent ≠ blocker; CONTENTION producer required); D-MIW-038 (`TUNNEL_HANDOFF_PENDING` arbitration NEUTRAL until executor); admission+continuation mandatory; C2-A…G falsification; task-27-brief |
@@ -3679,3 +3695,30 @@ Wrote `task-27-maibs-report.md`, `task-29-brief.md`. Blocked MI-14C3. Revised C2
 **RFC fields updated:** Identity, Topic Index, MI-14C2 MAIBS section, MI-14C3 blocked status,
 Change Log, progress ledger, task-27-maibs-report, task-29-brief, this contribution.
 
+---
+
+### Contribution — Agent_Codex (MI-14C3 implementation)
+
+**Agent:** Agent_Codex
+**Date/Session:** 2026-08-09 ~03:15 PDT
+**Contribution type:** `IMPLEMENTATION / VALIDATION / BEHAVIORAL_SIMULATION`
+
+**Frontier before:** MI-14C2 repair and MAIBS re-pass complete; MI-14C3 contract locked and user
+authorized implementation.
+
+**Action:** Added the persisted observable-progress timestamp and exact blocker-pause accumulator,
+the 2400-admissible-tick policy, director marker, and successful-break/complete-step/terminal wiring.
+Starting or ticking the executor does not create progress. A failed `destroyBlock` no longer advances
+the plan or budget. C3-A…E plus persistence and v2 migration tests were written RED-first.
+
+**Validation:** focused C1/C2/C3 suites green; `gradlew.bat clean build` passed 310 tests with zero
+failures/errors/skips. Artifact SHA-256
+`F0F14E9A6C5B33A241848805275A0E4419E73140872C00E70E336856413F03D3`. MAIBS verdict:
+**BEHAVIORALLY_PLAUSIBLE / RUNTIME_UNVERIFIED**. No Minecraft launch, commit, or push.
+
+**Frontier after:** MI-14C3 static implementation complete. Next execution-control subsystem is the
+missing `TunnelSearchGoal` consumer for Loop D; C3's live contention/resume/stall probe remains open
+under separate runtime approval.
+
+**RFC fields updated:** Identity, Topic Index, MI-14C3 topic, phased plan, task registry, gates,
+approval ledger, change log, this contribution; task-28 report and porting test/decision docs.

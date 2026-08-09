@@ -793,3 +793,21 @@ duplicates host behavior and risks full-inventory loss. The selected design lets
 consumer see the same usable tool and lets `ToolBox` swap an off-hand winner directly into main hand
 without requiring backpack capacity. Broken tools remain excluded by tier policy. Static tests and
 build are `CONFIRMED`; live SPM loot placement and combat equipment arbitration are `UNVERIFIED`.
+
+## 2026-08-09 — MI-14C3 progress time excludes completed blocker episodes
+
+The progress lease persists both the last observable progress time and accumulated paused ticks for
+the current progress window. The effective baseline is `executorStartedAt` until the first real
+progress event; starting the goal therefore never invents progress.
+
+Two smaller alternatives were rejected. Merely skipping evaluation while blocked includes that
+wall-clock time and causes immediate expiry after resume. Mutating `executorStartedAt` destroys the
+historical start-lease fact. A mutable remaining-budget counter is viable but has more tick-update
+and save/reload surface than the selected timestamp + exact-pause accumulator.
+
+Only successful planned block removal, completed stair steps, and terminal handoffs refresh the
+clock. Failed `destroyBlock` attempts stay on the same cell and make no budget/progress claim, so the
+bounded lease can expose the stall. Must happen: an admissibly stuck started descent ends once with
+`NO_PROGRESS`. Must not happen: ticks/replans create progress, or combat/contention time causes an
+immediate post-resume timeout. Static/unit/build evidence is `CONFIRMED` (310 tests); observable
+Minecraft behavior remains `UNVERIFIED` pending launch approval.

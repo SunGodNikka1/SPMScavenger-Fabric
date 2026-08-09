@@ -201,12 +201,8 @@ public final class MiningDirector {
                 });
 
         MiningExecutionLease withBlocker = lease.recordBlocker(blocker, now);
-        ExecutionLeasePolicy.LeaseOutcome outcome = ExecutionLeasePolicy.evaluate(
-                blocker,
-                withBlocker.everStarted(),
-                withBlocker.assignedAt(),
-                withBlocker.blockedSince(),
-                now);
+        ExecutionLeasePolicy.LeaseOutcome outcome =
+                ExecutionLeasePolicy.evaluate(blocker, withBlocker, now);
 
         if (outcome.revoked()) {
             MiningProjectEnd reason = outcome.revokeReason();
@@ -259,6 +255,21 @@ public final class MiningDirector {
         store.leaseOf(mob.getUUID())
                 .ifPresent(lease -> store.putLease(
                         mob.getUUID(), lease.started(level.getGameTime())));
+    }
+
+    /**
+     * MI-14C3 — records observable executor progress, never goal liveness or replanning.
+     *
+     * <p>Callers are deliberately narrow: successful planned block removal, completed stair step,
+     * or terminal handoff. Keeping this out of {@code tick()} is what lets the lease detect a live
+     * but physically stuck goal.
+     */
+    public static void markExecutionProgress(ServerLevel level, Mob mob) {
+        MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        store.leaseOf(mob.getUUID())
+                .filter(MiningExecutionLease::everStarted)
+                .ifPresent(lease -> store.putLease(
+                        mob.getUUID(), lease.markProgress(level.getGameTime())));
     }
 
     /** MI-14C1-R2 — whether an executor may persist interruption state after {@code stop()}. */
