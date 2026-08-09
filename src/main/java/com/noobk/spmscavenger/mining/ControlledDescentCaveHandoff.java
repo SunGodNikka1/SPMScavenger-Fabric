@@ -7,6 +7,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -19,6 +21,10 @@ public final class ControlledDescentCaveHandoff {
 
     /** Stair steps behind the mob whose excavated cells still count as self-created. */
     private static final int SELF_CORRIDOR_BEHIND = 4;
+
+    /** Bounded connected-air search from the excavation boundary. */
+    private static final int MAX_BREAKTHROUGH_CELLS = 64;
+    private static final int BREAKTHROUGH_RADIUS = 6;
 
     private static final int AHEAD_PROBE = 2;
 
@@ -60,32 +66,122 @@ public final class ControlledDescentCaveHandoff {
      * distinguishes a mob's own tunnel from a cave, because both are deep.
      */
     public static Optional<CaveOpening> findOpenedCave(
-            Level level, BlockPos feet, Direction heading, Predicate<BlockPos> standable) {
-        return findOpenedCave(fromLevel(level), feet, heading, standable);
+            Level level, BlockPos feet, Direction heading,
+            Predicate<BlockPos> passable, Predicate<BlockPos> standable) {
+        return findOpenedCave(
+                fromLevel(level), StairStepPlanner.planStep(feet, heading),
+                selfCorridor(feet, heading), passable, standable);
     }
 
     static Optional<CaveOpening> findOpenedCave(
             HeightAccess heights, BlockPos feet, Direction heading, Predicate<BlockPos> standable) {
-        Set<BlockPos> selfCorridor = selfCorridor(feet, heading);
-        BlockPos centre = feet.relative(heading, AHEAD_PROBE);
-        int mobY = feet.getY();
+        return findOpenedCave(
+                heights, StairStepPlanner.planStep(feet, heading), selfCorridor(feet, heading),
+                standable, standable);
+    }
 
-        for (BlockPos floor : CaveLandingResolver.collectStandable(
-                centre.getX(), centre.getZ(), mobY, standable)) {
-            if (floor.getY() > mobY) {
-                continue;
+    /**
+     * MI-14-R2b — connected breakthrough evidence.
+     *
+     * <p>R2a stopped the mob calling its own staircase a cave, but it still proved only that a
+     * standable cave-like floor existed <em>nearby</em>. Nearby is not opened: the probe read world
+     * state through unbroken stone, so a cave two blocks ahead behind an intact wall satisfied every
+     * check — standable, subterranean, outside the corridor — and fired {@code CAVE_FOUND} at a
+     * place the mob could not enter.
+     *
+     * <p>The invariant is topological, not geometric: a candidate must be <b>reachable through air
+     * from the cells this step just excavated</b>. The flood starts at the excavation boundary, so
+     * an intact wall is simply impassable and the volume behind it is never visited.
+     *
+     * <p>This also sidesteps the {@link CaveLandingResolver} budget problem rather than inheriting
+     * it. A breakthrough is adjacent to what was just broken by definition, so a small bounded flood
+     * is both cheaper and more accurate than a 180-probe volume scan whose outer radii are
+     * unreachable anyway.
+     *
+     * @param passable cells a mob could move through — no collision, no fluid
+     * @param standable cells a mob could stand in — passable, with a sturdy floor
+     */
+    static Optional<CaveOpening> findOpenedCave(
+            HeightAccess heights,
+            StairStepPlan completedStep,
+            Set<BlockPos> selfCorridor,
+            Predicate<BlockPos> passable,
+            Predicate<BlockPos> standable) {
+
+        BlockPos origin = completedStep.standCell();
+        Deque<BlockPos> frontier = new ArrayDeque<>();
+        Set<BlockPos> seen = new HashSet<>();
+
+        // Seeds: air immediately beyond the cells this step opened. Anything still solid is not a
+        // seed, which is exactly why a hidden cave behind a wall cannot be reached.
+        for (BlockPos excavated : excavatedCells(completedStep)) {
+            for (Direction face : Direction.values()) {
+                BlockPos neighbour = excavated.relative(face).immutable();
+                if (selfCorridor.contains(neighbour) || !seen.add(neighbour)) {
+                    continue;
+                }
+                if (passable.test(neighbour)) {
+                    frontier.add(neighbour);
+                }
             }
-            if (selfCorridor.contains(floor.immutable())) {
-                continue;
+        }
+
+        int visited = 0;
+        while (!frontier.isEmpty() && visited < MAX_BREAKTHROUGH_CELLS) {
+            BlockPos cell = frontier.poll();
+            visited++;
+
+            if (standable.test(cell)) {
+                CaveContextPolicy.SpaceKind kind = classifyAt(heights, cell);
+                if (kind == CaveContextPolicy.SpaceKind.CAVE
+                        || kind == CaveContextPolicy.SpaceKind.RAVINE) {
+                    // Measured from the breakthrough, not from the mob's feet. "Which way does the
+                    // cave lie from the hole I just made" is the question continuation answers; from
+                    // the stand cell a diagonal landing ties and resolves along the staircase axis,
+                    // which points back down the tunnel rather than into the discovery.
+                    BlockPos from = nearestExcavated(completedStep, cell);
+                    return Optional.of(new CaveOpening(cell, continuationTo(from, cell), kind));
+                }
             }
-            CaveContextPolicy.SpaceKind kind = classifyAt(heights, floor);
-            if (kind != CaveContextPolicy.SpaceKind.CAVE
-                    && kind != CaveContextPolicy.SpaceKind.RAVINE) {
-                continue;
+
+            for (Direction face : Direction.values()) {
+                BlockPos next = cell.relative(face).immutable();
+                if (selfCorridor.contains(next) || !seen.add(next)) {
+                    continue;
+                }
+                if (withinReach(origin, next) && passable.test(next)) {
+                    frontier.add(next);
+                }
             }
-            return Optional.of(new CaveOpening(floor.immutable(), continuationTo(feet, floor), kind));
         }
         return Optional.empty();
+    }
+
+    /** Cells this step physically opened — the only legitimate seeds for a breakthrough. */
+    private static Set<BlockPos> excavatedCells(StairStepPlan step) {
+        Set<BlockPos> cells = new HashSet<>(step.requiredBreaks());
+        cells.add(step.nextStandCell());
+        return cells;
+    }
+
+    /** The opened cell closest to the discovery — the point the breakthrough happened at. */
+    private static BlockPos nearestExcavated(StairStepPlan step, BlockPos landing) {
+        BlockPos best = step.nextStandCell();
+        double bestDistance = Double.MAX_VALUE;
+        for (BlockPos cell : excavatedCells(step)) {
+            double distance = cell.distSqr(landing);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = cell;
+            }
+        }
+        return best;
+    }
+
+    private static boolean withinReach(BlockPos origin, BlockPos cell) {
+        return Math.abs(cell.getX() - origin.getX()) <= BREAKTHROUGH_RADIUS
+                && Math.abs(cell.getZ() - origin.getZ()) <= BREAKTHROUGH_RADIUS
+                && Math.abs(cell.getY() - origin.getY()) <= BREAKTHROUGH_RADIUS;
     }
 
     /**

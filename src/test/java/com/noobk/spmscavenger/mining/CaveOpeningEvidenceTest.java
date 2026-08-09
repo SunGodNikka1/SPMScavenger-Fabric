@@ -39,12 +39,27 @@ class CaveOpeningEvidenceTest {
     /** Flat hill at {@link #SURFACE}; only explicitly-added cells are standable. */
     private static final class World implements ControlledDescentCaveHandoff.HeightAccess {
         private final Set<BlockPos> standable = new HashSet<>();
+        private final Set<BlockPos> passable = new HashSet<>();
 
+        /** A standable cell is necessarily passable; everything else is solid stone. */
         World open(BlockPos... cells) {
             for (BlockPos cell : cells) {
                 standable.add(cell.immutable());
+                passable.add(cell.immutable());
             }
             return this;
+        }
+
+        /** Air the mob can move through but not stand in — no floor. */
+        World air(BlockPos... cells) {
+            for (BlockPos cell : cells) {
+                passable.add(cell.immutable());
+            }
+            return this;
+        }
+
+        Predicate<BlockPos> passablePredicate() {
+            return pos -> passable.contains(pos.immutable());
         }
 
         @Override
@@ -70,7 +85,9 @@ class CaveOpeningEvidenceTest {
         BlockPos feet = new BlockPos(0, 50, 0);
 
         Optional<CaveOpening> opening = ControlledDescentCaveHandoff.findOpenedCave(
-                world, feet, Direction.EAST, world.standablePredicate());
+                world, StairStepPlanner.planStep(feet, Direction.EAST),
+                ControlledDescentCaveHandoff.selfCorridor(feet, Direction.EAST),
+                world.passablePredicate(), world.standablePredicate());
 
         assertTrue(opening.isEmpty(),
                 "20 blocks below the surface with no external air volume is not a discovery");
@@ -94,32 +111,40 @@ class CaveOpeningEvidenceTest {
                 "being deep in a covered staircase really is cave-like context");
 
         assertTrue(ControlledDescentCaveHandoff.findOpenedCave(
-                        world, feet, heading, world.standablePredicate()).isEmpty(),
+                        world, StairStepPlanner.planStep(feet, heading),
+                ControlledDescentCaveHandoff.selfCorridor(feet, heading),
+                world.passablePredicate(), world.standablePredicate()).isEmpty(),
                 "cave context without a cave opportunity must produce no opening");
     }
 
-    // ---- 2. LATERAL BREAKTHROUGH ----
+    // ---- 4. LATERAL BREAKTHROUGH ----
 
     @Test
     void mustHappen_aNaturalSpaceBesideTheStairIsAnOpening() {
         BlockPos feet = new BlockPos(0, 50, 0);
         Direction heading = Direction.EAST;
-        // Adjacent to the probe centre (feet + heading*AHEAD_PROBE = (2,50,0)). The 180-probe
-        // budget against 13 vertical probes per column is spent partway through radius 2, so a
-        // breakthrough further out than one ring is invisible - see the budget note below.
-        BlockPos caveFloor = new BlockPos(2, 50, 1);
+        // The step opens (1,50,0). A cave lying immediately south of that cut wall is a genuine
+        // lateral breakthrough: face-adjacent to what was just excavated.
+        //
+        // This scenario previously placed the cave diagonally at (2,50,1), touching nothing. Under
+        // the R2a volume scan that still counted; under R2b it correctly does not, which is the
+        // whole point of the change.
+        BlockPos lateral = new BlockPos(1, 50, 1);
 
-        World world = new World().open(caveFloor);
+        World world = new World().open(lateral);
+        world.open(ControlledDescentCaveHandoff.selfCorridor(feet, heading).toArray(new BlockPos[0]));
 
         Optional<CaveOpening> opening = ControlledDescentCaveHandoff.findOpenedCave(
-                world, feet, heading, world.standablePredicate());
+                world, StairStepPlanner.planStep(feet, heading),
+                ControlledDescentCaveHandoff.selfCorridor(feet, heading),
+                world.passablePredicate(), world.standablePredicate());
 
-        assertTrue(opening.isPresent(), "a standable natural floor outside the corridor is evidence");
-        assertEquals(caveFloor, opening.get().landing(), "the payload must name where to go");
+        assertTrue(opening.isPresent(), "air touching the newly cut wall is a breakthrough");
+        assertEquals(lateral, opening.get().landing(), "the payload must name where to go");
         assertTrue(opening.get().isSubterranean());
         assertEquals(CaveContextPolicy.SpaceKind.CAVE, opening.get().kind());
-        assertEquals(Direction.EAST, opening.get().continuation(),
-                "continuation points at the discovery, not merely along the staircase axis");
+        assertEquals(Direction.SOUTH, opening.get().continuation(),
+                "continuation points at the discovery, not along the staircase axis");
     }
 
     // ---- 3. CAVE DIRECTLY AHEAD ----
@@ -135,7 +160,9 @@ class CaveOpeningEvidenceTest {
                 .toArray(new BlockPos[0]));
 
         Optional<CaveOpening> opening = ControlledDescentCaveHandoff.findOpenedCave(
-                world, feet, heading, world.standablePredicate());
+                world, StairStepPlanner.planStep(feet, heading),
+                ControlledDescentCaveHandoff.selfCorridor(feet, heading),
+                world.passablePredicate(), world.standablePredicate());
 
         assertTrue(opening.isPresent());
         assertEquals(ahead, opening.get().landing(),
@@ -160,6 +187,47 @@ class CaveOpeningEvidenceTest {
         assertTrue(corridor.contains(planned.nextStandCell()), "next stand");
     }
 
+    // ---- 2. HIDDEN CAVE BEHIND AN INTACT WALL (MI-14-R2b) ----
+
+    @Test
+    void mustNotHappen_aCaveBehindUnbrokenStoneCountsAsOpened() {
+        BlockPos feet = new BlockPos(0, 50, 0);
+        Direction heading = Direction.EAST;
+        // The step opens (1,51,0),(1,50,0),(1,49,0). Leave (2,49,0) SOLID as the separating wall,
+        // and put a perfectly good cave floor behind it at (3,49,0).
+        BlockPos hidden = new BlockPos(3, 49, 0);
+        World world = new World().open(hidden);
+        world.open(ControlledDescentCaveHandoff.selfCorridor(feet, heading).toArray(new BlockPos[0]));
+
+        assertTrue(ControlledDescentCaveHandoff.findOpenedCave(
+                        world, StairStepPlanner.planStep(feet, heading),
+                        ControlledDescentCaveHandoff.selfCorridor(feet, heading),
+                        world.passablePredicate(), world.standablePredicate()).isEmpty(),
+                "geographically close is not topologically connected - the wall is still there");
+    }
+
+    // ---- 3. THE SAME CAVE ONCE THE CONNECTING BLOCK BREAKS ----
+
+    @Test
+    void mustHappen_theSameCaveIsFoundOnceTheWallIsGone() {
+        BlockPos feet = new BlockPos(0, 50, 0);
+        Direction heading = Direction.EAST;
+        BlockPos hidden = new BlockPos(3, 49, 0);
+
+        World world = new World().open(hidden);
+        world.open(ControlledDescentCaveHandoff.selfCorridor(feet, heading).toArray(new BlockPos[0]));
+        world.air(new BlockPos(2, 49, 0));   // the separating block is now excavated
+
+        Optional<CaveOpening> opening = ControlledDescentCaveHandoff.findOpenedCave(
+                world, StairStepPlanner.planStep(feet, heading),
+                ControlledDescentCaveHandoff.selfCorridor(feet, heading),
+                world.passablePredicate(), world.standablePredicate());
+
+        assertTrue(opening.isPresent(), "connected air now reaches the cave floor");
+        assertEquals(hidden, opening.get().landing(),
+                "the identical cell that was correctly rejected a moment ago");
+    }
+
     /**
      * Records a real constraint found while writing these scenarios: with
      * {@code MAX_PROBES = 180} and {@code Y_RADIUS = 6} (13 vertical probes per column), the search
@@ -174,7 +242,9 @@ class CaveOpeningEvidenceTest {
         World world = new World().open(farFloor);
 
         assertTrue(ControlledDescentCaveHandoff.findOpenedCave(
-                        world, feet, Direction.EAST, world.standablePredicate()).isEmpty(),
+                        world, StairStepPlanner.planStep(feet, Direction.EAST),
+                ControlledDescentCaveHandoff.selfCorridor(feet, Direction.EAST),
+                world.passablePredicate(), world.standablePredicate()).isEmpty(),
                 "documents reach, not desired behaviour: this floor is real but unreachable "
                         + "within the probe budget");
     }

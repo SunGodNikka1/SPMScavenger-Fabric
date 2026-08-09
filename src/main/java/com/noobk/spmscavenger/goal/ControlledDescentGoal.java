@@ -268,7 +268,7 @@ public final class ControlledDescentGoal extends Goal {
         // subterranean by construction; only a standable space outside the corridor it just cut
         // counts as a discovery.
         Optional<CaveOpening> opening = ControlledDescentCaveHandoff.findOpenedCave(
-                level, mob.blockPosition(), project.heading(), this::canStand);
+                level, mob.blockPosition(), project.heading(), this::canPass, this::canStand);
         if (opening.isPresent()) {
             MiningDirector.completeWithOpening(
                     level, mob, project, opening.get(), mob.blockPosition());
@@ -295,6 +295,24 @@ public final class ControlledDescentGoal extends Goal {
                 mob.getMainHandItem(),
                 mob.getOffhandItem(),
                 cfg) > 0;
+    }
+
+    /**
+     * MI-14-R2b — can a mob move <em>through</em> this cell? Distinct from {@link #canStand}, which
+     * also demands a sturdy floor. The breakthrough flood needs passability to travel; standability
+     * only decides where it may stop.
+     */
+    private boolean canPass(BlockPos position) {
+        if (!(mob.level() instanceof ServerLevel level)) {
+            return false;
+        }
+        if (!level.isPositionEntityTicking(position)) {
+            return false;
+        }
+        if (!level.getFluidState(position).isEmpty()) {
+            return false;
+        }
+        return level.getBlockState(position).getCollisionShape(level, position).isEmpty();
     }
 
     private boolean canStand(BlockPos position) {
