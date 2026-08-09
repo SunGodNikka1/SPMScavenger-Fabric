@@ -14,6 +14,8 @@ import com.noobk.spmscavenger.mining.MiningGoalKind;
 import com.noobk.spmscavenger.mining.MiningTransition;
 import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.SpmScavenger;
+import com.noobk.spmscavenger.experience.ExperienceEmitters;
+import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.mining.NaturalDescentExhaustionPolicy;
 import com.noobk.spmscavenger.mining.NaturalDescentSearchState;
 import com.noobk.spmscavenger.mining.NaturalDescentStatus;
@@ -176,6 +178,7 @@ public final class ExploringGoal extends Goal {
                 readiness.consume(now + COOLDOWN_TICKS);
                 return false;
             }
+            emitExpeditionUnlocked(expedition, now);
             readiness.consume(now + COOLDOWN_TICKS);
         } else if (expeditionExpired(expedition.startedTick, now, MAX_EXPEDITION_TICKS)) {
             abandon(EndReason.STALE, now);
@@ -410,6 +413,7 @@ public final class ExploringGoal extends Goal {
         }
         expedition = invited;
         expedition.companionsInvited = true; // a guest does not recruit its own party
+        emitExpeditionUnlocked(expedition, now);
         readiness.consume(now + COOLDOWN_TICKS);
         return true;
     }
@@ -455,6 +459,7 @@ public final class ExploringGoal extends Goal {
         expedition = rebased;
         expedition.caveHandoffContinuation = true;
         expedition.companionsInvited = true; // a handoff is not a recruiting opportunity
+        emitExpeditionUnlocked(expedition, now);
         readiness.consume(now + COOLDOWN_TICKS);
         SpmScavenger.LOGGER.info(
                 "[spmscavenger] cave handoff accepted entity={} at={} heading={}",
@@ -1084,6 +1089,14 @@ public final class ExploringGoal extends Goal {
         expedition = null;
         navigationState = null;
         readiness.consume(now + COOLDOWN_TICKS);
+    }
+
+    private void emitExpeditionUnlocked(ExpeditionState state, long now) {
+        ExperienceEmitters.expeditionUnlocked(
+                mob,
+                RestSessionCoordinator.episodeIdForProject(
+                        mob.getUUID(), state.startedTick, "EXPEDITION"),
+                now);
     }
 
     private void clearCaveContinuationCommitment(ServerLevel level) {

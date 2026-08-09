@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.activity;
 
+import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.mining.MoveHolderClassifier;
 import net.minecraft.world.entity.Mob;
@@ -38,7 +39,17 @@ public final class ActivityObservationService {
                         wrapped.getGoal(), mob, store, mob.getUUID(), now));
             }
         }
-        return summarize(active);
+        return summarize(active, externalRestState(mob));
+    }
+
+    private static boolean externalRestState(@Nullable Mob mob) {
+        if (mob == null) {
+            return false;
+        }
+        if (mob.isSleeping()) {
+            return true;
+        }
+        return OpinionExperienceRegistry.contextFor(mob.getUUID()).hasLiveRestClaim();
     }
 
     /** Deterministic test seam; production uses {@link #observe} and therefore one selector pass. */
@@ -52,11 +63,14 @@ public final class ActivityObservationService {
         for (Goal goal : runningGoals) {
             active.add(MoveHolderClassifier.activityClass(goal, mob, store, mobId, now));
         }
-        return summarize(active);
+        return summarize(active, false);
     }
 
-    /** Pure reducer used by parity tests; production classes still come from MoveHolderClassifier. */
     public static Observation summarize(Iterable<ActivityClass> activeClasses) {
+        return summarize(activeClasses, false);
+    }
+
+    public static Observation summarize(Iterable<ActivityClass> activeClasses, boolean externalRest) {
         EnumSet<ActivityClass> active = EnumSet.noneOf(ActivityClass.class);
         boolean meaningfulWork = false;
         boolean exploring = false;
@@ -77,6 +91,7 @@ public final class ActivityObservationService {
                 meaningfulWork = true;
             }
         }
+        resting |= externalRest;
         return new Observation(
                 active,
                 meaningfulWork,

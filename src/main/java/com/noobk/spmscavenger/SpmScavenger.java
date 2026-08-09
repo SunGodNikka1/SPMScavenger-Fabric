@@ -1,5 +1,7 @@
 package com.noobk.spmscavenger;
 
+import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
+import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.goal.AnticsGoal;
 import com.noobk.spmscavenger.goal.CampfireGoal;
 import com.noobk.spmscavenger.goal.ControlledDescentGoal;
@@ -95,6 +97,13 @@ public class SpmScavenger implements ModInitializer {
         ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
                 install(mob);
+            }
+        });
+        ServerEntityEvents.ENTITY_UNLOAD.register((entity, world) -> {
+            if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
+                RestSessionCoordinator.invalidateOnUnload(
+                        mob.getUUID(), world.getGameTime());
+                OpinionExperienceRegistry.remove(mob.getUUID());
             }
         });
     }

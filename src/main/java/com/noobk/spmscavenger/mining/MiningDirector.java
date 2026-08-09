@@ -6,6 +6,9 @@ import com.noobk.spmscavenger.SpmScavenger;
 import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.ToolTier;
 import com.noobk.spmscavenger.ToolTierPolicy;
+import com.noobk.spmscavenger.experience.ExperienceCause;
+import com.noobk.spmscavenger.experience.ExperienceEmitters;
+import com.noobk.spmscavenger.experience.ExperienceKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -111,6 +114,7 @@ public final class MiningDirector {
         SpmScavenger.LOGGER.info(
                 "[spmscavenger] director completed mode={} entity={} reason={} at={} heading={}",
                 project.mode(), mob.getId(), end, transition.at(), transition.heading());
+        ExperienceEmitters.miningTerminal(mob, project, end, at, level.getGameTime());
     }
 
     /**
@@ -317,11 +321,22 @@ public final class MiningDirector {
      * but physically stuck goal.
      */
     public static void markExecutionProgress(ServerLevel level, Mob mob) {
+        markExecutionProgress(
+                level, mob, ExperienceKind.BLOCK_BROKEN, ExperienceCause.MINING_BLOCK_REMOVED);
+    }
+
+    public static void markExecutionProgress(
+            ServerLevel level,
+            Mob mob,
+            ExperienceKind kind,
+            ExperienceCause cause) {
         MiningProjectSavedData store = MiningProjectSavedData.get(level);
         store.leaseOf(mob.getUUID())
                 .filter(MiningExecutionLease::everStarted)
                 .ifPresent(lease -> store.putLease(
                         mob.getUUID(), lease.markProgress(level.getGameTime())));
+        store.projectOf(mob.getUUID()).ifPresent(project ->
+                ExperienceEmitters.miningProgress(mob, project, kind, cause, level.getGameTime()));
     }
 
     /** MI-14C1-R2 — whether an executor may persist interruption state after {@code stop()}. */

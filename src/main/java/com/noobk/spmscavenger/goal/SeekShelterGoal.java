@@ -2,6 +2,8 @@ package com.noobk.spmscavenger.goal;
 
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.ShelterScore;
+import com.noobk.spmscavenger.experience.RestAnchorType;
+import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
@@ -64,6 +66,7 @@ public class SeekShelterGoal extends Goal {
     private BlockPos bedPos;
     private final PhasedScanClock scanClock;
     private int approachTicks;
+    private boolean restClaimOpened;
 
     private static final int SCAN_INTERVAL = 40;
     private static final int SCAN_PHASE_SALT = 11;
@@ -114,6 +117,7 @@ public class SeekShelterGoal extends Goal {
     @Override
     public void start() {
         approachTicks = 0;
+        restClaimOpened = false;
         if (standPos != null) {
             mob.getNavigation().moveTo(standPos.getX() + 0.5, standPos.getY(), standPos.getZ() + 0.5, speed);
         }
@@ -128,6 +132,7 @@ public class SeekShelterGoal extends Goal {
         standPos = null;
         bedPos = null;
         approachTicks = 0;
+        restClaimOpened = false;
         scanClock.resetAfter(mob.level().getGameTime());
         mob.getNavigation().stop();
     }
@@ -144,6 +149,11 @@ public class SeekShelterGoal extends Goal {
             return;
         }
         if (bedPos == null && mob.blockPosition().distSqr(standPos) <= ARRIVED_SQR) {
+            if (!restClaimOpened) {
+                RestSessionCoordinator.openShelterRecovery(
+                        mob, standPos, RestAnchorType.SHELTER_STAND, mob.level().getGameTime());
+                restClaimOpened = true;
+            }
             mob.getNavigation().stop(); // arrived; wait out the night
             return;
         }
@@ -158,6 +168,11 @@ public class SeekShelterGoal extends Goal {
         if (state.is(BlockTags.BEDS) && !state.getValue(BedBlock.OCCUPIED)) {
             mob.getNavigation().stop();
             mob.startSleeping(bedPos);
+            if (!restClaimOpened) {
+                RestSessionCoordinator.openShelterRecovery(
+                        mob, bedPos, RestAnchorType.SHELTER_BED, mob.level().getGameTime());
+                restClaimOpened = true;
+            }
         } else {
             release();
             bedPos = null;

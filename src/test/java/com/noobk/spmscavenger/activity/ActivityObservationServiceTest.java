@@ -94,6 +94,14 @@ class ActivityObservationServiceTest {
     }
 
     @Test
+    void liveRestClaimSuppressesDiscretionaryIdle() {
+        var observation = ActivityObservationService.summarize(
+                List.of(ActivityClass.IDLE_CANDIDATE), true);
+        assertTrue(observation.resting());
+        assertFalse(observation.discretionaryIdleCandidate());
+    }
+
+    @Test
     void passiveHelperPreservesLegacyMeaningfulWorkSemantics() {
         var observation = ActivityObservationService.summarize(
                 List.of(ActivityClass.PASSIVE_HELPER));

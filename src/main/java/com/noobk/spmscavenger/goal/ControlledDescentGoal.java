@@ -13,6 +13,8 @@ import com.noobk.spmscavenger.mining.MiningExecutionGuard;
 import com.noobk.spmscavenger.mining.MiningGoalKind;
 import com.noobk.spmscavenger.mining.MiningProjectEnd;
 import com.noobk.spmscavenger.mining.CaveOpening;
+import com.noobk.spmscavenger.experience.ExperienceCause;
+import com.noobk.spmscavenger.experience.ExperienceKind;
 import java.util.Optional;
 import com.noobk.spmscavenger.mining.MiningBreakTiming;
 import com.noobk.spmscavenger.mining.MiningDirector;
@@ -295,7 +297,8 @@ public final class ControlledDescentGoal extends Goal {
                         horizontalDistance(project.origin(), mob.blockPosition()),
                         project.origin().getY() - mob.blockPosition().getY()));
         persist(level);
-        MiningDirector.markExecutionProgress(level, mob);
+        MiningDirector.markExecutionProgress(
+                level, mob, ExperienceKind.STAIR_STEP, ExperienceCause.MINING_STAIR_STEP);
         // MI-14-R2: report the opening, not the fact of being underground. A staircase is
         // subterranean by construction; only a standable space outside the corridor it just cut
         // counts as a discovery.

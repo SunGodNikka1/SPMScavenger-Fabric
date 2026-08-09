@@ -1,0 +1,162 @@
+package com.noobk.spmscavenger.experience;
+
+import com.noobk.spmscavenger.mining.MiningProject;
+import com.noobk.spmscavenger.mining.MiningProjectEnd;
+import com.noobk.spmscavenger.mining.MiningProjectMode;
+import com.noobk.spmscavenger.progression.TaskLifecycle;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Mob;
+
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * GAO-0c — production emitters with causal episode ownership. Callers must not write affect or
+ * opinion state directly.
+ */
+public final class ExperienceEmitters {
+
+    private ExperienceEmitters() {
+    }
+
+    public static void expeditionUnlocked(Mob mob, UUID episodeId, long gameTime) {
+        pipeline(mob).accept(new ExperienceEvent(
+                ExperienceKind.EXPEDITION_UNLOCKED,
+                gameTime,
+                episodeId,
+                OutcomeClass.VOLUNTARY_SUCCESS,
+                ExperienceCause.EXPEDITION_UNLOCKED,
+                0.25f,
+                -0.1f,
+                0.0f,
+                0.0f,
+                0.5f,
+                Optional.of(ActivityKind.OVERLAND_EXPLORATION),
+                Optional.of(mob.blockPosition()),
+                Optional.empty()));
+    }
+
+    public static void miningProgress(
+            Mob mob, MiningProject project, ExperienceKind kind, ExperienceCause cause, long gameTime) {
+        ActivityKind activity = activityFor(project.mode());
+        pipeline(mob).accept(new ExperienceEvent(
+                kind,
+                gameTime,
+                episodeFor(project, mob.getUUID()),
+                OutcomeClass.VOLUNTARY_SUCCESS,
+                cause,
+                0.1f,
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                Optional.of(activity),
+                Optional.of(mob.blockPosition()),
+                Optional.empty()));
+    }
+
+    public static void miningTerminal(
+            Mob mob, MiningProject project, MiningProjectEnd end, BlockPos at, long gameTime) {
+        OutcomeClass outcome = outcomeFor(end);
+        ExperienceCause cause = causeFor(end);
+        float stress = end == MiningProjectEnd.NO_PROGRESS || end == MiningProjectEnd.HAZARD ? 0.25f : 0.0f;
+        pipeline(mob).accept(new ExperienceEvent(
+                ExperienceKind.PROJECT_END,
+                gameTime,
+                episodeFor(project, mob.getUUID()),
+                outcome,
+                cause,
+                0.0f,
+                0.0f,
+                end.lifecycle() == TaskLifecycle.SUCCESS ? 0.2f : 0.0f,
+                stress,
+                end == MiningProjectEnd.CAVE_FOUND ? 0.5f : 0.0f,
+                Optional.of(activityFor(project.mode())),
+                Optional.of(at),
+                Optional.empty()));
+    }
+
+    public static void restSessionOpened(UUID mobId, RestSessionClaim claim, long gameTime) {
+        pipeline(mobId).accept(new ExperienceEvent(
+                ExperienceKind.REST_SESSION,
+                gameTime,
+                claim.claimId(),
+                OutcomeClass.VOLUNTARY_SUCCESS,
+                ExperienceCause.REST_SESSION_OPEN,
+                0.05f,
+                -0.05f,
+                0.0f,
+                -0.05f,
+                0.0f,
+                Optional.of(ActivityKind.REST),
+                Optional.of(claim.anchor()),
+                Optional.empty()));
+    }
+
+    public static void restSessionClosed(
+            UUID mobId, RestSessionClaim claim, RestCloseReason reason, long gameTime) {
+        OutcomeClass outcome = reason == RestCloseReason.CHUNK_UNLOAD
+                ? OutcomeClass.PROTECTED_INTERRUPT
+                : OutcomeClass.VOLUNTARY_ABANDON;
+        pipeline(mobId).accept(new ExperienceEvent(
+                ExperienceKind.REST_SESSION,
+                gameTime,
+                claim.claimId(),
+                outcome,
+                ExperienceCause.REST_SESSION_CLOSE,
+                0.0f,
+                0.0f,
+                reason == RestCloseReason.TIMEOUT ? 0.1f : 0.0f,
+                0.0f,
+                0.0f,
+                Optional.of(ActivityKind.REST),
+                Optional.of(claim.anchor()),
+                Optional.empty()));
+    }
+
+    private static EpisodeRoutingPipeline pipeline(Mob mob) {
+        return pipeline(mob.getUUID());
+    }
+
+    private static EpisodeRoutingPipeline pipeline(UUID mobId) {
+        return OpinionExperienceRegistry.contextFor(mobId).pipeline();
+    }
+
+    private static UUID episodeFor(MiningProject project, UUID mobId) {
+        return RestSessionCoordinator.episodeIdForProject(
+                mobId, project.startedGameTime(), project.mode().name());
+    }
+
+    private static ActivityKind activityFor(MiningProjectMode mode) {
+        return switch (mode) {
+            case CONTROLLED_DESCENT -> ActivityKind.CONTROLLED_DESCENT;
+            case TUNNEL_SEARCH -> ActivityKind.TUNNEL_SEARCH;
+            case CAVE_EXPLORATION -> ActivityKind.CAVE_EXPLORATION;
+            default -> ActivityKind.RESOURCE_GATHERING;
+        };
+    }
+
+    private static OutcomeClass outcomeFor(MiningProjectEnd end) {
+        return switch (end.lifecycle()) {
+            case SUCCESS -> OutcomeClass.VOLUNTARY_SUCCESS;
+            case RETRY, BLOCKED -> OutcomeClass.EXECUTION_FAILURE;
+            case INTERRUPTED -> OutcomeClass.PROTECTED_INTERRUPT;
+            default -> OutcomeClass.VOLUNTARY_ABANDON;
+        };
+    }
+
+    private static ExperienceCause causeFor(MiningProjectEnd end) {
+        return switch (end) {
+            case CAVE_FOUND -> ExperienceCause.MINING_CAVE_FOUND;
+            case HANDOFF_TUNNEL_SEARCH -> ExperienceCause.MINING_TUNNEL_HANDOFF;
+            case NO_PROGRESS -> ExperienceCause.MINING_NO_PROGRESS;
+            case SEARCH_BUDGET_EXHAUSTED -> ExperienceCause.MINING_BUDGET_EXHAUSTED;
+            case HAZARD -> ExperienceCause.MINING_HAZARD;
+            case COMBAT -> ExperienceCause.MINING_COMBAT;
+            case PLAYER_ORDER -> ExperienceCause.MINING_PLAYER_ORDER;
+            case LEASE_EXPIRED -> ExperienceCause.MINING_LEASE_EXPIRED;
+            case TOOL_FAILURE -> ExperienceCause.ENVIRONMENT_BLOCKED;
+            default -> ExperienceCause.UNSPECIFIED;
+        };
+    }
+}

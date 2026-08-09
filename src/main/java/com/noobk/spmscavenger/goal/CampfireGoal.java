@@ -2,6 +2,7 @@ package com.noobk.spmscavenger.goal;
 
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
+import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
@@ -54,6 +55,7 @@ public class CampfireGoal extends Goal {
     private final PhasedScanClock scanClock;
     private int approachTicks;
     private int placeTicks;
+    private boolean restClaimOpened;
 
     private static final int SCAN_INTERVAL = 100;
     private static final int SCAN_PHASE_SALT = 37;
@@ -111,6 +113,7 @@ public class CampfireGoal extends Goal {
     public void start() {
         approachTicks = 0;
         placeTicks = 0;
+        restClaimOpened = false;
         if (idlePos != null) {
             mob.getNavigation().moveTo(idlePos.getX() + 0.5, idlePos.getY(), idlePos.getZ() + 0.5, speed);
         }
@@ -122,6 +125,7 @@ public class CampfireGoal extends Goal {
         idlePos = null;
         approachTicks = 0;
         placeTicks = 0;
+        restClaimOpened = false;
         scanClock.resetAfter(mob.level().getGameTime());
         mob.getNavigation().stop();
     }
@@ -148,6 +152,11 @@ public class CampfireGoal extends Goal {
                 firePos.getX() + 0.5, firePos.getY() + 0.5, firePos.getZ() + 0.5);
 
         if (mob.blockPosition().distSqr(idlePos) <= ARRIVED_SQR) {
+            if (!restClaimOpened) {
+                RestSessionCoordinator.openCampfireRest(
+                        mob, firePos, idlePos, level.getGameTime());
+                restClaimOpened = true;
+            }
             mob.getNavigation().stop();   // arrived — stand and watch the fire
             return;
         }

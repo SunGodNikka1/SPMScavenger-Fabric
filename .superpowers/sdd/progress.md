@@ -70,9 +70,8 @@ safety pause; player-order prevention/revocation; pre-start pause NBT v4; 400-ti
 C3-F1…F7; 321 tests/clean build; MAIBS static PASS; runtime unverified). Post-GREEN review also
 repaired a same-observer CommandedAction revoke→reassign loop. No Tunnel Search work performed.
 
-GA-OPINION: GAO-0 + GAO-0b `IMPLEMENTED / STATIC VERIFIED` — `ActivityObservationService` +
-`experience` schema (`ExperienceEvent`, `ExperiencePipeline`, enums); D-GAO-026/027 locked;
-`plans/RFC-ADAPTIVE-OPINION-MOOD-AND-ENGAGEMENT.md`; 410 tests; GAO-0c frontier; PD-GAO-01…04 open;
-runtime unverified.
+GA-OPINION: GAO-0 through GAO-0c `IMPLEMENTED / STATIC VERIFIED` — episode routing, REST claims,
+mining/explore/rest emitters; GAO-1 (`AffectiveState`) frontier; `plans/RFC-ADAPTIVE-OPINION-MOOD-AND-ENGAGEMENT.md`;
+full test suite pass; runtime unverified.
 
 No commits. No Minecraft launches (separate approval required).

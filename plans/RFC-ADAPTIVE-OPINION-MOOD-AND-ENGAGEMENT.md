@@ -9,13 +9,13 @@
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
 | **Mode** | `PLANNING` |
-| **Status** | GAO-0 + GAO-0b `IMPLEMENTED / STATIC VERIFIED`; GAO-0-B1 repaired; runtime parity remains `UNVERIFIED` |
+| **Status** | GAO-0 through GAO-0c `IMPLEMENTED / STATIC VERIFIED`; GAO-1 (`AffectiveState`) is nearest frontier; runtime parity `UNVERIFIED` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-09 (D-GAO-026/027 locked; GAO-0b schema implemented) |
+| **Last update** | 2026-08-09 (GAO-0c episode routing + REST claims implemented) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,10 +39,10 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** authorize **GAO-0c** — `ActivityEpisode`, concrete `ExperiencePipeline`
-routing, `RestSessionClaim`, and emitter wiring only with causal owner. GAO-0b is
-`IMPLEMENTED / STATIC VERIFIED` (schema vocabulary + inert ingress; no production emitters).
-Runtime parity remains `UNVERIFIED` because no launch was authorized.
+**Nearest frontier:** **GAO-1** — `AffectiveState` + observation cadence wiring into
+`OpinionExperienceSinks`. GAO-0c delivered `ActivityEpisode`, `EpisodeRoutingPipeline`,
+`RestSessionClaim`, production emitters (mining/explore/rest), and arrival-anchored REST lifecycle.
+Runtime parity remains `UNVERIFIED` (no launch authorized).
 
 ---
 
@@ -495,7 +495,7 @@ unbounded REST classification.
 
 ## Topic: Experience events — mood inputs without new goals (`LOCKED SEMANTICS / BOUNDARY PROPOSED`)
 
-**Status:** D-GAO-012/022/023 `LOCKED`; D-GAO-026/027 `LOCKED`; GAO-0b schema `IMPLEMENTED / STATIC VERIFIED`; emitters remain unimplemented (GAO-0c)
+**Status:** D-GAO-012/022/023 `LOCKED`; D-GAO-026/027 `LOCKED`; GAO-0b/0c `IMPLEMENTED / STATIC VERIFIED`
 
 Opinion should learn from **terminals and milestones** already emitted by shipped systems — not poll block state.
 
@@ -1148,13 +1148,13 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 + GAO-0b `IMPLEMENTED / STATIC VERIFIED`; GAO-0c is the nearest authorized frontier
+**Status:** GAO-0 through GAO-0c `IMPLEMENTED / STATIC VERIFIED`; GAO-1 is nearest frontier
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
 | **GAO-0** | Activity taxonomy + observation contract | **IMPLEMENTED:** `ActivityClass`; one `ActivityObservationService` scan wrapping `MoveHolderClassifier`; host/addon taxonomy and parity tests | MI-14C2-R2 pattern |
-| **GAO-0b** | Schema vocabulary + inert ingress contract | **IMPLEMENTED:** `ExperienceKind`, `ExperienceCause`, `OutcomeClass`, `ActivityKind`, immutable `ExperienceEvent`, interface-only `ExperiencePipeline.accept`; no emitters/consumers | GAO-0, D-GAO-026/027 |
-| **GAO-0c** | Episode + rest-claim processing | `ActivityEpisode`, concrete pipeline routing, `RestSessionClaim`; affect-vs-learning and unload lifecycle tests; emitter wiring only with causal owner | GAO-0, GAO-0b |
+| **GAO-0b** | Schema vocabulary + inert ingress contract | **IMPLEMENTED:** `ExperienceKind`, `ExperienceCause`, `OutcomeClass`, `ActivityKind`, immutable `ExperienceEvent`, interface-only `ExperiencePipeline.accept` | GAO-0, D-GAO-026/027 |
+| **GAO-0c** | Episode + rest-claim processing | **IMPLEMENTED:** `ActivityEpisode`, `EpisodeRoutingPipeline`, `RestSessionClaim`/`RestSessionCoordinator`, `OpinionExperienceRegistry`, mining/explore/rest emitters, observer REST integration | GAO-0, GAO-0b |
 | **GAO-1** | `AffectiveState` + observation | Boredom/engagement from experience events; scheduler-wide idle detection | GAO-0, GAO-0b, GAO-0c |
 | **GAO-2** | `OpinionMemory` v1 (ACTIVITY only) | Learned activity preferences + repetition | GAO-1 |
 | **GAO-3** | `IdleOpportunityPolicy` | Score available discretionary activities | GAO-2, existing goals |
@@ -1455,6 +1455,7 @@ Runtime probes require separate Minecraft launch approval.
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Cursor | **GAO-0c implementation.** Added `ActivityEpisode`, `EpisodeRoutingPipeline`, `MobExperienceContext`, `OpinionExperienceRegistry`, `RestSessionClaim`/`RestSessionCoordinator`, `ExperienceEmitters`, affect/learning sinks; wired mining terminals, expedition unlock, campfire/shelter REST claims; observer validates claims and classifies live REST; entity unload invalidates ephemeral state. Experience unit tests + full suite pass; runtime unverified |
 | 2026-08-09 | Agent_Cursor | **GAO-0b schema implementation.** Locked D-GAO-026/027 per RFC recommendation; added `experience` package (`ExperienceKind`, `ExperienceCause`, `OutcomeClass`, `ActivityKind`, `ExperienceEvent`, `ExperiencePipeline`); focused unit tests; full suite 410 tests, 0 failures. No emitters, episode state, affect, Goal, or scheduler changes. Runtime unverified; no launch, commit, or push |
 | 2026-08-09 | Agent_Codex | **GAO-0b continuation frontier audit.** Found that the locked event record referenced absent `OutcomeClass` and `ActivityKind` types while the phase table deferred one and owned neither completely. Added D-GAO-026/027, compared schema-first vs combined vs later-migration boundaries, defined a behavior-inert GAO-0b task and MAIBS/acceptance gates, and moved the frontier to one user decision/implementation authorization. No source implementation, build, runtime launch, commit, or push |
 | 2026-08-09 | Agent_Codex | **GAO-0-B1 + GAO-0 implementation.** Repaired disabled-cadence lease settlement and, during post-build MAIBS, found/repaired the disabled-at-entity-load observer absence with a permanently cleanup-only authority mode. Added `ActivityClass`, the single `ActivityObservationService`, reused/extended `MoveHolderClassifier`, refactored readiness observation, and added taxonomy/parity tests. Focused suite and clean build passed; 405 tests, 0 failures/errors/skips. Runtime remains unverified; no launch, commit, push, or out-of-scope GAO-0b+ work |
@@ -1815,3 +1816,32 @@ by construction (`UNVERIFIED` — no launch authorized).
 **Frontier after:** GAO-0c — `ActivityEpisode`, concrete pipeline routing, `RestSessionClaim`, and
 emitter wiring with causal owner. PD-GAO-01…04 remain open product decisions. No runtime launch,
 commit, or push.
+
+---
+
+## Contribution — Agent_Cursor (GAO-0c episode + REST lifecycle)
+
+**Agent:** `Agent_Cursor`
+
+**Date/Session:** 2026-08-09
+
+**Contribution type:** `IMPLEMENTATION`
+
+**Frontier before:** GAO-0b schema only; no episode routing, REST claims, or production emitters.
+
+**Delivered (`CONFIRMED` — `.\gradlew.bat test`, 0 failures):**
+
+- `ActivityEpisode` — milestone normalization, separate affect pulses vs learning evidence (D-GAO-022)
+- `EpisodeRoutingPipeline` + `MobExperienceContext` + `OpinionExperienceRegistry`
+- `RestSessionClaim` / `RestSessionCoordinator` — arrival-anchored REST (D-GAO-021)
+- `ExperienceEmitters` — mining progress/terminals, expedition unlock, REST open/close
+- Integration: `CampfireGoal`, `SeekShelterGoal`, `ExplorationActivityGoal` validation,
+  `ActivityObservationService` live-rest predicate, `MiningDirector`, `ExploringGoal`,
+  `ControlledDescentGoal` stair steps, entity unload invalidation (PD-GAO-07)
+
+**MAIBS (`CODE_CONFIRMED`, runtime `UNVERIFIED`):** post-arrival campfire mob should classify REST
+after `CampfireGoal` stops (GAO-M7); proximity without arrival must not open a claim (GAO-M8);
+simulation-frontier outcomes must not poison preference learning (GAO-M9).
+
+**Frontier after:** GAO-1 `AffectiveState` — wire `OpinionExperienceSinks` into mood channels.
+PD-GAO-01…04 remain open. No runtime launch, commit, or push.
