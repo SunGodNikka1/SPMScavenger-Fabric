@@ -1156,6 +1156,53 @@ Where two subsystems must agree on a lifetime, share the **predicate**. This is 
 this workstream of a defect that survives because two places agree on data and disagree on
 interpretation (R2c wiring, C1 grace clock, C2-M2).
 
+### Lifetime Semantics Sweep (`COMPLETE`, 1 finding / 5 pass, 330 tests)
+
+Bounded review scoped by the User to TTL / lifetime / grace / expiry / timeout / lease / claim, with
+an explicit stop condition: *for each contract identify owner, epoch, boundary predicate, persistence
+representation and all consumers; if consumers agree, mark PASS and move on; do not invent work
+merely because a timer exists.* No feature changes, no opportunistic cleanup.
+
+| Contract | Owner | Epoch | Predicate | Persistence | Consumers | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| Cave handoff **admission** 400 | `ExecutionIntentPolicy` | discovery (`transition.tick`) | `expired` = `>=`, one definition | transition NBT | 3, all via `acceptableCaveHandoff` | **L1 FIXED** |
+| Cave handoff **authority** 2400 | `ExploringGoal` | claim (`claimedAt`) | `expeditionExpired`, one definition | window in commitment NBT | 2 | PASS (M2) |
+| Expedition lifetime 2400 | `ExploringGoal` | `startedTick` | `expeditionExpired` | none (runtime) | 2 | PASS (M2) |
+| Start / temporary / progress lease | `ExecutionLeasePolicy` | `assignedAt` / `blockedSince` / `lastExecutionProgressAt` | single evaluator | lease NBT (age fields, not deadlines) | 1 | PASS |
+| Furnace walk claim 600 | `FurnaceStations` | claim time | `gameTime <= expiresAt` occupied, `>` claimable | none (runtime) | 2 | PASS |
+| Bed claim 600 | `SeekShelterGoal` | claim time | `gameTime > expiresAt` | none (runtime) | 1 | PASS |
+
+**L1 — same conceptual lifetime, two definitions (`LATENT`, fixed).** `CAVE_HANDOFF_LIFETIME_TICKS`
+existed twice: `ExploringGoal` (private) and `ExecutionIntentPolicy` (public, carrying the comment
+*"Must match ExploringGoal cave-handoff admission window"*) — an invariant enforced by a comment.
+All three consumers route through the same `acceptableCaveHandoff` predicate, so there was **no
+behavioural contradiction**; both values were 400. But a one-line edit to either would desynchronise
+admission from intent and goal classification, which is the same `CAVE_HANDOFF` vs
+`EXPLORING_ORDINARY` divergence M2 repaired, reached by a different route. Repair was a deletion, not
+a redesign: the private copy is gone and `ExploringGoal` reads the owner's constant.
+
+**Deliberate passes, recorded so the question is not reopened:**
+
+- The User's two named candidates were checked and cleared. `FurnaceStations` holds the only pair of
+  *complementary* predicates in the codebase (`<=` occupied / `>` claimable); exactly one is true at
+  every tick, so they cannot disagree. `SeekShelterGoal` has a single consumer, and its 600-tick bed
+  claim intentionally outlives its 400-tick approach rather than sharing a lifetime.
+- `PROGRESS_LEASE_TICKS = 400` versus `MAX_BREAK_TICKS = 200`: progress is marked per **successful
+  block removal**, not per completed stair step, so the worst-case gap is one capped break plus a
+  short traversal — inside the lease with roughly 2x headroom. A *denied* break deliberately marks no
+  progress, so an unbreakable target still trips `PROGRESS_TIMEOUT`, which is the intent. **This is a
+  bound relationship, not an independent number:** the progress lease must exceed
+  `MAX_BREAK_TICKS` plus inter-step traversal, and shrinking either constant without rechecking the
+  other would produce false revocations mid-dig.
+- Five `MAX_APPROACH_TICKS` (100/200/400) and repeated `CRAFT_TICKS`/`PLACE_TICKS` values are
+  per-goal budgets that coincide in value, not one shared concept. `COOLDOWN_TICKS`, `CLAIM_TICKS`
+  and `WALK_CLAIM_TICKS` all being 600 is likewise coincidence across unrelated subsystems. Marked
+  PASS under the stop condition rather than unified.
+
+**Sweep closed.** The recurring defect class is answered by a rule, not by a standing audit: *where
+two subsystems must agree on a lifetime, share the predicate; where they must agree on a bound,
+record the relationship.* Next work is the `TUNNEL_SEARCH` executor.
+
 ### Design question for the user (not a defect)
 
 `CraftTorchesGoal` `YIELD`s under `CONTROLLED_DESCENT`. Torch supply is a descent prerequisite, so a
@@ -3220,6 +3267,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | User + Agent_Claude | **Lifetime Semantics Sweep `COMPLETE`** — bounded review of every independently implemented lifetime/expiry contract (owner / epoch / predicate / persistence / consumers). One finding: **L1**, `CAVE_HANDOFF_LIFETIME_TICKS` defined twice and kept in step by a comment — latent, no behavioural contradiction, fixed by deletion. Five PASS, including the User's two named candidates (`FurnaceStations` complementary predicates, `SeekShelterGoal` single consumer) and the `PROGRESS_LEASE_TICKS` / `MAX_BREAK_TICKS` bound relationship, now documented. Coincidental equal values left alone per the stop condition. Frontier: `TUNNEL_SEARCH` executor |
 | 2026-08-09 | User + Agent_Claude | **MI-14C2-M2 `IMPLEMENTED`** (330 tests). MAIBS re-pass found predicate drift surviving the C2-R2 constant unification: commitment `now < claimedAt + 2400` vs expedition `now - startedTick > 2400` left one tick where the expedition was alive and its authority gone, reopening both `CAVE_HANDOFF -> NONE` and `mayStartControlledDescent`. Repaired by sharing the predicate (`ExploringGoal.expeditionExpired`) and storing `authorityTicks` instead of a derived `expiresAt`; legacy saves recover the window. Lesson `PROVEN`: deduplicating a constant does not deduplicate a boundary |
 | 2026-08-09 | Agent_Claude + User | **MI-14C2-R2 `IMPLEMENTED`** (327 tests): cave-handoff authority now runs from the claim (`now + ExploringGoal.MAX_EXPEDITION_TICKS`), not from discovery. User `LOCKED` the authority bound to the expedition's own lifetime rather than a route-derived estimate — a smaller invented budget could expire while the expedition it protects is still legally running. Constant made public rather than copied; `claimCaveContinuation` requires the window explicitly (no defaulted overload). Two corrections to my MAIBS report: admission is strictly `< 400` (`expired()` is `>=`), and the suite was 321 after Protected Interruption Handling, not 310 |
 | 2026-08-09 | Agent_Claude | MAIBS control-plane pass over shipped MI-14C1/C1-R1/C2/C2-R1/C3 (310 tests). Gate **FAIL: MI-14C2-M1** — the cave-continuation commitment expires on the *discovery* clock (`handoff.tick() + 400`), the same instant admission closes, so it grants ~0 protected travel for a 48-block route and Loop B returns mid-walk; `claimedAt` is stored and never read. Second-order: expiry also unblocks `mayStartControlledDescent`, so the mob can start a new staircase beside the cave it just found. Repair MI-14C2-R2 = separate admission (from discovery) from authority (from claim). Also recorded my own C1 defect (TEMPORARY grace measured from assignment age) repaired by another agent as C1-R1. Loop D confirmed correctly `NEUTRAL`; bounded authority confirmed — combat/survival unclassified |

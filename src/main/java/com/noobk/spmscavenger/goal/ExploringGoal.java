@@ -8,6 +8,7 @@ import com.noobk.spmscavenger.DescentHeadingPolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.WorkDemandPolicy;
+import com.noobk.spmscavenger.mining.ExecutionIntentPolicy;
 import com.noobk.spmscavenger.mining.MiningExecutionGuard;
 import com.noobk.spmscavenger.mining.MiningGoalKind;
 import com.noobk.spmscavenger.mining.MiningTransition;
@@ -69,7 +70,6 @@ public final class ExploringGoal extends Goal {
     /** Shortest hop worth asking for; below this the mob is better off wandering for a moment. */
     private static final double MIN_PATH_STEP = 6.0;
     /** A cave handoff older than this is stale — the mob or the world has moved on. */
-    private static final int CAVE_HANDOFF_LIFETIME_TICKS = 400;
     /** Cave continuation is short and local; the opening is right there. */
     private static final double CAVE_HANDOFF_ROUTE_BLOCKS = 48.0;
     /** A landing this far above or below the mob is a roof or a cliff top, not the next step. */
@@ -427,7 +427,8 @@ public final class ExploringGoal extends Goal {
         ScavengerConfig cfg = ScavengerConfig.get();
         MiningProjectSavedData store = MiningProjectSavedData.get(level);
         Optional<MiningTransition> pending = MiningTransition.acceptableCaveHandoff(
-                store.pendingTransition(mob.getUUID()), now, CAVE_HANDOFF_LIFETIME_TICKS);
+                store.pendingTransition(mob.getUUID()), now,
+                ExecutionIntentPolicy.CAVE_HANDOFF_LIFETIME_TICKS);
         if (pending.isEmpty()) {
             return false;
         }
