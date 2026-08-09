@@ -811,3 +811,10 @@ bounded lease can expose the stall. Must happen: an admissibly stuck started des
 `NO_PROGRESS`. Must not happen: ticks/replans create progress, or combat/contention time causes an
 immediate post-resume timeout. Static/unit/build evidence is `CONFIRMED` (310 tests); observable
 Minecraft behavior remains `UNVERIFIED` pending launch approval.
+
+**MAIBS correction:** the clock representation remains valid, but the integrated timeout ordering
+does not. Controlled descent's total project clock also ends at 2400 ticks using `>=`; C3 uses
+`>2400`, so an active stall cannot reach the intended `NO_PROGRESS` branch first. Furthermore,
+protected MOVE holders are deliberately excluded from CONTENTION without being represented as a
+different blocker. This decision is therefore **not accepted behaviorally** until timeout ordering
+and protected-interrupt ownership are repaired. See `.superpowers/sdd/task-28-report.md`.

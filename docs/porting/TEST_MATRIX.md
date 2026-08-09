@@ -226,3 +226,15 @@ animation, save/reload, and multi-mob behavior remain `UNVERIFIED`.
 
 Build evidence: `gradlew.bat clean build` passed 310 tests with no failures/errors/skips. Runtime
 falsification requires separate launch approval; see `.superpowers/sdd/task-28-report.md`.
+
+**MAIBS-1 integration result: FAIL.** These unit rows validate lease arithmetic, but active
+controlled descent has an equal 2400-tick total project budget checked at `>=`, so it emits
+`SEARCH_BUDGET_EXHAUSTED` before C3's strict `>2400` `NO_PROGRESS` threshold. Additionally,
+`PROTECTED_INTERRUPT` MOVE owners are excluded from CONTENTION without being mapped to another
+blocker; `StayNearGoal` can therefore prevent start while C1 sees `NONE`. Required repair tests:
+
+| Check | Must happen | Must not happen | Current |
+| --- | --- | --- | --- |
+| Integrated active stall | Denied planned break reaches `NO_PROGRESS` before total-budget end | C3-A passes only as an isolated policy test | **FAIL — CODE_CONFIRMED** |
+| Protected owner before start | Stay/order either prevents assignment or produces explicit blocker | Unstarted assignment authorized forever while priority-2 MOVE is occupied | **FAIL — CODE_CONFIRMED** |
+| Protected owner after start | Escape/recovery/order has explicit pause/revoke semantics | C3 ages under blocker `NONE` while executor cannot run | **FAIL — CODE_CONFIRMED** |

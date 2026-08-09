@@ -61,10 +61,12 @@ runtime unverified; verified commit a6e9793)
 MI-14C2: repair complete (R1 commitment + R2 scheduler-wide contention + C1-R2 safe stop;
 MAIBS C2 re-pass PASS_WITH_RUNTIME_UNVERIFIED; 302 tests; task-29-report)
 
-MI-14C3: implemented (task-28; observable break/step/handoff progress; exact TEMPORARY/CONTENTION
-pause accounting; NBT v3 + v2 migration; C3-A…E green; 310 tests; runtime unverified)
+MI-14C3: code implemented, but MAIBS-1 FAIL (task-28; C3-A…E pure tests green; 310 tests).
+Integration defects: active executor's 2400-tick project budget (`>=`) shadows C3's >2400 progress
+timeout; protected MOVE owners are excluded from contention without becoming another blocker.
 
-Next execution-control gap: `TunnelSearchGoal` / consumer for Loop D. MI-14C3 runtime falsification
-also remains open and requires separate Minecraft launch approval.
+Next execution-control work: repair MI-14C3 budget reachability and protected-MOVE classification.
+Do not advance to `TunnelSearchGoal` until MAIBS-1 passes. Runtime falsification remains open and
+requires separate Minecraft launch approval.
 
 No commits. No Minecraft launches (separate approval required).

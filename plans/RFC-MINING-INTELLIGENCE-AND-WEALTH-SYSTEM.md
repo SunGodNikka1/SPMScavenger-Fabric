@@ -9,7 +9,7 @@
 | **Target progression** | **Vanilla Minecraft 1.21.1 mining + resource wealth** (overworld ore tiers through diamond/deepslate; not Nether/endgame mining in gen-1) |
 | **Scope** | Autonomous *where* to mine, *how much* to stockpile (wealth), prerequisite planning hooks, capability gaps, integration methods, phased plan, validation — **design until implementation authorized** |
 | **Mode** | `PROGRESSIVE_CONTINUATION` (User — Continue the RFC) |
-| **Status** | MI-14C3 `IMPLEMENTED` (task-28; 310 tests); **MAIBS C3 `BEHAVIORALLY_PLAUSIBLE / RUNTIME_UNVERIFIED`** |
+| **Status** | MI-14C3 code `IMPLEMENTED` (task-28; 310 tests); **MAIBS-1 `FAIL — ARCHITECTURE_DEFECT`** (budget shadow + protected-MOVE blocker gap) |
 | **User constraint** | No Minecraft launch, commit, or push unless separately asked; implementation only after explicit Begin authorization |
 | **Baseline version** | `1.9.2` |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `TaskLifecycle.java` |
@@ -103,7 +103,7 @@ novelty before terrain** (MI-5H), not MI-7 session types alone.
 | [MI-5 behavioural prediction](#topic-mi-5-behavioural-prediction-gate-maibs-1) | `FAIL` heading blindness | **MI-5H `READY`** — `DescentHeadingPolicy` |
 | [MI-6 behavioural prediction](#topic-mi-6-behavioural-prediction-gate-maibs-1) | 6A/D/B/C `IMPLEMENTED`; runtime `UNVERIFIED` | **MI-6F wire before MI-7B+C** |
 | [MI-7 controlled excavation descent](#topic-mi-7-controlled-excavation-descent-gate-maibs-1) | MI-7R `IMPLEMENTED` | MI-14C control plane active |
-| [MI-14C execution control](#topic-mi-14c--execution-control-plane-proposed-user--agent_claude) | C1/C2/C3 implemented; runtime open | **Next: Tunnel-search consumer for Loop D** |
+| [MI-14C execution control](#topic-mi-14c--execution-control-plane-proposed-user--agent_claude) | C3 code green; MAIBS integration fail | **Next: repair budget shadow + protected-MOVE classification** |
 | [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order (revised) | **Next: C2 repair → MAIBS re-pass → C3** |
 | [Validation](#topic-validation) | `PARTIAL` | Policy units green; gather wealth + runtime open |
 | [Deferred](#topic-deferred-and-unverified) | — | Nether, branch mines, portfolio gen-1 |
@@ -782,7 +782,8 @@ Do **not** classify combat as contention when combat already has `TEMPORARY` cla
 
 ### MI-14C3 — Progress Lease (fixes stale-active Loop A) — **`IMPLEMENTED` (task-28)**
 
-**Status:** `IMPLEMENTED / STATICALLY VERIFIED / RUNTIME UNVERIFIED` — 310 tests; clean build pass.
+**Status:** code `IMPLEMENTED`, but **MAIBS-1 `FAIL — ARCHITECTURE_DEFECT`**. The 310-test clean
+build proves unit/static behavior, not integrated reachability of C3-A.
 **Prerequisite:** MI-14C2 repair package (task-29) `IMPLEMENTED`.
 
 Two clocks — start lease (C1) and progress lease (C3) — because an executor that starts once and
@@ -853,6 +854,30 @@ MiningExecutionLease.progressPausedTicks
 **Static/unit result:** C3-A…E **PASS** in `MiningExecutionC3Test`; persistence and v2→v3
 migration regressions pass. Full evidence: `.superpowers/sdd/task-28-report.md`. Runtime rows remain
 `UNVERIFIED` because no Minecraft launch was authorized.
+
+#### Full MAIBS integration audit — `FAIL` (Agent_Codex, explicit skill invocation)
+
+The active executor increments project `ticksElapsed` before acting and ends at
+`ticksElapsed >= MiningBudget.maxTicks` (**2400**). C3 ends only when admissible progress age is
+strictly `> PROGRESS_LEASE_TICKS` (**2400**). Consequently an actively stuck descent emits
+`SEARCH_BUDGET_EXHAUSTED` first; if 2300 project ticks were already spent before the last progress,
+the supposed 2400-tick progress window can be shadowed after only ~100 more ticks. C3-A is green as
+a pure policy test but unreachable on that integrated active-goal path (`CODE_CONFIRMED`).
+
+A second gap remains: `MoveHolderClassifier` excludes `PROTECTED_INTERRUPT` from contention, while
+`controlledDescentBlocker` only recognizes combat among protected higher-priority work. A running
+`StayNearGoal`, `TrainRecoveryGoal`, shelter, or environmental escape can therefore physically own
+MOVE while the lease sees blocker `NONE`. Never-started work can evade C1 indefinitely under a
+persistent stay tether; started work can consume C3 time while physically preempted.
+
+Three probes recorded: protected/stay handling `NOT FOUND` in `controlledDescentBlocker`;
+`PLAYER_ORDER` use `NOT FOUND` outside its enum; stay-anchor assignment prevention `NOT FOUND` in
+the director/flagless observer (it exists only in `ExploringGoal`). Full trace and options:
+`.superpowers/sdd/task-28-report.md`.
+
+**Repair gate:** make progress expiry reachable before total-budget termination and explicitly map
+protected MOVE ownership to prevent, pause, or revoke assignment. Do not proceed to the Loop-D
+tunnel consumer while this high-severity C3 objection remains unresolved.
 
 #### Non-goals (`LOCKED`)
 
@@ -2680,7 +2705,7 @@ boundary. Focused tests and `gradlew.bat clean build` pass (148/148); runtime re
 | MI-14 | P8 | `MiningDirector` orchestration (extends MI-7A project) | `BLOCKED` until MI-7A |
 | MI-14C1 | P8 | Assignment/start lease and revocation | **`IMPLEMENTED`** |
 | MI-14C2 | P8 | Intent arbitration + scheduler contention | **`IMPLEMENTED`** (task-29 repair; runtime `UNVERIFIED`) |
-| MI-14C3 | P8 | Observable-progress lease | **`IMPLEMENTED`** (task-28; 310 tests; runtime `UNVERIFIED`) |
+| MI-14C3 | P8 | Observable-progress lease | code `IMPLEMENTED`; **MAIBS-1 `FAIL` — repair required** |
 | MI-15 | P6 | `MiningMemory` store | `BLOCKED` |
 | MI-16 | P9 | `VeinFrontier` + `ResourceTarget` | `BLOCKED` |
 | MI-17 | P9 | Ore utility scoring | `BLOCKED` |
@@ -2851,7 +2876,7 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] **MI-6** cave opportunistic ore (task 17; 169 tests) — MAIBS FAIL on landings → repair package
 - [x] **MI-6A + MI-6D + MI-6B + MI-6C** (task 18; 178 tests) — code repair; runtime `UNVERIFIED`
 - [x] **Accept MI-7 redesign** — Controlled Excavation Descent MI-7A…E; D-MIW-033/034 (user 2026-08-09)
-- [x] **MI-14C3 progress lease** — task-28; C3-A…E + persistence/migration green; 310 tests
+- [ ] **MI-14C3 integration repair** — unit policy green, but total-budget shadow and protected-MOVE blocker gap fail MAIBS-1
 - [ ] **Begin implementation for MI-6F or MI-7B+C** (6F first per dependency)
 - [ ] U-MIW matrix / runtime datapack (MI-9/MI-10)
 - [ ] **MI-7E** controlled staircase (blocked until MI-7A–D + MI-6 runtime probe)
@@ -2864,8 +2889,9 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [ ] MI-7E falsifying probe (`NaturalDescentStatus` transitions; no dig beside cave mouth)
 - [ ] MI-14C3 runtime probe: >2400-tick CONTENTION resume, then admissible obstruction → one `NO_PROGRESS`
 
-**MRFC-1 status:** **PASS (continuation)** — MI-14C3 static gate passed; runtime proof remains
-open. Execution-control frontier is the missing tunnel-search handoff consumer (Loop D).
+**MRFC-1 status:** **FAIL at MAIBS-1** — MI-14C3's pure policy passes, but its active-stall outcome
+is shadowed by the total project budget and protected MOVE ownership is not represented. Repair C3
+before advancing execution control to the tunnel-search consumer.
 
 ---
 
@@ -2923,6 +2949,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Codex | **MI-14C3 MAIBS-1 `FAIL`** — active 2400-tick total budget shadows strict >2400 progress timeout; protected MOVE owners bypass contention without another blocker; three NOT FOUND probes; repair required before Loop D |
 | 2026-08-09 | Agent_Codex | **MI-14C3 `IMPLEMENTED`** — observable break/step/handoff progress; exact TEMPORARY/CONTENTION pause accumulator; NBT v3 + v2 migration; C3-A…E pass; 310-test clean build; runtime `UNVERIFIED`; task-28-report |
 | 2026-08-09 | User + Agent_Cursor | **MAIBS C2 FAIL** — M1 handoff authority lifetime, M2 host MOVE invisible to contention, M3 stop() resurrects revoked project; task-27-maibs-report; task-29-brief (R1/R2/R2); C3 blocked |
 | 2026-08-09 | Agent_Cursor | **MI-14C2 `IMPLEMENTED`** (task-27; MAIBS C2 static `PASS_WITH_CONCERNS` superseded); **MI-14C3 contract LOCKED** (D-MIW-039; C3-A…E; task-28-brief); frontier → Begin MI-14C3 |
@@ -3722,3 +3749,23 @@ under separate runtime approval.
 
 **RFC fields updated:** Identity, Topic Index, MI-14C3 topic, phased plan, task registry, gates,
 approval ledger, change log, this contribution; task-28 report and porting test/decision docs.
+
+---
+
+### Contribution — Agent_Codex (MI-14C3 full MAIBS audit)
+
+**Agent:** Agent_Codex
+**Date/Session:** 2026-08-09
+**Contribution type:** `REVIEW / OBJECTION / VALIDATION`
+
+The explicit behavioral-simulation skill traced the integrated executor rather than stopping at
+the lease policy. It found the active C3-A outcome unreachable: `ControlledDescentGoal.tick()`
+increments the project clock and terminates at `>=2400`, whereas C3 requires progress age `>2400`.
+It also found that protected priority-0/1/2 MOVE owners are excluded from CONTENTION but not mapped
+to a different blocker. A stay tether can therefore strand a never-started assignment, and other
+protected interruptions can age a started progress clock while the executor cannot physically run.
+
+**Objection:** high severity; MAIBS-1 `FAIL — ARCHITECTURE_DEFECT`. Pure C3 tests and the clean build
+remain valid but cannot support the behavioral claim. Three negative probes and two repair options
+are recorded in `task-28-report.md`. No code, runtime launch, commit, or push was performed during
+this audit.
