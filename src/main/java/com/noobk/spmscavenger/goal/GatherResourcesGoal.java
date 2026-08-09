@@ -13,6 +13,11 @@ import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.ToolBox;
 import com.noobk.spmscavenger.ToolTierPolicy;
+import com.noobk.spmscavenger.mining.ExposureOpportunity;
+import com.noobk.spmscavenger.mining.ExposureOpportunityPolicy;
+import com.noobk.spmscavenger.mining.MiningProject;
+import com.noobk.spmscavenger.mining.MiningProjectMode;
+import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.mining.MiningExecutionGuard;
 import com.noobk.spmscavenger.mining.MiningGoalKind;
 import net.minecraft.core.BlockPos;
@@ -81,6 +86,12 @@ public class GatherResourcesGoal extends Goal {
     private int breakTicks;
     private int breakTotal;
     private int scanCooldown;
+
+    /** D-MIW-TS2 - restricts {@link #findTarget} to a physically justified boundary. */
+    private java.util.function.Predicate<BlockPos> scanScope;
+
+    /** D-MIW-TS2 - this acquisition was approved cooperatively, not by the global rule. */
+    private boolean cooperativeSession;
     private int approachTicks;
     /** Logs already taken from the approved trunk. Zero means this is not a felling session yet. */
     private int felledLogs;
@@ -154,6 +165,19 @@ public class GatherResourcesGoal extends Goal {
         if (!MiningExecutionGuard.permits(mob, this, MiningGoalKind.GATHER_RESOURCES)) {
             return false;
         }
+        // D-MIW-TS2 - cooperative admission runs BEFORE the global scheduling rule.
+        //
+        // wantsMore() ends in shouldGather() = hasDemand && readyCraftStep == NOTHING. A mob can
+        // genuinely want the diamond the tunnel just exposed while its global admission says
+        // "craft something first" - and under TUNNEL_SEARCH, CraftTorchesGoal yields. Tunnel
+        // exposes, gather declines, crafter is yielded, nobody consumes the exposure.
+        //
+        // This bypasses that scheduling rule, never demand: the probe still asks the same intent
+        // and candidate policies, only over a physically justified boundary.
+        if (tryCooperativeAdmission(cfg)) {
+            return true;
+        }
+        cooperativeSession = false;
         if (scanCooldown > 0) {
             scanCooldown--;
             return false;
@@ -186,6 +210,12 @@ public class GatherResourcesGoal extends Goal {
         // another tree, but it must not cancel a trunk that was already approved and opened. Doing
         // so after log one leaves the rest floating, and build protection then correctly refuses to
         // reacquire that now-unrooted trunk.
+        // D-MIW-TS2 - an approved cooperative acquisition is not re-litigated against the global
+        // scheduling rule. Otherwise the same deadlock returns one tick later: gather starts on the
+        // exposed diamond, then stops before reaching it because a craft step became ready.
+        if (cooperativeSession) {
+            return hardConditionsPass && cooperativeSessionLive();
+        }
         boolean acquisitionStillNeeded = hardConditionsPass
                 && felledLogs == 0
                 && wantsMore(cfg);
@@ -506,6 +536,12 @@ public class GatherResourcesGoal extends Goal {
             for (int dz = -r; dz <= r; dz++) {
                 for (int dy = -4; dy <= 4; dy++) {
                     BlockPos pos = origin.offset(dx, dy, dz);
+                    // D-MIW-TS2: a cooperative probe may only look where the excavation actually
+                    // revealed something. Without this, "cooperative work" would fund an unrelated
+                    // resource excursion while pausing the tunnel's lease for it.
+                    if (scanScope != null && !scanScope.test(pos)) {
+                        continue;
+                    }
                     BlockState state = level.getBlockState(pos);
                     double dist = pos.distSqr(origin);
                     // MI-4R: normalized discovery cost. Path/dig/danger costs remain later RFC work.
@@ -816,6 +852,125 @@ public class GatherResourcesGoal extends Goal {
         }
         targetBackoff.put(
                 key.immutable(), mob.level().getGameTime() + UNREACHABLE_COOLDOWN_TICKS);
+    }
+
+    /**
+     * D-MIW-TS2 — the cooperative gather lifecycle.
+     *
+     * <pre>
+     * OFFERED    one exposure-local probe over the cells the cut opened
+     *   nothing  → offer already consumed by the take; tunnel resumes
+     *   target   → ACQUIRING
+     * ACQUIRING  continuation probes ONLY the frontier gather's own lastHarvest created
+     *   target   → keep the session, refresh its idle clock
+     *   nothing  → clear the session; tunnel resumes
+     * </pre>
+     *
+     * <p>Three scopes, one target-selection implementation: normal gather scans the world, an
+     * offered probe scans the excavation boundary, and a continuation scans the vein frontier. No
+     * second gather system, and no path by which cooperative status funds an unrelated errand.
+     */
+    private boolean tryCooperativeAdmission(ScavengerConfig cfg) {
+        if (!(mob.level() instanceof ServerLevel level)) {
+            return false;
+        }
+        MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        MiningProject project = store.projectOf(mob.getUUID())
+                .filter(candidate -> candidate.mode() == MiningProjectMode.TUNNEL_SEARCH)
+                .filter(MiningProject::isActive)
+                .orElse(null);
+        if (project == null) {
+            cooperativeSession = false;
+            return false;
+        }
+        long now = level.getGameTime();
+        ExposureOpportunity exposure = store.exposureOf(mob.getUUID()).orElse(null);
+
+        if (ExposureOpportunityPolicy.holdsCooperativeSession(exposure, project, now)) {
+            return continueCooperativeVein(cfg, store, project, now);
+        }
+        if (!ExposureOpportunityPolicy.offersProbe(exposure, project, now)) {
+            cooperativeSession = false;
+            return false;
+        }
+        ExposureOpportunity taken = store.takeExposureProbe(mob.getUUID(), project, now)
+                .orElse(null);
+        if (taken == null) {
+            return false;
+        }
+        // The probe is spent whether or not it finds anything; a fruitless look releases the tunnel
+        // immediately rather than holding it while we decide.
+        GatherTarget selected = scopedTarget(cfg, pos ->
+                ExposureOpportunityPolicy.isExposureLocal(taken, pos));
+        if (selected == null) {
+            cooperativeSession = false;
+            return false;
+        }
+        if (!store.beginCooperativeAcquisition(mob.getUUID(), project, taken, now)) {
+            return false;
+        }
+        adopt(selected);
+        cooperativeSession = true;
+        return true;
+    }
+
+    /** Continuation looks only at the physical frontier gather itself created. */
+    private boolean continueCooperativeVein(
+            ScavengerConfig cfg, MiningProjectSavedData store, MiningProject project, long now) {
+        DiscoveryPolicy.HarvestReveal reveal = lastHarvest;
+        GatherTarget selected = reveal == null || reveal.pos() == null
+                ? null
+                : scopedTarget(cfg, pos -> pos.distManhattan(reveal.pos()) <= 1);
+        if (selected == null) {
+            // The vein is finished. Release the tunnel rather than drifting into a broad scan under
+            // cooperative cover.
+            store.clearExposure(mob.getUUID());
+            cooperativeSession = false;
+            return false;
+        }
+        store.noteCooperativeAcquisition(mob.getUUID(), project, now);
+        adopt(selected);
+        cooperativeSession = true;
+        return true;
+    }
+
+    /** Existing selection, existing policies, restricted to a physically justified scope. */
+    private GatherTarget scopedTarget(
+            ScavengerConfig cfg, java.util.function.Predicate<BlockPos> scope) {
+        // Demand still governs what counts as a candidate; only the global "craft first" ordering
+        // is bypassed, so activeIntent must be populated without wantsMore().
+        activeIntent = GatherIntentPolicy.evaluate(
+                PlayerMobs.backpack(mob),
+                mob.getMainHandItem(),
+                mob.getOffhandItem(),
+                cfg,
+                mob.blockPosition().getY());
+        scanScope = scope;
+        try {
+            return findTarget(cfg);
+        } finally {
+            scanScope = null;
+        }
+    }
+
+    private boolean cooperativeSessionLive() {
+        if (!(mob.level() instanceof ServerLevel level)) {
+            return false;
+        }
+        MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        return store.projectOf(mob.getUUID())
+                .filter(project -> project.mode() == MiningProjectMode.TUNNEL_SEARCH)
+                .filter(project -> ExposureOpportunityPolicy.holdsCooperativeSession(
+                        store.exposureOf(mob.getUUID()).orElse(null), project, level.getGameTime()))
+                .isPresent();
+    }
+
+    private void adopt(GatherTarget selected) {
+        target = selected.blockPos();
+        approachPos = selected.approachPos();
+        approachPath = selected.path();
+        failureKey = selected.failureKey();
+        treeBase = selected.treeBase();
     }
 
     private record GatherTarget(

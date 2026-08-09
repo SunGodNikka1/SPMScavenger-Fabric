@@ -141,23 +141,59 @@ class CooperativeResourceHandoffTest {
     }
 
     /**
-     * Staging is deliberate and recorded: no intent currently returns {@code ALLOW} for a
-     * non-designated kind, so this classification is unreachable until the {@code TUNNEL_SEARCH}
-     * arbitration row lands. The contract exists first because the executor cannot be written
-     * correctly without it — but nothing here claims the path is live.
+     * The staged machinery is now live. This test replaced
+     * {@code documentsThatTheCooperativePathIsNotYetReachable}, which asserted the path was
+     * unreachable and was written to fail the moment {@code TUNNEL_SEARCH} landed.
      */
     @Test
-    void documentsThatTheCooperativePathIsNotYetReachable() {
-        for (ExecutionIntent intent : ExecutionIntent.values()) {
-            for (MiningGoalKind kind : MiningGoalKind.values()) {
-                if (kind.isDesignatedConsumer()) {
-                    continue;
-                }
-                assertNotEquals(ArbitrationDecision.ALLOW,
-                        MiningExecutionArbiter.decide(intent, kind),
-                        "when this starts failing, TUNNEL_SEARCH has landed and the cooperative "
-                                + "path is live - update this test rather than deleting it");
-            }
+    void mustHappen_tunnelSearchMakesGatherACooperativeHolder() {
+        assertSame(ArbitrationDecision.ALLOW,
+                MiningExecutionArbiter.decide(
+                        ExecutionIntent.TUNNEL_SEARCH, MiningGoalKind.GATHER_RESOURCES),
+                "tunnelling is the means; gathering is the end");
+        assertFalse(MiningGoalKind.GATHER_RESOURCES.isDesignatedConsumer());
+
+        assertSame(ExecutionBlocker.COOPERATIVE_WORK,
+                MoveHolderClassifier.leaseBlocker(
+                        MoveHolderClassification.COOPERATIVE_PROJECT_WORK),
+                "ALLOW + not the designated consumer = cooperative work, not contention");
+        assertSame(ExecutionBlocker.BlockerClass.PROTECTED_PAUSE,
+                ExecutionBlocker.COOPERATIVE_WORK.blockerClass(),
+                "so gather time pauses the tunnel lease instead of ageing it");
+    }
+
+    @Test
+    void mustHappen_theTunnelExecutorIsItsOwnDesignatedConsumer() {
+        assertTrue(MiningGoalKind.TUNNEL_SEARCH.isDesignatedConsumer());
+        assertSame(ArbitrationDecision.ALLOW,
+                MiningExecutionArbiter.decide(
+                        ExecutionIntent.TUNNEL_SEARCH, MiningGoalKind.TUNNEL_SEARCH),
+                "the executor holding its own flags is normal execution, not a pause");
+        assertTrue(ExecutionIntent.TUNNEL_SEARCH.isActionable(),
+                "actionable and executor now land together - actionable-without-executor is the "
+                        + "dead-leaf shape Loop D is kept out of");
+    }
+
+    @Test
+    void mustHappen_ordinaryChoresStillYieldToATunnel() {
+        for (MiningGoalKind kind : new MiningGoalKind[] {
+                MiningGoalKind.SMELT_AT_FURNACE, MiningGoalKind.CRAFT_TORCHES,
+                MiningGoalKind.EXPLORING_ORDINARY, MiningGoalKind.CONTROLLED_DESCENT}) {
+            assertSame(ArbitrationDecision.YIELD,
+                    MiningExecutionArbiter.decide(ExecutionIntent.TUNNEL_SEARCH, kind),
+                    kind + " must not compete with an active tunnel");
         }
+    }
+
+    @Test
+    void mustNotHappen_twoExcavationModesBothClaimAuthority() {
+        assertSame(ArbitrationDecision.YIELD,
+                MiningExecutionArbiter.decide(
+                        ExecutionIntent.CONTROLLED_DESCENT, MiningGoalKind.TUNNEL_SEARCH));
+        assertSame(ArbitrationDecision.YIELD,
+                MiningExecutionArbiter.decide(
+                        ExecutionIntent.TUNNEL_SEARCH, MiningGoalKind.CONTROLLED_DESCENT),
+                "one deliberate excavation at a time - the director chooses the mode, the arbiter "
+                        + "does not let the loser run anyway");
     }
 }

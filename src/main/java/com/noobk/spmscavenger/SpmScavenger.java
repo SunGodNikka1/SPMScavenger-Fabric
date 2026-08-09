@@ -3,6 +3,7 @@ package com.noobk.spmscavenger;
 import com.noobk.spmscavenger.goal.AnticsGoal;
 import com.noobk.spmscavenger.goal.CampfireGoal;
 import com.noobk.spmscavenger.goal.ControlledDescentGoal;
+import com.noobk.spmscavenger.goal.TunnelSearchGoal;
 import com.noobk.spmscavenger.goal.CraftTorchesGoal;
 import com.noobk.spmscavenger.goal.GatherResourcesGoal;
 import com.noobk.spmscavenger.goal.ExplorationActivityGoal;
@@ -146,6 +147,11 @@ public class SpmScavenger implements ModInitializer {
         selector.removeGoal(originalStroll);
         ExplorationReadiness readiness = new ExplorationReadiness();
         selector.addGoal(3, new ControlledDescentGoal(pathfinderMob, 0.9, readiness));
+        // Same priority as the other deliberate-excavation executor: mode selection belongs to
+        // MiningDirector, and arbitration to the intent matrix, not to Minecraft's priority
+        // numbers. Two mining goals racing on priority would reintroduce exactly the scheduler
+        // coupling the control plane exists to remove.
+        selector.addGoal(3, new TunnelSearchGoal(pathfinderMob, 0.9));
         selector.addGoal(8, new ExploringGoal(pathfinderMob, readiness));
         selector.addGoal(9, new TrackedLocalWanderGoal(
                 pathfinderMob, Math.max(0.5, Math.min(1.2, cfg.localWanderSpeed)), readiness));

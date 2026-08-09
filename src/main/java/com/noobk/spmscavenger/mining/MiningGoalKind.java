@@ -5,6 +5,7 @@ import com.noobk.spmscavenger.goal.CraftTorchesGoal;
 import com.noobk.spmscavenger.goal.ExploringGoal;
 import com.noobk.spmscavenger.goal.GatherResourcesGoal;
 import com.noobk.spmscavenger.goal.SmeltAtFurnaceGoal;
+import com.noobk.spmscavenger.goal.TunnelSearchGoal;
 import net.minecraft.world.entity.ai.goal.Goal;
 
 import java.util.Optional;
@@ -13,6 +14,7 @@ import java.util.UUID;
 /** Participating scavenger goals for MI-14C2 arbitration matrices. */
 public enum MiningGoalKind {
     CONTROLLED_DESCENT,
+    TUNNEL_SEARCH,
     GATHER_RESOURCES,
     SMELT_AT_FURNACE,
     CRAFT_TORCHES,
@@ -20,7 +22,9 @@ public enum MiningGoalKind {
     EXPLORING_CAVE_HANDOFF;
 
     public boolean isDesignatedConsumer() {
-        return this == CONTROLLED_DESCENT || this == EXPLORING_CAVE_HANDOFF;
+        return this == CONTROLLED_DESCENT
+                || this == TUNNEL_SEARCH
+                || this == EXPLORING_CAVE_HANDOFF;
     }
 
     /**
@@ -31,6 +35,9 @@ public enum MiningGoalKind {
             Goal goal, MiningProjectSavedData store, UUID mobId, long now) {
         if (goal instanceof ControlledDescentGoal) {
             return Optional.of(CONTROLLED_DESCENT);
+        }
+        if (goal instanceof TunnelSearchGoal) {
+            return Optional.of(TUNNEL_SEARCH);
         }
         if (goal instanceof GatherResourcesGoal) {
             return Optional.of(GATHER_RESOURCES);

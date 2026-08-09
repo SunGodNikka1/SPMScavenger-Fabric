@@ -23,6 +23,8 @@ public enum ExecutionIntent {
 
     /** May cause ordinary chores to {@link ArbitrationDecision#YIELD}. */
     public boolean isActionable() {
-        return this == CONTROLLED_DESCENT || this == CAVE_HANDOFF;
+        // TUNNEL_SEARCH joins here in the same change that gives it an executor and an arbiter
+        // row. Actionable-without-executor is precisely the dead-leaf shape Loop D is kept out of.
+        return this == CONTROLLED_DESCENT || this == CAVE_HANDOFF || this == TUNNEL_SEARCH;
     }
 }
