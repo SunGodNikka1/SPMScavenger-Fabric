@@ -9,11 +9,13 @@ import com.noobk.spmscavenger.ToolTier;
 import com.noobk.spmscavenger.ToolTierPolicy;
 import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.mining.ControlledDescentCaveHandoff;
-import com.noobk.spmscavenger.mining.MiningProject;
+import com.noobk.spmscavenger.mining.MiningExecutionGuard;
+import com.noobk.spmscavenger.mining.MiningGoalKind;
 import com.noobk.spmscavenger.mining.MiningProjectEnd;
 import com.noobk.spmscavenger.mining.CaveOpening;
 import java.util.Optional;
 import com.noobk.spmscavenger.mining.MiningDirector;
+import com.noobk.spmscavenger.mining.MiningProject;
 import com.noobk.spmscavenger.mining.MiningProjectMode;
 import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.mining.MiningTransition;
@@ -86,21 +88,34 @@ public final class ControlledDescentGoal extends Goal {
         if (assigned.isEmpty()) {
             return false;
         }
+        if (!MiningExecutionGuard.permits(mob, this, MiningGoalKind.CONTROLLED_DESCENT)) {
+            return false;
+        }
         return MiningDirector.authorizeExecution(
                 level, mob, store, assigned.get(),
-                MiningDirector.controlledDescentBlocker(level, mob, ScavengerConfig.get()));
+                MiningDirector.resolveControlledDescentBlocker(
+                        level, mob, ScavengerConfig.get(), store, this));
     }
 
     @Override
     public boolean canContinueToUse() {
-        // MI-14C1: one definition of "can this execute", shared with admission. The hand-rolled
-        // copy here omitted the tool check, so a pickaxe breaking mid-dig left the mob mining with
-        // nothing - and it could drift from the director's classification at any time.
-        return project != null
-                && project.isControlledDescent()
-                && mob.level() instanceof ServerLevel level
-                && MiningDirector.controlledDescentBlocker(level, mob, ScavengerConfig.get())
-                        .permitsExecution();
+        if (project == null || !project.isControlledDescent()) {
+            return false;
+        }
+        if (!(mob.level() instanceof ServerLevel level)) {
+            return false;
+        }
+        if (!MiningExecutionGuard.permits(mob, this, MiningGoalKind.CONTROLLED_DESCENT)) {
+            return false;
+        }
+        MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        return MiningDirector.authorizeExecution(
+                level,
+                mob,
+                store,
+                project,
+                MiningDirector.resolveControlledDescentBlocker(
+                        level, mob, ScavengerConfig.get(), store, this));
     }
 
     @Override

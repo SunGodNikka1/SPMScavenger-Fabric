@@ -4,6 +4,8 @@ import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.ToolTierPolicy;
+import com.noobk.spmscavenger.mining.MiningExecutionGuard;
+import com.noobk.spmscavenger.mining.MiningGoalKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
@@ -72,6 +74,9 @@ public class CraftTorchesGoal extends Goal {
         if (!cfg.enabled || !cfg.gatherResources || mob.getTarget() != null) {
             return false;
         }
+        if (!MiningExecutionGuard.permits(mob, this, MiningGoalKind.CRAFT_TORCHES)) {
+            return false;
+        }
         Container backpack = PlayerMobs.backpack(mob);
         if (backpack == null) {
             return false;
@@ -84,7 +89,8 @@ public class CraftTorchesGoal extends Goal {
     public boolean canContinueToUse() {
         return step != ScavengerCrafting.Step.NOTHING
                 && mob.getTarget() == null
-                && approachTicks < MAX_APPROACH_TICKS;
+                && approachTicks < MAX_APPROACH_TICKS
+                && MiningExecutionGuard.permits(mob, this, MiningGoalKind.CRAFT_TORCHES);
     }
 
     @Override

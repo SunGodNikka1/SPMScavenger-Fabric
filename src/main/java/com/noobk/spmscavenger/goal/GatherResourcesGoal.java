@@ -13,6 +13,8 @@ import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.ToolBox;
 import com.noobk.spmscavenger.ToolTierPolicy;
+import com.noobk.spmscavenger.mining.MiningExecutionGuard;
+import com.noobk.spmscavenger.mining.MiningGoalKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -149,6 +151,9 @@ public class GatherResourcesGoal extends Goal {
         if (mob.getTarget() != null || !wantsMore(cfg)) {
             return false;
         }
+        if (!MiningExecutionGuard.permits(mob, this, MiningGoalKind.GATHER_RESOURCES)) {
+            return false;
+        }
         if (scanCooldown > 0) {
             scanCooldown--;
             return false;
@@ -174,7 +179,8 @@ public class GatherResourcesGoal extends Goal {
                 && approachTicks < MAX_APPROACH_TICKS
                 && cfg.enabled
                 && cfg.gatherResources
-                && mob.level().getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING);
+                && mob.level().getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)
+                && MiningExecutionGuard.permits(mob, this, MiningGoalKind.GATHER_RESOURCES);
 
         // Crafting availability is a soft acquisition boundary: it may stop the mob from starting
         // another tree, but it must not cancel a trunk that was already approved and opened. Doing

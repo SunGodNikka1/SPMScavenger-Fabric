@@ -25,7 +25,7 @@ public enum ExecutionBlocker {
     /** Fighting or being hunted. Bounded, and worth keeping the project across. */
     COMBAT_TARGET(BlockerClass.TEMPORARY, MiningProjectEnd.COMBAT),
 
-    /** Survival interrupt. Bounded like combat; director may classify this later. */
+    /** Survival interrupt placeholder — director classification deferred; not wired in MI-14C2. */
     LOW_FOOD(BlockerClass.TEMPORARY, MiningProjectEnd.LOW_FOOD),
 
     /** The feature was switched off. Not the mob's problem to wait out. */

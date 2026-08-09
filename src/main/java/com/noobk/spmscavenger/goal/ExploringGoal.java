@@ -8,6 +8,8 @@ import com.noobk.spmscavenger.DescentHeadingPolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.WorkDemandPolicy;
+import com.noobk.spmscavenger.mining.MiningExecutionGuard;
+import com.noobk.spmscavenger.mining.MiningGoalKind;
 import com.noobk.spmscavenger.mining.MiningTransition;
 import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.SpmScavenger;
@@ -115,6 +117,11 @@ public final class ExploringGoal extends Goal {
         }
 
         long now = level.getGameTime();
+        if (!MiningExecutionGuard.permits(
+                mob, this, MiningGoalKind.classifyExploring(
+                        MiningProjectSavedData.get(level), mob.getUUID(), now))) {
+            return false;
+        }
         if (!readiness.hasDescentPressure()) {
             descentSearch.reset();
         }
@@ -179,6 +186,14 @@ public final class ExploringGoal extends Goal {
         if (mob.level() instanceof ServerLevel level
                 && yieldToStayAnchor(level, level.getGameTime())) {
             return false;
+        }
+        if (mob.level() instanceof ServerLevel level) {
+            long now = level.getGameTime();
+            if (!MiningExecutionGuard.permits(
+                    mob, this, MiningGoalKind.classifyExploring(
+                            MiningProjectSavedData.get(level), mob.getUUID(), now))) {
+                return false;
+            }
         }
         ScavengerConfig cfg = ScavengerConfig.get();
         return cfg.enabled && cfg.exploring && mob.getTarget() == null && !mob.isPassenger()

@@ -8,6 +8,8 @@ import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.StackFingerprint;
+import com.noobk.spmscavenger.mining.MiningExecutionGuard;
+import com.noobk.spmscavenger.mining.MiningGoalKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -62,6 +64,9 @@ public class SmeltAtFurnaceGoal extends Goal {
         if (!cfg.enabled || !cfg.smeltEnabled || mob.getTarget() != null) {
             return false;
         }
+        if (!MiningExecutionGuard.permits(mob, this, MiningGoalKind.SMELT_AT_FURNACE)) {
+            return false;
+        }
         if (!(mob.level() instanceof ServerLevel server)) {
             return false;
         }
@@ -104,7 +109,8 @@ public class SmeltAtFurnaceGoal extends Goal {
     public boolean canContinueToUse() {
         return mob.getTarget() == null
                 && approachTicks < MAX_APPROACH_TICKS
-                && ScavengerConfig.get().smeltEnabled;
+                && ScavengerConfig.get().smeltEnabled
+                && MiningExecutionGuard.permits(mob, this, MiningGoalKind.SMELT_AT_FURNACE);
     }
 
     @Override

@@ -9,7 +9,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.level.GameRules;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -155,6 +157,27 @@ public final class MiningDirector {
     }
 
     /**
+     * MI-14C2 — base preconditions plus scheduler contention when an actionable intent exists but a
+     * chore that should yield still owns {@code MOVE}.
+     */
+    public static ExecutionBlocker resolveControlledDescentBlocker(
+            ServerLevel level,
+            Mob mob,
+            ScavengerConfig cfg,
+            MiningProjectSavedData store,
+            @Nullable Goal callingGoal) {
+        ExecutionBlocker blocker = controlledDescentBlocker(level, mob, cfg);
+        if (!blocker.permitsExecution()) {
+            return blocker;
+        }
+        if (MoveContentionPolicy.hasYieldingMoveHolder(
+                mob, callingGoal, store, level.getGameTime())) {
+            return ExecutionBlocker.CONTENTION;
+        }
+        return ExecutionBlocker.NONE;
+    }
+
+    /**
      * Evaluates the lease and performs its decision. Returns whether the executor may run.
      *
      * <p>Must be reachable even when the executor cannot be — that is the whole point. A blocked
@@ -220,7 +243,11 @@ public final class MiningDirector {
             return;
         }
         authorizeExecution(
-                level, mob, store, assigned.get(), controlledDescentBlocker(level, mob, cfg));
+                level,
+                mob,
+                store,
+                assigned.get(),
+                resolveControlledDescentBlocker(level, mob, cfg, store, null));
     }
 
     /** The executor reports that it has actually begun. Only it knows this. */

@@ -8,15 +8,15 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Target progression** | **Vanilla Minecraft 1.21.1 mining + resource wealth** (overworld ore tiers through diamond/deepslate; not Nether/endgame mining in gen-1) |
 | **Scope** | Autonomous *where* to mine, *how much* to stockpile (wealth), prerequisite planning hooks, capability gaps, integration methods, phased plan, validation — **design until implementation authorized** |
-| **Mode** | `PROGRESSIVE_CONTINUATION` (User — MI-7B+C bundle + MI-5H + dependency reorder) |
-| **Status** | MI-7A `IMPLEMENTED` (task 20); **MI-6F → MI-7B+C `READY`**; MI-5H before MI-7D; runtime `UNVERIFIED` |
+| **Mode** | `PROGRESSIVE_CONTINUATION` (User — MI-14C2 contract lock) |
+| **Status** | MI-14C1-R1 `IMPLEMENTED` (`a6e9793`); **MI-14C2 contract `LOCKED`** — ready for implementation |
 | **User constraint** | No Minecraft launch, commit, or push unless separately asked; implementation only after explicit Begin authorization |
 | **Baseline version** | `1.9.2` |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `TaskLifecycle.java` |
 | **Former name** | `RFC-MINING-INTELLIGENCE-AND-RESOURCE-GREED.md` — merged into this file (2026-08-08); “resource greed” → **wealth system** |
 | **Owners** | User (product) |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Cursor 2` · `Agent_Codex` · `Agent_Claude` |
-| **Last update** | 2026-08-09 ~00:25 PDT |
+| **Last update** | 2026-08-09 ~02:35 PDT |
 | **Gate** | MRFC-1 |
 
 ### Naming
@@ -597,26 +597,157 @@ the lease layer asks "do I have an assignment / is the executor admissible / if 
 **Invariant (testable):** no `RUNNING` `MiningProject` may exist indefinitely without either
 execution progress or an explicit suspension reason.
 
-### MI-14C2 — Execution Arbitration (fixes Loop B)
+### MI-14C2 — Execution Intent & Arbitration (fixes Loop B) — `LOCKED` contract (user 2026-08-09)
 
-The handoff is **not** an active project, so the arbiter cannot read `store.projectOf` alone. Intent
-derives from an active project **or** a pending transition:
+**Status:** `READY` — contract locked; implementation requires `Begin implementation for MI-14C2`.
+**Prerequisite:** MI-14C1 + MI-14C1-R1 `IMPLEMENTED` (commit `a6e9793` verified: episode clock,
+`blockedSince`, `NEVER_STARTED` sentinel).
 
-`ExecutionIntent` in `{ CONTROLLED_DESCENT, CAVE_HANDOFF, TUNNEL_HANDOFF_PENDING, NONE }`
+**Purpose:** Make `MiningDirector` decisions enforceable through `GoalSelector` **without**
+replacing `GoalSelector` and **without** allowing mining to override combat/survival.
 
-Under `CAVE_HANDOFF`: `ExploringGoal` allow; `ControlledDescentGoal` deny; gather/smelt yield; combat
-and survival still interrupt.
+#### Separation of concerns (`CONSENSUS` — D-MIW-037)
 
-**Bounded authority — MI-14C must not become a dictator over the whole PlayerMob:**
+| Concept | Question it answers | Must not |
+| --- | --- | --- |
+| `ExecutionIntent` | What **should** have execution authority? | Merge with blocker classification |
+| `ExecutionBlocker` | Why is the authorized executor **not receiving** authority? | Become a second intent system |
+| `ArbitrationDecision` | May this goal run / continue given current intent? | Change Minecraft priority integers |
+
+`ExecutionBlocker.CONTENTION` is **not** an intent. It is the lease-layer observation:
 
 ```text
-critical activity (combat, survival)
-  > mining handoff / project intent
-    > ordinary resource chores
-      > idle / exploration noise
+CONTROLLED_DESCENT assigned
+  → no combat / pick exists / mobGriefing / feature enabled (C1 admissible)
+  → executor still hasn't started (or actionable intent exists)
+  → another running Goal owns MOVE
+  → CONTENTION
 ```
 
-...expressed as intent, **not** by encoding that hierarchy into Minecraft priority numbers.
+Without a real `CONTENTION` producer, C1 sees `NONE → AUTHORIZE` while the scheduler never runs the
+authorized goal — a narrower zombie assignment survives.
+
+Combat remains `ExecutionBlocker.COMBAT_TARGET` (`TEMPORARY`), **not** ordinary contention.
+
+#### 1. `ExecutionIntent` derivation (`CONSENSUS`)
+
+Derive from **actual persistent state only** — never from Goal priority:
+
+| Persistent state | Intent |
+| --- | --- |
+| Active `CONTROLLED_DESCENT` project | `CONTROLLED_DESCENT` |
+| Pending `CAVE_FOUND` transition | `CAVE_HANDOFF` |
+| Pending `HANDOFF_TUNNEL_SEARCH` | `TUNNEL_HANDOFF_PENDING` |
+| Otherwise | `NONE` |
+
+#### 2. `ArbitrationDecision` (`CONSENSUS`)
+
+| Decision | Meaning |
+| --- | --- |
+| `ALLOW` | This executor is the designated consumer for the current actionable intent |
+| `YIELD` | This ordinary/non-critical executor conflicts with an actionable mining intent |
+| `NEUTRAL` | Mining has no authority over this activity |
+
+Critical combat/survival remain **outside** mining authority (`NEUTRAL` from mining's perspective —
+those goals keep their own preemption).
+
+#### 3. Unsupported / non-exclusive intents (`CONSENSUS` — D-MIW-038)
+
+`TUNNEL_HANDOFF_PENDING` has **no executor**. Until `TunnelSearchGoal` exists:
+
+- **Observable** pending state only
+- **Blocks** fresh controlled descent through existing transition semantics (`mayStartControlledDescent`)
+- **Does NOT** claim exclusive `MOVE` authority
+- Arbitration: **`NEUTRAL`** — do **not** force unrelated goals to `YIELD`
+- **Do NOT** consume or clear the transition to make tests green (Loop D honesty)
+
+Same rule for `SEARCH_BUDGET_EXHAUSTED` as outcome/reconsideration lock: arbitration `NEUTRAL`.
+
+**Wrong (forbidden):**
+
+```text
+TUNNEL_HANDOFF_PENDING → yield Gather / Smelt / Explore → deny Descent → ALLOW nobody → deadlock
+```
+
+**Actionable intents** (may cause `YIELD` in other goals): `CONTROLLED_DESCENT`, `CAVE_HANDOFF` only.
+
+#### 4. `CONTROLLED_DESCENT` matrix (`LOCKED`)
+
+| Goal / activity | Decision |
+| --- | --- |
+| `ControlledDescentGoal` | `ALLOW` |
+| `GatherResourcesGoal` (ordinary) | `YIELD` |
+| `SmeltAtFurnaceGoal` | `YIELD` |
+| `CraftTorchesGoal` (ordinary) | `YIELD` |
+| `ExploringGoal` (ordinary) | `YIELD` |
+| Combat / survival | `NEUTRAL` |
+
+If controlled descent loses a required capability, **C1 revokes first** — do not retain descent
+authority merely because intent existed.
+
+#### 5. `CAVE_HANDOFF` matrix (`LOCKED`)
+
+| Goal / activity | Decision |
+| --- | --- |
+| `ExploringGoal` acting on `acceptCaveHandoff` | `ALLOW` |
+| `ControlledDescentGoal` | `YIELD` |
+| `GatherResourcesGoal` | `YIELD` |
+| `SmeltAtFurnaceGoal` | `YIELD` |
+| `CraftTorchesGoal` | `YIELD` (unless a future explicit prerequisite intent says otherwise) |
+| Combat / survival | `NEUTRAL` |
+
+Transition remains pending until handoff is **actually accepted successfully**.
+
+#### 6. Admission **and** continuation (`LOCKED` — C2 hard requirement)
+
+Every participating executor consults the **same** arbitration policy in **both**:
+
+- `canUse()`
+- `canContinueToUse()`
+
+`canUse`-only wiring is a **FAIL** (Loop B survives).
+
+Required sequence:
+
+```text
+GatherResourcesGoal running
+  → CAVE_FOUND appears
+  → canContinueToUse asks arbiter → YIELD
+  → goal stops → MOVE released
+  → ExploringGoal can acquire MOVE → acceptCaveHandoff runs
+```
+
+#### 7. Contention producer (`LOCKED`)
+
+C2 must create a real path to `ExecutionBlocker.CONTENTION`:
+
+When an assigned/actionable executor is otherwise C1-admissible but cannot obtain `MOVE` because
+another **running** goal owns it, the lease layer must classify `CONTENTION` (start lease remains
+bounded via C1).
+
+Do **not** classify combat as contention when combat already has `TEMPORARY` classification.
+
+#### 8. Non-goals (`LOCKED`)
+
+- Do **not** change Minecraft priority integers as the solution
+- `GoalSelector` remains the physical scheduler; mining arbitration is permission/yield semantics above it
+- `LOW_FOOD` enum exists for future director classification — **not wired in C2** merely because the enum exists
+
+#### C2 falsification scenarios (required before `DONE`)
+
+| ID | Scenario | Must happen | Must not |
+| --- | --- | --- | --- |
+| **C2-A** | Gather running → `CAVE_FOUND` | Gather yields; cave consumer becomes eligible | Gather keeps `MOVE` |
+| **C2-B** | Smelt running → controlled descent assigned | Smelt yields; descent may start | Smelt blocks descent indefinitely |
+| **C2-C** | Combat interrupts descent | Combat not suppressed; lease `TEMPORARY` suspend | Combat classified as contention |
+| **C2-D** | Combat ends | Valid mining intent resumes | Assignment wrongly revoked |
+| **C2-E** | `TUNNEL_HANDOFF_PENDING` | Ordinary behavior continues; transition untouched | Global yield freeze / transition consumed |
+| **C2-F** | Executor authorized; unrelated `MOVE` owner persists | `CONTENTION` observable; start lease bounded | Eternal `AUTHORIZE` with no execution |
+| **C2-G** | Intent changes while executor running | `canContinueToUse` reacts; goal yields | Wait for natural goal completion |
+
+**Implementation sketch (non-binding):** `ExecutionIntentPolicy.derive(store, mobId)` →
+`MiningExecutionArbiter.decide(intent, goalKind)` → goals call arbiter in `canUse` + `canContinueToUse`;
+`MiningDirector` observes `MOVE` ownership for `CONTENTION` when lease would otherwise `AUTHORIZE`.
 
 ### MI-14C3 — Progress Lease (fixes stale-active Loop A)
 
@@ -2565,6 +2696,8 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 | D-MIW-034 | Natural descent exhaustion | **`CONSENSUS` revised** | Evidence-based `EXHAUSTED`; spatial coverage required; MI-6F prerequisite |
 | D-MIW-035 | Descent heading policy | **`CONSENSUS`** | MI-5H before MI-7D; shared heading primitive |
 | D-MIW-036 | MI-7B+C bundle | **`CONSENSUS`** | Budget counters + exhaustion policy ship together |
+| D-MIW-037 | Intent vs blocker separation | **`CONSENSUS`** | `ExecutionIntent` ≠ `ExecutionBlocker`; `CONTENTION` is scheduler observation, not intent |
+| D-MIW-038 | Non-exclusive handoffs | **`CONSENSUS`** | `TUNNEL_HANDOFF_PENDING` arbitration `NEUTRAL` until executor exists; do not consume transition |
 
 ---
 
@@ -2678,6 +2811,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | User + Agent_Cursor | **MI-14C2 contract LOCKED** — D-MIW-037 (intent ≠ blocker; CONTENTION producer required); D-MIW-038 (`TUNNEL_HANDOFF_PENDING` arbitration NEUTRAL until executor); admission+continuation mandatory; C2-A…G falsification; task-27-brief |
 | 2026-08-09 | Agent_Claude | MI-14-R2 family closed for static/unit semantics (266 tests): R2c wiring (`completeStep` handed the detector the *future* step), R2c-b `SELF_CORRIDOR` height (2-high vs the 3 cells a step cuts), R2d planned-cells masking an already-open cave, R2e connected-air vs mob-occupiable space. MAIBS set R2-C1…C5 all green; **C4 was masking C5**. Method lesson: self-consistent low-level unit tests prove the algorithm and nothing about the wiring. Added MI-14C decomposition (C1 lease/revocation, C2 arbitration, C3 progress lease); Loop D locked outside MI-14C — no tunnel-search executor exists |
 | 2026-08-09 | Agent_Claude | Reconciled task table (MI-14A/A-T/A-R1/14B + MI-6F/G shipped; 249 tests); MAIBS prolonged-loop pass: **MI-14-M1** false `CAVE_FOUND` from self-dug staircase geometry (`isSubterraneanAt` early return) `FAIL`; loops A zombie assignment + B handoff-vs-chores `ARCHITECTURE_DEFECT`, C repeated-site `RUNTIME_QUESTION`, D tunnel dead leaf `ACCEPTABLE_STEPPING_STONE`; recommended MI-14-R2 before MI-14C |
 | 2026-08-09 | Agent_Claude | MI-14 pre-implementation review (MAIBS-1): `ControlledDescentGoal` already orchestrates; all three terminal handoffs (`CAVE_FOUND`, `HANDOFF_TUNNEL_SEARCH`, `SEARCH_BUDGET_EXHAUSTED`) have zero consumers; four `MOVE` goals share priority 3 so a policy director cannot enforce a mode; recommended consumer-first repair (MI-14a/b/c) over mode-chooser-first; gate `FAIL — ARCHITECTURE_DEFECT` |
@@ -3376,3 +3510,24 @@ MI-7A DONE → MI-6F wire → MI-7B+C → MI-5H → MI-7D → MI-7E
 
 **RFC fields updated:** Identity, Naming, Executive Summary, Collaboration, Topic Index, MI-5/MI-6/MI-7
 topics, Phased plan, Tasks, Decision Registry, Gates, User approval, Change Log, this contribution.
+
+---
+
+### Contribution — User + Agent_Cursor (MI-14C2 contract lock)
+
+**Agent:** User (product) + Agent_Cursor
+**Date/Session:** 2026-08-09 ~02:35 PDT
+**Contribution type:** `DECISION / CONTRACT_LOCK`
+
+**Frontier before:** MI-14C1-R1 verified (`a6e9793`); C2 could ship arbiter without CONTENTION
+producer or with `TUNNEL_HANDOFF_PENDING` as exclusive intent (Loop D deadlock).
+
+**Action:** Locked MI-14C2 contract in RFC Topic MI-14C2; added **D-MIW-037** (intent vs blocker
+separation; CONTENTION as scheduler observation) and **D-MIW-038** (non-exclusive
+`TUNNEL_HANDOFF_PENDING`); wrote `.superpowers/sdd/task-27-brief.md` with C2-A…G falsification.
+No Java.
+
+**Frontier after:** **MI-14C2 `READY`**. Requires `Begin implementation for MI-14C2`.
+
+**RFC fields updated:** Identity, MI-14C2 topic, Decision Registry, Change Log, progress ledger,
+task-27-brief, this contribution.
