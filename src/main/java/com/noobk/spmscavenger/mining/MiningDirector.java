@@ -96,6 +96,26 @@ public final class MiningDirector {
                 project.mode(), mob.getId(), end, transition.at(), transition.heading());
     }
 
+    /**
+     * MI-14-R2 — complete with a real discovery, so the transition names a destination.
+     *
+     * <p>Without this the handoff carried {@code target = unresolved} and the staircase's own
+     * heading, which is the difference between "something happened" and "go here".
+     */
+    public static void completeWithOpening(
+            ServerLevel level, Mob mob, MiningProject project, CaveOpening opening, BlockPos at) {
+        MiningTransition transition = new MiningTransition(
+                project.mode(), MiningProjectEnd.CAVE_FOUND, at,
+                opening.continuation(), opening.landing(), level.getGameTime());
+        MiningProjectSavedData.get(level)
+                .completeProject(mob.getUUID(), MiningProjectEnd.CAVE_FOUND, transition);
+        SpmScavenger.LOGGER.info(
+                "[spmscavenger] director completed mode={} entity={} reason=CAVE_FOUND kind={} "
+                        + "at={} landing={} continuation={}",
+                project.mode(), mob.getId(), opening.kind(), at,
+                opening.landing(), opening.continuation());
+    }
+
     /** The project this mob is assigned, if any. Executors ask; they do not create. */
     public static Optional<MiningProject> assignedProject(
             MiningProjectSavedData store, UUID mobId, MiningProjectMode mode) {

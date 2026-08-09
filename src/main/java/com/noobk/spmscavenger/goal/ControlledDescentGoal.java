@@ -11,6 +11,8 @@ import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.mining.ControlledDescentCaveHandoff;
 import com.noobk.spmscavenger.mining.MiningProject;
 import com.noobk.spmscavenger.mining.MiningProjectEnd;
+import com.noobk.spmscavenger.mining.CaveOpening;
+import java.util.Optional;
 import com.noobk.spmscavenger.mining.MiningDirector;
 import com.noobk.spmscavenger.mining.MiningProjectMode;
 import com.noobk.spmscavenger.mining.MiningProjectSavedData;
@@ -262,9 +264,17 @@ public final class ControlledDescentGoal extends Goal {
                         horizontalDistance(project.origin(), mob.blockPosition()),
                         project.origin().getY() - mob.blockPosition().getY()));
         persist(level);
-        if (ControlledDescentCaveHandoff.openedTraversableCave(
-                level, mob.blockPosition(), project.heading(), this::canStand)) {
-            finish(level, MiningProjectEnd.CAVE_FOUND);
+        // MI-14-R2: report the opening, not the fact of being underground. A staircase is
+        // subterranean by construction; only a standable space outside the corridor it just cut
+        // counts as a discovery.
+        Optional<CaveOpening> opening = ControlledDescentCaveHandoff.findOpenedCave(
+                level, mob.blockPosition(), project.heading(), this::canStand);
+        if (opening.isPresent()) {
+            MiningDirector.completeWithOpening(
+                    level, mob, project, opening.get(), mob.blockPosition());
+            project = null;
+            currentStep = null;
+            stop();
             return;
         }
         if (shouldHandoffTunnelSearch(level)) {
