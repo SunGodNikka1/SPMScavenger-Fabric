@@ -73,9 +73,13 @@ public final class TunnelSearchGoal extends Goal {
         if (assigned.isEmpty()) {
             return false;
         }
-        // A cooperative acquisition in progress is this project's own work being done by someone
-        // else. Reacquiring here is the ping-pong the ACQUIRING phase exists to prevent.
-        if (ExposureOpportunityPolicy.holdsCooperativeSession(
+        // M2 - stand aside for any live exposure, not only one already being worked.
+        //
+        // Yielding solely on ACQUIRING was circular: both goals sit at priority 3, so gather cannot
+        // preempt, so it can never run the probe, so ACQUIRING is never reached, so the tunnel
+        // never yields. An OFFERED exposure must release the flags for the probe to happen at all.
+        // If nothing wants it, the offer expires on its own clock and the tunnel resumes.
+        if (ExposureOpportunityPolicy.isLive(
                 store.exposureOf(mob.getUUID()).orElse(null), assigned.get(),
                 level.getGameTime())) {
             return false;
@@ -97,14 +101,28 @@ public final class TunnelSearchGoal extends Goal {
         if (project.mode() != MiningProjectMode.TUNNEL_SEARCH || !project.isActive()) {
             return false;
         }
-        // Yield the moment a downstream consumer claims the exposure this project produced.
-        if (ExposureOpportunityPolicy.holdsCooperativeSession(
-                MiningProjectSavedData.get(level).exposureOf(mob.getUUID()).orElse(null),
-                project, level.getGameTime())) {
+        MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        // M2 - release the flags the moment this project has an exposure worth consuming.
+        if (ExposureOpportunityPolicy.isLive(
+                store.exposureOf(mob.getUUID()).orElse(null), project, level.getGameTime())) {
             return false;
         }
-        return MiningDirector.miningExecutionBlocker(level, mob, ScavengerConfig.get())
-                .permitsExecution();
+        // M4 - re-check authority every tick, exactly as the descent executor does. Checking only
+        // the raw blocker let a revoked project keep running from this goal's stale local copy: the
+        // director removes the stored project and clears the lease, and the executor never notices.
+        MiningProject assigned = MiningDirector.assignedProject(
+                        store, mob.getUUID(), MiningProjectMode.TUNNEL_SEARCH)
+                .orElse(null);
+        if (assigned == null || !assigned.matchesSession(project)) {
+            return false;
+        }
+        if (!MiningExecutionGuard.permits(mob, this, MiningGoalKind.TUNNEL_SEARCH)) {
+            return false;
+        }
+        return MiningDirector.authorizeExecution(
+                level, mob, store, assigned,
+                MiningDirector.resolveMiningExecutionBlocker(
+                        level, mob, ScavengerConfig.get(), store, this));
     }
 
     @Override
@@ -125,8 +143,14 @@ public final class TunnelSearchGoal extends Goal {
 
     @Override
     public void stop() {
+        // M4 - never write a local copy back unconditionally. If the director revoked this project
+        // while the goal held it, an unguarded checkpoint resurrects a project the control plane
+        // deliberately destroyed - the zombie C2-R1 already removed for controlled descent.
         if (project != null && mob.level() instanceof ServerLevel level) {
-            MiningProjectSavedData.get(level).putProject(mob.getUUID(), project);
+            MiningProjectSavedData store = MiningProjectSavedData.get(level);
+            if (MiningDirector.shouldPersistExecutorCheckpoint(store, mob.getUUID(), project)) {
+                store.putProject(mob.getUUID(), project);
+            }
         }
         project = null;
         currentStep = null;

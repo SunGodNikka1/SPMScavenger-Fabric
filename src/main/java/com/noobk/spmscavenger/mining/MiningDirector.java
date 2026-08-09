@@ -257,7 +257,27 @@ public final class MiningDirector {
         // the observer deleted its lease, the executor recreated one, and every guarantee the lease
         // provides - start window, progress watchdog, cooperative pause accounting - stopped being
         // persistent for the second mode.
-        Optional<MiningProject> assigned = store.projectOf(mob.getUUID())
+        Optional<MiningProject> stored = store.projectOf(mob.getUUID());
+        // M5 - retire a stored-but-not-running project.
+        //
+        // completeProject keeps RUNNING/INTERRUPTED/RETRY, so a NO_PROGRESS or LEASE_EXPIRED
+        // revocation left the record in place. mayStartControlledDescent and claimTunnelSearch both
+        // refuse while projectOf is present, and this observer skipped it because it is not active -
+        // so one progress-lease revocation permanently ended all mining for that mob. Loop A
+        // returning through the persistence rule instead of the lease.
+        //
+        // Retiring rather than resuming is the honest option while no resumption path exists.
+        if (stored.isPresent() && !stored.get().isActive()) {
+            SpmScavenger.LOGGER.info(
+                    "[spmscavenger] director retired non-resumable project mode={} entity={} "
+                            + "reason={}",
+                    stored.get().mode(), mob.getId(), stored.get().endReason());
+            store.clearProject(mob.getUUID());
+            store.clearLease(mob.getUUID());
+            store.clearExposure(mob.getUUID());
+            return;
+        }
+        Optional<MiningProject> assigned = stored
                 .filter(MiningProject::isActive)
                 .filter(project -> ExecutionIntentPolicy.intentOf(project.mode()).isPresent());
         if (assigned.isEmpty()) {
@@ -376,6 +396,11 @@ public final class MiningDirector {
     /** The project this mob is assigned, if any. Executors ask; they do not create. */
     public static Optional<MiningProject> assignedProject(
             MiningProjectSavedData store, UUID mobId, MiningProjectMode mode) {
-        return store.projectOf(mobId).filter(project -> project.mode() == mode);
+        // M5 - only a RUNNING project is an assignment. Nothing in the codebase resumes an
+        // INTERRUPTED/RETRY project (MiningProjectEnd.resumable has zero consumers), so adopting
+        // one made an executor start, plan, and stop again every tick against a dead record.
+        return store.projectOf(mobId)
+                .filter(MiningProject::isActive)
+                .filter(project -> project.mode() == mode);
     }
 }

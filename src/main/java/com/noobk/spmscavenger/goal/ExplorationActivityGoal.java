@@ -152,6 +152,14 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         if (PlayerMobs.stayAnchorState(mob) != PlayerMobs.StayAnchorState.ABSENT) {
             return;
         }
+        // M1 - claim a pending HANDOFF_TUNNEL_SEARCH before considering a new descent.
+        // Without this call the transition blocks mayStartControlledDescent forever and nothing
+        // consumes it: the mob finishes its staircase at the diamond band and simply stops. An
+        // implemented, unit-tested claim API with no caller is still a dead leaf.
+        if (MiningDirector.claimTunnelSearch(level, mob, store, cfg).isPresent()) {
+            return;
+        }
+
         ExploringGoal exploring = ControlledDescentGoal.exploringGoalOf(mob);
         if (exploring == null) {
             return;

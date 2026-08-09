@@ -159,7 +159,7 @@ public class GatherResourcesGoal extends Goal {
         if (!mob.level().getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
             return false;
         }
-        if (mob.getTarget() != null || !wantsMore(cfg)) {
+        if (mob.getTarget() != null) {
             return false;
         }
         if (!MiningExecutionGuard.permits(mob, this, MiningGoalKind.GATHER_RESOURCES)) {
@@ -178,6 +178,12 @@ public class GatherResourcesGoal extends Goal {
             return true;
         }
         cooperativeSession = false;
+        // M3 - the global scheduling rule runs AFTER the cooperative branch. Placing it first
+        // meant the bypass sat behind the very gate it exists to bypass: a ready craft step made
+        // shouldGather() false and canUse returned before the exposure was ever considered.
+        if (!wantsMore(cfg)) {
+            return false;
+        }
         if (scanCooldown > 0) {
             scanCooldown--;
             return false;
