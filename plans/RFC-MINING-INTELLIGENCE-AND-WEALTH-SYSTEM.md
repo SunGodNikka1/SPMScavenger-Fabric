@@ -417,6 +417,7 @@ revised).
 | --- | --- | --- |
 | MI-14A transition protocol | not started | **`IMPLEMENTED`** — `MiningTransition`, pending store, atomic `completeProject(…, transition)` |
 | MI-14A-T contract tests | — | **`IMPLEMENTED`** — 14 tests |
+| MI-14-R2a…R2e | — | **`IMPLEMENTED`** — see the R2 family table below; suite now **266 tests** |
 | MI-14A-R1 `CAVE_FOUND` restart lock | — | **`IMPLEMENTED`** — corrected a wrong invariant, see below |
 | MI-14B ownership extraction | not started | **`IMPLEMENTED`** — `MiningDirector` owns admission/start/completion; executor runs assigned work only |
 | MI-6F / MI-6G | `DEFERRED` | **`IMPLEMENTED`** — `CaveOpportunityPolicy`, `CaveContextSnapshot` + `classify` |
@@ -492,7 +493,7 @@ MI-14A's payload worth having. Today it ships `target = unresolved, heading = st
 
 | ID | Loop | Class |
 | --- | --- | --- |
-| **A** | **Zombie assignment.** Director assigns `CONTROLLED_DESCENT`; a priority-3 chore already holds `MOVE`; the executor never starts; the project stays `RUNNING`; `mayStartControlledDescent` refuses a new one because `projectOf` is present. Budget ticks only during execution, so an unexecuted assignment consumes none and **cannot time out**. | `ARCHITECTURE_DEFECT` — needs an assignment TTL or MI-14C admission |
+| **A** | **Zombie assignment.** *(Contention is only one trigger — MI-14C1 shows any hard precondition failing after assignment produces the same deadlock.)* Director assigns `CONTROLLED_DESCENT`; a priority-3 chore already holds `MOVE`; the executor never starts; the project stays `RUNNING`; `mayStartControlledDescent` refuses a new one because `projectOf` is present. Budget ticks only during execution, so an unexecuted assignment consumes none and **cannot time out**. | `ARCHITECTURE_DEFECT` — needs an assignment TTL or MI-14C admission |
 | **B** | **Handoff vs chores.** The `CAVE_FOUND` lock stops another *staircase*, but `GatherResourcesGoal` / `CraftTorchesGoal` / `SmeltAtFurnaceGoal` at priority 3 still outrank the priority-8 rebase. The cave can be lost to a wood-chopping errand. | `ARCHITECTURE_DEFECT` — MI-14C is the intended fix |
 | **C** | **Repeated-site descent.** Exhaust → lock → 400 ticks → expiry → same demand, same area still `EXHAUSTED` → another descent. Immediate looping is impossible; **long-term repetition is not excluded.** | `RUNTIME_QUESTION` — needs site/sector rejection, folds into MiningMemory |
 | **D** | **Tunnel dead leaf.** `HANDOFF_TUNNEL_SEARCH` preserved with no executor. Honestly blocked rather than pretending to work. | `ACCEPTABLE_STEPPING_STONE` — while nothing claims tunnel search functions |
@@ -510,6 +511,135 @@ for evidence.
 **Falsifying probe:** scripted solid-stone hill, surface Y=70, no caves within 32 blocks. Force a
 controlled descent. Prediction under current code: `CAVE_FOUND` fires at Y≈62. Under R2: descent
 continues to budget exhaustion with no `CAVE_FOUND`.
+
+### MI-14-R2 family — `IMPLEMENTED`, `CODE/UNIT_CONFIRMED` (266 tests)
+
+Five revisions, each caused by falsifying the previous one. Recorded in order because the sequence is
+the lesson: every repair exposed the next defect, and three of them were invisible while the tests and
+the production caller disagreed about *which step* was the evidence.
+
+| Rev | Defect | Repair |
+| --- | --- | --- |
+| **R2a** | `isSubterraneanAt` early return — a staircase is subterranean by construction | `SELF_CORRIDOR` exclusion + `CaveOpening` payload (`landing`, `continuation`, `kind`) replacing the boolean |
+| **R2b** | "standable floor nearby" is not "we broke into it"; the probe read world state through unbroken stone | Bounded connected flood seeded from the cells the step actually excavated; an intact wall is impassable, so the volume behind it is never visited |
+| **R2c** | **Wiring.** `completeStep` passed `mob.blockPosition()`, and the overload planned `S1 -> S2` — the *future* step. The invariant "seed only from what this step excavated" was violated at the call site | Public API requires the `StairStepPlan`; executor passes its live `currentStep`; seeds must additionally be passable *now*, so a solid wall seeds nothing regardless of caller error |
+| **R2c-b** | `SELF_CORRIDOR` built 2-high columns; a step cuts **three** cells (`stand`, `+1`, `+2`). Each step's own headroom sat outside the exclusion set, so the flood found the staircase's dug ceiling and called it a cave | Full step height in `addColumn` |
+| **R2d** | Planned-but-undug cells counted as self-created, **masking a cave already open directly ahead** — the opposite failure to R2b | `SELF_CORRIDOR` = excavation history only. Self-created means *dug*, not *intended*; the R2c seed guard already covers solid future geometry |
+| **R2e** | The flood proved connected **air**, not connected **mob space**. A 1-block slit connects two chambers a 2-block-tall PlayerMob cannot pass | Flood over `occupiable = passable(cell) && passable(cell.above())`; standability still decides where it may stop |
+
+**MAIBS falsification set (all green):**
+
+| ID | Case | Expected |
+| --- | --- | --- |
+| R2-C1 | Self corridor only | no opening |
+| R2-C2 | Cave behind intact future wall | no opening |
+| R2-C3 | Cave touching completed excavation | opening |
+| R2-C4 | Natural cave **already open** directly ahead | opening |
+| R2-C5 | Connected only through a 1-high slit | no opening |
+
+**C4 was masking C5.** The slit occupied future-step cells, so the same over-exclusion that hid a real
+cave also hid the traversability defect. Stating both cases before repairing either is what surfaced
+it — repairing C4 alone would have shipped C5 silently.
+
+**Method lesson (`PROVEN`, promote):** a unit test that calls a low-level overload *self-consistently*
+proves the algorithm and **nothing** about the wiring. R2c, R2c-b and R2d were all invisible while the
+test paired a completed step with the corridor of the previous stand. `CaveOpeningEvidenceTest` now
+mirrors the production pairing exactly.
+
+**Continuation semantics:** measured from the **nearest excavated cell**, not the mob's feet. From the
+stand cell a diagonal landing ties and resolves along the staircase axis — pointing back down the
+tunnel instead of into the discovery.
+
+**Still `UNVERIFIED`:** no staircase has been observed breaking into a real cave in a running game.
+
+---
+
+## Topic: MI-14C — Execution Control Plane (`PROPOSED`, User + Agent_Claude)
+
+MI-14C was originally scoped as "arbitration". Loop A proves that insufficient: an arbiter that
+chooses *who may act* cannot clear an assignment nobody is acting on. Split into three tasks.
+
+```text
+        MiningDirector  "WHAT next?"
+                 |
+        +--------+--------+
+        v                 v
+  MiningProject     MiningTransition
+        +--------+--------+
+                 v
+          ExecutionIntent
+                 v
+     MI-14C Execution Control
+     (lease / arbitration / suspension / staleness / revocation)
+                 v
+            GoalSelector
+```
+
+### MI-14C1 — Assignment Lease & Revocation (fixes Loop A)
+
+`canUse` checks config, combat target, `mobGriefing` and `hasUsablePick()` **before** asking whether
+an assignment exists. Lose the pick after assignment and the executor returns `false` before the
+lookup, the project stays `RUNNING` forever, and `mayStartControlledDescent` refuses every future
+assignment because `projectOf` is present. **Deadlock, with no TTL anywhere.**
+
+A TTL alone is the wrong fix — it deletes without distinguishing *why*. Blockers are classified:
+
+| Class | Examples | Response |
+| --- | --- | --- |
+| `TEMPORARY` | combat target, short interruption | **suspend**, keep the project for bounded recovery |
+| `HARD` | `mobGriefing` off, feature disabled, capability lost (no pick) | **revoke** with a reason, let prerequisite systems restore capability |
+| `CONTENTION` | executor admissible, another non-critical goal owns `MOVE` | **arbitrate** (MI-14C2) |
+
+**Reordering `canUse` is not the fix.** The executor should stop owning the consequences of failure:
+the lease layer asks "do I have an assignment / is the executor admissible / if not, why", and
+`canUse` becomes "do I hold a valid lease for this mode, and can I physically execute right now".
+
+**Invariant (testable):** no `RUNNING` `MiningProject` may exist indefinitely without either
+execution progress or an explicit suspension reason.
+
+### MI-14C2 — Execution Arbitration (fixes Loop B)
+
+The handoff is **not** an active project, so the arbiter cannot read `store.projectOf` alone. Intent
+derives from an active project **or** a pending transition:
+
+`ExecutionIntent` in `{ CONTROLLED_DESCENT, CAVE_HANDOFF, TUNNEL_HANDOFF_PENDING, NONE }`
+
+Under `CAVE_HANDOFF`: `ExploringGoal` allow; `ControlledDescentGoal` deny; gather/smelt yield; combat
+and survival still interrupt.
+
+**Bounded authority — MI-14C must not become a dictator over the whole PlayerMob:**
+
+```text
+critical activity (combat, survival)
+  > mining handoff / project intent
+    > ordinary resource chores
+      > idle / exploration noise
+```
+
+...expressed as intent, **not** by encoding that hierarchy into Minecraft priority numbers.
+
+### MI-14C3 — Progress Lease (fixes stale-active Loop A)
+
+Two clocks, because one misses the nastier case — executor starts once, then is starved forever:
+
+- **start lease:** `assignedAt -> executorStartedAt` gives `START_TIMEOUT`
+- **progress lease:** `lastExecutionProgressAt -> now` gives `PROGRESS_TIMEOUT`
+
+**Progress must be observable, not "tick() was called"** — a block broken, a stand advanced, depth
+increased, project state changed. Otherwise a mob physically stuck refreshes its lease forever, and a
+zombie assignment is merely replaced by a zombie *active* assignment.
+
+### Loop D stays outside MI-14C (`LOCKED`)
+
+`HANDOFF_TUNNEL_SEARCH` means "descent is done, begin tunnel search" and **no tunnel-search executor
+exists** — verified: the constant appears only in the enum, the transition, and the goal that emits
+it. An arbiter cannot answer "who should run" when the answer is "nobody implements it". It stays
+`UNSUPPORTED / PENDING_MODE`. MI-14C must **not** consume or clear it to make tests green — that
+recreates precisely the producer-without-consumer defect this effort removed.
+
+Order: MI-14C -> `TUNNEL_SEARCH` executor -> the reason gains a real consumer -> second executable
+mode -> genuine multi-mode `MiningDirector` selection over modes that correspond to executable
+behaviour.
 
 ---
 
@@ -2548,6 +2678,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Claude | MI-14-R2 family closed for static/unit semantics (266 tests): R2c wiring (`completeStep` handed the detector the *future* step), R2c-b `SELF_CORRIDOR` height (2-high vs the 3 cells a step cuts), R2d planned-cells masking an already-open cave, R2e connected-air vs mob-occupiable space. MAIBS set R2-C1…C5 all green; **C4 was masking C5**. Method lesson: self-consistent low-level unit tests prove the algorithm and nothing about the wiring. Added MI-14C decomposition (C1 lease/revocation, C2 arbitration, C3 progress lease); Loop D locked outside MI-14C — no tunnel-search executor exists |
 | 2026-08-09 | Agent_Claude | Reconciled task table (MI-14A/A-T/A-R1/14B + MI-6F/G shipped; 249 tests); MAIBS prolonged-loop pass: **MI-14-M1** false `CAVE_FOUND` from self-dug staircase geometry (`isSubterraneanAt` early return) `FAIL`; loops A zombie assignment + B handoff-vs-chores `ARCHITECTURE_DEFECT`, C repeated-site `RUNTIME_QUESTION`, D tunnel dead leaf `ACCEPTABLE_STEPPING_STONE`; recommended MI-14-R2 before MI-14C |
 | 2026-08-09 | Agent_Claude | MI-14 pre-implementation review (MAIBS-1): `ControlledDescentGoal` already orchestrates; all three terminal handoffs (`CAVE_FOUND`, `HANDOFF_TUNNEL_SEARCH`, `SEARCH_BUDGET_EXHAUSTED`) have zero consumers; four `MOVE` goals share priority 3 so a policy director cannot enforce a mode; recommended consumer-first repair (MI-14a/b/c) over mode-chooser-first; gate `FAIL — ARCHITECTURE_DEFECT` |
 | 2026-08-09 | User + Agent_Cursor | **MI-7B+C bundle**, revised `NaturalDescentStatus`, **MI-5H**, MI-6F→7B+C dependency; cave-mouth downgrade |

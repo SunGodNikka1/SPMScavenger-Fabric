@@ -1,10 +1,15 @@
 package com.noobk.spmscavenger.mining;
 
+import com.noobk.spmscavenger.PlayerMobs;
+import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.SpmScavenger;
+import com.noobk.spmscavenger.ToolTier;
+import com.noobk.spmscavenger.ToolTierPolicy;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.level.GameRules;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -72,6 +77,10 @@ public final class MiningDirector {
         MiningProject project =
                 MiningProject.startControlledDescent(origin, heading, level.getGameTime());
         store.putProject(mob.getUUID(), project);
+        store.putLease(
+                mob.getUUID(),
+                MiningExecutionLease.issued(
+                        MiningProjectMode.CONTROLLED_DESCENT, level.getGameTime()));
         SpmScavenger.LOGGER.info(
                 "[spmscavenger] director assigned CONTROLLED_DESCENT entity={} heading={} origin={}",
                 mob.getId(), heading, origin);
@@ -89,8 +98,9 @@ public final class MiningDirector {
             ServerLevel level, Mob mob, MiningProject project, MiningProjectEnd end, BlockPos at) {
         MiningTransition transition =
                 MiningTransition.of(project, end, at, level.getGameTime());
-        MiningProjectSavedData.get(level)
-                .completeProject(mob.getUUID(), end, transition);
+        MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        store.completeProject(mob.getUUID(), end, transition);
+        store.clearLease(mob.getUUID());
         SpmScavenger.LOGGER.info(
                 "[spmscavenger] director completed mode={} entity={} reason={} at={} heading={}",
                 project.mode(), mob.getId(), end, transition.at(), transition.heading());
@@ -107,13 +117,110 @@ public final class MiningDirector {
         MiningTransition transition = new MiningTransition(
                 project.mode(), MiningProjectEnd.CAVE_FOUND, at,
                 opening.continuation(), opening.landing(), level.getGameTime());
-        MiningProjectSavedData.get(level)
-                .completeProject(mob.getUUID(), MiningProjectEnd.CAVE_FOUND, transition);
+        MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        store.completeProject(mob.getUUID(), MiningProjectEnd.CAVE_FOUND, transition);
+        store.clearLease(mob.getUUID());
         SpmScavenger.LOGGER.info(
                 "[spmscavenger] director completed mode={} entity={} reason=CAVE_FOUND kind={} "
                         + "at={} landing={} continuation={}",
                 project.mode(), mob.getId(), opening.kind(), at,
                 opening.landing(), opening.continuation());
+    }
+
+    /**
+     * MI-14C1 — why controlled descent cannot execute right now, or {@link ExecutionBlocker#NONE}.
+     *
+     * <p>Lives here rather than in the executor because the executor must stop owning the
+     * consequences of its own preconditions failing. It previously tested all of these
+     * <em>before</em> looking up its assignment, so any of them failing after assignment left a
+     * {@code RUNNING} project that blocked every future decision and could never time out.
+     */
+    public static ExecutionBlocker controlledDescentBlocker(
+            ServerLevel level, Mob mob, ScavengerConfig cfg) {
+        if (!cfg.enabled || !cfg.gatherResources || !cfg.exploring) {
+            return ExecutionBlocker.FEATURE_DISABLED;
+        }
+        if (!level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+            return ExecutionBlocker.WORLD_RULE_DISABLED;
+        }
+        if (mob.getTarget() != null) {
+            return ExecutionBlocker.COMBAT_TARGET;
+        }
+        if (ToolTierPolicy.tierOfPick(
+                        PlayerMobs.backpack(mob), mob.getMainHandItem(), mob.getOffhandItem())
+                == ToolTier.NONE) {
+            return ExecutionBlocker.CAPABILITY_MISSING;
+        }
+        return ExecutionBlocker.NONE;
+    }
+
+    /**
+     * Evaluates the lease and performs its decision. Returns whether the executor may run.
+     *
+     * <p>Must be reachable even when the executor cannot be — that is the whole point. A blocked
+     * assignment which nothing evaluates is exactly the zombie this repairs.
+     */
+    public static boolean authorizeExecution(
+            ServerLevel level, Mob mob, MiningProjectSavedData store, MiningProject project,
+            ExecutionBlocker blocker) {
+
+        long now = level.getGameTime();
+        MiningExecutionLease lease = store.leaseOf(mob.getUUID())
+                .orElseGet(() -> {
+                    // Assigned before leases existed, or persisted without one. Treat now as the
+                    // assignment time rather than revoking work that may be perfectly healthy.
+                    MiningExecutionLease issued = MiningExecutionLease.issued(project.mode(), now);
+                    store.putLease(mob.getUUID(), issued);
+                    return issued;
+                });
+
+        ExecutionLeasePolicy.LeaseOutcome outcome = ExecutionLeasePolicy.evaluate(
+                blocker, lease.everStarted(), lease.assignedAt(), now);
+
+        if (outcome.revoked()) {
+            MiningProjectEnd reason = outcome.revokeReason();
+            SpmScavenger.LOGGER.info(
+                    "[spmscavenger] director revoked mode={} entity={} blocker={} reason={} "
+                            + "heldTicks={} everStarted={}",
+                    project.mode(), mob.getId(), blocker, reason,
+                    now - lease.assignedAt(), lease.everStarted());
+            completeProject(level, mob, project, reason, mob.blockPosition());
+            return false;
+        }
+        if (outcome.authorized()) {
+            store.putLease(mob.getUUID(), lease.resumed());
+            return true;
+        }
+        store.putLease(mob.getUUID(), lease.suspended());
+        return false;
+    }
+
+    /**
+     * Enforces the lease for whatever this mob is assigned, independent of any executor running.
+     *
+     * <p>Called from the flagless observer <b>before</b> its own preconditions, because those
+     * preconditions are precisely the conditions under which an assignment gets stranded.
+     */
+    public static void enforceLease(
+            ServerLevel level, Mob mob, MiningProjectSavedData store, ScavengerConfig cfg) {
+        Optional<MiningProject> assigned =
+                assignedProject(store, mob.getUUID(), MiningProjectMode.CONTROLLED_DESCENT);
+        if (assigned.isEmpty()) {
+            if (store.leaseOf(mob.getUUID()).isPresent()) {
+                store.clearLease(mob.getUUID());
+            }
+            return;
+        }
+        authorizeExecution(
+                level, mob, store, assigned.get(), controlledDescentBlocker(level, mob, cfg));
+    }
+
+    /** The executor reports that it has actually begun. Only it knows this. */
+    public static void markExecutorStarted(ServerLevel level, Mob mob) {
+        MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        store.leaseOf(mob.getUUID())
+                .ifPresent(lease -> store.putLease(
+                        mob.getUUID(), lease.started(level.getGameTime())));
     }
 
     /** The project this mob is assigned, if any. Executors ask; they do not create. */

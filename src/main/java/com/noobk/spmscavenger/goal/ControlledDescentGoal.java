@@ -33,7 +33,6 @@ import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 
@@ -68,39 +67,40 @@ public final class ControlledDescentGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        ScavengerConfig cfg = ScavengerConfig.get();
-        if (!cfg.enabled || !cfg.gatherResources || !cfg.exploring) {
+        if (!(mob.level() instanceof ServerLevel level)) {
             return false;
         }
-        if (mob.getTarget() != null || !(mob.level() instanceof ServerLevel level)) {
-            return false;
-        }
-        if (!level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
-            return false;
-        }
-        if (!hasUsablePick()) {
-            return false;
-        }
+        // MI-14C1: the executor no longer owns the consequences of its preconditions failing. It
+        // asks two questions - am I assigned this mode, and does my lease authorize me right now -
+        // and the director classifies any blocker as suspend or revoke. Testing config, combat,
+        // mobGriefing and tool capability *before* the assignment lookup is what stranded a
+        // RUNNING project forever: canUse returned false ahead of the lookup, so nothing ever
+        // observed that the assignment could not proceed.
         // MI-14B: the executor asks one question — am I assigned work I can still perform? It no
         // longer decides whether descent is warranted, whether natural descent is exhausted, or
         // which heading to take. Those are director questions, and an executor that cannot find an
         // assignment does nothing rather than inventing one.
-        return MiningDirector.assignedProject(
-                        MiningProjectSavedData.get(level),
-                        mob.getUUID(),
-                        MiningProjectMode.CONTROLLED_DESCENT)
-                .isPresent();
+        MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        Optional<MiningProject> assigned = MiningDirector.assignedProject(
+                store, mob.getUUID(), MiningProjectMode.CONTROLLED_DESCENT);
+        if (assigned.isEmpty()) {
+            return false;
+        }
+        return MiningDirector.authorizeExecution(
+                level, mob, store, assigned.get(),
+                MiningDirector.controlledDescentBlocker(level, mob, ScavengerConfig.get()));
     }
 
     @Override
     public boolean canContinueToUse() {
-        ScavengerConfig cfg = ScavengerConfig.get();
+        // MI-14C1: one definition of "can this execute", shared with admission. The hand-rolled
+        // copy here omitted the tool check, so a pickaxe breaking mid-dig left the mob mining with
+        // nothing - and it could drift from the director's classification at any time.
         return project != null
                 && project.isControlledDescent()
-                && mob.getTarget() == null
-                && cfg.enabled
-                && cfg.gatherResources
-                && mob.level().getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING);
+                && mob.level() instanceof ServerLevel level
+                && MiningDirector.controlledDescentBlocker(level, mob, ScavengerConfig.get())
+                        .permitsExecution();
     }
 
     @Override
@@ -119,6 +119,9 @@ public final class ControlledDescentGoal extends Goal {
         if (project == null) {
             return;
         }
+        // MI-14C1: only the executor knows it actually began. The start lease depends on this, and
+        // inferring it from authorization would mark every suspended assignment as started.
+        MiningDirector.markExecutorStarted(level, mob);
         planNextStep(level);
     }
 
@@ -376,12 +379,6 @@ public final class ControlledDescentGoal extends Goal {
                 .orElse(null);
     }
 
-    private boolean hasUsablePick() {
-        return ToolTierPolicy.tierOfPick(
-                PlayerMobs.backpack(mob),
-                mob.getMainHandItem(),
-                mob.getOffhandItem()) != ToolTier.NONE;
-    }
 
     private int breakTicksFor(BlockState state) {
         float speed = state.getDestroySpeed(mob.level(), breakTarget);

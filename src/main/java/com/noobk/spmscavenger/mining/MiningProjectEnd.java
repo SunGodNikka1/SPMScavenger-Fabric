@@ -19,7 +19,11 @@ public enum MiningProjectEnd {
     /** Handoff to cave continuation without treating descent as failure. */
     CAVE_FOUND(TaskLifecycle.SUCCESS),
     /** Handoff to tunnel search when blocking demand remains in target band. */
-    HANDOFF_TUNNEL_SEARCH(TaskLifecycle.SUCCESS);
+    HANDOFF_TUNNEL_SEARCH(TaskLifecycle.SUCCESS),
+    /** MI-14C1 - a hard precondition disappeared after assignment (feature or world rule). */
+    EXECUTION_UNAVAILABLE(TaskLifecycle.BLOCKED),
+    /** MI-14C1 - assignment released because it never got to execute within its lease. */
+    LEASE_EXPIRED(TaskLifecycle.RETRY);
 
     private final TaskLifecycle lifecycle;
 

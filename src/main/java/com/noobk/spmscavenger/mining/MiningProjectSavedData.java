@@ -30,6 +30,9 @@ public final class MiningProjectSavedData extends SavedData {
      */
     private final Map<UUID, MiningTransition> pendingTransitions = new HashMap<>();
 
+    /** MI-14C1 - execution lifecycle per mob, kept beside the project it authorizes. */
+    private final Map<UUID, MiningExecutionLease> leases = new HashMap<>();
+
     public MiningProjectSavedData() {
     }
 
@@ -60,6 +63,16 @@ public final class MiningProjectSavedData extends SavedData {
             data.pendingTransitions.put(
                     wrapped.getUUID("mob"), MiningTransition.load(wrapped.getCompound("transition")));
         }
+        ListTag leaseList = tag.getList("leases", Tag.TAG_COMPOUND);
+        for (int index = 0; index < leaseList.size(); index++) {
+            CompoundTag wrapped = leaseList.getCompound(index);
+            if (!wrapped.hasUUID("mob")) {
+                continue;
+            }
+            data.leases.put(
+                    wrapped.getUUID("mob"),
+                    MiningExecutionLease.load(wrapped.getCompound("lease")));
+        }
         return data;
     }
 
@@ -86,6 +99,15 @@ public final class MiningProjectSavedData extends SavedData {
             transitions.add(wrapped);
         }
         tag.put("transitions", transitions);
+
+        ListTag leaseList = new ListTag();
+        for (Map.Entry<UUID, MiningExecutionLease> entry : leases.entrySet()) {
+            CompoundTag wrapped = new CompoundTag();
+            wrapped.putUUID("mob", entry.getKey());
+            wrapped.put("lease", entry.getValue().save());
+            leaseList.add(wrapped);
+        }
+        tag.put("leases", leaseList);
         return tag;
     }
 
@@ -123,6 +145,22 @@ public final class MiningProjectSavedData extends SavedData {
             UUID mobId, MiningProjectEnd end, MiningTransition transition) {
         recordTransition(mobId, transition);
         return completeProject(mobId, end);
+    }
+
+    /** MI-14C1 - the lease authorizing this mob's assignment, if one was issued. */
+    public Optional<MiningExecutionLease> leaseOf(UUID mobId) {
+        return Optional.ofNullable(leases.get(mobId));
+    }
+
+    public void putLease(UUID mobId, MiningExecutionLease lease) {
+        leases.put(mobId, lease);
+        setDirty();
+    }
+
+    public void clearLease(UUID mobId) {
+        if (leases.remove(mobId) != null) {
+            setDirty();
+        }
     }
 
     public Optional<MiningProject> projectOf(UUID mobId) {

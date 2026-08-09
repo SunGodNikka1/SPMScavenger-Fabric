@@ -131,6 +131,12 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
             return;
         }
         ScavengerConfig cfg = ScavengerConfig.get();
+        MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        // MI-14C1: enforce the lease FIRST. Every early return below is a condition under which an
+        // assignment gets stranded, so evaluating leases after them reproduces the deadlock inside
+        // the director itself: combat or mobGriefing would stop the one component able to revoke.
+        MiningDirector.enforceLease(level, mob, store, cfg);
+
         if (!cfg.enabled || !cfg.gatherResources || !cfg.exploring) {
             return;
         }
@@ -142,7 +148,6 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         if (exploring == null) {
             return;
         }
-        MiningProjectSavedData store = MiningProjectSavedData.get(level);
         long now = level.getGameTime();
         NaturalDescentStatus status = exploring.naturalDescentStatus(level, now);
         if (!MiningDirector.mayStartControlledDescent(
