@@ -59,7 +59,9 @@ currentBlocker; executorStartedAt NEVER_STARTED sentinel; 4 regression tests; fu
 runtime unverified; verified commit a6e9793)
 
 MI-14C2: complete with concerns (ExecutionIntent + arbiter + guard + CONTENTION producer;
-5 goals wired admission+continuation; MiningExecutionC2Test C2-A…G; 234 tests pass;
-runtime/MAIBS C2 UNVERIFIED)
+5 goals wired admission+continuation; MiningExecutionC2Test C2-A…G; 292 tests pass;
+MAIBS C2 static PASS_WITH_CONCERNS; runtime UNVERIFIED)
+
+MI-14C3: contract LOCKED (D-MIW-039; task-28-brief; C3-A…E) — requires Begin
 
 No commits. No Minecraft launches (separate approval required).

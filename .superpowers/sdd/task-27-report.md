@@ -4,7 +4,7 @@
 
 ## Verification
 
-`.\gradlew.bat test` — **234 tests, 0 failures** (`CONFIRMED`, cwd `Projects/SPMScavenger-1.21.1-Fabric`)
+`.\gradlew.bat test` — **292 tests, 0 failures** (`CONFIRMED`, cwd `Projects/SPMScavenger-1.21.1-Fabric`)
 
 ## Delivered
 
