@@ -18,6 +18,7 @@ import com.noobk.spmscavenger.goal.SmeltAtFurnaceGoal;
 import com.noobk.spmscavenger.goal.TrackedLocalWanderGoal;
 import com.noobk.spmscavenger.mixin.MobGoalSelectorAccessor;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -105,6 +106,11 @@ public class SpmScavenger implements ModInitializer {
                 RestSessionCoordinator.invalidateOnUnload(
                         mob.getUUID(), world.getGameTime());
                 OpinionExperienceRegistry.freeze(mob.getUUID());
+            }
+        });
+        ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
+            if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
+                OpinionExperienceRegistry.onDeath(mob.getUUID());
             }
         });
     }

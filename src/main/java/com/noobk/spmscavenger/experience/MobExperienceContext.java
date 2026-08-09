@@ -1,7 +1,9 @@
 package com.noobk.spmscavenger.experience;
 
-import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.opinion.AffectiveState;
+import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
+import com.noobk.spmscavenger.opinion.OpinionMemory;
+import com.noobk.spmscavenger.opinion.OpinionMemoryService;
 
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -17,6 +19,7 @@ public final class MobExperienceContext {
 
     private final UUID mobId;
     private final AffectiveState affectiveState = new AffectiveState();
+    private final OpinionMemory opinionMemory = new OpinionMemory();
     private final OpinionExperienceSinks sinks;
     private final EpisodeRoutingPipeline pipeline;
     private final Map<UUID, ActivityEpisode> episodes = new HashMap<>();
@@ -39,6 +42,7 @@ public final class MobExperienceContext {
 
             @Override
             public void onLearningEvidence(EpisodeLearningEvidence evidence) {
+                OpinionMemoryService.apply(MobExperienceContext.this, evidence);
                 external.onLearningEvidence(evidence);
             }
         };
@@ -51,6 +55,18 @@ public final class MobExperienceContext {
 
     public AffectiveState affectiveState() {
         return affectiveState;
+    }
+
+    public OpinionMemory opinionMemory() {
+        return opinionMemory;
+    }
+
+    public long episodeDuration(UUID episodeId, long closeTime) {
+        ActivityEpisode episode = episodes.get(episodeId);
+        if (episode == null) {
+            return 0L;
+        }
+        return Math.max(0L, closeTime - episode.openedAtGameTime());
     }
 
     public EpisodeRoutingPipeline pipeline() {

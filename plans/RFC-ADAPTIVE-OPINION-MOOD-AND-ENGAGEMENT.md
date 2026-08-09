@@ -9,13 +9,13 @@
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
 | **Mode** | `PLANNING` |
-| **Status** | GAO-0 through GAO-1 `IMPLEMENTED / STATIC VERIFIED`; GAO-2 (`OpinionMemory`) is nearest frontier; runtime `UNVERIFIED` |
+| **Status** | GAO-0 through GAO-2 `IMPLEMENTED / STATIC VERIFIED`; GAO-3 (`IdleOpportunityPolicy`) is nearest frontier; runtime `UNVERIFIED` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-09 (PD-GAO-01…04 locked; GAO-1 AffectiveState implemented) |
+| **Last update** | 2026-08-09 (PD-GAO-03 death semantics locked; GAO-2 OpinionMemory implemented) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,10 +39,11 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** **GAO-2** — `OpinionMemory` (activity preferences only). GAO-1 delivers
-per-mob `AffectiveState`, 10-tick observation updates, `onAffectPulse` wiring, rate-based
-minute-scale boredom, REST/stalled/social semantics, neutral decay, unload freeze, and
-`opinion.enabled` gate. No activity choice yet (GAO-3/4 deferred). Runtime `UNVERIFIED`.
+**Nearest frontier:** **GAO-3** — `IdleOpportunityPolicy` (activity scoring). GAO-2 delivers
+per-`ActivityKind` `ActivityOpinionMemory` (`preference`, `repetition`, `recentReward`,
+`recentFailures`, `lastPerformed`, `recentDuration`) fed only by normalized
+`EpisodeLearningEvidence`; PD-GAO-03 partial death reset; no activity choice yet (GAO-4 deferred).
+Runtime `UNVERIFIED`.
 
 ---
 
@@ -1148,7 +1149,7 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 through GAO-0c `IMPLEMENTED / STATIC VERIFIED`; GAO-1 is nearest frontier
+**Status:** GAO-0 through GAO-2 `IMPLEMENTED / STATIC VERIFIED`; GAO-3 is nearest frontier
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
@@ -1156,7 +1157,7 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-0b** | Schema vocabulary + inert ingress contract | **IMPLEMENTED:** `ExperienceKind`, `ExperienceCause`, `OutcomeClass`, `ActivityKind`, immutable `ExperienceEvent`, interface-only `ExperiencePipeline.accept` | GAO-0, D-GAO-026/027 |
 | **GAO-0c** | Episode + rest-claim processing | **IMPLEMENTED:** `ActivityEpisode`, `EpisodeRoutingPipeline`, `RestSessionClaim`/`RestSessionCoordinator`, `OpinionExperienceRegistry`, mining/explore/rest emitters, observer REST integration | GAO-0, GAO-0b |
 | **GAO-1** | `AffectiveState` + observation | **IMPLEMENTED:** per-mob mood channels, 10-tick observation, pulse wiring, rate-based boredom, REST/stalled/social semantics, decay, freeze-on-unload, `opinion.enabled` | GAO-0, GAO-0b, GAO-0c |
-| **GAO-2** | `OpinionMemory` v1 (ACTIVITY only) | Learned activity preferences + repetition | GAO-1 |
+| **GAO-2** | `OpinionMemory` v1 (ACTIVITY only) | **IMPLEMENTED:** `ActivityOpinionMemory`, `OpinionMemory`, `OpinionLearningPolicy`, normalized-evidence wiring, PD-GAO-03 death reset | GAO-1 |
 | **GAO-3** | `IdleOpportunityPolicy` | Score available discretionary activities | GAO-2, existing goals |
 | **GAO-4** | `DiscretionaryActivityDirector` | Emit intents to existing directors/goals | GAO-3 |
 | **GAO-5** | PLACE / ENVIRONMENT opinions | World gains meaning for choice | GAO-4, spatial memory TBD |
@@ -1343,11 +1344,29 @@ companion coordination—not competing activity semantics.
 | --- | --- | --- | --- | --- |
 | **PD-GAO-01** | `LOCKED` | Should mood affect **only** discretionary ranking, or also **thresholds** (explore idle ticks)? | A thresholds only / B ranking only / **C both** | **C both** — user 2026-08-09 |
 | **PD-GAO-02** | `LOCKED` | Is `CampfireGoal` idle REST or positive engagement? | REST / mild engagement | **REST with mild engagement** — user 2026-08-09 |
-| **PD-GAO-03** | `LOCKED (direction)` | Persist `OpinionMemory` across death? | wipe / partial / full | **Partial persistence** — implement with GAO-2; not GAO-1 blocker |
+| **PD-GAO-03** | `LOCKED` | Persist `OpinionMemory` across death? | wipe / partial / full | **Partial persistence** — see death table below |
 | **PD-GAO-04** | `LOCKED` | Config surface | `opinion.enabled` only / full trait sliders | **`opinion.enabled` now**; trait presets deferred until GAO-7 `PersonalityModel` |
 | **PD-GAO-05** | `RESOLVED BY D-GAO-015` | Who owns `IdleOpportunityPolicy` tick? | fold into `ExplorationActivityGoal` / new flagless goal | Single refactored observer; affect/intent bookkeeping must precede early returns |
 | **PD-GAO-06** | `LOCKED` | Which two executable activities prove GAO-4? | Explore + Rest / Explore + opportunistic Gather / other | **Explore + Rest** after the REST claim lifecycle exists |
 | **PD-GAO-07** | `LOCKED` | What happens while unloaded/non-ticking? | freeze / lazy elapsed-time decay / full catch-up | **Freeze affect/opinion; invalidate intents; invalidate/revalidate rest claims; suspend only genuinely resumable episodes** |
+
+#### PD-GAO-03 death semantics (`LOCKED` — GAO-2)
+
+On mob death, `OpinionMemory.onDeath()` applies **partial reset**. `AffectiveState` is a separate
+short-term layer and is **not** folded into `OpinionMemory` persistence semantics.
+
+| Field | On death |
+| --- | --- |
+| `preference` | **Mostly survives** (unchanged) |
+| `repetition` | **Cleared** |
+| `recentDuration` | **Cleared** |
+| `recentFailures` | **Cleared** |
+| `recentReward` | **Heavily decayed** (×0.5) |
+| `lastPerformed` | **Survives** (history anchor) |
+| `AffectiveState` | Separate; not part of `OpinionMemory` death contract |
+
+Disk save/load persistence for opinions remains **deferred** until a later phase; GAO-2 implements
+in-memory learning plus runtime death reset only.
 
 ---
 
@@ -1873,3 +1892,83 @@ director, explore-vs-rest choice, personality presets, threshold modulation of
 scheduler authority unchanged (D-GAO-024).
 
 **Frontier after:** GAO-2 `OpinionMemory` v1 (ACTIVITY only).
+
+---
+
+### GAO-2 pre-implementation contract (`LOCKED`)
+
+**Architecture (mandatory path):**
+
+```text
+ActivityEpisode
+      ↓
+EpisodeLearningEvidence (normalized)
+      ↓
+OpinionMemory.apply(...)
+      ↓
+ActivityOpinionMemory[ActivityKind]
+```
+
+**Forbidden:** raw `BLOCK_BROKEN` → `preference += …` without episode normalization (GAO-0c owns
+frequency windows).
+
+**`ActivityOpinionMemory` fields (ACTIVITY only in GAO-2):**
+
+| Field | Role |
+| --- | --- |
+| `preference` | Long-term learned evaluation |
+| `repetition` | Short-horizon "done too much lately" |
+| `recentReward` | Recent positive terminal/milestone signal |
+| `recentFailures` | Recent execution-failure learning count |
+| `lastPerformed` | Last evidence game-time |
+| `recentDuration` | Last terminal episode duration (ticks) |
+
+**Core rule (GAO-REPETITION):** A long mining session must raise `repetition` strongly while
+`preference` may remain positive — "I like mining, but I've had enough mining for now."
+
+**Attribution gates (defense in depth in `OpinionLearningPolicy`):**
+
+| Gate | Effect |
+| --- | --- |
+| `AUTHORITY_CANCEL` / `PROTECTED_INTERRUPT` / player-order causes | No negative activity learning |
+| `SIMULATION_FRONTIER` / `ENVIRONMENT_UNAVAILABLE` | No preference learning |
+| Repeated activity-owned `EXECUTION_FAILURE` | May gradually negative `preference` (emitter threshold + policy) |
+
+**Explicitly out of scope:** activity scoring, Explore vs Rest choice, `DiscretionaryIntent`,
+`ExplorationReadiness` threshold changes, Goal preemption, `PersonalityModel`, using raw
+`AffectiveState` as permanent preference.
+
+### GAO-2 MAIBS static scenarios (`CODE_CONFIRMED`)
+
+| ID | Setup | Must happen | Must not |
+| --- | --- | --- | --- |
+| **GAO-2-M1** | 64 normalized `BLOCK_BROKEN` milestones on one mining episode | `repetition > preference`; `preference > 0` | Permanent mining hate from one session |
+| **GAO-2-M2** | Terminal success after `LONG_SESSION_TICKS` duration | `recentDuration` set; `repetition` rises; `preference` stays positive | Duration collapses `preference` below zero |
+| **GAO-2-M3** | `onDeath()` after mixed success/failure history | `preference` survives; `repetition`/`recentDuration`/`recentFailures` cleared | Total amnesia |
+| **GAO-2-M4** | `AUTHORITY_CANCEL` evidence injected | Policy rejects; no memory change | Command interrupt poisons preference |
+| **GAO-2-M5** | Pipeline terminal `REST_SESSION` success | `OpinionMemory` updates when `opinion.enabled` | Raw event bypass of episode layer |
+
+---
+
+## Contribution — Agent_Cursor (GAO-2 OpinionMemory)
+
+**Agent:** `Agent_Cursor` **Date/Session:** 2026-08-09 **Type:** `IMPLEMENTATION` + PD lock
+
+**User decisions locked:** PD-GAO-03 exact partial-death table (preference survives; episodic
+pressure clears; `AffectiveState` separate).
+
+**Delivered:** `ActivityOpinionMemory`, `OpinionMemory`, `OpinionLearningPolicy`,
+`OpinionMemoryService`; `MobExperienceContext.onLearningEvidence` wiring; `episodeDuration`;
+`OpinionExperienceRegistry.onDeath` + `ServerLivingEntityEvents.AFTER_DEATH` hook; unit tests
+`OpinionMemoryTest`, `OpinionLearningPolicyTest`.
+
+**Not delivered (explicitly out of scope):** `IdleOpportunityPolicy`, activity director,
+`DiscretionaryIntent`, PLACE/ENTITY/ENVIRONMENT/PROJECT opinions, disk NBT persistence,
+personality presets.
+
+**Evidence (`CONFIRMED`):** `.\gradlew.bat test` — BUILD SUCCESSFUL, 436 tests, 0 failures.
+
+**MAIBS (`CODE_CONFIRMED`, runtime `UNVERIFIED`):** GAO-2-M1…M5 static scenarios pass; no Goal or
+readiness behavior changes; opinions inert for choice until GAO-3.
+
+**Frontier after:** GAO-3 `IdleOpportunityPolicy` (activity scoring).

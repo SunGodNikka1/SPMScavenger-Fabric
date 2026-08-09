@@ -50,6 +50,14 @@ public final class OpinionExperienceRegistry {
         }
     }
 
+    /** PD-GAO-03 — partial death reset for learned opinions (preference survives). */
+    public static void onDeath(UUID mobId) {
+        MobExperienceContext context = CONTEXTS.get(mobId);
+        if (context != null) {
+            context.opinionMemory().onDeath();
+        }
+    }
+
     public static void remove(UUID mobId) {
         CONTEXTS.remove(mobId);
     }
