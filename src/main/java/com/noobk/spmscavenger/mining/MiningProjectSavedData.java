@@ -204,38 +204,66 @@ public final class MiningProjectSavedData extends SavedData {
     }
 
     /**
-     * Consumes the single probe this offer grants.
+     * TS2-M1 — takes the single probe this offer grants, <b>removing</b> it atomically.
      *
-     * <p>Consumed when the probe <b>executes</b>, not when the consumer is merely scheduled - an
-     * earlier admission failure must never destroy an opportunity nothing inspected. The caller
-     * follows with {@link #beginCooperativeAcquisition} if it found a legitimate target, or
-     * {@link #clearExposure} if it did not.
+     * <p>The earlier version returned the offer without removing it, so "one probe per exposure"
+     * was a comment rather than a mechanism: the same offer could be probed every tick until it
+     * expired. Having the right states is not enough if callers can bypass the transitions.
+     *
+     * <p>Consumed when the probe <b>executes</b>, not when the consumer is merely scheduled — an
+     * admission failure upstream must never destroy an opportunity nothing inspected, which is why
+     * this is called at the probe rather than at {@code canUse} entry.
+     *
+     * <p>Finding nothing therefore needs no cleanup call: the offer is already gone. Finding a
+     * legitimate target requires handing the evidence back to
+     * {@link #beginCooperativeAcquisition}, which re-admits it only for the same session.
      *
      * @return the boundary to inspect, or empty when no probe is on offer
      */
-    public Optional<ExposureOpportunity> consumeExposureProbe(UUID mobId, MiningProject project,
+    public Optional<ExposureOpportunity> takeExposureProbe(UUID mobId, MiningProject project,
             long now) {
         ExposureOpportunity offer = exposures.get(mobId);
         if (!ExposureOpportunityPolicy.offersProbe(offer, project, now)) {
             return Optional.empty();
         }
+        exposures.remove(mobId);
         return Optional.of(offer);
     }
 
-    /** The probe found something: hold the session so vein-follow can finish. */
-    public void beginCooperativeAcquisition(UUID mobId, long now) {
-        ExposureOpportunity offer = exposures.get(mobId);
-        if (offer != null) {
-            exposures.put(mobId, offer.acquiring(now));
+    /**
+     * Re-admits a taken probe as an active acquisition, so vein-follow can finish.
+     *
+     * <p>Requires the evidence a successful take produced. Without that argument the transition
+     * could be driven from whatever happened to be stored, with no proof a probe ran, that it was
+     * still {@code OFFERED}, that it was fresh, or that it belonged to the caller's project.
+     *
+     * @return whether the session was opened
+     */
+    public boolean beginCooperativeAcquisition(
+            UUID mobId, MiningProject project, ExposureOpportunity taken, long now) {
+        if (taken == null || project == null
+                || taken.phase() != ExposureOpportunity.Phase.OFFERED
+                || !taken.belongsTo(project)
+                || now - taken.offeredAt() > ExposureOpportunityPolicy.OFFER_LIFETIME_TICKS) {
+            return false;
         }
+        exposures.put(mobId, taken.acquiring(now));
+        return true;
     }
 
-    /** A cooperative take happened; restart the vein idle clock. */
-    public void noteCooperativeAcquisition(UUID mobId, long now) {
-        ExposureOpportunity offer = exposures.get(mobId);
-        if (offer != null) {
-            exposures.put(mobId, offer.withActivity(now));
+    /**
+     * Restarts the vein idle clock after a cooperative take.
+     *
+     * <p>Only refreshes a live {@code ACQUIRING} session for this project: an {@code OFFERED} offer
+     * must not have its lifetime extended, or the 100-tick freshness bound becomes advisory.
+     */
+    public boolean noteCooperativeAcquisition(UUID mobId, MiningProject project, long now) {
+        ExposureOpportunity active = exposures.get(mobId);
+        if (!ExposureOpportunityPolicy.holdsCooperativeSession(active, project, now)) {
+            return false;
         }
+        exposures.put(mobId, active.withActivity(now));
+        return true;
     }
 
     public void clearExposure(UUID mobId) {

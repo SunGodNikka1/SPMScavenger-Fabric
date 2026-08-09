@@ -60,7 +60,7 @@ class ExposureOpportunityTest {
         assertFalse(ExposureOpportunityPolicy.offersProbe(
                         store.exposureOf(MOB).orElseThrow(), restarted, STARTED + 2),
                 "an opportunity belongs to the session that cut it, not to the location");
-        assertTrue(store.consumeExposureProbe(MOB, restarted, STARTED + 2).isEmpty());
+        assertTrue(store.takeExposureProbe(MOB, restarted, STARTED + 2).isEmpty());
     }
 
     @Test
@@ -99,11 +99,11 @@ class ExposureOpportunityTest {
         assertTrue(store.exposureOf(MOB).isPresent());
         assertSame(ExposureOpportunity.Phase.OFFERED, store.exposureOf(MOB).orElseThrow().phase());
 
-        // Probe executes, finds nothing: the caller clears it.
-        assertTrue(store.consumeExposureProbe(MOB, project, STARTED + 1).isPresent());
-        store.clearExposure(MOB);
+        // Probe executes, finds nothing: the take itself already released it.
+        assertTrue(store.takeExposureProbe(MOB, project, STARTED + 1).isPresent());
         assertTrue(store.exposureOf(MOB).isEmpty(),
-                "a probe that ran and found nothing releases the tunnel immediately");
+                "a probe that ran and found nothing releases the tunnel immediately, with no "
+                        + "cleanup call the caller could forget");
     }
 
     @Test
@@ -112,8 +112,7 @@ class ExposureOpportunityTest {
         MiningProject project = tunnelProject();
         long stale = STARTED + ExposureOpportunityPolicy.OFFER_LIFETIME_TICKS + 1;
 
-        assertTrue(store.consumeExposureProbe(MOB, project, STARTED + 1).isPresent());
-        assertTrue(store.consumeExposureProbe(MOB, project, stale).isEmpty(),
+        assertTrue(store.takeExposureProbe(MOB, project, stale).isEmpty(),
                 "the mob has walked away; sending it back to that wall is not cooperation");
     }
 
@@ -124,7 +123,9 @@ class ExposureOpportunityTest {
         MiningProjectSavedData store = storeWithOffer(STARTED);
         MiningProject project = tunnelProject();
 
-        store.beginCooperativeAcquisition(MOB, STARTED + 5);
+        ExposureOpportunity taken = store.takeExposureProbe(MOB, project, STARTED + 5)
+                .orElseThrow();
+        assertTrue(store.beginCooperativeAcquisition(MOB, project, taken, STARTED + 5));
         assertTrue(ExposureOpportunityPolicy.holdsCooperativeSession(
                         store.exposureOf(MOB).orElseThrow(), project, STARTED + 5),
                 "the producer must not reacquire between two ores of the same vein");
@@ -133,7 +134,7 @@ class ExposureOpportunityTest {
         long t = STARTED + 5;
         for (int ore = 0; ore < 6; ore++) {
             t += ExposureOpportunityPolicy.VEIN_IDLE_TICKS - 1;
-            store.noteCooperativeAcquisition(MOB, t);
+            assertTrue(store.noteCooperativeAcquisition(MOB, project, t));
             assertTrue(ExposureOpportunityPolicy.holdsCooperativeSession(
                             store.exposureOf(MOB).orElseThrow(), project, t),
                     "ore " + ore + ": vein-follow is still productive work");
@@ -149,7 +150,9 @@ class ExposureOpportunityTest {
     void mustNotHappen_afreshCutStealsAnActiveAcquisition() {
         MiningProjectSavedData store = storeWithOffer(STARTED);
         MiningProject project = tunnelProject();
-        store.beginCooperativeAcquisition(MOB, STARTED + 5);
+        ExposureOpportunity taken = store.takeExposureProbe(MOB, project, STARTED + 5)
+                .orElseThrow();
+        store.beginCooperativeAcquisition(MOB, project, taken, STARTED + 5);
 
         store.offerExposure(MOB, project, List.of(new BlockPos(9, 12, 0)), STARTED + 6);
 
@@ -201,5 +204,72 @@ class ExposureOpportunityTest {
         assertFalse(corridor.nextStandCell().equals(stair.nextStandCell()),
                 "sharing the plan type must not mean sharing the drop - a corridor that inherited "
                         + "DROP_TOO_DEEP logic would reject flat ground");
+    }
+
+    // ---- TS2-M1: the store enforces the state machine, not just describes it ----
+
+    @Test
+    void mustNotHappen_theSameOfferIsProbedTwice() {
+        MiningProjectSavedData store = storeWithOffer(STARTED);
+        MiningProject project = tunnelProject();
+
+        assertTrue(store.takeExposureProbe(MOB, project, STARTED + 1).isPresent(),
+                "first take inspects the boundary");
+        assertTrue(store.takeExposureProbe(MOB, project, STARTED + 2).isEmpty(),
+                "one probe per exposure event must be a mechanism, not a comment - the previous "
+                        + "version returned the same offer every tick until it expired");
+    }
+
+    @Test
+    void mustNotHappen_anAcquisitionBeginsWithoutASuccessfulTake() {
+        MiningProjectSavedData store = storeWithOffer(STARTED);
+        MiningProject project = tunnelProject();
+
+        assertFalse(store.beginCooperativeAcquisition(MOB, project, null, STARTED + 1),
+                "no probe evidence, no session");
+        assertSame(ExposureOpportunity.Phase.OFFERED, store.exposureOf(MOB).orElseThrow().phase(),
+                "and the stored offer is untouched by the attempt");
+    }
+
+    @Test
+    void mustNotHappen_anAcquisitionBeginsWithOldSessionEvidence() {
+        MiningProjectSavedData store = storeWithOffer(STARTED);
+        MiningProject project = tunnelProject();
+        ExposureOpportunity taken = store.takeExposureProbe(MOB, project, STARTED + 1)
+                .orElseThrow();
+
+        MiningProject restarted = MiningProject.start(
+                MiningProjectMode.TUNNEL_SEARCH, ORIGIN, Direction.EAST,
+                MiningBudget.controlledDescentDefaults(), STARTED + 1);
+
+        assertFalse(store.beginCooperativeAcquisition(MOB, restarted, taken, STARTED + 2),
+                "evidence cut by the previous tunnel cannot open a session for the next one");
+        assertTrue(store.exposureOf(MOB).isEmpty());
+    }
+
+    @Test
+    void mustNotHappen_anAcquisitionBeginsFromStaleEvidence() {
+        MiningProjectSavedData store = storeWithOffer(STARTED);
+        MiningProject project = tunnelProject();
+        ExposureOpportunity taken = store.takeExposureProbe(MOB, project, STARTED + 1)
+                .orElseThrow();
+        long stale = STARTED + ExposureOpportunityPolicy.OFFER_LIFETIME_TICKS + 1;
+
+        assertFalse(store.beginCooperativeAcquisition(MOB, project, taken, stale),
+                "a probe held across a long interruption must not reopen a session on arrival");
+    }
+
+    @Test
+    void mustNotHappen_anOfferedExposureHasItsLifetimeRefreshed() {
+        MiningProjectSavedData store = storeWithOffer(STARTED);
+        MiningProject project = tunnelProject();
+
+        assertFalse(store.noteCooperativeAcquisition(MOB, project, STARTED + 50),
+                "only a live ACQUIRING session may refresh - otherwise the 100-tick freshness "
+                        + "bound becomes advisory and an offer never expires");
+
+        long stale = STARTED + ExposureOpportunityPolicy.OFFER_LIFETIME_TICKS + 1;
+        assertTrue(store.takeExposureProbe(MOB, project, stale).isEmpty(),
+                "so it still expires on schedule");
     }
 }
