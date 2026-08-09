@@ -2,6 +2,7 @@ package com.noobk.spmscavenger.mining;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import com.noobk.spmscavenger.goal.ExploringGoal;
 import net.minecraft.nbt.CompoundTag;
 
 import java.util.Objects;
@@ -16,7 +17,7 @@ public record MiningExecutionCommitment(
         Direction heading,
         BlockPos target,
         long claimedAt,
-        long expiresAt) {
+        int authorityTicks) {
 
     public MiningExecutionCommitment {
         Objects.requireNonNull(kind, "kind");
@@ -54,18 +55,22 @@ public record MiningExecutionCommitment(
      */
     public static MiningExecutionCommitment caveContinuation(
             MiningTransition handoff, long now, int authorityTicks) {
-        long expiresAt = now + Math.max(0, authorityTicks);
         return new MiningExecutionCommitment(
                 ExecutionCommitmentKind.CAVE_CONTINUATION,
                 handoff.at(),
                 handoff.heading(),
                 handoff.target(),
                 now,
-                expiresAt);
+                Math.max(0, authorityTicks));
     }
 
+    /**
+     * MI-14C2-M2: asks the lifetime's owner, rather than re-implementing the boundary. A commitment
+     * is alive for exactly as long as the expedition it protects would be.
+     */
     public boolean isActive(long now) {
-        return kind == ExecutionCommitmentKind.CAVE_CONTINUATION && now < expiresAt;
+        return kind == ExecutionCommitmentKind.CAVE_CONTINUATION
+                && !ExploringGoal.expeditionExpired(claimedAt, now, authorityTicks);
     }
 
     public boolean blocksControlledDescentRestart(long now) {
@@ -79,7 +84,7 @@ public record MiningExecutionCommitment(
         tag.putString("heading", heading.getName());
         tag.putLong("target", target.asLong());
         tag.putLong("claimedAt", claimedAt);
-        tag.putLong("expiresAt", expiresAt);
+        tag.putInt("authorityTicks", authorityTicks);
         return tag;
     }
 
@@ -91,6 +96,15 @@ public record MiningExecutionCommitment(
                 heading == null ? Direction.NORTH : heading,
                 BlockPos.of(tag.getLong("target")),
                 tag.getLong("claimedAt"),
-                tag.getLong("expiresAt"));
+                loadAuthorityTicks(tag));
+    }
+
+    /** Pre-M2 saves stored an absolute deadline; recover the window it represented. */
+    private static int loadAuthorityTicks(CompoundTag tag) {
+        if (tag.contains("authorityTicks")) {
+            return tag.getInt("authorityTicks");
+        }
+        long legacyWindow = tag.getLong("expiresAt") - tag.getLong("claimedAt");
+        return (int) Math.max(0L, Math.min(Integer.MAX_VALUE, legacyWindow));
     }
 }

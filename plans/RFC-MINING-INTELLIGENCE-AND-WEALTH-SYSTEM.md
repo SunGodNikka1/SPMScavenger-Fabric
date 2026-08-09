@@ -1118,6 +1118,44 @@ Six pre-existing call sites were updated explicitly. One,
 from the admission window — and now measures from the authority window with its behaviour under test
 unchanged.
 
+### MI-14C2-M2 — predicate drift at the shared boundary (`IMPLEMENTED`, 330 tests)
+
+Found by the MAIBS re-pass over C2-R2, on the tick after it shipped. **Sharing the constant did not
+share the lifetime.**
+
+```text
+commitment   now < claimedAt + 2400        dead at claim+2400
+expedition   now - startedTick > 2400      alive at claim+2400, stale at +2401
+```
+
+At exactly `claim + 2400` the expedition was still legally running and its authority had already
+lapsed. In that one tick the intent falls to `NONE`, `ExploringGoal` reverts to `EXPLORING_ORDINARY`,
+and `mayStartControlledDescent` reopens — both outcomes C2-R2 exists to prevent. Whether the
+`GoalSelector` does anything observable in a single cycle is runtime-dependent, and irrelevant:
+**MAIBS does not accept an architectural invariant that is false for even one scheduler cycle**
+(User).
+
+**Repair — share the semantics, not the number.** `ExploringGoal.expeditionExpired(startedTick, now,
+lifetimeTicks)` is now the single definition, called by both expedition-staleness sites and by
+`MiningExecutionCommitment.isActive`. The record stores `authorityTicks` (the window) instead of
+`expiresAt` (a derived deadline), so there is no second place for a boundary to live. Pre-M2 saves
+recover the window from `expiresAt - claimedAt`.
+
+The window stays an explicit parameter, so the predicate is shared without an implicit default —
+the property C2-R2 deliberately established.
+
+**Tests (4 new):** the exact `claim + 2400` tick, asserting expedition-alive implies
+authority-alive *and* no descent admissible; both must also end together at +2401; an exhaustive
+agreement sweep over windows `{0, 1, 40, 400, 2400}` and every age through `window + 2`, so a future
+local comparison fails at build time instead of in a one-tick runtime window; and legacy-save window
+recovery.
+
+**Lesson (`PROVEN`, promote).** *Deduplicating a constant does not deduplicate a boundary.* Two
+correct-looking comparisons over the same shared number produced an off-by-one invariant violation.
+Where two subsystems must agree on a lifetime, share the **predicate**. This is the third instance in
+this workstream of a defect that survives because two places agree on data and disagree on
+interpretation (R2c wiring, C1 grace clock, C2-M2).
+
 ### Design question for the user (not a defect)
 
 `CraftTorchesGoal` `YIELD`s under `CONTROLLED_DESCENT`. Torch supply is a descent prerequisite, so a
@@ -3182,6 +3220,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | User + Agent_Claude | **MI-14C2-M2 `IMPLEMENTED`** (330 tests). MAIBS re-pass found predicate drift surviving the C2-R2 constant unification: commitment `now < claimedAt + 2400` vs expedition `now - startedTick > 2400` left one tick where the expedition was alive and its authority gone, reopening both `CAVE_HANDOFF -> NONE` and `mayStartControlledDescent`. Repaired by sharing the predicate (`ExploringGoal.expeditionExpired`) and storing `authorityTicks` instead of a derived `expiresAt`; legacy saves recover the window. Lesson `PROVEN`: deduplicating a constant does not deduplicate a boundary |
 | 2026-08-09 | Agent_Claude + User | **MI-14C2-R2 `IMPLEMENTED`** (327 tests): cave-handoff authority now runs from the claim (`now + ExploringGoal.MAX_EXPEDITION_TICKS`), not from discovery. User `LOCKED` the authority bound to the expedition's own lifetime rather than a route-derived estimate — a smaller invented budget could expire while the expedition it protects is still legally running. Constant made public rather than copied; `claimCaveContinuation` requires the window explicitly (no defaulted overload). Two corrections to my MAIBS report: admission is strictly `< 400` (`expired()` is `>=`), and the suite was 321 after Protected Interruption Handling, not 310 |
 | 2026-08-09 | Agent_Claude | MAIBS control-plane pass over shipped MI-14C1/C1-R1/C2/C2-R1/C3 (310 tests). Gate **FAIL: MI-14C2-M1** — the cave-continuation commitment expires on the *discovery* clock (`handoff.tick() + 400`), the same instant admission closes, so it grants ~0 protected travel for a 48-block route and Loop B returns mid-walk; `claimedAt` is stored and never read. Second-order: expiry also unblocks `mayStartControlledDescent`, so the mob can start a new staircase beside the cave it just found. Repair MI-14C2-R2 = separate admission (from discovery) from authority (from claim). Also recorded my own C1 defect (TEMPORARY grace measured from assignment age) repaired by another agent as C1-R1. Loop D confirmed correctly `NEUTRAL`; bounded authority confirmed — combat/survival unclassified |
 | 2026-08-09 | Agent_Codex | **MI-14C3 MAIBS-1 `FAIL`** — active 2400-tick total budget shadows strict >2400 progress timeout; protected MOVE owners bypass contention without another blocker; three NOT FOUND probes; repair required before Loop D |

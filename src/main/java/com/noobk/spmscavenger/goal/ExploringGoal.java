@@ -84,6 +84,23 @@ public final class ExploringGoal extends Goal {
      * mining package would let the two drift apart silently.
      */
     public static final int MAX_EXPEDITION_TICKS = 2400;
+
+    /**
+     * MI-14C2-M2 — the single definition of "this expedition has outlived its window".
+     *
+     * <p>Sharing the constant was not enough. The commitment protecting a cave continuation asked
+     * {@code now < claimedAt + 2400} while the expedition itself asked
+     * {@code now - startedTick > 2400}, so at exactly {@code claim + 2400} the expedition was still
+     * legally running and its authority was already gone. One tick, but it falsifies the invariant
+     * outright: authority must not expire while the continuation it protects is alive. Two copies of
+     * a boundary are a delayed fuse even when the number matches.
+     *
+     * @param lifetimeTicks window to measure against, so an authority window stays an explicit
+     *     decision at the call site rather than an implicit default
+     */
+    public static boolean expeditionExpired(long startedTick, long now, int lifetimeTicks) {
+        return now - startedTick > lifetimeTicks;
+    }
     private static final int STALL_TICKS = 100;
     private static final int NAVIGATION_DONE_GRACE_TICKS = 20;
     private static final int COOLDOWN_TICKS = 600;
@@ -160,7 +177,7 @@ public final class ExploringGoal extends Goal {
                 return false;
             }
             readiness.consume(now + COOLDOWN_TICKS);
-        } else if (now - expedition.startedTick > MAX_EXPEDITION_TICKS) {
+        } else if (expeditionExpired(expedition.startedTick, now, MAX_EXPEDITION_TICKS)) {
             abandon(EndReason.STALE, now);
             return false;
         }
@@ -238,7 +255,7 @@ public final class ExploringGoal extends Goal {
             descentSearch.recordTick();
             descentSearch.recordPosition(mob.blockPosition());
         }
-        if (now - expedition.startedTick > MAX_EXPEDITION_TICKS) {
+        if (expeditionExpired(expedition.startedTick, now, MAX_EXPEDITION_TICKS)) {
             abandon(EndReason.STALE, now);
             return;
         }

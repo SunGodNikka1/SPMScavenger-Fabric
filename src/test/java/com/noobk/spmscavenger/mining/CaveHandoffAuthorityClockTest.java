@@ -91,9 +91,73 @@ class CaveHandoffAuthorityClockTest {
         store.claimCaveContinuation(MOB, handoff(), DISCOVERY, AUTHORITY);
 
         assertTrue(store.hasActiveCaveContinuation(MOB, DISCOVERY + AUTHORITY - 1));
-        assertFalse(store.hasActiveCaveContinuation(MOB, DISCOVERY + AUTHORITY),
+        assertFalse(store.hasActiveCaveContinuation(MOB, DISCOVERY + AUTHORITY + 1),
                 "a mob that never arrives must release the claim - an unbounded commitment is the "
                         + "same deadlock the lease work removed");
+    }
+
+    /**
+     * MI-14C2-M2 — the exact tick the previous revision got wrong.
+     *
+     * <p>Sharing the 2400 constant was not enough: the commitment asked
+     * {@code now < claimedAt + 2400} while {@code ExploringGoal} asks
+     * {@code now - startedTick > 2400}. At exactly {@code claim + 2400} the expedition was still
+     * legally running and its authority had already lapsed — one tick in which intent falls to
+     * {@code NONE}, exploring reverts to ordinary, and {@code mayStartControlledDescent} reopens.
+     * A one-tick hole is still a false invariant, and one scheduler cycle is all a goal needs.
+     */
+    @Test
+    void mustNotHappen_authorityLapsesOnTheTickTheExpeditionIsStillAlive() {
+        MiningProjectSavedData store = storeWithPendingHandoff();
+        store.claimCaveContinuation(MOB, handoff(), DISCOVERY, AUTHORITY);
+
+        long lastLegalTick = DISCOVERY + AUTHORITY;
+        assertFalse(ExploringGoal.expeditionExpired(DISCOVERY, lastLegalTick, AUTHORITY),
+                "precondition: the expedition is still alive at exactly start + lifetime");
+        assertTrue(store.hasActiveCaveContinuation(MOB, lastLegalTick),
+                "so its authority must be too - the two boundaries are one definition now");
+        assertFalse(MiningDirector.mayStartControlledDescent(
+                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, lastLegalTick),
+                "and no fresh staircase may slip through that tick");
+
+        long firstStaleTick = DISCOVERY + AUTHORITY + 1;
+        assertTrue(ExploringGoal.expeditionExpired(DISCOVERY, firstStaleTick, AUTHORITY));
+        assertFalse(store.hasActiveCaveContinuation(MOB, firstStaleTick),
+                "they must also end together, or authority outlives what it protects");
+    }
+
+    /**
+     * Guards the repair itself: both sides must go on asking the same question. A future edit that
+     * reintroduces a local comparison fails here rather than in a one-tick runtime window.
+     */
+    @Test
+    void mustHappen_commitmentAndExpeditionShareOneLifetimeBoundary() {
+        for (int window : new int[] {0, 1, 40, ADMISSION, AUTHORITY}) {
+            MiningProjectSavedData store = storeWithPendingHandoff();
+            assertTrue(store.claimCaveContinuation(MOB, handoff(), DISCOVERY, window));
+
+            for (long age = 0; age <= window + 2L; age++) {
+                long now = DISCOVERY + age;
+                assertEquals(
+                        !ExploringGoal.expeditionExpired(DISCOVERY, now, window),
+                        store.hasActiveCaveContinuation(MOB, now),
+                        "window=" + window + " age=" + age
+                                + ": authority and expedition lifetime disagreed");
+            }
+        }
+    }
+
+    /** A pre-M2 save stored an absolute deadline; the window it meant must survive the upgrade. */
+    @Test
+    void mustHappen_legacyCommitmentsKeepTheirWindow() {
+        MiningExecutionCommitment claimed =
+                MiningExecutionCommitment.caveContinuation(handoff(), DISCOVERY, AUTHORITY);
+        net.minecraft.nbt.CompoundTag legacy = claimed.save();
+        legacy.remove("authorityTicks");
+        legacy.putLong("expiresAt", DISCOVERY + AUTHORITY);
+
+        assertEquals(AUTHORITY, MiningExecutionCommitment.load(legacy).authorityTicks(),
+                "a world saved before M2 must not silently lose its authority window");
     }
 
     /** While the walk is protected, the director must not hand out a fresh staircase. */
