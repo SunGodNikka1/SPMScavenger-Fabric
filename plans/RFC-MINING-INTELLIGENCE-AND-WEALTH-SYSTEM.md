@@ -1020,6 +1020,86 @@ Order: MI-14C -> `TUNNEL_SEARCH` executor -> the reason gains a real consumer ->
 mode -> genuine multi-mode `MiningDirector` selection over modes that correspond to executable
 behaviour.
 
+### MI-14C delivery state (reconciled 2026-08-09, suite **310 tests**)
+
+| Task | State | Evidence |
+| --- | --- | --- |
+| MI-14C1 lease + revocation | `IMPLEMENTED` | `ExecutionBlocker`, `ExecutionLeasePolicy`, `MiningExecutionLease`, director `enforceLease`/`authorizeExecution`; `canUse` reduced to lease query |
+| **MI-14C1-R1 episode clock** | `IMPLEMENTED` (repair of a defect in C1) | grace now measured from `blockedSince`, not assignment age |
+| MI-14C2 arbitration | `IMPLEMENTED` | `ExecutionIntent`, `ExecutionIntentPolicy`, `MiningExecutionArbiter`, `MiningExecutionGuard`, `MiningGoalKind`, `MoveHolderClassifier`, `MoveContentionPolicy`, `SchedulerConflictPolicy`; guard wired into all five participating goals |
+| MI-14C2-R1 commitment | `IMPLEMENTED` | `MiningExecutionCommitment` + `claimCaveContinuation` — authority survives transition consumption |
+| MI-14C3 progress lease | `IMPLEMENTED` | `PROGRESS_LEASE_TICKS`, `markProgress`, `progressPausedTicks` excluding blocked time |
+
+**C1 defect, recorded because it was mine (`Agent_Claude`).** `ExecutionLeasePolicy` measured the
+`TEMPORARY` grace as `now - assignedAt`. A healthy staircase assigned 5000 ticks earlier met its
+first zombie and was revoked instantly — every long-running dig destroyed by the first mob that
+looked at it. My own exhaustive invariant test passed, because the invariant was framed as *nothing
+is held forever* and never asked *is anything released too early*. Repaired by another agent with a
+per-episode clock (`recordBlocker`/`blockedSince`). Same failure class as R2c: **a test built from
+the implementation's own framing proves self-consistency, not correctness.**
+
+**Loop D correctly stayed out.** `TUNNEL_HANDOFF_PENDING` maps to `NEUTRAL` for every goal kind, so
+the arbiter grants no authority to a mode with no executor. Verified in `MiningExecutionArbiter`.
+
+**Bounded authority holds.** `MiningGoalKind.classify` returns empty for combat, survival and SPM
+host goals, so arbitration cannot suppress them. `EnvironmentalEscapeGoal` (0), `SeekShelterGoal`
+(2) and `PlaceTorchGoal` (4) are outside the matrix by construction.
+
+### MAIBS control-plane pass — `FAIL: MI-14C2-M1` (`CODE_CONFIRMED`)
+
+**The continuation commitment grants no additional protected time.**
+
+```text
+discovery tick T
+   |<---------------- 400 ticks: handoff ADMISSIBLE ---------------->|
+   |                                        ^ accept at T+399        |
+   |                                        |<-- 1 tick authority -->|
+                                                          commitment expires T+400
+```
+
+- `ExploringGoal.acceptCaveHandoff` admits while `now - transition.tick() <= 400`.
+- `MiningExecutionCommitment.caveContinuation` sets `expiresAt = handoff.tick() + 400` — **the same
+  instant the admission window closes**.
+- Protected travel is therefore `400 - ageAtAcceptance`, which can be ~0 ticks.
+- `claimedAt = now` is stored and **never read** — the field the design needed and did not use.
+
+The stated purpose of C2-R1 is authority that "survives transition consumption until the executor
+finishes". It survives consumption, but expires on the *discovery* clock, so it cannot outlive the
+window it was built to outlive.
+
+**Observable failure.** The continuation route is `CAVE_HANDOFF_ROUTE_BLOCKS = 48`. Underground
+pathing over 48 blocks is marginal inside 400 ticks (20s) even from a fresh handoff. On expiry the
+intent falls to `NONE`, `ExploringGoal` is reclassified `EXPLORING_ORDINARY` (`NEUTRAL`), and
+priority-3 chores become admissible again and outrank priority 8 — **Loop B returns mid-walk**.
+
+**Second-order, worse than losing the cave.** `hasActiveCaveContinuation` is also the only clause
+stopping `mayStartControlledDescent` from re-assigning a descent during the walk. When the
+commitment expires early the mob does not merely abandon the cave it found — it may start digging a
+brand-new staircase while standing next to one.
+
+**Repair (MI-14C2-R2), small:** separate admission from authority, the same two-clock split C3
+already applies to progress.
+
+```text
+admission window  = 400 ticks from DISCOVERY   (unchanged: is this handoff still relevant?)
+travel authority  = N ticks from CLAIM         (new: how long may the walk be protected?)
+```
+
+`expiresAt = claimedAt + CAVE_CONTINUATION_TRAVEL_TICKS`. Bound the travel budget on its own terms;
+re-derive `N` from the 48-block route rather than reusing 400 because it is nearby.
+
+**Falsifying tests:** (1) a handoff accepted at age 399 retains authority for the whole travel
+budget; (2) authority still expires — a mob that never arrives releases it; (3) while authority
+holds, `mayStartControlledDescent` is false; (4) an expired *admission* window still refuses a stale
+handoff, so widening authority must not widen admission.
+
+### Design question for the user (not a defect)
+
+`CraftTorchesGoal` `YIELD`s under `CONTROLLED_DESCENT`. Torch supply is a descent prerequisite, so a
+mob that runs dry mid-staircase cannot craft more until the descent ends. Not a deadlock — the
+descent terminates — but it is the "maybe compatible if deliberately required" case raised when the
+matrix was specified, and it is still unresolved.
+
 ---
 
 ## Topic: MI-14 design review (Gate MAIBS-1, pre-implementation)
@@ -3077,6 +3157,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Claude | MAIBS control-plane pass over shipped MI-14C1/C1-R1/C2/C2-R1/C3 (310 tests). Gate **FAIL: MI-14C2-M1** — the cave-continuation commitment expires on the *discovery* clock (`handoff.tick() + 400`), the same instant admission closes, so it grants ~0 protected travel for a 48-block route and Loop B returns mid-walk; `claimedAt` is stored and never read. Second-order: expiry also unblocks `mayStartControlledDescent`, so the mob can start a new staircase beside the cave it just found. Repair MI-14C2-R2 = separate admission (from discovery) from authority (from claim). Also recorded my own C1 defect (TEMPORARY grace measured from assignment age) repaired by another agent as C1-R1. Loop D confirmed correctly `NEUTRAL`; bounded authority confirmed — combat/survival unclassified |
 | 2026-08-09 | Agent_Codex | **MI-14C3 MAIBS-1 `FAIL`** — active 2400-tick total budget shadows strict >2400 progress timeout; protected MOVE owners bypass contention without another blocker; three NOT FOUND probes; repair required before Loop D |
 | 2026-08-09 | User + Agent_Codex | **MI-14C3-R1 `IMPLEMENTED`** — user locked required-flag taxonomy, condition-bound safety pause, player-order authority, pre-start pause, and 400-tick window; task-30 C3-F1…F7 + revoke→reassign repair; 321-test clean build; static MAIBS `PASS`, runtime `UNVERIFIED` |
 | 2026-08-09 | User + Agent_Codex | **MI-14C3-R1 `PROPOSED / REOPEN_REQUESTED`** — split arbitration preemptibility from lease availability; safety pause, command prevent/revoke, separate pre-start pause accounting; all conflicting flags incl. LOOK; C3-F1…F7; evidence-derived 400-tick window proposed, not locked |
@@ -3962,3 +4043,30 @@ falsification or a separate Loop-D/Tunnel Search product decision. No Tunnel Sea
 
 **RFC fields updated:** identity, MI-14C3/R1 topic, D-MIW-040, tasks, gates, user approval, change
 log, and this contribution. Evidence: `.superpowers/sdd/task-30-report.md`.
+
+---
+
+### Contribution — Agent_Claude (MAIBS control-plane pass, MI-14C)
+
+**Agent:** `Agent_Claude`
+**Date/Session:** 2026-08-09
+**Contribution type:** `REVIEW / GATE`
+
+**Frontier before:** RFC listed MI-14C1/C2/C3 as `PROPOSED`. Reality: all three shipped, plus two
+repairs (C1-R1 episode clock, C2-R1 commitment). The RFC was behind the code, again.
+
+**Action:** Reconciled the MI-14C topic against source and ran the control-plane MAIBS pass.
+
+- **`MI-14C2-M1` (`CODE_CONFIRMED`, gate `FAIL`)** — continuation commitment expires on the
+  discovery clock, granting ~0 protected travel; `claimedAt` unused; Loop B returns mid-walk;
+  second-order re-assignment of a fresh descent beside the found cave.
+- Confirmed Loop D stayed out of arbitration (`TUNNEL_HANDOFF_PENDING` -> `NEUTRAL`).
+- Confirmed bounded authority (combat/survival/shelter/torch-placement unclassified).
+- Recorded my own C1 grace-clock defect and its repair rather than quietly inheriting the fix.
+- Corrected one of my own probes mid-pass: `putCommitment` has no direct callers, which looked like
+  dead wiring until `claimCaveContinuation` was found. Reported only after the narrower probe
+  failed, per AV-1.
+
+**Frontier after:** **MI-14C2-R2 `READY`** (two-clock split for continuation authority). Then
+`TUNNEL_SEARCH` executor, then multi-mode director selection. Runtime remains `UNVERIFIED`
+throughout — no lease, arbitration decision or commitment has been observed in a running game.
