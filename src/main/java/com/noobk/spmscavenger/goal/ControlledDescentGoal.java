@@ -12,6 +12,7 @@ import com.noobk.spmscavenger.mining.ControlledDescentCaveHandoff;
 import com.noobk.spmscavenger.mining.MiningProject;
 import com.noobk.spmscavenger.mining.MiningProjectEnd;
 import com.noobk.spmscavenger.mining.MiningProjectSavedData;
+import com.noobk.spmscavenger.mining.MiningTransition;
 import com.noobk.spmscavenger.mining.NaturalDescentExhaustionPolicy;
 import com.noobk.spmscavenger.mining.NaturalDescentStatus;
 import com.noobk.spmscavenger.mining.StairStepPlan;
@@ -79,6 +80,15 @@ public final class ControlledDescentGoal extends Goal {
         MiningProject active = activeProject(level);
         if (active != null && active.isControlledDescent()) {
             return true;
+        }
+        // MI-14A: an unconsumed SEARCH_BUDGET_EXHAUSTED or HANDOFF_TUNNEL_SEARCH is a claim on the
+        // next decision. Without it the loop is: exhaust budget -> project deleted -> descent
+        // pressure unchanged -> exhausted again -> fresh descent in the same area, indefinitely.
+        // Checked after the resume branch so an already-running project is never interrupted.
+        if (MiningProjectSavedData.get(level).pendingTransition(mob.getUUID())
+                .filter(MiningTransition::blocksControlledDescentRestart)
+                .isPresent()) {
+            return false;
         }
         if (!readiness.hasDescentPressure()) {
             return false;
@@ -320,10 +330,15 @@ public final class ControlledDescentGoal extends Goal {
     }
 
     private void finish(ServerLevel level, MiningProjectEnd end) {
+        // MI-14A: record the outcome *with* the data a consumer needs, atomically with completion.
+        // completeProject deletes terminal projects, so a reason emitted without a payload here is
+        // gone before anything can read it.
+        MiningTransition transition = MiningTransition.of(
+                project, end, mob.blockPosition(), level.getGameTime());
         SpmScavenger.LOGGER.info(
-                "[spmscavenger] controlled descent ended entity={} reason={} depth={}",
-                mob.getId(), end, project.depthBelowOrigin());
-        MiningProjectSavedData.get(level).completeProject(mob.getUUID(), end);
+                "[spmscavenger] controlled descent ended entity={} reason={} depth={} at={} heading={}",
+                mob.getId(), end, project.depthBelowOrigin(), transition.at(), transition.heading());
+        MiningProjectSavedData.get(level).completeProject(mob.getUUID(), end, transition);
         project = null;
         currentStep = null;
         stop();

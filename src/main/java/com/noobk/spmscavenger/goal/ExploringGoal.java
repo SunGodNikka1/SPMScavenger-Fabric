@@ -8,6 +8,8 @@ import com.noobk.spmscavenger.DescentHeadingPolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.WorkDemandPolicy;
+import com.noobk.spmscavenger.mining.MiningTransition;
+import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.SpmScavenger;
 import com.noobk.spmscavenger.mining.NaturalDescentExhaustionPolicy;
 import com.noobk.spmscavenger.mining.NaturalDescentSearchState;
@@ -36,6 +38,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -63,6 +66,10 @@ public final class ExploringGoal extends Goal {
     private static final int LANDING_PROBES_PER_HOP = 8;
     /** Shortest hop worth asking for; below this the mob is better off wandering for a moment. */
     private static final double MIN_PATH_STEP = 6.0;
+    /** A cave handoff older than this is stale — the mob or the world has moved on. */
+    private static final int CAVE_HANDOFF_LIFETIME_TICKS = 400;
+    /** Cave continuation is short and local; the opening is right there. */
+    private static final double CAVE_HANDOFF_ROUTE_BLOCKS = 48.0;
     /** A landing this far above or below the mob is a roof or a cliff top, not the next step. */
     private static final int MAX_LANDING_ELEVATION = 16;
     private static final int MAX_WAYPOINT_FAILURES = 3;
@@ -114,6 +121,16 @@ public final class ExploringGoal extends Goal {
         if (yieldToStayAnchor(level, now)) {
             return false;
         }
+
+        // MI-14A: a cave the mob just dug into outranks whatever it was doing before. Checked ahead
+        // of the retry window and of readiness, because the stale expedition is exactly what would
+        // otherwise win: stop() deliberately preserves it, so without this the mob breaks into a
+        // cave, the project is deleted, and it resumes walking to a surface waypoint chosen minutes
+        // earlier.
+        if (acceptCaveHandoff(level, now)) {
+            return true;
+        }
+
         // A failed plan releases MOVE for this window instead of standing on it, so the mob keeps
         // moving under local wandering while the route re-resolves.
         if (now < retryAfterTick) {
@@ -356,6 +373,47 @@ public final class ExploringGoal extends Goal {
         expedition = invited;
         expedition.companionsInvited = true; // a guest does not recruit its own party
         readiness.consume(now + COOLDOWN_TICKS);
+        return true;
+    }
+
+    /**
+     * MI-14A — consume a pending {@code CAVE_FOUND} transition and rebase onto the opening.
+     *
+     * <p>Deliberately destructive: the previous expedition, its waypoints and its navigation are
+     * discarded rather than resumed. That is the point of the handoff — the world changed under the
+     * old plan, because the mob mined its way into somewhere better.
+     *
+     * @return true when a cave-continuation expedition was installed and planning should proceed
+     */
+    private boolean acceptCaveHandoff(ServerLevel level, long now) {
+        ScavengerConfig cfg = ScavengerConfig.get();
+        MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        Optional<MiningTransition> pending = store.pendingTransition(mob.getUUID())
+                .filter(MiningTransition::isCaveContinuation)
+                .filter(transition -> !transition.expired(now, CAVE_HANDOFF_LIFETIME_TICKS));
+        if (pending.isEmpty()) {
+            return false;
+        }
+        MiningTransition handoff = pending.get();
+
+        ExpeditionState rebased = createExpedition(
+                level, cfg,
+                handoff.heading().getStepX(), handoff.heading().getStepZ(),
+                CAVE_HANDOFF_ROUTE_BLOCKS, 0.0);
+        if (rebased == null) {
+            // Leave it pending: failing to plan is not a reason to forget the cave.
+            return false;
+        }
+
+        store.consumeTransition(mob.getUUID());
+        mob.getNavigation().stop();
+        navigationState = null;
+        expedition = rebased;
+        expedition.companionsInvited = true; // a handoff is not a recruiting opportunity
+        readiness.consume(now + COOLDOWN_TICKS);
+        SpmScavenger.LOGGER.info(
+                "[spmscavenger] cave handoff accepted entity={} at={} heading={}",
+                mob.getId(), handoff.at(), handoff.heading());
         return true;
     }
 

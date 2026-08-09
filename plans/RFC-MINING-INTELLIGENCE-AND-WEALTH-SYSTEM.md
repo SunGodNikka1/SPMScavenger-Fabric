@@ -406,6 +406,142 @@ revised).
 
 ---
 
+## Topic: MI-14 design review (Gate MAIBS-1, pre-implementation)
+
+**Status:** `FAIL — ARCHITECTURE_DEFECT`. The layered design is right; its **entry point is wrong**.
+**Analyst:** `Agent_Claude`, snapshot 01:00. Source-verified against the shipped MI-7 stack.
+
+### Reconciliation — what MI-14 actually inherits (`CODE_CONFIRMED`)
+
+| Primitive | Exists | Note |
+| --- | --- | --- |
+| `MiningProjectMode` | ✅ 7 modes | Only `CONTROLLED_DESCENT` is *activated* by code |
+| `MiningProjectEnd` | ✅ 11 reasons → `TaskLifecycle` | See defect 1 |
+| `MiningProject` / `MiningProjectSavedData` | ✅ persisted per mob UUID | `projectOf(UUID)` |
+| `MiningBudget` / `MiningBudgetUsage` | ✅ | Descent + natural-search defaults |
+| `NaturalDescentStatus` / `NaturalDescentExhaustionPolicy` | ✅ `SEARCHING`/`AVAILABLE`/`TEMPORARILY_BLOCKED`/`EXHAUSTED` | `mayStartControlledDescent` |
+| `DescentHeadingPolicy`, `DescentPressurePolicy` | ✅ | Heading + pressure |
+| `CaveOpportunityPolicy`, `CaveContextPolicy` | ✅ (MI-6F/G) | Commitment + `SpaceKind` classifier |
+| `ControlledDescentGoal` | ✅ priority **3**, `MOVE`+`LOOK` | **Already starts and ends projects** |
+| `TUNNEL_SEARCH` executor | ❌ | 3 probes: no goal file, no references outside the two enums and the emitter |
+
+**The premise needs correcting.** MI-14 is not new orchestration over inert primitives —
+`ControlledDescentGoal` already calls `MiningProject.startControlledDescent(...)`, reads
+`projectOf(mobId)`, and emits **seven** distinct `MiningProjectEnd` values. Orchestration exists; it
+is embedded in one executor and covers one mode.
+
+### Defect 1 — every terminal handoff is orphaned (`CODE_CONFIRMED`)
+
+| Terminal state | Consumers outside the emitter |
+| --- | --- |
+| `HANDOFF_TUNNEL_SEARCH` | **0** |
+| `CAVE_FOUND` | **0** |
+| `SEARCH_BUDGET_EXHAUSTED` | **0** |
+
+`ControlledDescentGoal` ends its project with a precisely named reason and **nothing reads it**. The
+mob stops descending, the project record closes, and the GoalSelector falls through to whatever is
+next — ordinary gather or explore. `CAVE_FOUND` does not cause cave exploration;
+`HANDOFF_TUNNEL_SEARCH` names a destination with no executor.
+
+This is the iron dead end in control flow: **a producer with no consumer.** The handoffs are
+currently decoration.
+
+That reframes the task. MI-14's first job is not "choose the next mode" — it is to become **the
+missing consumer of terminal states that already exist**. Adding modes before that adds more orphans.
+
+### Defect 2 — a pure-policy director cannot enforce its decision (`CODE_CONFIRMED`)
+
+Priority 3 currently holds **four** `MOVE` goals:
+
+| Goal | Priority | Flags |
+| --- | ---: | --- |
+| `CraftTorchesGoal` | 3 | MOVE |
+| `GatherResourcesGoal` | 3 | MOVE |
+| `SmeltAtFurnaceGoal` | 3 | MOVE |
+| `ControlledDescentGoal` | 3 | MOVE + LOOK |
+| `ExploringGoal` | 8 | MOVE |
+| `EnvironmentalEscapeGoal` | 0 | MOVE + LOOK |
+
+`WrappedGoal.canBeReplacedBy` yields a flag only to a **strictly lower priority number**, so equal
+priorities cannot preempt each other — whichever starts first holds `MOVE` until it stops on its own
+terms. A `MiningDirector` that selects `CAVE_EXPLORATION` while `GatherResourcesGoal` already holds
+`MOVE` has made a decision the world will not honour, and nothing reports the discrepancy.
+
+**A director must either own a single executor, or the executors must carry distinct priorities that
+encode the mode hierarchy.** The proposed design specifies neither.
+
+### Threshold audit — project ends, who owns the next tick?
+
+| Question | Answer today |
+| --- | --- |
+| Turns off | `ControlledDescentGoal.canContinueToUse` → releases `MOVE` |
+| Turns on | Any priority-3 goal that wants it, by registration order |
+| Owns next action | **Undefined** — not the terminal reason |
+| Immediate reactivation? | Yes, if descent pressure still holds — the same mode can restart with no memory that it just ended |
+| Gap where nothing progresses? | Worse: **wrong-mode progress**. `CAVE_FOUND` ends descent and the mob wanders off instead of entering the cave it just opened |
+
+### Predicted weird behaviours
+
+1. **Cave opened, cave ignored.** `ControlledDescentCaveHandoff.openedTraversableCave` fires,
+   project ends `CAVE_FOUND`, no consumer exists, the mob walks away from the opening it just mined.
+   `ARCHITECTURE_DEFECT`.
+2. **Descent loop.** Ends `SEARCH_BUDGET_EXHAUSTED`; pressure is still true because demand is
+   unchanged; re-qualifies and restarts with a fresh budget. Bounded only by cooldown, not by
+   memory. `ARCHITECTURE_DEFECT` unless the director records the outcome.
+3. **Director talking to itself.** Selects a mode, the executor cannot take `MOVE`, the project
+   record says `CAVE_EXPLORATION` while the mob is visibly gathering wood. Diagnostics lie.
+   `ARCHITECTURE_DEFECT`.
+4. **Tunnel handoff into the void.** `HANDOFF_TUNNEL_SEARCH` with no executor.
+   `ACCEPTABLE_STEPPING_STONE` **only** while nothing claims tunnel search works.
+5. **Two mobs, one opening.** Projects are per-UUID with no contention model; both commit to the
+   same cave mouth. `RUNTIME_QUESTION`.
+
+### Design options
+
+| Option | Content | Trade-off |
+| --- | --- | --- |
+| **A — director as mode chooser** (as proposed) | New `MiningDirector` policy picks the next mode from demand/band/opportunity | Matches the diagram; but duplicates decisions already inside `ControlledDescentGoal`, and cannot enforce a choice it wins on paper |
+| **B — director as terminal-state consumer first** | MI-14a: one place that reads `MiningProjectEnd` and decides what happens next, wiring the three orphans. MI-14b: extract the start/stop logic out of `ControlledDescentGoal`. MI-14c: mode selection, once ≥2 modes have executors | Smaller, ships value immediately (`CAVE_FOUND` finally means something), and each step is independently testable |
+
+**Recommended: B.** Option A's mode table is only meaningful when more than one mode has an executor
+— today exactly one does. Building the chooser first produces a system that selects among modes it
+cannot run, on top of handoffs nothing consumes.
+
+### Repair to the proposed decision tree
+
+The user's tree is correct in shape and premature in one branch:
+
+```text
+blocking diamond demand
+  ├ above band?  ── YES ─ natural descent AVAILABLE? ─ YES → explore pressure (exists)
+  │                                                   └ EXHAUSTED → CONTROLLED_DESCENT (exists)
+  └ in band? ── cave opportunity? ─ YES → CAVE_EXPLORATION   (executor: MISSING - see below)
+                                   └ NO  → TUNNEL_SEARCH     (executor: MISSING)
+```
+
+`CAVE_EXPLORATION` has no dedicated executor either — cave *continuation* is landing-sort behaviour
+inside `ExploringGoal`, not a project mode. So two of the four leaves currently terminate in nothing.
+Wire `CAVE_FOUND` → `ExploringGoal` cave continuation first; that leaf becomes real without a new
+goal. `TUNNEL_SEARCH` stays deferred until MI-7's stair planner is promoted into an executor.
+
+`VEIN_EXTRACTION`, `TARGETED_RETURN` and `EMERGENCY_EXIT` depend on MI-16, MI-15 and hazard work
+respectively; catalogue them, do not branch to them.
+
+### Acceptance
+
+**Must happen:** every `MiningProjectEnd` has exactly one consumer that decides the next action;
+the mode recorded in `MiningProjectSavedData` matches the goal actually holding `MOVE`; a project
+ending `CAVE_FOUND` results in the mob entering the opening.
+**Must not happen:** a mode selected whose executor cannot obtain `MOVE`; a terminal state with no
+consumer; the same mode restarting immediately with no record of why the last attempt ended.
+
+**Falsifying runtime probe:** scripted stone shaft, diamond-demanding mob, `ControlledDescentGoal`
+active. Log `(tick, mode, end reason, goal holding MOVE, y)` for 2400 ticks. Prediction: at least one
+`CAVE_FOUND` or `SEARCH_BUDGET_EXHAUSTED` followed by a goal unrelated to mining, and at least one
+descent restart with no intervening progress.
+
+---
+
 ## Topic: MI-5 behavioural prediction (Gate MAIBS-1)
 
 **Status:** `FAIL — ARCHITECTURE_DEFECT` (heading blindness remains; defect 1 **repaired** in code).
@@ -2305,6 +2441,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Claude | MI-14 pre-implementation review (MAIBS-1): `ControlledDescentGoal` already orchestrates; all three terminal handoffs (`CAVE_FOUND`, `HANDOFF_TUNNEL_SEARCH`, `SEARCH_BUDGET_EXHAUSTED`) have zero consumers; four `MOVE` goals share priority 3 so a policy director cannot enforce a mode; recommended consumer-first repair (MI-14a/b/c) over mode-chooser-first; gate `FAIL — ARCHITECTURE_DEFECT` |
 | 2026-08-09 | User + Agent_Cursor | **MI-7B+C bundle**, revised `NaturalDescentStatus`, **MI-5H**, MI-6F→7B+C dependency; cave-mouth downgrade |
 | 2026-08-09 | Agent_Cursor | **MI-7A implemented** (task 20; 200 tests) |
 | 2026-08-08 | Agent_Cursor | **MI-6A/D/B/C implemented** (task 18; 178 tests); defer 6E/F/G; MI-7 still blocked on runtime |
@@ -2326,6 +2463,49 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 | 2026-08-08 | Agent_Cursor | Integrated Agent_ChatGPT mining architecture; expanded MI-13…MI-22, D-MIW-008…014 |
 | 2026-08-08 | Agent_Cursor | Renamed from resource-greed RFC; full mining+wealth RFC; user deliverable template; cave-vs-dig answer |
 | 2026-08-08 | Agent_Cursor | Initial greed/mining split from tool-tier Phase 3 |
+
+### Contribution — Agent_Claude (MI-14 design review)
+
+Agent: Agent_Claude
+Date/Session: 2026-08-09 (snapshot 01:00)
+Contribution type: REVIEW (Gate MAIBS-1, pre-implementation)
+
+Reviewed MI-14 against the **shipped** MI-7 stack rather than the RFC's description of it, per the
+user's step 2. Steps 1–3 done; step 4 (implement) deliberately not started — the review says the
+design needs repair first.
+
+**Reconciliation:** the MI-7 primitives all exist as described. One premise does not hold —
+`ControlledDescentGoal` **already** starts projects (`MiningProject.startControlledDescent`), reads
+`projectOf(mobId)`, and emits seven `MiningProjectEnd` values. Orchestration is not missing; it is
+embedded in one executor, for one mode.
+
+**Defect 1 — all three terminal handoffs are orphaned.** `HANDOFF_TUNNEL_SEARCH`, `CAVE_FOUND` and
+`SEARCH_BUDGET_EXHAUSTED` have **zero** consumers outside the emitter. A descent that breaks into a
+cave ends with the reason `CAVE_FOUND` and the mob walks away. This is the iron dead end in control
+flow — a producer with no consumer — and it reframes MI-14: its first job is to be the missing
+consumer, not a new mode chooser.
+
+**Defect 2 — a pure-policy director cannot enforce a decision.** Priority 3 holds four `MOVE` goals
+(craft, gather, smelt, controlled descent). Equal priorities cannot preempt, so a director selecting
+`CAVE_EXPLORATION` while gather holds `MOVE` has decided nothing, and the project record will
+disagree with what the mob is visibly doing. The proposed design specifies neither a single owned
+executor nor a priority hierarchy.
+
+**Repair:** option B — consumer first (MI-14a), extract start/stop from the goal (MI-14b), mode
+selection last (MI-14c). Two of the four leaves in the proposed decision tree currently terminate in
+nothing: `TUNNEL_SEARCH` has no executor at all, and `CAVE_EXPLORATION` is landing-sort behaviour
+inside `ExploringGoal` rather than a project mode. Wiring `CAVE_FOUND` → cave continuation makes one
+leaf real without writing a new goal.
+
+Agreement: the layering is right and the primitives are good. The five-step frontier is right; step 3
+is not optional.
+
+Concerns: MI-15/16/17 all assume a director that can enforce its choices. Building them on option A
+would compound defect 2.
+
+RFC fields updated: new Topic: MI-14 design review (MAIBS-1), Change Log, this contribution.
+
+---
 
 ### Contribution — Agent_Claude (MI-5 behavioural simulation)
 

@@ -23,6 +23,13 @@ public final class MiningProjectSavedData extends SavedData {
 
     private final Map<UUID, MiningProject> byMob = new HashMap<>();
 
+    /**
+     * MI-14A — outcomes awaiting a consumer. Kept separately because a finished project is
+     * <b>deleted</b>: every handoff reason maps to {@code SUCCESS} and {@code shouldPersist()} keeps
+     * only RUNNING / INTERRUPTED / RETRY, so the outcome would vanish in the same call that made it.
+     */
+    private final Map<UUID, MiningTransition> pendingTransitions = new HashMap<>();
+
     public MiningProjectSavedData() {
     }
 
@@ -47,6 +54,12 @@ public final class MiningProjectSavedData extends SavedData {
                 data.byMob.put(mob, project);
             }
         }
+                ListTag transitions = tag.getList("transitions", 10);
+        for (int index = 0; index < transitions.size(); index++) {
+            CompoundTag wrapped = transitions.getCompound(index);
+            data.pendingTransitions.put(
+                    wrapped.getUUID("mob"), MiningTransition.load(wrapped.getCompound("transition")));
+        }
         return data;
     }
 
@@ -64,7 +77,52 @@ public final class MiningProjectSavedData extends SavedData {
             list.add(wrapped);
         }
         tag.put("projects", list);
+
+        ListTag transitions = new ListTag();
+        for (Map.Entry<UUID, MiningTransition> entry : pendingTransitions.entrySet()) {
+            CompoundTag wrapped = new CompoundTag();
+            wrapped.putUUID("mob", entry.getKey());
+            wrapped.put("transition", entry.getValue().save());
+            transitions.add(wrapped);
+        }
+        tag.put("transitions", transitions);
         return tag;
+    }
+
+    /** Records an outcome for a later consumer. Overwrites any unconsumed one for that mob. */
+    public void recordTransition(UUID mobId, MiningTransition transition) {
+        pendingTransitions.put(mobId, transition);
+        setDirty();
+    }
+
+    /** Reads without consuming — for admission checks that must not clear the claim. */
+    public Optional<MiningTransition> pendingTransition(UUID mobId) {
+        return Optional.ofNullable(pendingTransitions.get(mobId));
+    }
+
+    /** Reads and clears. The consumer that acts on an outcome owns removing it. */
+    public Optional<MiningTransition> consumeTransition(UUID mobId) {
+        MiningTransition taken = pendingTransitions.remove(mobId);
+        if (taken != null) {
+            setDirty();
+        }
+        return Optional.ofNullable(taken);
+    }
+
+    public void clearTransition(UUID mobId) {
+        if (pendingTransitions.remove(mobId) != null) {
+            setDirty();
+        }
+    }
+
+    /**
+     * Completes a project and preserves its outcome atomically, so the transition cannot be lost to
+     * the removal that {@code completeProject} performs for terminal lifecycles.
+     */
+    public Optional<MiningProject> completeProject(
+            UUID mobId, MiningProjectEnd end, MiningTransition transition) {
+        recordTransition(mobId, transition);
+        return completeProject(mobId, end);
     }
 
     public Optional<MiningProject> projectOf(UUID mobId) {
