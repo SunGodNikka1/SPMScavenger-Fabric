@@ -18,6 +18,7 @@ import com.noobk.spmscavenger.mining.ExposureOpportunityPolicy;
 import com.noobk.spmscavenger.mining.MiningProject;
 import com.noobk.spmscavenger.mining.MiningProjectMode;
 import com.noobk.spmscavenger.mining.MiningProjectSavedData;
+import com.noobk.spmscavenger.mining.MiningBreakTiming;
 import com.noobk.spmscavenger.mining.MiningExecutionGuard;
 import com.noobk.spmscavenger.mining.MiningGoalKind;
 import net.minecraft.core.BlockPos;
@@ -124,6 +125,8 @@ public class GatherResourcesGoal extends Goal {
     private static final double REACH_SQR = 6.0;
     /** Never let one block take longer than this, whatever the maths says. */
     private static final int MAX_BREAK_TICKS = 200;
+    /** Gather keeps a longer visible minimum than deliberate excavation. */
+    private static final int MIN_BREAK_TICKS = 10;
     /** How many nearest candidates get the expensive build-protection check. */
     private static final int MAX_CANDIDATES = 24;
     /** Pathfinding is substantially more expensive than a block-state check; keep each scan bounded. */
@@ -436,16 +439,16 @@ public class GatherResourcesGoal extends Goal {
      * vanilla's calculation without reaching into player-only mining state.
      */
     private int breakTicksFor(BlockState state) {
-        float hardness = state.getDestroySpeed(mob.level(), target);
-        if (hardness < 0) {
-            return MAX_BREAK_TICKS; // unbreakable; the reach check will time out
-        }
-        float toolSpeed = ToolBox.bestSpeed(mob, state);
-        if (toolSpeed <= 0) {
-            toolSpeed = 1.0F;
-        }
-        int ticks = (int) Math.ceil((hardness * 30.0F) / toolSpeed);
-        return Math.max(10, Math.min(MAX_BREAK_TICKS, ticks));
+        // Single owner for the physics. This formula was correct while the two excavation
+        // executors had it inverted, which is exactly why keeping a private copy is a latent
+        // defect: the next tuning pass would change the shared policy and silently leave gather
+        // on the old numbers. The 10-tick floor is gather's own animation choice and stays here.
+        return MiningBreakTiming.breakTicks(
+                state,
+                state.getDestroySpeed(mob.level(), target),
+                ToolBox.bestSpeed(mob, state),
+                MIN_BREAK_TICKS,
+                MAX_BREAK_TICKS);
     }
 
     private boolean isCandidate(Level level, BlockPos pos, BlockState state) {

@@ -124,4 +124,44 @@ class MiningBreakTimingTest {
                 "distance travelled is recorded, so the cap is a live contract rather than a "
                         + "configured number nothing updates");
     }
+
+    // ---- single owner, asserted structurally ----
+
+    /**
+     * Every behavioural consumer must <b>route through</b> the shared policy, not merely happen to
+     * compute the same answer today. Equivalent math is what the two excavation executors had with
+     * each other while both were wrong, and what gather had with the repaired policy afterwards -
+     * correct by coincidence, and one tuning pass away from divergence.
+     *
+     * <p>Read as source rather than behaviour on purpose: a value-equality test would pass for a
+     * private duplicate, which is precisely the thing being forbidden.
+     */
+    @Test
+    void mustHappen_allThreeConsumersRouteThroughTheSharedPolicy() throws Exception {
+        for (String goal : new String[] {
+                "ControlledDescentGoal", "TunnelSearchGoal", "GatherResourcesGoal"}) {
+            String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "src/main/java/com/noobk/spmscavenger/goal/" + goal + ".java"));
+
+            assertTrue(source.contains("MiningBreakTiming.breakTicks("),
+                    goal + " must delegate break timing to the shared owner");
+            assertFalse(source.contains("* 30.0F)") || source.contains("* 20.0f"),
+                    goal + " still computes break duration locally - a private copy diverges the "
+                            + "moment the shared policy is retuned");
+        }
+    }
+
+    /** The floors differ deliberately; the physics above them do not. */
+    @Test
+    void mustHappen_callersKeepTheirOwnAnimationFloorOnly() {
+        int excavation = MiningBreakTiming.breakTicks(0.05F, 12.0F, 5, MAX);
+        int gather = MiningBreakTiming.breakTicks(0.05F, 12.0F, 10, MAX);
+
+        assertEquals(5, excavation, "deliberate excavation keeps its shorter visible minimum");
+        assertEquals(10, gather, "gather keeps its longer one");
+        assertEquals(
+                MiningBreakTiming.breakTicks(20.0F, 6.0F, 5, MAX),
+                MiningBreakTiming.breakTicks(20.0F, 6.0F, 10, MAX),
+                "and above the floor every caller gets identical physics");
+    }
 }
