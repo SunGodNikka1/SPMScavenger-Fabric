@@ -9,7 +9,7 @@
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
 | **Mode** | `PLANNING` |
-| **Status** | GAO-0 through GAO-3 `IMPLEMENTED / STATIC VERIFIED`; GAO-4 (`DiscretionaryActivityDirector`) is nearest frontier; runtime `UNVERIFIED` |
+| **Status** | GAO-0 through GAO-3 `IMPLEMENTED / STATIC VERIFIED`; GAO-4 contract `LOCKED` (preflight); implementation **not authorized**; runtime `UNVERIFIED` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
@@ -39,10 +39,10 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** **GAO-4** — `DiscretionaryActivityDirector` (convert ranked utility into
-behavior). GAO-3 delivers `IdleOpportunityPolicy` utility scoring for EXPLORE + REST only,
-normalized component math, inspectable breakdowns, and zero execution authority. Runtime
-`UNVERIFIED`.
+**Nearest frontier:** **GAO-4** — `DiscretionaryActivityDirector` (first visible-behavior phase).
+**Preflight contract is LOCKED** (abstention, intent lifecycle, voluntary yield, opinion-on consumer
+gates, mandatory invalidation, commitment/hysteresis, D-GAO-025 trace). **Implementation not
+authorized until user approves GAO-4 coding.** GAO-3 scoring remains inert. Runtime `UNVERIFIED`.
 
 ---
 
@@ -743,46 +743,79 @@ if SOCIAL_TRAVEL active:
 
 Summary band drives **coarse** routing only; utility math uses components.
 
-### `DiscretionaryIntent` lifecycle (B-19)
+### `DiscretionaryIntent` lifecycle (`LOCKED` — supersedes B-19 TTL-only sketch)
+
+Commitment is **adoption-anchored**, not scoring-anchored (B-27 / MI-14C2-M2).
 
 ```text
-issued when boredom crosses threshold AND IdleOpportunityPolicy picks activity
-TTL = 200 ticks (10 s) unless consumed
-invalidated immediately when:
-  - any MANDATORY_* class becomes active
-  - new player command / StayNear anchor
-  - combat target acquired
+SCORED (ephemeral — same director tick only)
+  ↓ top utility ≥ activationThreshold AND passes switch margin
+PENDING
+  ↓ executor validates hard gates (route, campfire path, config flags)
+ADOPTED
+  ↓ commitmentUntilTick = adoptedAt + minCommitmentTicks
+RUNNING / CLAIMED
+  ↓ RestSessionClaim open OR ExploringGoal MOVE active with adopted intent
+TERMINAL:
+  SUCCEEDED | FAILED | INTERRUPTED | INVALIDATED | EXPIRED | ABSTAINED
 ```
 
-**Must happen:** Intent consumed by `ExploringGoal` / readiness sets expedition without new GoalSelector entry.
+| State | Meaning | Clock starts |
+| --- | --- | --- |
+| `PENDING` | Intent issued; waiting for executor adoption | `issuedAtTick`; short pending TTL may expire if never adopted |
+| `ADOPTED` | Executor accepted; voluntary yield may proceed | `adoptedAtTick` |
+| `RUNNING` | Physical activity underway / claim live | adoption + executor `start()` or claim open |
+| `EXPIRED` | Pending TTL elapsed with no adoption | `issuedAtTick` |
+| `INVALIDATED` | Mandatory authority preempted intent | immediate |
+| `ABSTAINED` | No activity met activation threshold | scoring tick |
 
-**Must not happen:** Stale `EXPLORE` intent fires after `FollowLovedOneGoal` starts.
+**Invalidated immediately when any becomes active:**
+
+- `MANDATORY_SAFETY` / `MANDATORY_COMMAND` / `MANDATORY_COMBAT` / `MANDATORY_SURVIVAL`
+- `PROJECT_EXECUTION` with mandatory mining/progression authority
+- combat target acquired
+- `StayNearGoal` / player command anchor
+- `UNKNOWN_ACTIVE` fail-safe (conservative)
+
+**Must happen:** Intent consumed by executor adoption, not by scoring alone.
+
+**Must not happen:** Stale `EXPLORE` intent fires after `FollowLovedOneGoal` starts; REST intent
+opens shelter safety path; Explore starts from `readiness.eligible` alone when `opinion.enabled`.
 
 ---
 
-## Topic: DiscretionaryIntent — data, not GoalSelector entries (`PROPOSED`)
+## Topic: DiscretionaryIntent — data, not GoalSelector entries (`LOCKED` for GAO-4 contract)
 
-**Status:** `PROPOSED` (Agent_Cursor)
+**Status:** `LOCKED` contract; **NOT FOUND** in `src/` (implementation deferred)
 
-When `IdleOpportunityPolicy` picks an activity, emit:
+When the Director selects an activity (above activation threshold and passing hysteresis), emit a
+**real intent record** — not a bare `preferredActivity` enum write:
 
 ```text
 DiscretionaryIntent {
-  ActivityKind preferred;     // OVERLAND_EXPLORATION, REST, SOCIALIZING, MIMICRY, …
-  float urgency;              // boredom-driven
-  long issuedAtTick;
-  Optional<UUID> socialTarget;
+  UUID intentId;
+  DiscretionaryActivity activity;     // EXPLORE | REST (GAO-4 v1)
+  IntentLifecycle lifecycle;          // see state machine below
+  float selectedUtility;              // winning score at issue time
+  float runnerUpUtility;              // for trace / switch-margin checks
+  long scoredAtTick;
+  long issuedAtTick;                  // PENDING entry
+  long adoptedAtTick;                 // 0 until executor accepts
+  long commitmentUntilTick;           // 0 until ADOPTED; starts at adoption
+  Optional<UUID> episodeId;           // correlates experience + trace
+  InvalidationCause lastInvalidation; // when terminal = INVALIDATED
 }
 ```
 
-**Consumers (existing executors):**
+**Consumers (GAO-4 v1 — executable pair only):**
 
-| Intent | Consumer | Notes |
-| --- | --- | --- |
-| `EXPLORE` | `ExploringGoal` / `ExplorationReadiness` | Sets readiness or biases stage heading |
-| `REST` | `SeekShelterGoal` / `CampfireGoal` | Intentional downtime |
-| `SOCIALIZE` | Bias toward `FriendlyGreetGoal` eligibility window | Does not preempt follow/combat |
-| `GATHER_OPPORTUNISTIC` | Soft boost to `GatherResourcesGoal` when wealth allows | Never overrides NEED |
+| Intent | Executor | Hard gates (adoption) | Must never be |
+| --- | --- | --- | --- |
+| `EXPLORE` | `ExploringGoal` | adopted EXPLORE intent + route plan succeeds | sole authority for cave handoff / mandatory progression explore |
+| `REST` | `CampfireGoal` → `RestSessionClaim` | adopted REST intent + campfire path viable | `SeekShelterGoal` (safety, p2) |
+
+**Explicit correction:** discretionary REST is **not** `SeekShelterGoal`. Night/danger shelter
+remains `MANDATORY_SAFETY` and is outside Director authority.
 
 Directors (`MiningDirector`) **ignore** `DiscretionaryIntent` when assignment is mandatory.
 
@@ -1100,10 +1133,10 @@ Explicit companion/social activities may legitimately align several mobs on EXPL
 | **D-GAO-006** | Scheduler-wide activity observation (host + addon) |
 | **D-GAO-007** | SPM social graph is authoritative for entity relationships |
 | **D-GAO-008** | Opinion disabled ⇒ SPM parity unchanged |
-| **D-GAO-017** | *(candidate, B-25)* An `ActivityClass` is selectable only when a designated executor exists — aspiration stays in the taxonomy, out of the scorer |
-| **D-GAO-018** | *(candidate, B-22)* Discretionary selection requires a **voluntary yield protocol**; a utility ranking alone cannot move a Minecraft goal at equal priority |
+| **D-GAO-017** | **LOCKED (GAO-4):** An activity is selectable only when a designated executor exists | aspiration stays out of scorer/director |
+| **D-GAO-018** | **LOCKED (GAO-4):** Discretionary selection requires a **voluntary yield protocol**; utility ranking alone cannot move a Minecraft goal at equal or weaker priority | B-22; Campfire p7 vs Explore p8 |
 | **D-GAO-019** | *(candidate, B-23)* Affect clocks pause while a downstream executor serves the chosen activity, reusing `COOPERATIVE_PROJECT_WORK` rather than a second signal |
-| **D-GAO-020** | *(candidate, B-21)* GAO-4 ships with ≥2 executable discretionary activities; one activity cannot falsify a director's genericity |
+| **D-GAO-020** | **LOCKED (GAO-4):** GAO-4 ships with ≥2 executable discretionary activities (EXPLORE + REST) | B-21; PD-GAO-06 |
 | **D-GAO-021** | **LOCKED:** Sustained REST is an arrival-anchored, condition-bound claim tied to the activity/authority that legitimately adopted REST; Goal liveness or proximity alone is insufficient |
 | **D-GAO-022** | **LOCKED:** Experience is episode-scoped and frequency-normalized; bounded short-term affect pulses and normalized long-term `OpinionMemory` learning are separate outputs and cannot double-apply one event |
 | **D-GAO-023** | **LOCKED:** Outcome class controls learning eligibility, not sign; exact terminal cause is preserved, and feasibility/safety/authority outcomes do not automatically imply dislike |
@@ -1158,7 +1191,7 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-1** | `AffectiveState` + observation | **IMPLEMENTED:** per-mob mood channels, 10-tick observation, pulse wiring, rate-based boredom, REST/stalled/social semantics, decay, freeze-on-unload, `opinion.enabled` | GAO-0, GAO-0b, GAO-0c |
 | **GAO-2** | `OpinionMemory` v1 (ACTIVITY only) | **IMPLEMENTED:** `ActivityOpinionMemory`, `OpinionMemory`, `OpinionLearningPolicy`, normalized-evidence wiring, PD-GAO-03 death reset | GAO-1 |
 | **GAO-3** | `IdleOpportunityPolicy` | **IMPLEMENTED:** EXPLORE + REST utility scoring, normalized components, ranked `ScoringResult`, no execution | GAO-2, existing goals |
-| **GAO-4** | `DiscretionaryActivityDirector` | Emit intents to existing directors/goals | GAO-3 |
+| **GAO-4** | `DiscretionaryActivityDirector` | **CONTRACT LOCKED** — intent lifecycle, abstention, voluntary yield, consumer gates; implementation pending authorization | GAO-3 |
 | **GAO-5** | PLACE / ENVIRONMENT opinions | World gains meaning for choice | GAO-4, spatial memory TBD |
 | **GAO-6** | ENTITY bridge | SPM `feelingToward` integration | GAO-4 |
 | **GAO-7** | PersonalityModel | Trait-weighted experience scaling | GAO-2 |
@@ -1348,6 +1381,10 @@ companion coordination—not competing activity semantics.
 | **PD-GAO-05** | `RESOLVED BY D-GAO-015` | Who owns `IdleOpportunityPolicy` tick? | fold into `ExplorationActivityGoal` / new flagless goal | Single refactored observer; affect/intent bookkeeping must precede early returns |
 | **PD-GAO-06** | `LOCKED` | Which two executable activities prove GAO-4? | Explore + Rest / Explore + opportunistic Gather / other | **Explore + Rest** after the REST claim lifecycle exists |
 | **PD-GAO-07** | `LOCKED` | What happens while unloaded/non-ticking? | freeze / lazy elapsed-time decay / full catch-up | **Freeze affect/opinion; invalidate intents; invalidate/revalidate rest claims; suspend only genuinely resumable episodes** |
+| **PD-GAO-08** | `LOCKED` | Must the Director always pick the top score? | always pick / **abstain below threshold** | **ABSTAIN (`NO_SELECTION`)** when top utility is below activation threshold — neither activity appeals enough |
+| **PD-GAO-09** | `LOCKED` | Who may start discretionary Explore/Rest when `opinion.enabled`? | legacy `canUse` / **adopted intent only** | **`opinion.enabled=true`:** discretionary `CampfireGoal` REST and discretionary `ExploringGoal` expedition start require an **adopted** matching intent; **`opinion.enabled=false`:** legacy parity unchanged |
+| **PD-GAO-10** | `LOCKED (direction)` | Switch/hold policy | rescore every tick / **commitment + switch margin** | **Adoption-anchored minimum commitment** + meaningful switch margin before incumbent yields; exact ticks tuned in implementation |
+| **PD-GAO-11** | `LOCKED` | REST executor for discretionary choice | Campfire / SeekShelter / both | **Campfire + `RestSessionClaim` only** — `SeekShelterGoal` (p2 safety) is never the discretionary REST executor |
 
 #### PD-GAO-03 death semantics (`LOCKED` — GAO-2)
 
@@ -2039,3 +2076,251 @@ voluntary yield, `ExplorationReadiness` threshold changes, activities beyond EXP
 mob behavior change until GAO-4 consumes `ScoringResult`.
 
 **Frontier after:** GAO-4 `DiscretionaryActivityDirector`.
+
+---
+
+## GAO-4 pre-implementation control-flow / MAIBS contract (`LOCKED`)
+
+**Gate:** GAO-4 is **READY FOR IMPLEMENTATION** only after this contract; **not authorized to wire
+blindly**. This is the first phase that changes visible mob behavior.
+
+### Problem statement
+
+```text
+Mood + Opinion + Repetition + Opportunity
+        ↓
+IdleOpportunityPolicy (GAO-3)     ← CODE_CONFIRMED, inert
+        ↓
+EXPLORE = 46, REST = 23
+        ↓
+(nothing happens today)
+```
+
+GAO-4 closes the loop:
+
+```text
+SCORE → SELECT/ABSTAIN → INTENT → YIELD → ADOPT → EXECUTE → TERMINAL
+```
+
+### Scheduler evidence (`CODE_CONFIRMED` — `SpmScavenger.java`)
+
+| Priority | Goal | `ActivityClass` | Opinion relevance |
+| ---: | --- | --- | --- |
+| 2 | `SeekShelterGoal` | `MANDATORY_SAFETY` | **not** discretionary REST executor |
+| 7 | `CampfireGoal` | `REST_APPROACH` | discretionary REST executor (PD-GAO-11) |
+| 8 | `ExploringGoal` | `EXPEDITION` | discretionary EXPLORE executor |
+| 9 | `TrackedLocalWanderGoal` | `IDLE_CANDIDATE` | must yield MOVE on adoption |
+
+**Priority asymmetry (load-bearing):**
+
+- Explore (8) can be preempted by Rest (7) via Minecraft priority alone.
+- Rest running **cannot** be preempted by Explore (8) — **voluntary yield is mandatory** for
+  REST→EXPLORE handoff (D-GAO-018).
+
+**Current executor gates (`CODE_CONFIRMED` — no intent awareness today):**
+
+- `CampfireGoal.canUse()` — config + scan + campfire proximity; **no Opinion/intent gate**
+  (`CampfireGoal.java` L75–102).
+- `ExploringGoal.canUse()` — `readiness.eligible(...)` starts discretionary expeditions
+  independently of scoring (`ExploringGoal.java` L172–175); **cave handoff** (`acceptCaveHandoff`)
+  and mining guard paths remain mandatory and must stay independent (PD-GAO-09).
+
+Without consumer gating when `opinion.enabled`, two decision systems compete: Director says EXPLORE
+while `CampfireGoal` independently fires.
+
+### Director responsibilities (GAO-4 v1)
+
+| Responsibility | Owner | Must not |
+| --- | --- | --- |
+| Score consumption | `DiscretionaryActivityDirector` | Re-score inside executors |
+| Activation / abstention | Director | Pick winner when both utilities below threshold |
+| Intent issue / invalidate | Director | Hold authority against mandatory work |
+| Switch margin / commitment | Director | Flip every 10-tick observation |
+| Voluntary yield request | Director + incumbent Goals | Rely on priority alone REST→EXPLORE |
+| Executor adoption | `ExploringGoal`, `CampfireGoal` | Start discretionary path without adopted intent |
+| Trace | `OpinionDecisionTrace` (D-GAO-025) | Treat score as proof of behavior |
+
+### Rule 1 — ABSTAIN / `NO_SELECTION` (PD-GAO-08)
+
+The Director **must not** always choose the highest score.
+
+```text
+if topUtility < activationThreshold:
+    emit ABSTAINED
+    clear pending discretionary intent
+    legacy idle ladder continues (wander / antics)
+```
+
+Example: Explore = −44, Rest = −52 → **neither** — not “Explore wins because −44 > −52”.
+
+`activationThreshold` is a tunable constant (implementation phase); falsify with GAO-4-M7.
+
+### Rule 2 — Real intent lifecycle (not `preferredActivity` only)
+
+See **DiscretionaryIntent lifecycle** topic above. Pending intent may expire if never adopted;
+**commitment clock starts at adoption**, not at score time.
+
+### Rule 3 — Mandatory authority invalidates immediately
+
+Scoring and pending/adopted discretionary intent **cannot** compete with:
+
+- combat, commands, safety/recovery, blocking progression, active mandatory mining/project execution.
+
+When `discretionaryEligible=false`, Director does not score or issue intent (GAO-3-M5 extends to
+GAO-4).
+
+### Rule 4 — Opinion ON vs OFF consumer authority (PD-GAO-09)
+
+| Mode | Discretionary Explore start | Discretionary REST start |
+| --- | --- | --- |
+| `opinion.enabled=false` | `ExplorationReadiness.eligible` (parity) | `CampfireGoal` legacy `canUse` |
+| `opinion.enabled=true` | adopted `EXPLORE` intent + plan success | adopted `REST` intent + campfire path |
+
+**Mandatory explore paths (unchanged):** `acceptCaveHandoff`, progression/descent pressure,
+`MiningExecutionGuard` mandatory assignments — **not** Director-gated.
+
+### Rule 5 — Voluntary yield protocol (D-GAO-018)
+
+When adopted intent activity ≠ incumbent discretionary activity:
+
+| Transition | Mechanism |
+| --- | --- |
+| Wander → Explore/Rest | incumbent `canContinueToUse()` false when adopted intent matches winner |
+| Explore → Rest | priority 7 may preempt 8 naturally |
+| **Rest → Explore** | **`CampfireGoal.canContinueToUse()` must voluntarily release** — priority cannot |
+| Explore → Explore (re-adopt) | commitment window prevents thrash |
+
+Yield is **requested** at adoption; trace records `YIELD requested/completed/refused`.
+
+### Rule 6 — Commitment + switch margin (PD-GAO-10)
+
+Without hysteresis:
+
+```text
+tick 100: Explore 31.0, Rest 30.0 → Explore
+tick 110: Explore 29.9, Rest 30.1 → Rest
+tick 120: Explore 30.2, Rest 30.0 → Explore   ← oscillation defect
+```
+
+**Locked direction:**
+
+- minimum commitment from `adoptedAtTick` (tunable; not guessed in contract)
+- switch only when challenger beats incumbent by `switchMargin` utility points
+- natural termination, invalidation, or mandatory interrupt still ends incumbent immediately
+
+### Rule 7 — D-GAO-025 trace completion (GAO-4 delivers)
+
+Bounded per-mob ring (16–32 entries). Each discretionary decision records:
+
+```text
+SCORE
+  EXPLORE 46.2  (component breakdown ref)
+  REST    23.1
+↓
+SELECT
+  EXPLORE (margin over REST, threshold pass)
+↓
+INTENT
+  EXPLORE issued  intentId=…
+↓
+YIELD
+  TrackedLocalWander released MOVE
+↓
+CLAIM / ADOPT
+  ExploringGoal adopted intentId=…
+↓
+EXECUTOR
+  ExploringGoal started  expeditionId=…
+↓
+TERMINAL
+  SUCCESS | FAILURE | INTERRUPTED | INVALIDATED
+  cause = …
+```
+
+**Must happen:** distinguish “REST won but no claim adopted” from “REST executor started and failed.”
+
+**Must not happen:** utility score treated as proof of observable behavior.
+
+### MAIBS preflight — intent vs mechanism vs prediction
+
+| Layer | GAO-4 prediction |
+| --- | --- |
+| **Intended** | Mob visibly chooses Explore vs Rest from mood + opinion; mandatory work always wins |
+| **Mechanism** | Director issues intent; executors gate on adoption; Campfire voluntarily yields for REST→EXPLORE |
+| **Predicted (opinion on)** | Wander gives way to expedition or campfire scene; fewer endless stroll loops when bored |
+| **Predicted (opinion off)** | Identical to pre-GAO-4 behavior (D-GAO-008) |
+| **Failure modes** | Dual decision systems; REST→EXPLORE stuck; intent oscillation; stale intent after combat; shelter mistaken for discretionary REST |
+| **Confidence** | Control-flow `CODE_CONFIRMED`; observable outcomes `UNVERIFIED` until approved runtime |
+
+### GAO-4 preflight scenarios (required before handoff)
+
+| ID | Setup | Must happen | Must not |
+| --- | --- | --- | --- |
+| **GAO-4-M1** | Wander + Explore wins + above threshold | Wander releases MOVE; Explore adopts and starts | Score alone starts Explore |
+| **GAO-4-M2** | Wander + Rest wins | Campfire REST path starts; claim can open | SeekShelter used for discretionary REST |
+| **GAO-4-M3** | REST running + Explore wins strongly (margin) | Campfire **voluntarily yields**; Explore starts | REST blocks Explore via priority forever |
+| **GAO-4-M4** | Explore running + Rest wins | Explore releases; Rest starts | Explore ignores Director |
+| **GAO-4-M5** | Intent issued; combat target tick+1 | Intent `INVALIDATED`; combat runs | Delayed discretionary start |
+| **GAO-4-M6** | Intent issued; Stay/command active | Intent `INVALIDATED` | Command competes with intent |
+| **GAO-4-M7** | Both scores below `activationThreshold` | `ABSTAINED`; ordinary idle continues | “Less negative” wins |
+| **GAO-4-M8** | Explore adopted; no route | Honest `FAILED`/`EXPIRED`; no stuck intent | Permanent pending intent |
+| **GAO-4-M9** | `opinion.enabled=false` | Legacy Campfire/Explore behavior | Hidden Director effect |
+| **GAO-4-M10** | Mandatory mining/progression active | No discretionary score/intent | Opinion preempts NEED |
+| **GAO-4-M11** | Tiny utility deltas within margin | Incumbent holds; no Explore↔Rest oscillation | Flip every 10 ticks |
+| **GAO-4-M12** | REST→EXPLORE handoff | Proves voluntary yield despite p7 vs p8 | Priority-only preemption |
+
+### Implementation scope boundary (GAO-4 authorized slice)
+
+**In scope when authorized:**
+
+- `DiscretionaryIntent` + lifecycle store on `MobExperienceContext`
+- `DiscretionaryActivityDirector` (observation cadence owner per PD-GAO-05)
+- `OpinionDecisionTrace` ring buffer
+- Consumer gates: `CampfireGoal`, `ExploringGoal` (discretionary path only), `TrackedLocalWanderGoal` yield
+- Activation threshold + switch margin + min commitment (constants with tests)
+
+**Out of scope (later phases):**
+
+- Socialize, gather-opportunistic, personality presets
+- `ExplorationReadiness` threshold modulation (PD-GAO-01 C wiring may land here or GAO-5 — product decision at implementation)
+- SeekShelter discretionary REST
+- Runtime launch without explicit approval
+
+### Open tuning knobs (implementation phase — not guessed here)
+
+| Knob | Purpose |
+| --- | --- |
+| `activationThreshold` | PD-GAO-08 abstention |
+| `switchMargin` | PD-GAO-10 anti-oscillation |
+| `minCommitmentTicks` | PD-GAO-10 hold after adoption |
+| `pendingIntentTtlTicks` | expire never-adopted pending intents |
+
+Each knob requires a unit test anchor and a MAIBS scenario mapping.
+
+---
+
+## Contribution — Agent_Cursor (GAO-4 preflight contract)
+
+**Agent:** `Agent_Cursor` **Date/Session:** 2026-08-09 **Type:** `PLANNING` + MAIBS preflight (no code)
+
+**User input locked:** abstention, full intent lifecycle, adoption-anchored commitment, voluntary
+yield for REST→EXPLORE, opinion-on consumer gates, SeekShelter exclusion, mandatory invalidation,
+D-GAO-025 trace completion, 12 preflight scenarios.
+
+**Decisions promoted:** D-GAO-017/018/020 → `LOCKED (GAO-4)`; PD-GAO-08/09/11 → `LOCKED`;
+PD-GAO-10 → `LOCKED (direction)`.
+
+**Evidence (`CODE_CONFIRMED`):** `SpmScavenger.java` goal priorities 7/8/9; `CampfireGoal.canUse`
+no intent gate; `ExploringGoal.canUse` readiness-independent discretionary start;
+`SeekShelterGoal` at priority 2.
+
+**Not delivered:** any GAO-4 implementation, Goal wiring, runtime probes, threshold constants.
+
+**Gate status:**
+
+| Phase | Static MAIBS | Unit | Behavior authority | Runtime |
+| --- | --- | --- | --- | --- |
+| GAO-3 Scoring | PASS | 445 PASS | none | UNVERIFIED |
+| GAO-4 Director | **CONTRACT LOCKED** | — | **not wired** | UNVERIFIED |
+
+**Frontier after:** user authorization to implement GAO-4 per this contract.
