@@ -1,6 +1,7 @@
 # Task 27 report: MI-14C2 — Execution Intent & Arbitration
 
-**Status:** `DONE_WITH_CONCERNS`
+**Status:** `DONE_WITH_CONCERNS` → **MAIBS C2 superseded to `FAIL — ARCHITECTURE_DEFECT`** (see
+`task-27-maibs-report.md`; repair via task-29-brief)
 
 ## Verification
 

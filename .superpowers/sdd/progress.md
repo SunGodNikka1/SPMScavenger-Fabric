@@ -58,10 +58,9 @@ MI-14C1-R1: complete with concerns (temporary-blocker episode clock via blockedS
 currentBlocker; executorStartedAt NEVER_STARTED sentinel; 4 regression tests; full suite pass;
 runtime unverified; verified commit a6e9793)
 
-MI-14C2: complete with concerns (ExecutionIntent + arbiter + guard + CONTENTION producer;
-5 goals wired admission+continuation; MiningExecutionC2Test C2-A…G; 292 tests pass;
-MAIBS C2 static PASS_WITH_CONCERNS; runtime UNVERIFIED)
+MI-14C2: unit complete; **MAIBS C2 FAIL** (M1 handoff lifetime, M2 host MOVE blind spot, M3 stop
+resurrection) — task-27-maibs-report; repair task-29-brief; C3 blocked
 
-MI-14C3: contract LOCKED (D-MIW-039; task-28-brief; C3-A…E) — requires Begin
+MI-14C3: contract LOCKED but **BLOCKED** until C2 repair + MAIBS re-pass
 
 No commits. No Minecraft launches (separate approval required).
