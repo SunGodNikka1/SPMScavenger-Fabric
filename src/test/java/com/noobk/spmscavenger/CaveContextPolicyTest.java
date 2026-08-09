@@ -83,4 +83,68 @@ class CaveContextPolicyTest {
                 < CaveContextPolicy.landingPreferenceKey(
                         CaveContextPolicy.LandingMode.CAVE_CONTINUATION, 72, mobY, surface));
     }
+
+    // ---- MI-6G: CaveContextSnapshot classifier ----
+
+    private static CaveContextPolicy.CaveContextSnapshot snap(
+            int feetY, int columnSurfaceY, int localRimY, boolean skyVisible) {
+        return new CaveContextPolicy.CaveContextSnapshot(
+                feetY, columnSurfaceY, localRimY, skyVisible);
+    }
+
+    @Test
+    void mustNotHappen_aCellarUnderAHouseClassifiesAsCave() {
+        // The recorded weird behaviour: feet Y60, roof Y70, natural ground around it also Y60.
+        // enclosureDepth 10 passes the raw isCaveLike test; localRimDepth 0 does not.
+        CaveContextPolicy.CaveContextSnapshot cellar = snap(60, 70, 60, false);
+
+        assertTrue(CaveContextPolicy.isCaveOrRavineLike(60, 70, 60),
+                "the raw geometric test still reports true - that is why it is not the classifier");
+        assertEquals(CaveContextPolicy.SpaceKind.ENCLOSED_STRUCTURE,
+                CaveContextPolicy.classify(cellar));
+        assertFalse(CaveContextPolicy.isSubterranean(cellar),
+                "a basement must not unlock underground ore reasoning");
+    }
+
+    @Test
+    void mustHappen_aRealCaveClassifiesAsCave() {
+        CaveContextPolicy.CaveContextSnapshot cave = snap(32, 70, 70, false);
+        assertEquals(CaveContextPolicy.SpaceKind.CAVE, CaveContextPolicy.classify(cave));
+        assertTrue(CaveContextPolicy.isSubterranean(cave));
+        assertEquals(38, cave.localRimDepth());
+    }
+
+    @Test
+    void mustHappen_anOpenRavineIsSubterraneanButNotACave() {
+        // Column open to the sky, surrounding rim far above: below terrain, not enclosed.
+        CaveContextPolicy.CaveContextSnapshot ravine = snap(40, 40, 68, true);
+        assertEquals(CaveContextPolicy.SpaceKind.RAVINE, CaveContextPolicy.classify(ravine));
+        assertTrue(ravine.belowLocalTerrain());
+        assertFalse(ravine.enclosed());
+        assertTrue(CaveContextPolicy.isSubterranean(ravine));
+    }
+
+    @Test
+    void mustHappen_openGroundIsSurface() {
+        CaveContextPolicy.CaveContextSnapshot surface = snap(70, 70, 70, true);
+        assertEquals(CaveContextPolicy.SpaceKind.SURFACE, CaveContextPolicy.classify(surface));
+        assertFalse(CaveContextPolicy.isSubterranean(surface));
+    }
+
+    @Test
+    void mustNotHappen_anUnsampledRimIsTreatedAsDepth() {
+        // No rim samples must read as level ground, never as an accidental cave.
+        CaveContextPolicy.CaveContextSnapshot unsampled =
+                snap(60, 70, Integer.MIN_VALUE, false);
+        assertEquals(0, unsampled.localRimDepth());
+        assertEquals(CaveContextPolicy.SpaceKind.ENCLOSED_STRUCTURE,
+                CaveContextPolicy.classify(unsampled));
+    }
+
+    @Test
+    void mustHappen_theBoundaryIsTheDocumentedDepth() {
+        int min = CaveContextPolicy.MIN_DEPTH_BELOW_SURFACE;
+        assertFalse(snap(60, 60 + min, 60 + min - 1, false).belowLocalTerrain());
+        assertTrue(snap(60, 60 + min, 60 + min, false).belowLocalTerrain());
+    }
 }

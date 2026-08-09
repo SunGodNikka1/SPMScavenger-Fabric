@@ -37,9 +37,77 @@ public final class CaveContextPolicy {
     /**
      * Open ravines have column surface ≈ feet Y; surrounding rim stays high. Enclosed caves have
      * column surface high above feet.
+     *
+     * <p><b>MI-6G:</b> retained as the raw geometric OR. It answers "is there something above me,
+     * or is the ground around me higher" — which is true of a basement as well as a cave. Callers
+     * that must not treat a building as a cave use {@link #classify}.
      */
     public static boolean isCaveOrRavineLike(int feetY, int columnSurfaceY, int localRimY) {
         return isCaveLike(feetY, columnSurfaceY) || isCaveLike(feetY, localRimY);
+    }
+
+    /**
+     * MI-6G — what kind of space the mob is standing in.
+     *
+     * <p>The classifier this replaces could not tell a cave from a cellar: a mob at Y60 under a
+     * roof at Y70 has {@code enclosureDepth} 10, passes {@code isCaveLike}, and gets treated as
+     * subterranean. The distinguishing fact is not what is overhead but whether the mob is below
+     * the <b>surrounding natural terrain</b>: a cellar's local rim is at its own ground level
+     * (depth ≈ 0) while a cave's rim is far above it.
+     */
+    public enum SpaceKind {
+        /** Open ground at or above local terrain. */
+        SURFACE,
+        /** Enclosed, but not below the surrounding terrain — a building, cellar, or covered area. */
+        ENCLOSED_STRUCTURE,
+        /** Below local terrain with the column open to the sky — ravine, canyon, quarry. */
+        RAVINE,
+        /** Below local terrain and enclosed overhead. */
+        CAVE
+    }
+
+    /**
+     * Geometry of one standing position. Extensible: new dimensions are added here rather than as
+     * more boolean parameters threaded through call sites.
+     *
+     * @param localRimY upper-median surrounding surface, or {@link Integer#MIN_VALUE} when unsampled
+     * @param skyVisible whether the column above the feet reaches the sky
+     */
+    public record CaveContextSnapshot(
+            int feetY, int columnSurfaceY, int localRimY, boolean skyVisible) {
+
+        /** How much material sits above this column. A roof counts, which is the point. */
+        public int enclosureDepth() {
+            return columnSurfaceY - feetY;
+        }
+
+        /** Depth below the surrounding natural terrain. Unsampled rim reads as level ground. */
+        public int localRimDepth() {
+            return localRimY == Integer.MIN_VALUE ? 0 : localRimY - feetY;
+        }
+
+        /** The honest subterranean test: below what is around you, not merely under something. */
+        public boolean belowLocalTerrain() {
+            return localRimDepth() >= MIN_DEPTH_BELOW_SURFACE;
+        }
+
+        public boolean enclosed() {
+            return enclosureDepth() >= MIN_DEPTH_BELOW_SURFACE;
+        }
+    }
+
+    public static SpaceKind classify(CaveContextSnapshot snapshot) {
+        if (!snapshot.belowLocalTerrain()) {
+            // Under a roof but level with the terrain around it: a structure, not a cave.
+            return snapshot.enclosed() ? SpaceKind.ENCLOSED_STRUCTURE : SpaceKind.SURFACE;
+        }
+        return snapshot.skyVisible() ? SpaceKind.RAVINE : SpaceKind.CAVE;
+    }
+
+    /** True for spaces where underground ore opportunity reasoning is legitimate. */
+    public static boolean isSubterranean(CaveContextSnapshot snapshot) {
+        SpaceKind kind = classify(snapshot);
+        return kind == SpaceKind.CAVE || kind == SpaceKind.RAVINE;
     }
 
     /**
