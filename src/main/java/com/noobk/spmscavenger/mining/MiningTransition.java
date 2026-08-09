@@ -68,7 +68,15 @@ public record MiningTransition(
      */
     public boolean blocksControlledDescentRestart() {
         return reason == MiningProjectEnd.SEARCH_BUDGET_EXHAUSTED
-                || reason == MiningProjectEnd.HANDOFF_TUNNEL_SEARCH;
+                || reason == MiningProjectEnd.HANDOFF_TUNNEL_SEARCH
+                // MI-14A-R1: CAVE_FOUND must block too, and for a different reason than the other
+                // two. Its consumer is ExploringGoal at priority 8; ControlledDescentGoal sits at
+                // priority 3 and wins MOVE. With descent pressure still live, a fresh descent would
+                // reacquire the flag before the rebase could ever run, and the mob would dig a
+                // second staircase past the cave it just opened - the exact defect MI-14A exists to
+                // prevent. The block is released by consumption (rebase succeeded) or by the
+                // handoff expiring, which is what makes the retention window meaningful.
+                || reason == MiningProjectEnd.CAVE_FOUND;
     }
 
     /** Actionable today: {@code ExploringGoal} can be rebased onto the opening. */

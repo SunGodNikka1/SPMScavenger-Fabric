@@ -3,6 +3,13 @@ package com.noobk.spmscavenger.goal;
 import com.noobk.spmscavenger.DescentPressurePolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.server.level.ServerLevel;
+import com.noobk.spmscavenger.mining.NaturalDescentStatus;
+import com.noobk.spmscavenger.mining.MiningProjectSavedData;
+import com.noobk.spmscavenger.mining.MiningDirector;
+import com.noobk.spmscavenger.DescentHeadingPolicy;
 import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.goal.AnticsGoal;
 import net.minecraft.world.Container;
@@ -108,6 +115,53 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         }
 
         updateDescentPressure();
+        directorTick();
+    }
+
+    /**
+     * MI-14B — the director runs on this flagless observer's cadence.
+     *
+     * <p>It claims no goal flags and competes for nothing, so hosting it here adds no arbitration
+     * surface. The decision it makes is recorded as an assigned {@link MiningProject};
+     * {@code ControlledDescentGoal} picks that up on its next {@code canUse} and can no longer
+     * create one itself.
+     */
+    private void directorTick() {
+        if (!(mob.level() instanceof ServerLevel level)) {
+            return;
+        }
+        ScavengerConfig cfg = ScavengerConfig.get();
+        if (!cfg.enabled || !cfg.gatherResources || !cfg.exploring) {
+            return;
+        }
+        if (mob.getTarget() != null
+                || !level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+            return;
+        }
+        ExploringGoal exploring = ControlledDescentGoal.exploringGoalOf(mob);
+        if (exploring == null) {
+            return;
+        }
+        MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        long now = level.getGameTime();
+        NaturalDescentStatus status = exploring.naturalDescentStatus(level, now);
+        if (!MiningDirector.mayStartControlledDescent(
+                store, mob.getUUID(), status, readiness.hasDescentPressure())) {
+            return;
+        }
+        DescentHeadingPolicy.Heading heading = DescentHeadingPolicy.chooseBest(
+                mob.getX(),
+                mob.getZ(),
+                mob.blockPosition().getY(),
+                (x, z) -> new int[] {
+                    level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z),
+                    ControlledDescentGoal.sampleLocalRim(level, x, z)
+                },
+                0,
+                sector -> false,
+                12,
+                mob.getRandom());
+        MiningDirector.startControlledDescent(level, mob, store, heading.direction());
     }
 
     /** MI-5 / D-MIW-031: progression diamond need above the band unlocks explore sooner. */

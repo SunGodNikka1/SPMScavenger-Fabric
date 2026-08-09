@@ -140,9 +140,34 @@ class MiningTransitionContractTest {
     }
 
     @Test
-    void caveFoundDoesNotBlockDescentAndTunnelDoesNotRebaseExploration() {
-        assertFalse(transition(MiningProjectEnd.CAVE_FOUND, 0L).blocksControlledDescentRestart());
+    void everyHandoffBlocksAFreshDescentButOnlyCaveFoundRebases() {
+        // MI-14A-R1. The first assertion replaced its opposite: CAVE_FOUND used to be tested as
+        // *not* blocking descent, which starved its own consumer. ExploringGoal owns the rebase at
+        // priority 8; ControlledDescentGoal takes MOVE at priority 3. Leaving descent unblocked let
+        // a second staircase begin before the rebase could run.
+        assertTrue(transition(MiningProjectEnd.CAVE_FOUND, 0L).blocksControlledDescentRestart(),
+                "an unconsumed cave handoff must not be starved by a fresh descent");
         assertFalse(transition(MiningProjectEnd.HANDOFF_TUNNEL_SEARCH, 0L).isCaveContinuation());
+        assertFalse(transition(MiningProjectEnd.SEARCH_BUDGET_EXHAUSTED, 0L).isCaveContinuation());
+    }
+
+    @Test
+    void theDescentLockIsReleasedByConsumptionOrExpiry() {
+        MiningProjectSavedData store = new MiningProjectSavedData();
+        store.recordTransition(MOB_A, transition(MiningProjectEnd.CAVE_FOUND, 1000L));
+
+        assertTrue(store.pendingTransition(MOB_A).orElseThrow().blocksControlledDescentRestart(),
+                "locked while the handoff is unconsumed");
+
+        // Path 1: the rebase succeeds and consumes it.
+        assertTrue(store.consumeTransition(MOB_A).isPresent());
+        assertTrue(store.pendingTransition(MOB_A).isEmpty(), "lock released by consumption");
+
+        // Path 2: nothing ever consumes it, so expiry must release the lock rather than deadlock.
+        store.recordTransition(MOB_A, transition(MiningProjectEnd.CAVE_FOUND, 1000L));
+        assertTrue(MiningTransition.acceptableCaveHandoff(
+                        store.pendingTransition(MOB_A), 1000L + LIFETIME, LIFETIME).isEmpty(),
+                "an expired handoff stops being admissible, so the descent lock cannot be permanent");
     }
 
     // ---- 8. consumption exactly once ----

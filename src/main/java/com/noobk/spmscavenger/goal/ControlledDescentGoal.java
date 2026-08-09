@@ -11,6 +11,8 @@ import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.mining.ControlledDescentCaveHandoff;
 import com.noobk.spmscavenger.mining.MiningProject;
 import com.noobk.spmscavenger.mining.MiningProjectEnd;
+import com.noobk.spmscavenger.mining.MiningDirector;
+import com.noobk.spmscavenger.mining.MiningProjectMode;
 import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.mining.MiningTransition;
 import com.noobk.spmscavenger.mining.NaturalDescentExhaustionPolicy;
@@ -77,28 +79,15 @@ public final class ControlledDescentGoal extends Goal {
         if (!hasUsablePick()) {
             return false;
         }
-        MiningProject active = activeProject(level);
-        if (active != null && active.isControlledDescent()) {
-            return true;
-        }
-        // MI-14A: an unconsumed SEARCH_BUDGET_EXHAUSTED or HANDOFF_TUNNEL_SEARCH is a claim on the
-        // next decision. Without it the loop is: exhaust budget -> project deleted -> descent
-        // pressure unchanged -> exhausted again -> fresh descent in the same area, indefinitely.
-        // Checked after the resume branch so an already-running project is never interrupted.
-        if (MiningProjectSavedData.get(level).pendingTransition(mob.getUUID())
-                .filter(MiningTransition::blocksControlledDescentRestart)
-                .isPresent()) {
-            return false;
-        }
-        if (!readiness.hasDescentPressure()) {
-            return false;
-        }
-        ExploringGoal exploring = exploringGoalOf(mob);
-        if (exploring == null) {
-            return false;
-        }
-        NaturalDescentStatus status = exploring.naturalDescentStatus(level, level.getGameTime());
-        return NaturalDescentExhaustionPolicy.mayStartControlledDescent(status);
+        // MI-14B: the executor asks one question — am I assigned work I can still perform? It no
+        // longer decides whether descent is warranted, whether natural descent is exhausted, or
+        // which heading to take. Those are director questions, and an executor that cannot find an
+        // assignment does nothing rather than inventing one.
+        return MiningDirector.assignedProject(
+                        MiningProjectSavedData.get(level),
+                        mob.getUUID(),
+                        MiningProjectMode.CONTROLLED_DESCENT)
+                .isPresent();
     }
 
     @Override
@@ -117,28 +106,16 @@ public final class ControlledDescentGoal extends Goal {
         if (!(mob.level() instanceof ServerLevel level)) {
             return;
         }
-        MiningProjectSavedData store = MiningProjectSavedData.get(level);
-        UUID mobId = mob.getUUID();
-        project = store.projectOf(mobId).filter(MiningProject::isControlledDescent).orElse(null);
+        // MI-14B: resume the assigned project. A missing assignment is not an invitation to create
+        // one — canUse should already have refused, and silently starting here would restore exactly
+        // the ownership this task removed.
+        project = MiningDirector.assignedProject(
+                        MiningProjectSavedData.get(level),
+                        mob.getUUID(),
+                        MiningProjectMode.CONTROLLED_DESCENT)
+                .orElse(null);
         if (project == null) {
-            DescentHeadingPolicy.Heading heading = DescentHeadingPolicy.chooseBest(
-                    mob.getX(),
-                    mob.getZ(),
-                    mob.blockPosition().getY(),
-                    (x, z) -> new int[] {
-                        level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z),
-                        sampleLocalRim(level, x, z)
-                    },
-                    0,
-                    sector -> false,
-                    12,
-                    mob.getRandom());
-            project = MiningProject.startControlledDescent(
-                    mob.blockPosition(), heading.direction(), level.getGameTime());
-            store.putProject(mobId, project);
-            SpmScavenger.LOGGER.info(
-                    "[spmscavenger] controlled descent started entity={} heading={} origin={}",
-                    mob.getId(), heading.direction(), mob.blockPosition());
+            return;
         }
         planNextStep(level);
     }
@@ -330,15 +307,9 @@ public final class ControlledDescentGoal extends Goal {
     }
 
     private void finish(ServerLevel level, MiningProjectEnd end) {
-        // MI-14A: record the outcome *with* the data a consumer needs, atomically with completion.
-        // completeProject deletes terminal projects, so a reason emitted without a payload here is
-        // gone before anything can read it.
-        MiningTransition transition = MiningTransition.of(
-                project, end, mob.blockPosition(), level.getGameTime());
-        SpmScavenger.LOGGER.info(
-                "[spmscavenger] controlled descent ended entity={} reason={} depth={} at={} heading={}",
-                mob.getId(), end, project.depthBelowOrigin(), transition.at(), transition.heading());
-        MiningProjectSavedData.get(level).completeProject(mob.getUUID(), end, transition);
+        // MI-14B: the executor reports the execution fact it observed. Persistence, the transition
+        // payload and what happens next belong to the director.
+        MiningDirector.completeProject(level, mob, project, end, mob.blockPosition());
         project = null;
         currentStep = null;
         stop();
@@ -354,7 +325,7 @@ public final class ControlledDescentGoal extends Goal {
         return (int) Math.sqrt(dx * dx + dz * dz);
     }
 
-    private static int sampleLocalRim(ServerLevel level, int originX, int originZ) {
+    static int sampleLocalRim(ServerLevel level, int originX, int originZ) {
         int[] ox = com.noobk.spmscavenger.CaveContextPolicy.rimSampleOffsetsX();
         int[] oz = com.noobk.spmscavenger.CaveContextPolicy.rimSampleOffsetsZ();
         int[] samples = new int[ox.length];
@@ -390,7 +361,7 @@ public final class ControlledDescentGoal extends Goal {
         return Math.max(1, Math.min(MAX_BREAK_TICKS, ticks));
     }
 
-    private static ExploringGoal exploringGoalOf(Mob other) {
+    static ExploringGoal exploringGoalOf(Mob other) {
         GoalSelector selector = ((MobGoalSelectorAccessor) other).spmscavenger$getGoalSelector();
         if (selector == null) {
             return null;
