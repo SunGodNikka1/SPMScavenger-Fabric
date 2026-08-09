@@ -388,9 +388,8 @@ public final class ExploringGoal extends Goal {
     private boolean acceptCaveHandoff(ServerLevel level, long now) {
         ScavengerConfig cfg = ScavengerConfig.get();
         MiningProjectSavedData store = MiningProjectSavedData.get(level);
-        Optional<MiningTransition> pending = store.pendingTransition(mob.getUUID())
-                .filter(MiningTransition::isCaveContinuation)
-                .filter(transition -> !transition.expired(now, CAVE_HANDOFF_LIFETIME_TICKS));
+        Optional<MiningTransition> pending = MiningTransition.acceptableCaveHandoff(
+                store.pendingTransition(mob.getUUID()), now, CAVE_HANDOFF_LIFETIME_TICKS);
         if (pending.isEmpty()) {
             return false;
         }

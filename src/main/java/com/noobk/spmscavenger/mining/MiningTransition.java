@@ -5,6 +5,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * MI-14A — what a finished {@link MiningProject} hands to whatever acts next.
@@ -77,6 +78,17 @@ public record MiningTransition(
 
     public boolean expired(long now, int lifetimeTicks) {
         return now - tick >= lifetimeTicks;
+    }
+
+    /**
+     * The exact admission rule {@code ExploringGoal} uses, extracted so the contract is testable
+     * against shipped code rather than a reimplementation of it in a test.
+     */
+    public static Optional<MiningTransition> acceptableCaveHandoff(
+            Optional<MiningTransition> pending, long now, int lifetimeTicks) {
+        return pending
+                .filter(MiningTransition::isCaveContinuation)
+                .filter(transition -> !transition.expired(now, lifetimeTicks));
     }
 
     public CompoundTag save() {
