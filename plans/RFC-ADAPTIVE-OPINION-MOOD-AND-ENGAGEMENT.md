@@ -15,7 +15,7 @@
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-09 (GAO-0-B1 repair and GAO-0 implementation/static validation) |
+| **Last update** | 2026-08-09 (GAO-0b dependency/type-ownership audit; D-GAO-026/027 proposed) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,8 +39,9 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** GAO-0b is dependency-ready but remains outside the current authorization.
-GAO-0 has completed its code/unit/build/static-MAIBS gates; Minecraft runtime parity remains
+**Nearest frontier:** resolve D-GAO-026/027, then authorize the schema-only GAO-0b slice. GAO-0b's
+locked semantics referenced `OutcomeClass` and `ActivityKind`, but the phase table did not assign
+either type to a compilable owner. GAO-0 remains implemented/static-verified; runtime parity is
 `UNVERIFIED` because no launch was authorized.
 
 ---
@@ -492,9 +493,9 @@ unbounded REST classification.
 
 ---
 
-## Topic: Experience events — mood inputs without new goals (`LOCKED CONTRACT`)
+## Topic: Experience events — mood inputs without new goals (`LOCKED SEMANTICS / BOUNDARY PROPOSED`)
 
-**Status:** D-GAO-012/022/023 `LOCKED`; emitters remain unimplemented
+**Status:** D-GAO-012/022/023 `LOCKED`; GAO-0b type ownership D-GAO-026/027 awaits user acceptance; emitters remain unimplemented
 
 Opinion should learn from **terminals and milestones** already emitted by shipped systems — not poll block state.
 
@@ -532,6 +533,56 @@ ExperienceEvent {
   Optional<UUID> entity;             // GAO-6 — utility only, not relationship authority
 }
 ```
+
+### GAO-0b dependency audit (`CODE_CONFIRMED`, 2026-08-09)
+
+The schema is not compilable as previously phased: `ExperienceEvent` requires both `OutcomeClass`
+and `ActivityKind`; neither exists in source, while the phase table assigned `OutcomeClass` to
+GAO-0c and assigned no phase to `ActivityKind`. Three implementation boundaries were considered:
+
+1. **Recommended — schema vocabulary first.** GAO-0b owns `ExperienceKind`, `ExperienceCause`,
+   `OutcomeClass`, `ActivityKind`, immutable `ExperienceEvent`, and an interface-only
+   `ExperiencePipeline.accept(ExperienceEvent)` ingress. It wires no production emitters and stores
+   no events. GAO-0c owns `ActivityEpisode`, processing/routing, and `RestSessionClaim`; emitter
+   wiring begins only when episode ownership exists. This compiles the locked schema without a
+   silent queue/no-op consumer or premature behavioral side effects.
+2. Implement GAO-0b and GAO-0c together. This avoids a temporarily unused API but expands the next
+   task across episode normalization, unload lifecycle, REST claims, and multiple behavioral hooks.
+   Select it only if the user intentionally authorizes the larger slice.
+3. Remove `OutcomeClass`/`ActivityKind` from the raw event until later. Smaller initially, but it
+   contradicts the reviewed attribution contract and forces an avoidable event API migration.
+
+**D-GAO-026 (`PROPOSED`):** select option 1. `OutcomeClass` is schema vocabulary owned by GAO-0b;
+GAO-0c owns its episode-learning semantics, not the enum declaration. `ExperiencePipeline` is an
+ingress contract in GAO-0b and gains its processing implementation only with GAO-0c. No production
+emitter may publish into an unowned/no-op pipeline.
+
+**D-GAO-027 (`PROPOSED`):** `ActivityKind` is deliberately distinct from scheduler-facing
+`ActivityClass`. Initial stable values are `OVERLAND_EXPLORATION`, `CAVE_EXPLORATION`,
+`CONTROLLED_DESCENT`, `TUNNEL_SEARCH`, `RESOURCE_GATHERING`, `REST`, `SOCIALIZING`, and `MIMICRY`.
+Campfire is a REST anchor, not a learned activity kind. Reusing `ActivityClass` was rejected because
+mandatory/authority taxonomy and subjective activity identity change for different reasons; one
+coarse `MINING` value was rejected because it loses the already-required tunnel-versus-cave route
+preference.
+
+**GAO-0b behavioral prediction:** because this slice defines immutable vocabulary and an unbound
+ingress interface only, a PlayerMob physically does exactly what it did after GAO-0. No Goal,
+selector, cadence, persistence, event emitter, affect value, or decision path changes.
+
+**Predicted weirdness / risks:** an unused contract is temporarily dead infrastructure
+(`ACCEPTABLE_STEPPING_STONE`, bounded to GAO-0c); callers could later generate one episode ID per
+milestone (`ARCHITECTURE_DEFECT`, prohibited by GAO-0c tests); and an insufficient `ActivityKind`
+vocabulary could require additive enum values (`RUNTIME_QUESTION` for later activity coverage, not
+permission to collapse it into `ActivityClass`).
+
+**GAO-0b acceptance tests:**
+
+- Must happen: the record preserves exact kind/time/episode/outcome/cause/deltas/context, rejects
+  null and non-finite deltas, and the functional ingress passes the identical immutable event.
+- Must not happen: no terminal/executor is wired, no event is silently queued/dropped by a concrete
+  pipeline, and no affect/opinion/episode/rest/Goal behavior appears.
+- MAIBS pre-implementation gate: `PASS — BEHAVIORALLY_PLAUSIBLE` for the schema-only boundary;
+  observable runtime remains unchanged by construction and still requires later runtime proof.
 
 | `ExperienceKind` | Emitter (shipped) | Notes |
 | --- | --- | --- |
@@ -717,7 +768,7 @@ When `IdleOpportunityPolicy` picks an activity, emit:
 
 ```text
 DiscretionaryIntent {
-  ActivityKind preferred;     // EXPLORE, SOCIALIZE, REST, CAMPFIRE, MIMICRY, …
+  ActivityKind preferred;     // OVERLAND_EXPLORATION, REST, SOCIALIZING, MIMICRY, …
   float urgency;              // boredom-driven
   long issuedAtTick;
   Optional<UUID> socialTarget;
@@ -1097,13 +1148,13 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 `IMPLEMENTED / STATIC VERIFIED`; GAO-0b and later phases remain unimplemented and unauthorized
+**Status:** GAO-0 `IMPLEMENTED / STATIC VERIFIED`; GAO-0b boundary awaits D-GAO-026/027 acceptance and implementation authorization
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
 | **GAO-0** | Activity taxonomy + observation contract | **IMPLEMENTED:** `ActivityClass`; one `ActivityObservationService` scan wrapping `MoveHolderClassifier`; host/addon taxonomy and parity tests | MI-14C2-R2 pattern |
-| **GAO-0b** | `ExperienceEvent` schema | Immutable raw events + `ExperiencePipeline.accept`; exact cause retained | GAO-0 |
-| **GAO-0c** | Episode + rest-claim contracts | `ActivityEpisode`, `OutcomeClass`, `RestSessionClaim`; affect-vs-learning and unload lifecycle tests | GAO-0, GAO-0b |
+| **GAO-0b** | Schema vocabulary + inert ingress contract | `ExperienceKind`, `ExperienceCause`, `OutcomeClass`, `ActivityKind`, immutable `ExperienceEvent`, interface-only `ExperiencePipeline.accept`; no emitters/consumers | GAO-0, D-GAO-026/027 |
+| **GAO-0c** | Episode + rest-claim processing | `ActivityEpisode`, concrete pipeline routing, `RestSessionClaim`; affect-vs-learning and unload lifecycle tests; emitter wiring only with causal owner | GAO-0, GAO-0b |
 | **GAO-1** | `AffectiveState` + observation | Boredom/engagement from experience events; scheduler-wide idle detection | GAO-0, GAO-0b, GAO-0c |
 | **GAO-2** | `OpinionMemory` v1 (ACTIVITY only) | Learned activity preferences + repetition | GAO-1 |
 | **GAO-3** | `IdleOpportunityPolicy` | Score available discretionary activities | GAO-2, existing goals |
@@ -1112,6 +1163,19 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-6** | ENTITY bridge | SPM `feelingToward` integration | GAO-4 |
 | **GAO-7** | PersonalityModel | Trait-weighted experience scaling | GAO-2 |
 | **GAO-8** | Observable expression | Movement/scan biases | GAO-4, deferred UX |
+
+### GAO-0b implementation task (`READY AFTER D-GAO-026/027 ACCEPTANCE`)
+
+| Field | Contract |
+| --- | --- |
+| Status | `BLOCKED_BY_PRODUCT_DECISION`; implementation not authorized by “Continue the RFC” |
+| Objective | Establish the immutable, server-neutral experience vocabulary and ingress seam required by GAO-0c without changing runtime behavior |
+| Files/systems | New `experience` package and focused unit tests only; RFC evidence update |
+| Constraints | No production emitters, concrete queue/router, episode state, persistence, affect, OpinionMemory, RestSessionClaim, Goal changes, or scheduler changes |
+| Must happen | Exact field preservation; null/non-finite rejection; distinct activity-vs-scheduler taxonomy; functional ingress forwards the identical event |
+| Must not happen | No PlayerMob behavior, scan cadence, Goal priority/flags, readiness, mining lease, save data, or network behavior changes |
+| Validation | Focused schema tests, full test suite, clean build, `git diff --check`, static scope/MAIBS review |
+| Runtime | Not required for a genuinely inert schema slice; no Minecraft launch is included |
 
 ### GAO-0 implementation task
 
@@ -1382,6 +1446,8 @@ Runtime probes require separate Minecraft launch approval.
 | D-GAO-023 | Outcome controls learning eligibility; exact cause controls sign | `LOCKED` | `VOLUNTARY_ABANDON` is not inherently negative |
 | D-GAO-024 | Occupancy, progress/restlessness, and discretionary preemption are independent | `LOCKED` | Closes stalled unknown-Goal affect hole without violating authority |
 | D-GAO-025 | Bounded end-to-end decision trace | `LOCKED` | Score through terminal; 16–32 initial capacity target, tune by evidence |
+| D-GAO-026 | GAO-0b owns schema vocabulary + interface-only ingress; GAO-0c owns processing and emitter wiring | `PROPOSED` | Resolves `OutcomeClass` phase cycle without a silent/no-op runtime pipeline |
+| D-GAO-027 | `ActivityKind` is distinct from `ActivityClass`; initial route/activity values are explicit | `PROPOSED` | Preserves subjective route preference without coupling it to scheduler authority taxonomy |
 
 ---
 
@@ -1389,6 +1455,7 @@ Runtime probes require separate Minecraft launch approval.
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Codex | **GAO-0b continuation frontier audit.** Found that the locked event record referenced absent `OutcomeClass` and `ActivityKind` types while the phase table deferred one and owned neither completely. Added D-GAO-026/027, compared schema-first vs combined vs later-migration boundaries, defined a behavior-inert GAO-0b task and MAIBS/acceptance gates, and moved the frontier to one user decision/implementation authorization. No source implementation, build, runtime launch, commit, or push |
 | 2026-08-09 | Agent_Codex | **GAO-0-B1 + GAO-0 implementation.** Repaired disabled-cadence lease settlement and, during post-build MAIBS, found/repaired the disabled-at-entity-load observer absence with a permanently cleanup-only authority mode. Added `ActivityClass`, the single `ActivityObservationService`, reused/extended `MoveHolderClassifier`, refactored readiness observation, and added taxonomy/parity tests. Focused suite and clean build passed; 405 tests, 0 failures/errors/skips. Runtime remains unverified; no launch, commit, push, or out-of-scope GAO-0b+ work |
 | 2026-08-09 | Agent_Codex | **GAO-0 pre-implementation stop.** Found GAO-0-B1: `ExplorationActivityGoal.tick()` returns on global disable before the only production `MiningDirector.enforceLease` call, so the documented “lease first” invariant is false on that path. Recorded four probes, three options, behavioral prediction, and stop gate. No Java edits, tests, build, runtime launch, commit, or push |
 | 2026-08-09 | User peer review + Agent_Codex | **Contract amendment and convergence.** Promoted prior-consensus D-GAO-011 and locked amended D-GAO-012/015/021…025; accepted PD-GAO-06 Explore + Rest and PD-GAO-07 freeze persistent affect/opinion but invalidate ephemeral intent/claim state. Added adopted-authority identity to REST claims, split affect pulses from normalized learning, preserved exact terminal cause beneath outcome eligibility, separated stalled restlessness from preemption authority, expanded the trace through executor terminal, corrected multi-mob coordination wording, added GAO-M12, and made GAO-0 implementation-ready. No source implementation or runtime launch |
@@ -1684,3 +1751,35 @@ out of scope.
 
 **Frontier after:** GAO-0 is implemented. GAO-0b is dependency-ready but not authorized. No GAO-0b,
 GAO-0c, GAO-1+, Opinion behavior, runtime launch, commit, push, or PR occurred.
+
+---
+
+## Contribution — Agent_Codex (GAO-0b boundary audit)
+
+**Agent:** `Agent_Codex`
+
+**Date/Session:** 2026-08-09
+
+**Contribution type:** `REVIEW / OBJECTION / DESIGN`
+
+**Frontier before:** the RFC called GAO-0b dependency-ready and merely unauthorized.
+
+**Objection:** the proposed `ExperienceEvent` cannot compile within the recorded phase ownership:
+it contains `OutcomeClass`, assigned to GAO-0c, and `ActivityKind`, assigned to no phase and absent
+from source. Implementing the prior task wording would either silently broaden into GAO-0c or invent
+placeholder types without an accepted owner.
+
+**Alternatives reviewed:** schema vocabulary first; implement GAO-0b+0c together; or omit the future
+fields and migrate later. The recommended schema-first boundary is smallest and preserves the locked
+attribution contract without creating a concrete no-op/queue whose lifecycle is undefined.
+
+**Recommendation:** accept D-GAO-026/027, then authorize schema-only GAO-0b. It defines all required
+vocabulary plus an interface-only ingress, but wires no emitters and produces no behavior. GAO-0c
+then supplies episode ownership, concrete routing, REST claims, and emitter integration.
+
+**MAIBS:** `PASS — BEHAVIORALLY_PLAUSIBLE` for an inert contract slice. The falsifier is any diff to
+Goal registration/flags/cadence, mining/readiness, save state, or a production event emitter.
+
+**Frontier after:** D-GAO-026/027 require user acceptance; the same response may authorize the
+dependency-ready GAO-0b implementation and its focused/full/build/static gates. No implementation,
+build, runtime launch, commit, or push occurred.
