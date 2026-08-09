@@ -1,7 +1,11 @@
 package com.noobk.spmscavenger.goal;
 
+import com.noobk.spmscavenger.DescentPressurePolicy;
+import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
+import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.goal.AnticsGoal;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.GoalSelector;
@@ -101,6 +105,26 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
             readiness.recordMeaningfulWork();
         } else if (!exploring) {
             readiness.recordIdleTicks(OBSERVE_INTERVAL);
+        }
+
+        updateDescentPressure();
+    }
+
+    /** MI-5 / D-MIW-031: progression diamond need above the band unlocks explore sooner. */
+    private void updateDescentPressure() {
+        ScavengerConfig cfg = ScavengerConfig.get();
+        Container backpack = PlayerMobs.backpack(mob);
+        if (backpack == null || !cfg.enabled || !cfg.craftTools || !cfg.exploring) {
+            readiness.clearDescentPressure();
+            return;
+        }
+        int progression = WorkDemandPolicy.diamondProgressionDemand(
+                backpack, mob.getMainHandItem(), cfg);
+        boolean local = WorkDemandPolicy.isDiamondLocalGatherEligible(mob.blockPosition().getY());
+        if (DescentPressurePolicy.wantsDescentExplore(progression, local, false)) {
+            readiness.recordDescentPressure();
+        } else {
+            readiness.clearDescentPressure();
         }
     }
 }

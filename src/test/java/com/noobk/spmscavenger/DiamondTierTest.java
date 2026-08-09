@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -85,10 +86,18 @@ class DiamondTierTest {
     // ---- the plausibility gate (D-TTU-024) ----
 
     @Test
-    void mustNotHappen_surfaceMobCarriesDiamondDemand() {
+    void mustNotHappen_surfaceMobCarriesDiamondLocalDeficit() {
         assertEquals(0, WorkDemandPolicy.diamondDeficit(
                         ironPickPack(), ItemStack.EMPTY, diamondConfig(), SURFACE),
-                "a surface mob has no diamond prospect, so it must not scan forever for one");
+                "a surface mob must not scan forever for diamond locally");
+    }
+
+    @Test
+    void mustHappen_surfaceMobStillHasProgressionDemand() {
+        assertTrue(WorkDemandPolicy.diamondProgressionDemand(
+                        ironPickPack(), ItemStack.EMPTY, diamondConfig()) > 0,
+                "progression demand must survive above the band (D-MIW-031)");
+        assertFalse(WorkDemandPolicy.isDiamondLocalGatherEligible(SURFACE));
     }
 
     @Test
@@ -99,7 +108,7 @@ class DiamondTierTest {
         assertTrue(WorkDemandPolicy.diamondDeficit(
                         pack, ItemStack.EMPTY, cfg,
                         WorkDemandPolicy.DIAMOND_GENERATION_CEILING_Y) > 0,
-                "at the generation ceiling diamond becomes plausible");
+                "at the generation ceiling diamond becomes locally gatherable");
     }
 
     // ---- tier reachability + frontier ----

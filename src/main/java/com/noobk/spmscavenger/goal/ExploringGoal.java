@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.goal;
 
+import com.noobk.spmscavenger.DescentPressurePolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.SpmScavenger;
@@ -625,7 +626,13 @@ public final class ExploringGoal extends Goal {
             }
         }
         // Stable, so the radius ordering survives inside one elevation band.
-        ring.sort(Comparator.comparingInt(position -> Math.abs(position.getY() - mobY)));
+        // MI-5: under descent pressure prefer standable landings below the mob first.
+        if (readiness.hasDescentPressure()) {
+            ring.sort(Comparator.comparingInt(
+                    position -> DescentPressurePolicy.landingPreferenceKey(position.getY(), mobY)));
+        } else {
+            ring.sort(Comparator.comparingInt(position -> Math.abs(position.getY() - mobY)));
+        }
         result.addAll(ring);
         return result;
     }

@@ -8,15 +8,15 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Target progression** | **Vanilla Minecraft 1.21.1 mining + resource wealth** (overworld ore tiers through diamond/deepslate; not Nether/endgame mining in gen-1) |
 | **Scope** | Autonomous *where* to mine, *how much* to stockpile (wealth), prerequisite planning hooks, capability gaps, integration methods, phased plan, validation — **design until implementation authorized** |
-| **Mode** | `PROGRESSIVE_CONTINUATION` (Agent_Cursor — F-1 normalisation lock) |
-| **Status** | Gen-1 through MI-4R + MI-13 + MI-2 `IMPLEMENTED` (155 tests); **F-1 `AWAITING_LOCK`** blocks MI-4 acceptance; runtime `UNVERIFIED` |
+| **Mode** | `WORKING_FROM_PLAN` (Agent_Cursor — MI-5 complete) |
+| **Status** | Gen-1 through MI-4S + **MI-5** `IMPLEMENTED` (165 tests); runtime cave/ravine descent `UNVERIFIED` |
 | **User constraint** | No Minecraft launch, commit, or push unless separately asked; implementation only after explicit Begin authorization |
 | **Baseline version** | `1.9.2` |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `TaskLifecycle.java` |
 | **Former name** | `RFC-MINING-INTELLIGENCE-AND-RESOURCE-GREED.md` — merged into this file (2026-08-08); “resource greed” → **wealth system** |
 | **Owners** | User (product) |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Cursor 2` · `Agent_Codex` · `Agent_Claude` |
-| **Last update** | 2026-08-08 ~21:45 PDT |
+| **Last update** | 2026-08-08 ~22:00 PDT |
 | **Gate** | MRFC-1 |
 
 ### Naming
@@ -53,17 +53,15 @@ PlayerMobs should progress through **vanilla mining** using **deterministic clas
 
 **Mining architecture (`CONSENSUS`, D-MIW-001):** `MiningDirector` / `MiningProject` / `MiningMemory` are policy + session state; `GatherResourcesGoal` owns physical dig; no clairvoyant ore map.
 
-**Continuation result (`CODE_CONFIRMED`, Agent_Cursor):** MI-13 + MI-2 shipped (task 14). Nearest
-frontier is no longer another code task: **F-1 utility/cost scale** remains `CONTESTED` and blocks
-accepting MI-4 wealth behaviour. Design findings **F-2 / F-4 / F-5** are promoted to registry
-decisions below; **F-1** needs an explicit product lock before a repair task (MI-4S) may start.
-Runtime, vein follow, and F-6 perception budget remain open.
+**Continuation result (`CODE_CONFIRMED`, Agent_Cursor):** **MI-5 implemented** — D-MIW-031 split
+(`diamondProgressionDemand` vs local-gated `diamondDeficit`); descent pressure unlocks explore and
+biases landings lower. 165 tests pass. Next: MI-6 cave opportunism / MI-9–10 / runtime — ask first.
 
 ---
 
 ## Collaboration Protocol
 
-- This continuation is **`Agent_Cursor`** (F-1 options + lock F-2/F-4/F-5; no Java).
+- This continuation is **`Agent_Cursor`** (MI-5 implementation + static validation).
 - Evidence: `CONFIRMED` / `INFERRED` / `UNVERIFIED` (Gate AV-1).
 - Reuse SPM + Scavenger executors; no duplicate scanners (Gate SPM-2).
 - **Anti-clairvoyance (D-MIW-008 `CONSENSUS`):** undiscovered ore behind solid stone is never an exact path target from server block query alone.
@@ -97,8 +95,8 @@ Runtime, vein follow, and F-6 perception budget remain open.
 | [Capabilities](#topic-capabilities) | `CONFIRMED` refresh | Diamond + furnace craft present |
 | [Integration methods](#topic-integration-methods) | `CONSENSUS` | Per-capability ladder; SPI deferred |
 | [Task lifecycle](#topic-task-lifecycle) | `CONSENSUS` | RUNNING/SUCCESS/FAILURE/… |
-| [Utility scale (F-1…F-6)](#topic-utility-scale-and-policy-boundaries-5-blocking-findings) | F-1 `AWAITING_LOCK`; F-2/F-4/F-5 `CONSENSUS` | Blocks MI-4 acceptance |
-| [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order | Next code: MI-4S after F-1 lock |
+| [Utility scale (F-1…F-6)](#topic-utility-scale-and-policy-boundaries-5-blocking-findings) | F-1 Option A `LOCKED` + MI-4S `IMPLEMENTED` | Scale repair landed |
+| [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order | Next: MI-6 or MI-9/10 |
 | [Validation](#topic-validation) | `PARTIAL` | Policy units green; gather wealth + runtime open |
 | [Deferred](#topic-deferred-and-unverified) | — | Nether, branch mines, portfolio gen-1 |
 
@@ -144,7 +142,7 @@ Runtime, vein follow, and F-6 perception budget remain open.
 | M-iron-ore | stone+ pick, **reachable ore** | raw iron | `IMPLEMENTED` (TT-2c) | **PARTIAL** (surface bias) |
 | M-iron-ingot | furnace, fuel | ingot | `IMPLEMENTED` | **FULL** |
 | M-iron-tools | ingots, sticks | iron tools | `IMPLEMENTED` (TT-2b) | **FULL** |
-| M-reach-depth | navigation | Y ≤ 16 | **PARTIAL** — `diamondDeficit` zeros above Y16; no descent seek | **PARTIAL** (this RFC MI-4/MI-5) |
+| M-reach-depth | navigation | Y ≤ 16 | **PARTIAL** — MI-5 descent pressure; cave seek still weak | **PARTIAL** (MI-6/MI-14) |
 | M-diamond-ore | iron pick, exposed/deep ore | diamond | `IMPLEMENTED` consumer-pull + Y gate | **PARTIAL** (no seek; needs exposure in range) |
 | M-diamond-tools | 3 diamond + sticks | diamond tools | `IMPLEMENTED` (`MAKE_DIAMOND_*`) | **FULL** (craft; runtime `UNVERIFIED`) |
 | M-branch-mine | iron pick, torches, Y band | sustained ore | `NOT FOUND` | **NOT PRACTICAL** gen-1 |
@@ -403,8 +401,8 @@ revised).
 
 ## Topic: Utility scale and policy boundaries (5 blocking findings)
 
-**Status:** F-1 `AWAITING_LOCK` (D-MIW-028); F-2/F-4/F-5 `CONSENSUS` (D-MIW-031/029/030); F-3/F-6 still open.
-**Blocks:** MI-4 acceptance and MI-4S repair until F-1 locks.
+**Status:** F-1 **Option A `LOCKED`** + **MI-4S `IMPLEMENTED`** (task 15); F-2/F-4/F-5 `CONSENSUS`; F-3/F-6 still open.
+**Blocks:** none for MI-4 acceptance on scale; runtime still `UNVERIFIED`.
 
 ### F-1 — Wealth utility and acquisition cost are on different scales (`CODE_CONFIRMED`)
 
@@ -413,49 +411,44 @@ with an exposed vein costed at `3`. Executed against the shipped formulas
 (`ResourceWealthPolicy.wealthValue` / `opportunityBonus`), iron at the recommended `greed = 0.55`,
 `wealthLevel = 1`:
 
-| Held | Cost | wealth | bonus | **net** |
+| Held | Cost | wealth | bonus | **net (pre-A, BROKEN)** |
 | ---: | ---: | ---: | ---: | ---: |
 | 0 | 0 | 0.227 | 0.227 | **+0.454** |
 | 0 | **3** | 0.227 | 0.180 | **−2.593** |
 | 0 | 10 | 0.227 | 0.071 | **−9.702** |
 | 12 | 3 | 0.125 | 0.099 | **−2.776** |
 
-**Maximum achievable iron net utility is ≈ 0.45, at zero cost.** Any real cost — including the
-RFC's own exposed-vein example of `3` — makes optional iron acquisition permanently negative. Even
-DIAMOND at `greed = 1.0`, `wealthLevel = 1` nets `+0.15` at cost 3 and goes negative by cost ≈ 5.
+**Maximum achievable iron net utility under the broken formula is ≈ 0.45, at zero cost.** Any real
+cost made optional iron permanently negative. Worked-example absolutes (15/18/3) are **illustrative
+ratios only** under Option A.
 
-The worked example elsewhere in this RFC assumes `wealth 15, opportunity 18, cost 3`. **The locked
-constants and the worked examples describe two different systems**, and only the examples describe
-the behaviour this RFC exists to create.
+**This already affects merged code** until MI-4S: candidate admission uses
+`evaluateWealth(...).netUtility() > 0` with raw cost subtract.
 
-**This already affects merged code.** MI-4R still admits wealth only when
-`evaluateWealth(...).netUtility() > 0`. Live candidate cost is `sqrt(distSq)/8`
-(`GatherTargetPolicy`). At distance ≈24 blocks (`cost≈3`) wealth is already dead for iron at
-recommended greed. Intent scan activation uses `SCAN_ACTIVATION_COST = 0.25F` so global wealth
-flags can still light; candidate admission is where the scale break shows.
+#### Decision D-MIW-028 — F-1 normalisation (`LOCKED` — Option A)
 
-#### Decision D-MIW-028 — F-1 normalisation (`AWAITING_LOCK`)
+**User lock (2026-08-08):** **Option A — Unit desire × proximity.**
 
-| Option | Formula | Keeps D-MIW-026 profiles? | Product feel |
+| Option | Formula | Keeps D-MIW-026 profiles? | Status |
 | --- | --- | --- | --- |
-| **A — Unit desire × proximity (recommended)** | `desire = wealthValue(inventory)` (no cost). `detourBudget = 8 + greed×12`. `proximity = max(0, 1 − cost/detourBudget)`. **`acquisitionUtility = desire × proximity`** (admit if `> 0`). Drop raw `− acquisitionCost` from net. | **Yes** | Nearby exposed ore yes; dedicated far trip no. Worked-example *ratios* match; absolute 15/18 numbers become illustrative only. |
-| **B — Scale utilities to 0…100** | Multiply desire (or profile bases) so iron ≈15 at greed 0.55; keep `desire + bonus − cost` with costs 0…40. | **No** — revises D-MIW-026 meaning | Literal worked examples; larger magic multiplier; still needs F-4 so cost is not double-counted. |
-| **C — Raise profile constants until cost 3 nets +** | Keep broken formula; bump `baseValue`/`hoardability` until iron net>0 at cost 3. | Nominally yes, actually retunes lock | **Rejected** — hides the scale mismatch (Claude + this continuation). |
+| **A — Unit desire × proximity** | `desire = wealthValue(inventory)` (no cost). `detourBudget = 8 + greed×12`. `proximity = max(0, 1 − cost/detourBudget)`. **`acquisitionUtility = desire × proximity`** (admit if `> 0`). Drop raw `− acquisitionCost` from net. | **Yes** | **`LOCKED`** |
+| B — Scale utilities to 0…100 | Multiply desire so iron ≈15; keep desire+bonus−cost | No | **Rejected** (not chosen) |
+| C — Raise profile constants until cost 3 nets + | Keep broken formula; bump constants | Nominally | **Rejected** |
 
-**Must-happen acceptance if Option A locks (unit tests on policy):**
+**Must-happen acceptance (unit tests on policy after MI-4S):**
 
 | Case | greed / wealthLevel | held iron | cost | Must |
 | --- | --- | --- | --- | --- |
 | Nearby vein | 0.55 / 1 | 0 | 3 | `acquisitionUtility > 0` |
 | Far expedition | 0.55 / 1 | 0 | 35 | `acquisitionUtility == 0` (proximity floor) |
 | Defaults | 0 / 0 | any | any | desire 0; consumer-only parity |
-| Saturated | 0.55 / 1 | ≥ saturation | 3 | desire near floor; may still be tiny-positive — wealth must not force perpetual scans alone (MI-4R scan gate stays) |
+| Saturated | 0.55 / 1 | ≥ saturation | 3 | desire near floor; MI-4R scan gate stays |
 
-**Must-not:** reintroduce `wealthRawIron`; subtract raw block-distance from sub-1 utilities; apply cost inside desire *and* again as a second full subtract without documenting F-4.
+**Must-not:** reintroduce `wealthRawIron`; subtract raw block-distance from sub-1 utilities; apply cost inside desire *and* again as a second full subtract (obey D-MIW-029).
 
-**Switch evidence:** if playtests show greed=0.55 never takes exposed iron at cost≈3 under Option A, reconsider Option B. If Option B causes constant background wealth scans, return to A + F-6.
+**Switch evidence:** if playtests show greed=0.55 never takes exposed iron at cost≈3 under Option A, reopen for Option B. If Option A causes constant background wealth scans, tighten with F-6.
 
-**Repair task after lock:** **MI-4S** — rewrite `ResourceWealthPolicy` net/admission to the locked option; update Opportunity topic examples to match; refresh U-MIW wealth tests. Not authorized until user locks D-MIW-028.
+**Repair task:** **MI-4S** — `IMPLEMENTED` (task 15, 158 tests). Runtime still `UNVERIFIED`.
 
 ### F-2 — The Y-band gate destroys the signal needed to descend (`CODE_CONFIRMED`) → D-MIW-031 `CONSENSUS`
 
@@ -471,7 +464,8 @@ mob has no diamond demand for the director to act on. **Nothing can ever motivat
 | `ProgressionDemand(DIAMOND)` | **> 0** — the mob still wants diamond | exploration / descent pressure, `MiningDirector` |
 | `LocalGatherEligibility(DIAMOND)` | **false** unless legitimately sighted | candidate scanning, target selection |
 
-MI-2 task 14 delivered priority sort only; **band split remains for MI-5 / MI-14** (not blocked on F-1).
+MI-2 task 14 delivered priority sort; **MI-5 (task 16) applied the two-signal split in code** —
+progression unlocks explore descent pressure; local gather remains Y-gated.
 
 ### F-3 — IRON wealth does not distinguish raw iron from ingots (`CODE_CONFIRMED`)
 
@@ -516,14 +510,14 @@ Does not block F-1 / MI-4S.
 
 | Finding | Status | Blocks | Owner |
 | --- | --- | --- | --- |
-| F-1 scale | **D-MIW-028 `AWAITING_LOCK`** | MI-4 acceptance, MI-4S, MI-17 tuning | **User product lock** |
+| F-1 scale | **D-MIW-028 Option A `LOCKED`** + MI-4S done | — | Locked + applied |
 | F-2 band split | **D-MIW-031 `CONSENSUS`** | MI-5 / MI-14 implementation shape | Design locked; code later |
 | F-3 iron stage | Open | Later accounting | Design |
 | F-4 boundary | **D-MIW-029 `CONSENSUS`** | MI-4S / MI-17 | Design locked |
 | F-5 expedition rule | **D-MIW-030 `CONSENSUS`** | MI-14 | Design locked |
 | F-6 perception budget | D-MIW-032 `PROPOSED` | Director / scan growth | Design |
 
-**MI-4R stays `IMPLEMENTED` with concerns** until F-1 locks and MI-4S lands. Parity at greed=0 still holds.
+**MI-4 / MI-4R / MI-4S:** wealth path **accepted** under Option A at unit level. Runtime `UNVERIFIED`.
 
 ---
 
@@ -611,18 +605,20 @@ At 14 iron, wealth utility declined; inventory penalty rose → **probably stop*
 
 Connects to [Ore utility](#topic-ore-utility-while-mining) and `DiscoveryMode.VISIBLE` / `NEWLY_EXPOSED`.
 
-### Gen-1 opportunity formula (MI-25 — pairs with D-MIW-026; **scale pending D-MIW-028**)
+### Gen-1 opportunity formula (MI-25 — pairs with D-MIW-026; **D-MIW-028 Option A `LOCKED`**)
 
 ```text
-acquisitionCost = pathDistance + digPenalty + dangerPenalty   // live: sqrt(distSq)/8 in GatherTargetPolicy
-opportunityBonus (shipped) = wealthValue * max(0, 1 - acquisitionCost / detourBudget)
-netUtility (shipped, BROKEN vs costs) = wealthValue + opportunityBonus - acquisitionCost
+desire = wealthValue(inventory)                         // no path cost inside desire
+detourBudget = 8 + greed * 12
+proximity = max(0, 1 - acquisitionCost / detourBudget)
+acquisitionUtility = desire * proximity                 // Option A — admit if > 0
 
-detourBudget = 8 + greed * 12    // 8 blocks minimalist → 20 blocks goblin
+// REMOVED (broken pre-A):
+// netUtility = wealthValue + opportunityBonus - acquisitionCost
 ```
 
-**After D-MIW-028 Option A:** `acquisitionUtility = wealthValue * proximity` — do not subtract raw cost.
-Worked-example absolutes (15/18/3) remain **illustrative ratios** only unless Option B locks.
+Live cost today: `sqrt(distSq)/8` in `GatherTargetPolicy`. Worked-example absolutes (15/18/3) are
+**illustrative ratios only**.
 
 Mine when `blockingDemand + reserveValue + acquisitionUtility - inventoryPressure > 0` (NEED layers still dominate).
 Dedicated expeditions require positive **blocking** or **reserve** shortfall; wealth alone never starts a trip without `MEMORY`/`PROJECT` (D-MIW-008).
@@ -861,9 +857,9 @@ TaskLifecycle (RUNNING…INTERRUPTED)
 | Vein frontier | MI-16 | Generic `ResourceTarget` vein follow |
 | Ore utility scoring | MI-17 | Side-ore detour while blocking search |
 | Hazards + durability | MI-18 | Lava, gravel, tool swap, preemptive replace |
-| Band gate | MI-2 `IMPLEMENTED` priority; F-2 split → MI-5 | No deep local gather above Y=16 without sighting |
+| Band gate | MI-2 + MI-5 `IMPLEMENTED` | Local gather Y-gated; progression drives descent |
 | Target priority | MI-2 `IMPLEMENTED` | Blocking > wealth among legitimate candidates |
-| Explore downward bias | MI-5 | ProgressionDemand + zero local ore → nudge `ExploringGoal` |
+| Explore downward bias | MI-5 `IMPLEMENTED` | Descent pressure unlocks explore + lower landings |
 | Cave opportunism | MI-6 | Prefer exposed ore in ravine/cave during explore |
 | Bounded staircase | MI-7 | Last resort: 1×2 staircase max N blocks, torch check |
 | Torch pairing underground | MI-11 | `PlaceTorchGoal` + coal demand loop |
@@ -1417,7 +1413,7 @@ Gen-1 uses **Java policy records** only; SPI when a second mod needs hooks.
 | **P2d** | Portfolio + scarcity (MI-27, MI-28) | P2c | **DEFERRED** gen-1 |
 | **P3** | Target priority + deepen Y gate (MI-2) | P1, P3a | **READY** after MI-4 or parallel design |
 | **P4** | Wire wealth into gather (MI-4) | P2b, P3a | **`IMPLEMENTED`** — MI-4R candidate-aware repair (task 13) |
-| **P5** | Explore downward bias (MI-5) | P3 | **PARTIAL** |
+| **P5** | Explore downward bias (MI-5) | P3 | **`IMPLEMENTED`** (task 16) |
 | **P6** | Cave opportunism + `MiningMemory` (MI-5, MI-15) | P5 | **PARTIAL** |
 | **P7** | Bounded staircase (MI-6) | P5 | **PARTIAL** |
 | **P7b** | `DiscoveryMode` gate (MI-13) | P3 | **FULL** |
@@ -1435,9 +1431,8 @@ Gen-1 uses **Java policy records** only; SPI when a second mod needs hooks.
 ### Gen-1 slice (D-MIW-025 `CONSENSUS`, revised)
 
 ```text
-DONE:     MI-1 → MI-3/23 → MI-13a → MI-24/25 (policy) → MI-4R → MI-13 → MI-2
-BLOCKED:  MI-4 acceptance / MI-4S until **Lock D-MIW-028** (F-1 Option A recommended)
-NEXT CODE (after F-1): MI-4S scale repair → then MI-5 (uses D-MIW-031 band split) / MI-9 / MI-10
+DONE:     … → MI-4S → **MI-5** (D-MIW-031 progression vs local + descent pressure)
+NEXT:     **MI-6** cave opportunism (or MI-9/MI-10 datapack) — await Begin implementation
 DEFER:    MI-26 SPM trait, MI-27/28 portfolio/scarcity, MI-14 director, vein, staircase, personalities
 ```
 
@@ -1504,10 +1499,10 @@ boundary. Focused tests and `gradlew.bat clean build` pass (148/148); runtime re
 | MI-1 | P1 | `GatherIntentPolicy` — one intent from need layers + existing deficits | `IMPLEMENTED` (unit/build; runtime `UNVERIFIED`) |
 | MI-2 | P3 | `GatherTargetPolicy` + band/priority (extend Y≤16 gate) | `IMPLEMENTED` — priority sort + blocking>wealth; F-2 band split deferred |
 | MI-3 | P2 | `ResourceWealthPolicy` need layers | `IMPLEMENTED` (task 10) |
-| MI-4 | P4 | Gather + config wire wealth without replacing consumer specs | `IMPLEMENTED` — MI-4R/task 13; **not accepted** until F-1 + MI-4S |
-| MI-4S | P4b | Apply locked D-MIW-028 normalisation (+ D-MIW-029 boundary) | **`READY` after Lock D-MIW-028** |
-| MI-5 | P5 | Explore downward bias | `READY` design (D-MIW-031); code after MI-4S recommended |
-| MI-6 | P6 | Cave opportunistic ore | `BLOCKED` |
+| MI-4 | P4 | Gather + config wire wealth without replacing consumer specs | `IMPLEMENTED` — accepted after MI-4S |
+| MI-4S | P4b | Apply locked D-MIW-028 Option A (+ D-MIW-029 boundary) | **`IMPLEMENTED`** (task 15; 158 tests) |
+| MI-5 | P5 | Explore downward bias | **`IMPLEMENTED`** (task 16; 165 tests) |
+| MI-6 | P6 | Cave opportunistic ore | **`READY`** — await Begin implementation |
 | MI-7 | P7 | Bounded staircase | `BLOCKED` |
 | MI-8 | P12 | `RequirementResolver` v1 | `BLOCKED` |
 | MI-9 | P13 | Unit tests U-MIW-* | `PARTIAL` — MI-13/MI-2 policy tests added; full U-MIW matrix open |
@@ -1630,7 +1625,7 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 | D-MIW-025 | Gen-1 slice | `CONSENSUS` | MI-13a→MI-24→MI-25→MI-4R→MI-13→MI-2; MI-4S after F-1 |
 | D-MIW-026 | Gen-1 profile v1 | `CONSENSUS` | Locked constants + marginal curve; parity at greed=0 |
 | D-MIW-027 | Perception legitimacy | `CONSENSUS` | Exposure in `isCandidate` before MI-13/24/25 |
-| D-MIW-028 | F-1 utility/cost scale | **`AWAITING_LOCK`** | Option A recommended (desire×proximity); B scale-up; C rejected |
+| D-MIW-028 | F-1 utility/cost scale | **`LOCKED` Option A** | desire×proximity; keep D-MIW-026; no raw −cost; B/C rejected |
 | D-MIW-029 | F-4 desire vs acquisition | `CONSENSUS` | Desire inventory-only; acquisition applies cost once |
 | D-MIW-030 | F-5 wealth expeditions | `CONSENSUS` | Wealth opportunism only; expeditions need NEED layers |
 | D-MIW-031 | F-2 band signal split | `CONSENSUS` | ProgressionDemand vs LocalGatherEligibility |
@@ -1675,15 +1670,17 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] MI-24/MI-25 policy curves + opportunity implemented (task 12)
 - [x] **MI-4R** gather wealth repair (task 13)
 - [x] **MI-13 + MI-2** DiscoveryMode + priority (task 14; 155 tests)
-- [ ] **MI-4S** after Lock D-MIW-028 (F-1)
-- [ ] U-MIW matrix complete for normalised wealth
+- [x] **MI-4S** Option A formula (task 15; 158 tests)
+- [x] **MI-5** descent pressure / D-MIW-031 (task 16; 165 tests)
+- [ ] U-MIW matrix / runtime datapack (MI-9/MI-10)
+- [ ] **MI-6** cave opportunism (`READY`)
 
 ### Runtime Gate
 
 - [ ] Approved launch + RT matrix for mining/wealth
 - [ ] Dedicated-server smoke
 
-**MRFC-1 status:** **PASS (continuation)** — code through MI-13/MI-2 done; **blocked on user Lock D-MIW-028 (F-1)** before MI-4S; runtime `UNVERIFIED`.
+**MRFC-1 status:** **PASS (implementation)** — MI-5 `IMPLEMENTED`; **MI-6 `READY`**; runtime `UNVERIFIED`.
 
 ---
 
@@ -1699,8 +1696,10 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] **Authorize MI-4R** — implemented and statically verified as task 13
 - [x] **MI-13 + MI-2** — DiscoveryMode + GatherTargetPolicy (task 14)
 - [x] **Accept D-MIW-029 / 030 / 031** — F-4 boundary, F-5 expedition rule, F-2 band split (Agent_Cursor continuation)
-- [ ] **Lock D-MIW-028** — F-1 normalisation (**recommend Option A**; or say B)
-- [ ] **Begin implementation for MI-4S** — after D-MIW-028 locks
+- [x] **Lock D-MIW-028 Option A** — desire × proximity; keep D-MIW-026 profiles (user 2026-08-08)
+- [x] **MI-4S** — Option A applied (task 15; Continue the Plan)
+- [x] **Begin implementation for MI-5** — ProgressionDemand vs LocalGatherEligibility (task 16)
+- [ ] **Begin implementation for MI-6** — cave opportunistic ore during explore
 - [ ] Runtime launch (separate)
 
 ---
@@ -1729,6 +1728,9 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-08 | Agent_Cursor | **MI-5 implemented** (D-MIW-031 + descent pressure); 165 tests; MI-6 READY |
+| 2026-08-08 | Agent_Cursor | **MI-4S implemented** (Option A + saturated scan gate); 158 tests; MI-5 READY |
+| 2026-08-08 | Agent_Cursor | User **Lock D-MIW-028 Option A**; MI-4S → `READY`; no Java |
 | 2026-08-08 | Agent_Cursor | Continue RFC: F-1 → D-MIW-028 A/B/C (recommend A); lock F-2/F-4/F-5 as D-MIW-031/029/030; MI-4S READY after lock; no Java |
 | 2026-08-08 | Agent_Claude | Verified the user's five wealth objections: F-1 scale mismatch confirmed numerically (iron max net +0.454 at zero cost, −2.59 at cost 3; examples assume 15/18/3), F-4 confirmed from MI-4's deliberate zero-cost workaround, F-6 quantified (no stagger, ~3,969–15,129 positions/scan/mob); F-2/F-3/F-5 endorsed; MI-4 marked implemented-but-not-accepted pending F-1 |
 | 2026-08-08 | Agent_Cursor | Continue RFC: reconciled MI-13a/24/25 done; MI-4 → `READY` with acceptance tests; gates/approval fixed; no Java |
@@ -2083,3 +2085,61 @@ locked D-MIW-029 (F-4), D-MIW-030 (F-5), D-MIW-031 (F-2); proposed D-MIW-032 (F-
 **RFC fields updated:** Identity, Executive Summary, Collaboration, Topic Index, Utility scale topic,
 Opportunity formula note, Phased plan, Tasks, Decision Registry, Gates, User approval, Change Log,
 this contribution.
+
+---
+
+### Contribution — Agent_Cursor (Lock D-MIW-028 Option A)
+
+**Agent:** Agent_Cursor
+**Date/Session:** 2026-08-08 ~21:50 PDT
+**Contribution type:** `DECISION`
+
+**Frontier before:** D-MIW-028 `AWAITING_LOCK`; MI-4S blocked on product choice.
+
+**Action:** Recorded user lock of **Option A** (desire × proximity; keep D-MIW-026; drop raw
+`- acquisitionCost`). Options B/C remain rejected. Updated Identity, Utility scale topic,
+Opportunity formula, gen-1 slice, Decision Registry, Gates, User approval. No Java.
+
+**Frontier after:** **MI-4S `READY`**. Requires explicit `Begin implementation for MI-4S`.
+
+**RFC fields updated:** Identity, Executive Summary, Collaboration, Topic Index, F-1 decision,
+Opportunity formula, Phased plan, Tasks, Decision Registry, Gates, User approval, Change Log,
+this contribution.
+
+---
+
+### Contribution — Agent_Cursor (MI-4S / Continue the Plan)
+
+**Agent:** Agent_Cursor
+**Date/Session:** 2026-08-08 ~21:55 PDT
+**Contribution type:** `IMPLEMENTATION / VALIDATION`
+
+**Frontier before:** D-MIW-028 Option A locked; MI-4S READY.
+
+**Action:** Task 15 — `netUtility`/admission = `desire × proximity`; added `isSaturated` for
+wealth-only scan activation (replaces broken `-cost` saturated kill). Updated wealth tests so
+cost 3 admits and cost 35 rejects. `gradlew.bat test`: 158/158 pass.
+
+**Frontier after:** **MI-5 `READY`** (D-MIW-031). Ask `Begin implementation for MI-5`.
+
+**RFC fields updated:** Identity, Executive Summary, Collaboration, Topic Index, F-1/Disposition,
+Phased plan, Tasks, Gates, User approval, Change Log, this contribution.
+
+---
+
+### Contribution — Agent_Cursor (MI-5 implementation)
+
+**Agent:** Agent_Cursor
+**Date/Session:** 2026-08-08 ~22:00 PDT
+**Contribution type:** `IMPLEMENTATION / VALIDATION`
+
+**Frontier before:** MI-5 READY after MI-4S; user authorized Begin implementation for MI-5.
+
+**Action:** Task 16 — split `diamondProgressionDemand` / local eligibility; `DescentPressurePolicy`;
+readiness unlock + `ExplorationActivityGoal` wire; `ExploringGoal` lower-Y landing bias.
+`gradlew.bat test`: 165 pass.
+
+**Frontier after:** **MI-6 `READY`**. Ask `Begin implementation for MI-6`.
+
+**RFC fields updated:** Identity, Executive Summary, Collaboration, capability rows, Phased plan,
+Tasks, Gates, User approval, Change Log, this contribution.

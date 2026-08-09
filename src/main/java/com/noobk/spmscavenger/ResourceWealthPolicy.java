@@ -84,8 +84,18 @@ public final class ResourceWealthPolicy {
             float wealthValue,
             float opportunityBonus,
             float acquisitionCost) {
+        /**
+         * D-MIW-028 Option A + D-MIW-029: candidate admission uses desire×proximity only.
+         * {@code opportunityBonus} already stores that product; raw {@code acquisitionCost} must
+         * not be subtracted again from sub-1 utilities.
+         */
+        public float acquisitionUtility() {
+            return opportunityBonus;
+        }
+
+        /** Admission key — alias of {@link #acquisitionUtility()} under Option A. */
         public float netUtility() {
-            return wealthValue + opportunityBonus - acquisitionCost;
+            return acquisitionUtility();
         }
     }
 
@@ -154,26 +164,53 @@ public final class ResourceWealthPolicy {
                 + profile.rarityAppeal() * scale * factor;
     }
 
-    /** Local acquisition bonus (MI-25). */
+    /**
+     * Stock at/above the profile saturation band — desire is at the floor. Wealth must not start a
+     * global gather scan from floor desire alone (MI-4R / D-MIW-028 A acceptance).
+     */
+    public static boolean isSaturated(ResourceWealthContext context) {
+        ResourceWealthProfile profile = profileFor(context.category());
+        return context.currentAmount() >= profile.saturationAmount();
+    }
+
+    /** Detour budget used to normalise acquisition cost into proximity (D-MIW-028 A). */
+    public static float detourBudget(float greed) {
+        return 8.0F + greed * 12.0F;
+    }
+
+    /**
+     * Proximity factor in {@code [0, 1]} — cost at/above detour budget yields zero (far trip dies).
+     */
+    public static float proximity(float greed, float acquisitionCost) {
+        float budget = detourBudget(greed);
+        if (budget <= 0.0F) {
+            return 0.0F;
+        }
+        return Math.max(0.0F, 1.0F - acquisitionCost / budget);
+    }
+
+    /**
+     * Local acquisition utility (MI-25 / D-MIW-028 Option A): {@code desire * proximity}.
+     * Inventory desire is {@code wealthValue}; path cost enters only through proximity.
+     */
     public static float opportunityBonus(
             float wealthValue, float greed, float acquisitionCost) {
         if (wealthValue <= 0.0F) {
             return 0.0F;
         }
-        float detourBudget = 8.0F + greed * 12.0F;
-        float proximity = Math.max(0.0F, 1.0F - acquisitionCost / detourBudget);
-        return wealthValue * proximity;
+        return wealthValue * proximity(greed, acquisitionCost);
     }
 
+    /** Desire (inventory-only) paired with Option A acquisition utility for a candidate cost. */
     public static WealthUtility evaluateWealth(
             ResourceWealthContext context, float acquisitionCost) {
-        float wealthValue = wealthValue(context);
-        float bonus = opportunityBonus(wealthValue, context.greed(), acquisitionCost);
+        float desire = wealthValue(context);
+        float acquisitionUtility = opportunityBonus(desire, context.greed(), acquisitionCost);
         return new WealthUtility(
                 context.category(),
                 wealthFactor(context.currentAmount(), profileFor(context.category())),
-                wealthValue,
-                bonus,
+                desire,
+                acquisitionUtility,
                 acquisitionCost);
     }
 

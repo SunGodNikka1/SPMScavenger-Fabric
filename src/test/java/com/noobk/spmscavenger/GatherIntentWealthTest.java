@@ -169,7 +169,9 @@ class GatherIntentWealthTest {
         GatherIntentPolicy.GatherIntent intent = GatherIntentPolicy.evaluate(
                 satisfiedPack(), ItemStack.EMPTY, cfg, 0);
 
+        // D-MIW-028 Option A: nearby (cost 3) still worth it; far expedition (35) dies.
         assertTrue(intent.wants(GatherIntentPolicy.Resource.RAW_IRON, 0.125F));
-        assertFalse(intent.wants(GatherIntentPolicy.Resource.RAW_IRON, 3.0F));
+        assertTrue(intent.wants(GatherIntentPolicy.Resource.RAW_IRON, 3.0F));
+        assertFalse(intent.wants(GatherIntentPolicy.Resource.RAW_IRON, 35.0F));
     }
 }

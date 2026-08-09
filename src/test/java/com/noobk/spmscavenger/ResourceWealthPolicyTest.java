@@ -3,6 +3,7 @@ package com.noobk.spmscavenger;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -78,5 +79,46 @@ class ResourceWealthPolicyTest {
         assertTrue(near.opportunityBonus() > 0.0F);
         assertEquals(0.0F, far.opportunityBonus());
         assertTrue(near.netUtility() > far.netUtility());
+        assertEquals(near.opportunityBonus(), near.acquisitionUtility(), 0.0001F);
+    }
+
+    /** D-MIW-028 Option A — nearby exposed iron must stay positive; far trip dies. */
+    @Test
+    void optionA_nearbyVeinPositiveFarTripZero() {
+        ResourceWealthPolicy.ResourceWealthContext ctx =
+                new ResourceWealthPolicy.ResourceWealthContext(
+                        ResourceWealthPolicy.ResourceCategory.IRON, 0, 0.55F, 1.0F);
+        ResourceWealthPolicy.WealthUtility near =
+                ResourceWealthPolicy.evaluateWealth(ctx, 3.0F);
+        ResourceWealthPolicy.WealthUtility far =
+                ResourceWealthPolicy.evaluateWealth(ctx, 35.0F);
+        assertTrue(near.acquisitionUtility() > 0.0F);
+        assertEquals(0.0F, far.acquisitionUtility(), 0.0001F);
+        assertEquals(near.wealthValue() * ResourceWealthPolicy.proximity(0.55F, 3.0F),
+                near.acquisitionUtility(), 0.0001F);
+    }
+
+    @Test
+    void optionA_doesNotSubtractRawCostFromDesire() {
+        ResourceWealthPolicy.ResourceWealthContext ctx =
+                new ResourceWealthPolicy.ResourceWealthContext(
+                        ResourceWealthPolicy.ResourceCategory.IRON, 0, 0.55F, 1.0F);
+        ResourceWealthPolicy.WealthUtility atCost3 =
+                ResourceWealthPolicy.evaluateWealth(ctx, 3.0F);
+        // Pre-A broken net was desire + bonus - 3 ≈ -2.59; Option A must stay positive.
+        assertTrue(atCost3.netUtility() > 0.0F);
+        assertTrue(atCost3.netUtility() < atCost3.wealthValue() + 0.0001F);
+    }
+
+    @Test
+    void saturatedStockIsExplicitlyMarked() {
+        ResourceWealthPolicy.ResourceWealthContext saturated =
+                new ResourceWealthPolicy.ResourceWealthContext(
+                        ResourceWealthPolicy.ResourceCategory.IRON, 48, 0.55F, 1.0F);
+        ResourceWealthPolicy.ResourceWealthContext below =
+                new ResourceWealthPolicy.ResourceWealthContext(
+                        ResourceWealthPolicy.ResourceCategory.IRON, 47, 0.55F, 1.0F);
+        assertTrue(ResourceWealthPolicy.isSaturated(saturated));
+        assertFalse(ResourceWealthPolicy.isSaturated(below));
     }
 }

@@ -48,24 +48,32 @@ public final class GatherIntentPolicy {
             return requiredResources.contains(resource) || wealthContexts.containsKey(resource);
         }
 
-        /** Candidate-aware admission: needs are unconditional; wealth must pay its actual cost. */
+        /**
+         * Candidate-aware admission: needs are unconditional; wealth uses D-MIW-028 Option A
+         * {@code acquisitionUtility = desire × proximity} (no raw cost subtract).
+         */
         public boolean wants(Resource resource, float acquisitionCost) {
             if (requiredResources.contains(resource)) {
                 return true;
             }
             ResourceWealthPolicy.ResourceWealthContext context = wealthContexts.get(resource);
             return context != null
-                    && ResourceWealthPolicy.evaluateWealth(context, acquisitionCost).netUtility() > 0.0F;
+                    && ResourceWealthPolicy.evaluateWealth(context, acquisitionCost)
+                                    .acquisitionUtility()
+                            > 0.0F;
         }
 
         public boolean hasDemand() {
             if (!requiredResources.isEmpty()) {
                 return true;
             }
+            // Wealth-only: Option A keeps tiny positive utility at the saturation floor, so scan
+            // activation uses an explicit saturation gate instead of the old raw −cost hack.
             return wealthContexts.values().stream().anyMatch(context ->
-                    ResourceWealthPolicy.evaluateWealth(context, SCAN_ACTIVATION_COST)
-                                    .netUtility()
-                            > 0.0F);
+                    !ResourceWealthPolicy.isSaturated(context)
+                            && ResourceWealthPolicy.evaluateWealth(context, SCAN_ACTIVATION_COST)
+                                            .acquisitionUtility()
+                                    > 0.0F);
         }
 
         /** Crafting is the cheaper next action when an existing recipe can commit immediately. */
@@ -134,14 +142,6 @@ public final class GatherIntentPolicy {
                 resources, wealthContexts, ScavengerCrafting.nextStep(backpack, cfg, mainHand));
     }
 
-    /**
-     * Whether holding one more of this resource is worth a detour purely for wealth.
-     *
-     * <p>Uses {@link ResourceWealthPolicy#evaluateWealth} with a zero acquisition cost — this answers
-     * "would the mob want this at all", not "is that particular block worth walking to". Distance is
-     * the candidate scorer's job, and keeping it out of here stops wealth from silently becoming a
-     * second targeting system (Gate SPM-2).
-     */
     /** Gather resources map onto wealth categories; the two enums are deliberately separate. */
     private static ResourceWealthPolicy.ResourceCategory categoryOf(Resource resource) {
         return switch (resource) {

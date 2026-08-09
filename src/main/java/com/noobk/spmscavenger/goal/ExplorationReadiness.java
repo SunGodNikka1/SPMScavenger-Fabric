@@ -10,6 +10,8 @@ public final class ExplorationReadiness {
     private int successfulLocalTrips;
     private int idleWorkTicks;
     private long cooldownUntilTick;
+    /** MI-5: progression wants deep ore while local gather is ineligible. */
+    private boolean descentPressure;
 
     public ExplorationReadiness() {
     }
@@ -27,15 +29,29 @@ public final class ExplorationReadiness {
         successfulLocalTrips++;
     }
 
+    void recordDescentPressure() {
+        descentPressure = true;
+    }
+
+    void clearDescentPressure() {
+        descentPressure = false;
+    }
+
+    boolean hasDescentPressure() {
+        return descentPressure;
+    }
+
     boolean eligible(long now, int localTripThreshold, int idleTickThreshold) {
         return now >= cooldownUntilTick
-                && (successfulLocalTrips >= Math.max(1, localTripThreshold)
+                && (descentPressure
+                || successfulLocalTrips >= Math.max(1, localTripThreshold)
                 || idleWorkTicks >= Math.max(1, idleTickThreshold));
     }
 
     void consume(long cooldownUntilTick) {
         successfulLocalTrips = 0;
         idleWorkTicks = 0;
+        descentPressure = false;
         this.cooldownUntilTick = Math.max(this.cooldownUntilTick, cooldownUntilTick);
     }
 

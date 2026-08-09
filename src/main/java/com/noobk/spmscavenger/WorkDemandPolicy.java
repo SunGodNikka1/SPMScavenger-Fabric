@@ -64,30 +64,22 @@ public final class WorkDemandPolicy {
     }
 
     /**
-     * Highest Y at which diamond can generate in vanilla worldgen. Above this a mob has no diamond
-     * prospect at all, so it must not carry diamond demand.
+     * Highest Y at which diamond can generate in vanilla worldgen. Above this, local gather for
+     * diamond is ineligible (D-MIW-031 {@code LocalGatherEligibility}).
      */
     public static final int DIAMOND_GENERATION_CEILING_Y = 16;
 
+    /** True when the mob's feet are inside the diamond generation band. */
+    public static boolean isDiamondLocalGatherEligible(int mobBlockY) {
+        return mobBlockY <= DIAMOND_GENERATION_CEILING_Y;
+    }
+
     /**
-     * How many diamonds the mob still needs for its active diamond-tool consumer.
-     *
-     * <p>Consumer-pulled like {@link #rawIronDeficit}, with one extra gate: <b>plausibility</b>.
-     * Diamond generates below Y≈16, this addon has no descent behaviour, and the ore gate requires
-     * air exposure — so a surface mob can never satisfy diamond demand. Carrying it anyway would
-     * make {@code wantsMore()} permanently true and destroy the "nothing to gather" resting state,
-     * leaving every mob scanning forever for a block that cannot be in range (D-TTU-024).
-     *
-     * <p>Gating on the mob's own altitude keeps Phase 3 honest: a mob that wanders into a ravine or
-     * deep cave opportunistically mines diamond, and a mob on the surface simply does not want any.
-     * <b>Seeking</b> diamond is deliberately out of scope — it belongs to a future Mining
-     * Intelligence RFC, not here.
+     * Diamonds still needed for the active diamond-tool consumer — <b>no Y gate</b>
+     * (D-MIW-031 {@code ProgressionDemand}). Drives descent / explore pressure, not gather scans.
      */
-    public static int diamondDeficit(
-            Container backpack, ItemStack mainHand, ScavengerConfig cfg, int mobBlockY) {
-        if (mobBlockY > DIAMOND_GENERATION_CEILING_Y) {
-            return 0;
-        }
+    public static int diamondProgressionDemand(
+            Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
         Optional<ScavengerCrafting.ConsumerRecipeSpec> specOpt =
                 ScavengerCrafting.activeDiamondToolRecipe(backpack, mainHand, cfg);
         if (specOpt.isEmpty()) {
@@ -96,6 +88,21 @@ public final class WorkDemandPolicy {
         ScavengerCrafting.ConsumerRecipeSpec spec = specOpt.get();
         int required = spec.requiredCount(Items.DIAMOND);
         return Math.max(0, required - ScavengerCrafting.count(backpack, Items.DIAMOND));
+    }
+
+    /**
+     * Local gather deficit for diamond ore in range.
+     *
+     * <p>Equals {@link #diamondProgressionDemand} only when
+     * {@link #isDiamondLocalGatherEligible}; otherwise {@code 0} so surface mobs do not scan
+     * forever for unreachable ore (D-TTU-024 / D-MIW-031).
+     */
+    public static int diamondDeficit(
+            Container backpack, ItemStack mainHand, ScavengerConfig cfg, int mobBlockY) {
+        if (!isDiamondLocalGatherEligible(mobBlockY)) {
+            return 0;
+        }
+        return diamondProgressionDemand(backpack, mainHand, cfg);
     }
 
     /**

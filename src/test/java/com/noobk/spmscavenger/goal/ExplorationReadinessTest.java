@@ -39,4 +39,15 @@ class ExplorationReadinessTest {
         assertFalse(readiness.eligible(199, 2, 600));
         assertTrue(readiness.eligible(200, 2, 600));
     }
+
+    @Test
+    void descentPressureUnlocksExploreWithoutIdleTrips() {
+        ExplorationReadiness readiness = new ExplorationReadiness();
+        readiness.recordDescentPressure();
+        assertTrue(readiness.hasDescentPressure());
+        assertTrue(readiness.eligible(100, 2, 600));
+        readiness.consume(200);
+        assertFalse(readiness.hasDescentPressure());
+        assertFalse(readiness.eligible(100, 2, 600));
+    }
 }

@@ -21,4 +21,10 @@ tag-aware log stock; 148 tests/build pass; runtime/performance unverified)
 MI-13 + MI-2: complete with concerns (DiscoveryMode classification, GatherTargetPolicy blocking>wealth
 priority sort, harvest-reveal for NEWLY_EXPOSED; 155 tests/build pass; runtime unverified)
 
+MI-4S: complete with concerns (D-MIW-028 Option A desire×proximity; saturated scan gate explicit;
+158 tests pass; runtime unverified)
+
+MI-5: complete with concerns (D-MIW-031 progression vs local gather; descent pressure unlocks
+explore + lower landing bias; 165 tests pass; runtime cave seek unverified)
+
 No commits. No Minecraft launches (separate approval required).
