@@ -68,4 +68,9 @@ public final class OpinionMemory {
     int trackedActivityCount() {
         return activities.size();
     }
+
+    /** Package-private test seam. */
+    void seedActivity(ActivityKind kind, float preference, float repetition, int recentFailures) {
+        memoryOf(kind).seedForTest(preference, repetition, recentFailures);
+    }
 }

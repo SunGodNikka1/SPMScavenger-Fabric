@@ -9,7 +9,7 @@
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
 | **Mode** | `PLANNING` |
-| **Status** | GAO-0 through GAO-2 `IMPLEMENTED / STATIC VERIFIED`; GAO-3 (`IdleOpportunityPolicy`) is nearest frontier; runtime `UNVERIFIED` |
+| **Status** | GAO-0 through GAO-3 `IMPLEMENTED / STATIC VERIFIED`; GAO-4 (`DiscretionaryActivityDirector`) is nearest frontier; runtime `UNVERIFIED` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
@@ -39,11 +39,10 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** **GAO-3** — `IdleOpportunityPolicy` (activity scoring). GAO-2 delivers
-per-`ActivityKind` `ActivityOpinionMemory` (`preference`, `repetition`, `recentReward`,
-`recentFailures`, `lastPerformed`, `recentDuration`) fed only by normalized
-`EpisodeLearningEvidence`; PD-GAO-03 partial death reset; no activity choice yet (GAO-4 deferred).
-Runtime `UNVERIFIED`.
+**Nearest frontier:** **GAO-4** — `DiscretionaryActivityDirector` (convert ranked utility into
+behavior). GAO-3 delivers `IdleOpportunityPolicy` utility scoring for EXPLORE + REST only,
+normalized component math, inspectable breakdowns, and zero execution authority. Runtime
+`UNVERIFIED`.
 
 ---
 
@@ -274,7 +273,7 @@ existing executors (ExploringGoal, GatherResourcesGoal, …)
 
 ## Topic: Activity utility (discretionary scoring)
 
-**Status:** `PROPOSED`
+**Status:** `IMPLEMENTED / STATIC VERIFIED` (GAO-3 EXPLORE + REST only)
 
 When no mandatory objective:
 
@@ -1149,7 +1148,7 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 through GAO-2 `IMPLEMENTED / STATIC VERIFIED`; GAO-3 is nearest frontier
+**Status:** GAO-0 through GAO-3 `IMPLEMENTED / STATIC VERIFIED`; GAO-4 is nearest frontier
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
@@ -1158,7 +1157,7 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-0c** | Episode + rest-claim processing | **IMPLEMENTED:** `ActivityEpisode`, `EpisodeRoutingPipeline`, `RestSessionClaim`/`RestSessionCoordinator`, `OpinionExperienceRegistry`, mining/explore/rest emitters, observer REST integration | GAO-0, GAO-0b |
 | **GAO-1** | `AffectiveState` + observation | **IMPLEMENTED:** per-mob mood channels, 10-tick observation, pulse wiring, rate-based boredom, REST/stalled/social semantics, decay, freeze-on-unload, `opinion.enabled` | GAO-0, GAO-0b, GAO-0c |
 | **GAO-2** | `OpinionMemory` v1 (ACTIVITY only) | **IMPLEMENTED:** `ActivityOpinionMemory`, `OpinionMemory`, `OpinionLearningPolicy`, normalized-evidence wiring, PD-GAO-03 death reset | GAO-1 |
-| **GAO-3** | `IdleOpportunityPolicy` | Score available discretionary activities | GAO-2, existing goals |
+| **GAO-3** | `IdleOpportunityPolicy` | **IMPLEMENTED:** EXPLORE + REST utility scoring, normalized components, ranked `ScoringResult`, no execution | GAO-2, existing goals |
 | **GAO-4** | `DiscretionaryActivityDirector` | Emit intents to existing directors/goals | GAO-3 |
 | **GAO-5** | PLACE / ENVIRONMENT opinions | World gains meaning for choice | GAO-4, spatial memory TBD |
 | **GAO-6** | ENTITY bridge | SPM `feelingToward` integration | GAO-4 |
@@ -1972,3 +1971,71 @@ personality presets.
 readiness behavior changes; opinions inert for choice until GAO-3.
 
 **Frontier after:** GAO-3 `IdleOpportunityPolicy` (activity scoring).
+
+---
+
+### GAO-3 pre-implementation contract (`LOCKED`)
+
+**Three rules:**
+
+1. **Preference and repetition remain separate** — high `preference` with high `repetition` lowers
+   current utility without collapsing long-term liking (GAO-REPETITION).
+2. **Mood influences scoring, not legality** — boredom/stress/novelty adjust utility only; they
+   cannot make illegal activities legal or compete with combat, commands, progression, or protected
+   work (`discretionaryEligible` gate).
+3. **Normalize every input before combining** — components use `UtilityNormalizer` to map channels
+   onto `[-1,+1]` before weighted summation to final utility `[-100,+100]`. Raw tick counts (e.g.
+   `recentDuration`) never enter the sum directly.
+
+**Formula (GAO-3 v1 — EXPLORE + REST only):**
+
+```text
+ActivityUtility =
+    base usefulness
+  + learned preference (normalized)
+  + mood fit (boredom/stress/novelty per activity)
+  + recent reward (normalized)
+  - repetition (normalized pressure)
+  - recent failures (normalized)
+  - travel/effort cost (constant per activity)
+```
+
+**Output:** `ScoringResult` with inspectable `ActivityUtilityBreakdown` per candidate, ranked by
+`total` (EXPLORE wins deterministic ties).
+
+**Explicitly out of scope:** `DiscretionaryIntent`, Goal changes, voluntary yield, wander
+preemption, scheduler authority, threshold modulation of `ExplorationReadiness`.
+
+### GAO-3 MAIBS static scenarios (`CODE_CONFIRMED`)
+
+| ID | Setup | Must happen | Must not |
+| --- | --- | --- | --- |
+| **GAO-3-M1** | Explore `preference +55`, `repetition 5` | Explore outranks Rest | Repetition erases preference |
+| **GAO-3-M2** | Explore `preference +55`, `repetition 48` | Rest can win; Explore `preference` term stays positive | "I hate exploring" from one long session |
+| **GAO-3-M3** | High stress | Rest utility rises; Rest can win | Mood grants scheduler authority |
+| **GAO-3-M4** | High boredom | Explore utility rises; Explore wins | Mood makes illegal activity legal |
+| **GAO-3-M5** | `discretionaryEligible=false` | Empty scoring | Scoring overrides mandatory work |
+| **GAO-3-M6** | REST executor absent | REST excluded; only EXPLORE scored | Hypothetical activity scored |
+| **GAO-3-M7** | `opinionEnabled=false` | Empty scoring | Hidden behavioral effect |
+| **GAO-3-M8** | Identical totals | Deterministic order; EXPLORE wins tie | Nondeterministic ranking |
+
+---
+
+## Contribution — Agent_Cursor (GAO-3 IdleOpportunityPolicy)
+
+**Agent:** `Agent_Cursor` **Date/Session:** 2026-08-09 **Type:** `IMPLEMENTATION`
+
+**Delivered:** `DiscretionaryActivity`, `DiscretionaryAvailability`, `UtilityNormalizer`,
+`ActivityUtilityWeights`, `ActivityUtilityBreakdown`, `ActivityUtilityScorer`,
+`DiscretionaryScoringInput`, `ScoringResult`, `IdleOpportunityPolicy`; unit tests
+`IdleOpportunityPolicyTest` (GAO-3-M1…M8).
+
+**Not delivered (explicitly out of scope):** `DiscretionaryActivityDirector`, intents, Goal wiring,
+voluntary yield, `ExplorationReadiness` threshold changes, activities beyond EXPLORE/REST.
+
+**Evidence (`CONFIRMED`):** `.\gradlew.bat test` — BUILD SUCCESSFUL, 445 tests, 0 failures.
+
+**MAIBS (`CODE_CONFIRMED`, runtime `UNVERIFIED`):** scoring is pure computation with no observable
+mob behavior change until GAO-4 consumes `ScoringResult`.
+
+**Frontier after:** GAO-4 `DiscretionaryActivityDirector`.

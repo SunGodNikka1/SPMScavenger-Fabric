@@ -84,4 +84,11 @@ public final class ActivityOpinionMemory {
     private static float clamp(float value) {
         return Math.max(OpinionMemory.CHANNEL_MIN, Math.min(OpinionMemory.CHANNEL_MAX, value));
     }
+
+    /** Package-private test seam. */
+    void seedForTest(float preference, float repetition, int recentFailures) {
+        this.preference = clamp(preference);
+        this.repetition = clamp(repetition);
+        this.recentFailures = Math.max(0, recentFailures);
+    }
 }

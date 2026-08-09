@@ -143,4 +143,13 @@ public final class AffectiveState {
             default -> false;
         };
     }
+
+    /** Package-private test seam for GAO-3 scoring tests. */
+    void seedChannels(float engagement, float boredom, float satisfaction, float stress, float novelty) {
+        this.engagement = clamp(engagement);
+        this.boredom = clamp(boredom);
+        this.satisfaction = clamp(satisfaction);
+        this.stress = clamp(stress);
+        this.novelty = clamp(novelty);
+    }
 }
