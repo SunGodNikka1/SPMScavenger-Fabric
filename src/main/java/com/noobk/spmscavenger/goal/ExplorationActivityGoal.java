@@ -4,6 +4,7 @@ import com.noobk.spmscavenger.activity.ActivityObservationService;
 import com.noobk.spmscavenger.DescentPressurePolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
+import com.noobk.spmscavenger.opinion.AffectiveStateService;
 import com.noobk.spmscavenger.ScavengerConfig;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.GameRules;
@@ -112,6 +113,7 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         }
 
         RestSessionCoordinator.validate(mob, observation, mob.level().getGameTime());
+        AffectiveStateService.observe(mob.getUUID(), observation, OBSERVE_INTERVAL);
 
         boolean mayCreateWork = permitsNewMiningWork(cfg.enabled, allowNewMiningWork);
         if (mayCreateWork) {

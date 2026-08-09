@@ -53,6 +53,12 @@ public final class ScavengerConfig {
     /** Master switch. Off leaves PlayerMobs exactly as Social Player Mobs ships them. */
     public boolean enabled = true;
 
+    /**
+     * GAO-1 — short-term mood tracking. Off preserves stock observable behaviour; affect state is
+     * not updated and pulses are not applied (GAO-PARITY).
+     */
+    public boolean opinionEnabled = false;
+
     // ---- Torches ----------------------------------------------------------
 
     public boolean placeTorches = true;

@@ -96,6 +96,7 @@ public class SpmScavenger implements ModInitializer {
 
         ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
+                OpinionExperienceRegistry.resume(mob.getUUID());
                 install(mob);
             }
         });
@@ -103,7 +104,7 @@ public class SpmScavenger implements ModInitializer {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
                 RestSessionCoordinator.invalidateOnUnload(
                         mob.getUUID(), world.getGameTime());
-                OpinionExperienceRegistry.remove(mob.getUUID());
+                OpinionExperienceRegistry.freeze(mob.getUUID());
             }
         });
     }

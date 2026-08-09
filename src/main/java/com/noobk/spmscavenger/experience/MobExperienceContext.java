@@ -1,5 +1,8 @@
 package com.noobk.spmscavenger.experience;
 
+import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
+import com.noobk.spmscavenger.opinion.AffectiveState;
+
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
@@ -8,25 +11,46 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * GAO-0c — per-mob episode registry and REST claim holder.
+ * GAO-0c/GAO-1 — per-mob episode registry, REST claims, and short-term mood.
  */
 public final class MobExperienceContext {
 
     private final UUID mobId;
+    private final AffectiveState affectiveState = new AffectiveState();
     private final OpinionExperienceSinks sinks;
     private final EpisodeRoutingPipeline pipeline;
     private final Map<UUID, ActivityEpisode> episodes = new HashMap<>();
     private final Map<ActivityKind, Integer> executionFailureTotals = new EnumMap<>(ActivityKind.class);
     private Optional<RestSessionClaim> restClaim = Optional.empty();
+    private boolean frozen;
 
-    public MobExperienceContext(UUID mobId, OpinionExperienceSinks sinks) {
+    public MobExperienceContext(UUID mobId, OpinionExperienceSinks delegate) {
         this.mobId = Objects.requireNonNull(mobId, "mobId");
-        this.sinks = Objects.requireNonNull(sinks, "sinks");
+        OpinionExperienceSinks external =
+                delegate == null ? OpinionExperienceSinks.noOp() : delegate;
+        this.sinks = new OpinionExperienceSinks() {
+            @Override
+            public void onAffectPulse(AffectPulse pulse) {
+                if (OpinionFeatureGate.isEnabled() && !frozen) {
+                    affectiveState.applyPulse(pulse);
+                }
+                external.onAffectPulse(pulse);
+            }
+
+            @Override
+            public void onLearningEvidence(EpisodeLearningEvidence evidence) {
+                external.onLearningEvidence(evidence);
+            }
+        };
         this.pipeline = new EpisodeRoutingPipeline(this, sinks);
     }
 
     public UUID mobId() {
         return mobId;
+    }
+
+    public AffectiveState affectiveState() {
+        return affectiveState;
     }
 
     public EpisodeRoutingPipeline pipeline() {
@@ -35,6 +59,21 @@ public final class MobExperienceContext {
 
     public OpinionExperienceSinks sinks() {
         return sinks;
+    }
+
+    public boolean isFrozen() {
+        return frozen;
+    }
+
+    public void freeze() {
+        frozen = true;
+        affectiveState.freeze();
+        invalidateEphemeral();
+    }
+
+    public void resume() {
+        frozen = false;
+        affectiveState.resume();
     }
 
     public Optional<RestSessionClaim> restClaim() {

@@ -36,12 +36,26 @@ public final class OpinionExperienceRegistry {
         }
     }
 
+    public static void freeze(UUID mobId) {
+        MobExperienceContext context = CONTEXTS.get(mobId);
+        if (context != null) {
+            context.freeze();
+        }
+    }
+
+    public static void resume(UUID mobId) {
+        MobExperienceContext context = CONTEXTS.get(mobId);
+        if (context != null) {
+            context.resume();
+        }
+    }
+
     public static void remove(UUID mobId) {
         CONTEXTS.remove(mobId);
     }
 
     /** Test-only visibility. */
-    static void clearAll() {
+    public static void clearAll() {
         CONTEXTS.clear();
         resetSinks();
     }
