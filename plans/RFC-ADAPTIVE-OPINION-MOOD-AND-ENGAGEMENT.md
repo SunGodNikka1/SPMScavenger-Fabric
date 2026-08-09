@@ -9,13 +9,13 @@
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
 | **Mode** | `PLANNING` |
-| **Status** | `RESEARCHING` — GAO-0 taxonomy drafted; REST lifecycle and experience attribution corrected by source/MAIBS review; no implementation authorized |
+| **Status** | `CONSENSUS` for GAO-0/0b/0c contracts — first implementation slice is dependency-ready; implementation not yet authorized |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
-| **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex (2026-08-09) |
-| **Last update** | 2026-08-09 (Agent_Codex behavioral brainstorm continuation) |
+| **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
+| **Last update** | 2026-08-09 (peer-review amendments and contract locks) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,9 +39,10 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** D-GAO-011 is already `CONSENSUS`. Peer-review D-GAO-021…025 and resolve
-PD-GAO-06/07, then lock the GAO-0/0b/0c contracts. The next dependency-ready implementation slice
-is GAO-0, but implementation remains unauthorized until explicit **Begin GAO-0** (or equivalent).
+**Nearest frontier:** D-GAO-011/012/015/021…025 and PD-GAO-06/07 are locked. GAO-0 is the
+dependency-ready first implementation slice: refactor the shared activity observer with Opinion
+disabled and prove no behavior change. Implementation remains unauthorized until explicit
+**Begin GAO-0** (or equivalent).
 
 ---
 
@@ -75,7 +76,7 @@ Early candidates from Agent_Cursor brainstorm (2026-08-09). Serious items promot
 | B-29 | Normalize repeated low-level events inside an `ActivityEpisode` | **PROMOTE** → Experience events; prevents block-count frequency from dominating learning |
 | B-30 | Separate subjective outcome from feasibility/authority failure | **PROMOTE** → Experience events; a simulation frontier or player order must not teach “I hate exploring” |
 | B-31 | Carry activity/episode identity through events and interruptions | **PROMOTE** → Experience events; prevents crediting the wrong activity after combat/work preemption |
-| B-32 | Stable per-mob tie-breaking plus physical-destination reservation | **RESEARCH** → multi-mob GAO-4; avoids synchronized crowds without randomness-everywhere |
+| B-32 | Prevent accidental lockstep/contention without forbidding intentional group activity | **REFINED / RESEARCH** → deterministic staggering plus reservations only for exclusive physical resources |
 | B-33 | Freeze affect while unloaded/non-ticking; make long-term offline decay an explicit policy | **PROMOTE** → persistence/product decision |
 | B-34 | Bounded decision trace: candidates, utilities, blocker, claim owner, outcome | **PROMOTE** → validation; required to falsify “why did it choose that?” without log spam |
 | B-35 | Goal liveness proves occupancy, not engagement or progress | **PROMOTE** → observation contract; stalled goals must not award endless engagement |
@@ -384,17 +385,23 @@ GAO-0 must answer: *what activity is this mob doing right now, and is that IDLE,
 - Only `TrackedLocalWanderGoal`, host `RandomStrollGoal`, look goals, `AnticsGoal`, and self → `recordIdleTicks(10)`.
 - `FollowLovedOneGoal` and raid goals → meaningful work (`CONFIRMED` by control flow).
 
-**Recommendation (D-GAO-015):** GAO-0 **refactors** this loop into `ActivityObservationService` rather than adding a second scanner. `ExplorationReadiness` keeps calling the same predicates; Opinion adds affect side-effects on the same tick.
+**Locked decision (D-GAO-015):** GAO-0 **refactors** this loop into
+`ActivityObservationService` rather than adding a second scanner. `ExplorationReadiness` keeps
+calling the same predicates; later Opinion stages add affect side-effects on the same cadence.
 
-### Dual predicates — same scan, different consumers (`PROPOSED`)
+### Shared observation contract — independent consumers (`LOCKED` for GAO-0)
 
-One observation pass must feed **three** derived booleans (B-11, B-17):
+One selector observation plus the episode/authority state must expose independent signals. They must
+not be collapsed into one “active” boolean:
 
 | Predicate | Consumer | True when |
 | --- | --- | --- |
 | `meaningfulWorkForExpedition()` | `ExplorationReadiness` | Any non-cosmetic running goal except wander/look/antics (current behavior) |
 | `discretionaryIdleCandidate()` | `AffectiveState` boredom rise | Only `IDLE_CANDIDATE` + cosmetic classes active |
 | `resting()` | REST band / slow boredom | live `RestSessionClaim`, or `mob.isSleeping()` in the shelter path |
+| `schedulerOccupied()` | compatibility/authority guard | Any authoritative running Goal owns the relevant activity lifecycle |
+| `meaningfulProgressRecently()` | `AffectiveState` engagement/stall distinction | bounded episode milestone/terminal occurred inside its freshness window |
+| `discretionaryAuthorityAvailable()` | intent/director admission | no mandatory, command, protected, or unknown owner forbids voluntary replacement |
 
 **Must not happen:** Campfire classified as `discretionaryIdleCandidate` (would spike boredom at a cozy fire).
 
@@ -404,7 +411,7 @@ One observation pass must feed **three** derived booleans (B-11, B-17):
 2. `DiscretionaryIntent` — **NOT FOUND** in `src/`.
 3. `ExperienceEvent` — **NOT FOUND** in `src/`.
 
-### Idle vs REST detection (`REOPEN_REQUESTED` — source correction)
+### Idle vs REST detection (`LOCKED` — source correction resolved)
 
 The previous B-17 mechanism treated a running `CampfireGoal` as the sustained rest session. Source
 inspection falsifies that model:
@@ -441,10 +448,31 @@ if FollowLovedOneGoal running
 
 **Must not happen:** `FollowLovedOneGoal` classified as idle because addon goals are inactive (GAO-OBSERVE).
 
-**Recommended repair (D-GAO-021):** open a condition-bound `RestSessionClaim` when arrival is
-observed. Anchor its lifetime at arrival, not selection (B-27). Clear it when the fire/shelter becomes
-invalid, the mob leaves the allowed radius, mandatory work/combat/command takes authority, or the
-bounded rest session expires. The claim owns no Goal flags; the existing observer reads it.
+**Locked repair (D-GAO-021):** open a condition-bound `RestSessionClaim` only when physical arrival
+completes a legitimately adopted REST activity or shelter-recovery authority. Anchor its lifetime at
+arrival, not selection (B-27). Goal activity or proximity alone cannot manufacture a claim. Clear it
+when the fire/shelter becomes invalid, the mob leaves the allowed radius, mandatory
+work/combat/command takes authority, or the bounded rest session expires. The claim owns no Goal
+flags; the existing observer reads it.
+
+```text
+RestSessionClaim {
+  UUID claimId;
+  Optional<UUID> sourceIntentId; // absent for shelter authority not originating in Opinion
+  UUID commitmentId;
+  RestSourceKind sourceKind; // DISCRETIONARY_REST | SHELTER_RECOVERY
+  BlockPos anchor;
+  RestAnchorType anchorType;
+  long adoptedAt;
+  long arrivedAt;
+  long lastValidatedAt;
+  RestCloseReason closeReason;
+}
+```
+
+`DISCRETIONARY_REST` requires the matching accepted REST intent/commitment. `SHELTER_RECOVERY` is a
+distinct safety-owned source: it may reduce stress and boredom without falsely claiming that Opinion
+chose it. `mob.isSleeping()` remains a direct observable REST state.
 
 **Alternatives considered:**
 
@@ -462,9 +490,9 @@ unbounded REST classification.
 
 ---
 
-## Topic: Experience events — mood inputs without new goals (`PROPOSED`)
+## Topic: Experience events — mood inputs without new goals (`LOCKED CONTRACT`)
 
-**Status:** `PROPOSED` (Agent_Cursor brainstorm)
+**Status:** D-GAO-012/022/023 `LOCKED`; emitters remain unimplemented
 
 Opinion should learn from **terminals and milestones** already emitted by shipped systems — not poll block state.
 
@@ -478,16 +506,20 @@ Opinion should learn from **terminals and milestones** already emitted by shippe
 | `GatherResourcesGoal` harvest | `RESOURCE_HARVEST` | materialism + |
 | SPM `FriendlyGreetGoal` / combat end | `SOCIAL_INTERACTION` | stress − / + via `feelingToward` |
 
-**Recommendation (D-GAO-012):** Single immutable `ExperienceEvent` record + `OpinionMemory.apply(ExperienceEvent)` — subscribers call from existing code paths; no parallel scanners.
+**Locked recommendation (D-GAO-012):** existing terminals emit one immutable `ExperienceEvent` into
+an `ExperiencePipeline`; no parallel scanners. Raw events do **not** call `OpinionMemory` directly.
+The episode layer owns aggregation and routes bounded affect pulses separately from normalized
+long-term learning (D-GAO-022).
 
-### GAO-0b — `ExperienceEvent` schema draft (`PROPOSED`)
+### GAO-0b — `ExperienceEvent` schema contract (`LOCKED`)
 
 ```text
 ExperienceEvent {
   ExperienceKind kind;
   long gameTime;
   UUID episodeId;                       // causal owner; stable across interruption/resume
-  OutcomeClass outcome;                 // subjective success vs feasibility/authority failure
+  OutcomeClass outcome;                 // learning eligibility, not emotional sign
+  ExperienceCause cause;                // exact terminal/milestone cause; preserves semantic detail
   float engagementDelta;
   float boredomDelta;
   float satisfactionDelta;
@@ -514,27 +546,43 @@ ExperienceEvent {
 | `REST_SESSION` | `RestSessionClaim` open/close | mild engagement + (PD-GAO-02); not raw goal start/end |
 | `SOCIAL_INTERACTION` | greet/follow proximity window | stress − via SPM bridge |
 
-### Episode attribution and normalization (`PROPOSED`)
+### Episode attribution and normalization (`LOCKED`)
 
 Raw hook frequency is not subjective importance. Mining can emit many block-level milestones while a
 social or rest activity emits one terminal; applying every hook directly would make mining dominate
 learning merely because it has a tighter loop. `ActivityEpisode` therefore aggregates bounded
-milestones by `episodeId` and commits affect/opinion at meaningful progress windows or terminal state.
-Interrupting combat may pause the episode but must not silently change its causal owner.
+milestones by `episodeId`. It may emit bounded immediate/periodic pulses to `AffectiveState`, but only
+normalized episode evidence reaches `OpinionMemory` at a learning window or terminal. The same raw
+event must never be applied through both paths. Interrupting combat may pause the episode but must not
+silently change its causal owner.
+
+```text
+RAW ExperienceEvent
+        ↓
+ActivityEpisode
+        ├── bounded short-term affect pulse → AffectiveState
+        └── normalized terminal/window evidence → OpinionMemory
+```
 
 `OutcomeClass` separates:
 
 | Outcome | Affect | Long-term activity preference |
 | --- | --- | --- |
-| `VOLUNTARY_SUCCESS` / `VOLUNTARY_ABANDON` | yes | eligible |
+| `VOLUNTARY_SUCCESS` / `VOLUNTARY_ABANDON` | yes | eligible; `ExperienceCause` determines sign |
 | `EXECUTION_FAILURE` | stress/confidence | only with repeated activity-owned evidence |
 | `ENVIRONMENT_UNAVAILABLE` / simulation frontier | short-lived confidence/cooldown | no negative preference |
 | `PROTECTED_INTERRUPT` | normally pause/neutral | none |
 | `AUTHORITY_CANCEL` / player command | neutral | none |
 
+`OutcomeClass` controls whether evidence may affect long-term learning; it does not itself choose a
+positive or negative sign. In particular, `VOLUNTARY_ABANDON` may mean boredom, satisfaction (“done
+for now”), a more interesting opportunity, or social reprioritization. The preserved
+`ExperienceCause`/terminal reason distinguishes them.
+
 This prevents an unloaded frontier, unreachable target, or player order from becoming the false
 belief “I dislike exploration.” It also prevents a block broken during an interrupting activity from
-being credited to the suspended episode.
+being credited to the suspended episode. GAO-5 may later attach environment failure to a PLACE
+opinion without poisoning ACTIVITY opinion.
 
 **Unit-test vectors (pre-implementation):**
 
@@ -544,7 +592,11 @@ being credited to the suspended episode.
   configured repeated-evidence rule;
 - `SIMULATION_FRONTIER`, `PROTECTED_INTERRUPT`, and `AUTHORITY_CANCEL` do not reduce activity opinion;
 - an exploration episode interrupted by combat resumes with the same ID and does not absorb combat
-  events.
+  events;
+- one raw event can produce a bounded affect pulse and later normalized learning, but its affect
+  delta is not applied a second time at episode commit;
+- two `VOLUNTARY_ABANDON` events with different causes can produce neutral/satisfied versus negative
+  learning rather than sharing a hardcoded sign.
 
 **Must happen:** productive repeated work still increases short-term repetition pressure.
 
@@ -599,24 +651,37 @@ AffectiveState {
   float stress;
   float novelty;
   int ticksSinceMeaningfulEvent;
+  int ticksSinceObservableProgress;
   Optional<DiscretionaryIntent> pendingIntent;
 }
 ```
 
 ### Tick cadence (`PROPOSED` — B-13, B-16)
 
-- **Observation + boredom rise:** every 10 ticks on `discretionaryIdleCandidate()` (same stagger as `ExplorationActivityGoal`).
-- **Decay toward neutral:** every 20 ticks when not idle (−1…−3 per channel toward 0).
-- **Event application:** immediate on `ExperienceEvent` (mining progress, social, REST start).
-- **Engagement during MI-14 projects:** fed by `ExperienceEvent` terminals only — **not** by lease age or `MiningProject` budget ticks (avoids MI-14C3 shadowing where project `>=` budget masks progress timeout).
+- **Observation:** every 10 ticks using independent `schedulerOccupied()`,
+  `meaningfulProgressRecently()`, `discretionaryIdleCandidate()`, `resting()`, and
+  `discretionaryAuthorityAvailable()` predicates.
+- **Boredom/restlessness:** rises fastest while discretionary-idle; may rise slowly while occupied
+  without recent observable progress. This clock does not grant authority to preempt the occupant.
+- **Decay toward neutral:** every 20 ticks for channels not updated by the active branch/event; do
+  not run decay and rise/pulse on the same channel in the same update.
+- **Event application:** `ActivityEpisode` may emit bounded immediate/periodic affect pulses;
+  normalized terminal/window evidence updates `OpinionMemory` separately. Raw events are never
+  applied twice.
+- **Engagement during MI-14 projects:** fed by explicit, episode-bounded progress milestones and
+  terminals — **not** by lease age or `MiningProject` budget ticks (avoids MI-14C3 shadowing where
+  project `>=` budget masks progress timeout).
 
 ### Boredom rise (example coefficients — tune in tests)
 
 ```text
-if discretionaryIdleCandidate:
-    boredom += baseIdleRise * (1 + personality.restlessness)
 if resting:
     boredom += baseRestRise * 0.25    // slow — PD-GAO-02
+else if discretionaryIdleCandidate:
+    boredom += baseIdleRise * (1 + personality.restlessness)
+else if schedulerOccupied && !meaningfulProgressRecently:
+    boredom += baseStalledRise * (1 + personality.restlessness)
+    // affect only: existing authority remains non-preemptible
 if SOCIAL_TRAVEL active:
     boredom -= socialDecayPerTick     // B-15
 ```
@@ -683,10 +748,10 @@ Acceptable REST while: `Opinion >= CONTENT` OR recent high stress OR short post-
 
 Prolonged REST: stress falls → rest satisfaction falls → boredom rises → discretionary objective.
 
-### Rest session lifecycle (`PROPOSED`, B-28)
+### Rest session lifecycle (`LOCKED`, B-28 / D-GAO-021)
 
 ```text
-REST selected
+REST intent accepted OR shelter recovery adopts REST
   → existing CampfireGoal/SeekShelterGoal navigates
   → physical arrival is observed
   → RestSessionClaim opens
@@ -696,16 +761,48 @@ REST selected
   → ordinary discretionary selection resumes
 ```
 
-The claim records anchor position/type, adopted-at/arrived-at ticks, last validity check, and close
-reason. It must not preserve a Minecraft `Path`. Sleeping remains observable directly and does not
-need a parallel synthetic claim unless implementation evidence shows lifecycle gaps.
+The claim records its source intent/commitment and authority kind in addition to anchor/type,
+adopted-at/arrived-at ticks, last validity check, and close reason. It must not preserve a Minecraft
+`Path`. Sleeping remains observable directly and does not need a parallel synthetic claim unless
+implementation evidence shows lifecycle gaps.
 
-### Occupied is not engaged (`PROPOSED`, B-35)
+### Occupied, progressing, and replaceable are independent (`LOCKED`, B-35 / D-GAO-024)
 
 A running Goal proves the scheduler is occupied. It does not prove movement, progress, success, or
-positive engagement. Unknown/host goals remain fail-safe **not-idle** for compatibility, but they earn
-no positive opinion without an explicit progress/terminal event. This avoids a stuck follow, shelter,
-or navigation goal freezing boredom forever while visibly doing nothing.
+positive engagement. Unknown/host goals remain fail-safe **not-idle** and **not preemptible** for
+compatibility, but they earn no positive opinion without an explicit progress/terminal event.
+
+```text
+schedulerOccupied = true
+meaningfulProgressRecently = false
+        ↓
+boredom/restlessness may accumulate slowly
+        ↓
+discretionaryAuthorityAvailable = false
+        ↓
+Opinion MUST NOT preempt; the owning lifecycle/timeout still controls release
+```
+
+Therefore boredom accumulation and authority to replace an activity are deliberately different
+predicates. When the stalled authority eventually releases, accumulated restlessness can influence
+the next discretionary choice. This closes GAO-M11 without allowing Opinion to cancel mandatory or
+unknown host behavior.
+
+### Non-ticking lifecycle (`LOCKED`, PD-GAO-07)
+
+| State | Unload/non-ticking behavior | Load behavior |
+| --- | --- | --- |
+| `AffectiveState` | freeze | resume without elapsed-time catch-up |
+| `OpinionMemory` | freeze | resume; any future long-term decay must be separately bounded and observed |
+| `DiscretionaryIntent` | invalidate | rescore current world state |
+| `RestSessionClaim` | invalidate | revalidate from current authority/location; never resurrect by age alone |
+| `ActivityEpisode` | suspend only when its persistent project/commitment is genuinely resumable; otherwise neutral interruption close | resume by persistent owner or create a fresh episode |
+
+**Must happen:** emotion survives unload without instant boredom, while stale ephemeral choices are
+discarded.
+
+**Must not happen:** a days-old REST intent or invalid campfire claim resumes immediately when the
+chunk starts ticking again.
 
 ---
 
@@ -902,9 +999,43 @@ mechanism, but MI-14C2-M2 proved the subtle part: the cave-continuation commitme
 scored**, and its lifetime must not be shorter than the activity's own legitimate duration. Where two
 subsystems must agree on a lifetime, share the *predicate*, not the constant.
 
+### B-34 — End-to-end decision trace (`LOCKED`, D-GAO-025)
+
+A score-only trace cannot distinguish a bad policy choice from a failed handoff. Keep a bounded
+per-mob ring buffer (initial implementation target: 16–32 decisions; exact capacity is a config and
+performance choice) covering the complete control path:
+
+```text
+AVAILABLE candidates
+  → normalized SCORES
+  → SELECTED activity
+  → INTENT issued/invalidated
+  → CLAIM adopted/rejected
+  → incumbent YIELD requested/completed/refused
+  → EXECUTOR admitted/started/refused
+  → TERMINAL success/interrupted/expired/failed + exact cause
+```
+
+Each transition records decision/intent/claim/episode IDs and ticks so the chain is correlatable.
+Tracing is server-owned, bounded, and query-on-demand; it must not emit perpetual log lines or retain
+live entity/path references.
+
+**Must happen:** an operator can distinguish “REST won but no claim was adopted” from “REST executor
+started and failed.”
+
+**Must not happen:** a correct utility score is treated as proof that the selected behavior became
+observable.
+
+### B-32 — Multi-mob coordination boundary (`PROPOSED`)
+
+Prevent accidental synchronization and exclusive-resource contention; do not forbid intentional
+coordination. Deterministic staggering/stable tie-breaking may prevent lockstep rescoring, and
+reservations apply only to exclusive physical targets such as one rest position or one break target.
+Explicit companion/social activities may legitimately align several mobs on EXPLORE or REST.
+
 ---
 
-## Topic: Hard architectural rules (candidate LOCK)
+## Topic: Hard architectural rules
 
 | ID | Rule |
 | --- | --- |
@@ -920,11 +1051,34 @@ subsystems must agree on a lifetime, share the *predicate*, not the constant.
 | **D-GAO-018** | *(candidate, B-22)* Discretionary selection requires a **voluntary yield protocol**; a utility ranking alone cannot move a Minecraft goal at equal priority |
 | **D-GAO-019** | *(candidate, B-23)* Affect clocks pause while a downstream executor serves the chosen activity, reusing `COOPERATIVE_PROJECT_WORK` rather than a second signal |
 | **D-GAO-020** | *(candidate, B-21)* GAO-4 ships with ≥2 executable discretionary activities; one activity cannot falsify a director's genericity |
-| **D-GAO-021** | *(candidate, B-28)* Sustained REST is represented by an arrival-anchored, condition-bound claim; Goal liveness alone is insufficient |
-| **D-GAO-022** | *(candidate, B-29/B-31)* Experience learning is episode-scoped and frequency-normalized; events retain causal identity through interruption/resume |
-| **D-GAO-023** | *(candidate, B-30)* Feasibility, safety, and authority outcomes are not automatically negative activity opinions |
-| **D-GAO-024** | *(candidate, B-35)* Goal liveness proves occupancy only; positive engagement requires observable progress or an outcome event |
-| **D-GAO-025** | *(candidate, B-34)* Every discretionary selection records a bounded decision trace sufficient to reproduce its ranking and blocker state |
+| **D-GAO-021** | **LOCKED:** Sustained REST is an arrival-anchored, condition-bound claim tied to the activity/authority that legitimately adopted REST; Goal liveness or proximity alone is insufficient |
+| **D-GAO-022** | **LOCKED:** Experience is episode-scoped and frequency-normalized; bounded short-term affect pulses and normalized long-term `OpinionMemory` learning are separate outputs and cannot double-apply one event |
+| **D-GAO-023** | **LOCKED:** Outcome class controls learning eligibility, not sign; exact terminal cause is preserved, and feasibility/safety/authority outcomes do not automatically imply dislike |
+| **D-GAO-024** | **LOCKED:** Goal liveness proves occupancy only. Lack of progress may advance affect/restlessness, but cannot grant discretionary preemption authority |
+| **D-GAO-025** | **LOCKED:** A bounded trace spans score → intent → claim → scheduler yield/handoff → executor start → exact terminal cause |
+
+### Consensus — corrected GAO-0/0b/0c contracts
+
+**Accepted:** prior-consensus D-GAO-011, D-GAO-012, D-GAO-015, and amended D-GAO-021…025;
+PD-GAO-06 = Explore + Rest;
+PD-GAO-07 = freeze persistent affect/opinion state while non-ticking but invalidate/revalidate
+ephemeral intent/claim state.
+
+**Why:** source inspection disproved Goal-liveness REST; peer review found the affect/learning
+double-application risk, ambiguous voluntary-abandon sign, stalled-occupant boredom gap, and
+score-only trace gap. Each now has explicit ownership and falsification criteria.
+
+**Supporting contributors:** Agent_Codex source/MAIBS review; user-provided independent peer review
+and product decisions (2026-08-09).
+
+**Remaining objections:** none high-severity for GAO-0/0b/0c contracts. Runtime behavior and tuning
+remain `UNVERIFIED`; D-GAO-017…020 and PD-GAO-01…05 remain outside this lock set.
+
+**Rejected alternatives:** proximity-only REST; raw events applied directly to both affect and
+memory; outcome class as emotional sign; stalled occupancy granting preemption; score-only tracing;
+mandatory artificial diversity between cooperative mobs.
+
+**Status:** `LOCKED`
 
 ---
 
@@ -939,15 +1093,15 @@ subsystems must agree on a lifetime, share the *predicate*, not the constant.
 
 ---
 
-## Topic: Phased plan (deferred)
+## Topic: Phased plan
 
-**Status:** `PROPOSED` — **not authorized**
+**Status:** GAO-0 `READY_FOR_IMPLEMENTATION` — **authorization required**
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
 | **GAO-0** | Activity taxonomy + observation contract | `ActivityClass` enum; `ActivityObservationService` wrapping `MoveHolderClassifier`; SPM goal map table | MI-14C2-R2 pattern |
-| **GAO-0b** | `ExperienceEvent` schema | Immutable events + `OpinionMemory.apply` signature | GAO-0 |
-| **GAO-0c** | Episode + rest-claim contracts | `ActivityEpisode`, `OutcomeClass`, `RestSessionClaim`; pure lifecycle tests | GAO-0, GAO-0b |
+| **GAO-0b** | `ExperienceEvent` schema | Immutable raw events + `ExperiencePipeline.accept`; exact cause retained | GAO-0 |
+| **GAO-0c** | Episode + rest-claim contracts | `ActivityEpisode`, `OutcomeClass`, `RestSessionClaim`; affect-vs-learning and unload lifecycle tests | GAO-0, GAO-0b |
 | **GAO-1** | `AffectiveState` + observation | Boredom/engagement from experience events; scheduler-wide idle detection | GAO-0, GAO-0b, GAO-0c |
 | **GAO-2** | `OpinionMemory` v1 (ACTIVITY only) | Learned activity preferences + repetition | GAO-1 |
 | **GAO-3** | `IdleOpportunityPolicy` | Score available discretionary activities | GAO-2, existing goals |
@@ -957,23 +1111,36 @@ subsystems must agree on a lifetime, share the *predicate*, not the constant.
 | **GAO-7** | PersonalityModel | Trait-weighted experience scaling | GAO-2 |
 | **GAO-8** | Observable expression | Movement/scan biases | GAO-4, deferred UX |
 
-**Frontier when resumed:** D-GAO-011 is already `CONSENSUS`. Resolve PD-GAO-06/07 and peer-review
-D-GAO-021…025. Then lock D-GAO-012/015 plus the accepted corrections; the first dependency-ready
-implementation slice is GAO-0 (observer refactor with opinion disabled and no behavior change),
-followed by GAO-0b/0c pure contracts and tests. `Continue the RFC` must request implementation
-authority at that point rather than recycle settled architecture.
+### GAO-0 implementation-ready task
 
-### Open product decisions (need user input)
+| Field | Contract |
+| --- | --- |
+| Status | `READY_FOR_IMPLEMENTATION` — authorization missing |
+| Objective | Extract the existing 10-tick selector observation into one `ActivityObservationService` without changing behavior |
+| Primary systems | `ExplorationActivityGoal`, `ExplorationReadiness`, `MoveHolderClassifier`, new observer contract and unit tests |
+| Constraints | Opinion remains disabled/unimplemented; observer stays flagless and staggered; current unknown-goal fail-safe and director ordering remain intact; no second selector scan |
+| Must happen | Existing idle/work/explore sequences produce identical `ExplorationReadiness` results before and after refactor; host + addon goal classifications are visible through one service |
+| Must not happen | New affect state, discretionary intent, REST claim, preemption, scan cadence, goal priority, or observable mob behavior appears in GAO-0 |
+| Static/unit gates | Unknown running Goal = occupied/meaningful-work fail-safe; wander/look/antics remain cosmetic-idle; Explore remains expedition; observer owns no flags; early-return/director ordering regression tests |
+| Build gate | `gradlew.bat test build` passes; proves compile/tests only, not runtime behavior |
+| Runtime state | Not required to implement the refactor, but behavior parity remains `UNVERIFIED` until a separately approved Minecraft launch |
 
-| ID | Question | Options | Recommendation |
-| --- | --- | --- | --- |
-| **PD-GAO-01** | Should mood affect **only** discretionary ranking, or also **thresholds** (explore idle ticks)? | A thresholds only / B ranking only / C both | **C both** — thresholds for “I'm bored enough to do something”; ranking for “which something” |
-| **PD-GAO-02** | Is `CampfireGoal` idle REST or positive engagement? | REST / mild engagement | **REST with mild engagement** — fire is cozy, not a project |
-| **PD-GAO-03** | Persist `OpinionMemory` across death? | wipe / partial / full | **Partial** — personality stable; activity opinions decay on death |
-| **PD-GAO-04** | Config surface | `opinion.enabled` only / full trait sliders | Start with **`opinion.enabled` + 3 trait presets** (Curious / Homebody / Grinder) |
-| **PD-GAO-05** | Who owns `IdleOpportunityPolicy` tick? | fold into `ExplorationActivityGoal` / new flagless goal | **Fold into refactored observer** (D-GAO-015) — one staggered pass. **New evidence (M1/M5):** that observer already hosts `MiningDirector`, and lease enforcement had to be moved *ahead of its early returns* because combat and `mobGriefing` disabled the very component able to revoke. Any affect or intent bookkeeping folded in must run before the same early returns, or it inherits the identical blind spot |
-| **PD-GAO-06** | Which two executable activities prove GAO-4? | Explore + Rest / Explore + opportunistic Gather / other | **Explore + Rest**, but only after B-28 gives REST a real claim/executor lifecycle. Opportunistic Gather overlaps progression policy and is a weaker first proof |
-| **PD-GAO-07** | What happens to affect/opinion while the entity is unloaded or non-ticking? | freeze / lazy elapsed-time decay / full catch-up | **Freeze affect**; permit only explicitly bounded long-term opinion decay on a later observed session. Never convert unloaded wall-clock/game-time into instant boredom |
+**Frontier when resumed:** request authorization for GAO-0. Its scope is only the shared observer
+refactor with Opinion disabled and current `ExplorationReadiness` behavior preserved. After its
+static/unit/build gates, proceed to GAO-0b/0c only under continued implementation authority. Do not
+reopen the locked contracts without contradictory implementation evidence.
+
+### Product decisions
+
+| ID | Status | Question | Options | Decision / recommendation |
+| --- | --- | --- | --- | --- |
+| **PD-GAO-01** | `OPEN` | Should mood affect **only** discretionary ranking, or also **thresholds** (explore idle ticks)? | A thresholds only / B ranking only / C both | Recommend **C both** |
+| **PD-GAO-02** | `OPEN` | Is `CampfireGoal` idle REST or positive engagement? | REST / mild engagement | Recommend **REST with mild engagement** |
+| **PD-GAO-03** | `OPEN` | Persist `OpinionMemory` across death? | wipe / partial / full | Recommend **Partial** |
+| **PD-GAO-04** | `OPEN` | Config surface | `opinion.enabled` only / full trait sliders | Recommend **enabled + 3 presets** |
+| **PD-GAO-05** | `RESOLVED BY D-GAO-015` | Who owns `IdleOpportunityPolicy` tick? | fold into `ExplorationActivityGoal` / new flagless goal | Single refactored observer; affect/intent bookkeeping must precede early returns |
+| **PD-GAO-06** | `LOCKED` | Which two executable activities prove GAO-4? | Explore + Rest / Explore + opportunistic Gather / other | **Explore + Rest** after the REST claim lifecycle exists |
+| **PD-GAO-07** | `LOCKED` | What happens while unloaded/non-ticking? | freeze / lazy elapsed-time decay / full catch-up | **Freeze affect/opinion; invalidate intents; invalidate/revalidate rest claims; suspend only genuinely resumable episodes** |
 
 ---
 
@@ -989,7 +1156,7 @@ authority at that point rather than recycle settled architecture.
 | **GAO-THRESHOLD** | Mood modulates `exploreIdleTicks` / REST cooldown; never mandatory NEED |
 | **GAO-REST-LIFECYCLE** | Campfire/shelter arrival opens bounded REST that survives delivery-goal stop and closes on invalidation |
 | **GAO-ATTRIBUTION** | Episode IDs and outcome classes prevent interrupt, command, frontier, and event-frequency mislearning |
-| **GAO-TRACE** | Selection trace exposes available candidates, normalized scores, blocker, winning claim, and terminal reason without unbounded logging |
+| **GAO-TRACE** | Bounded per-mob trace covers candidates/scores → intent → claim → yield/handoff → executor admission/start → exact terminal cause |
 | **MAIBS-1** | Multi-minute discretionary sessions look human-plausible (explore → rest → socialize → return) |
 
 ### MAIBS discretionary scenarios (`PROPOSED` — pre-implementation)
@@ -1002,11 +1169,12 @@ authority at that point rather than recycle settled architecture.
 | **GAO-M4** | 8 min straight `TrackedLocalWanderGoal` | Boredom → `DiscretionaryIntent(EXPLORE)` | Permanent wander loop |
 | **GAO-M5** | Diamond NEED + cave handoff + high `Opinion(CAVE)` | Prefer explore handoff over tunnel when both legal | Clairvoyant ore scan |
 | **GAO-M6** | `DiscretionaryIntent(EXPLORE)` issued; combat target appears tick+1 | Intent invalidated; attack runs | Delayed explore after fight |
-| **GAO-M7** | Mob arrives beside fire; `CampfireGoal` reaches 200-tick cap | REST remains active through its bounded claim | Post-arrival mob immediately becomes bored/Explore |
+| **GAO-M7** | Adopted REST intent reaches fire; `CampfireGoal` reaches 200-tick cap | Matching arrival-bound claim keeps REST active | Post-arrival mob immediately becomes bored/Explore |
 | **GAO-M8** | Mob merely crosses a campfire radius | No REST claim without adopted activity + arrival | Proximity creates false rest |
 | **GAO-M9** | Explore route meets simulation frontier | Temporary confidence/cooldown only | Long-term dislike of exploration |
-| **GAO-M10** | Two mobs reach discretionary threshold on same tick | Stable diversity/tie-break; physical targets reserved where needed | Permanent synchronized oscillation or both claim same spot |
-| **GAO-M11** | Goal remains running but makes no observable progress for minutes | Occupied fail-safe, no positive engagement; terminal/stall policy eventually owns outcome | Endless “engaged” state from goal liveness |
+| **GAO-M10** | Two mobs reach discretionary threshold on same tick | Deterministic staggering; reserve exclusive positions/targets, but permit explicit cooperative alignment | Accidental lockstep oscillation or both claim the same exclusive spot |
+| **GAO-M11** | Unknown Goal remains running without progress for minutes | Slow restlessness rises while scheduler remains occupied and non-preemptible; owning lifecycle controls release | Frozen affect or Opinion preempting unknown authority |
+| **GAO-M12** | REST selected, then entity unloads for days | Affect/opinion freeze; intent/claim are invalidated; current state is rescored on load | Ancient intent or stale campfire claim resurrects |
 
 Runtime probes require separate Minecraft launch approval.
 
@@ -1056,21 +1224,21 @@ Runtime probes require separate Minecraft launch approval.
 | D-GAO-008 | Opinion disabled ⇒ SPM parity | `PROPOSED` | Debug + ship gate |
 | D-GAO-009 | Three-layer model (Personality/Opinion/Mood) | `PROPOSED` | Agent_ChatGPT |
 | D-GAO-010 | Typed OpinionMemory taxonomy | `PROPOSED` | ACTIVITY/PLACE/ENTITY/ENV/PROJECT |
-| D-GAO-011 | Reuse `MoveHolderClassifier` for GAO-0 observation | `CONSENSUS` | Extend suffix map for raid/harvest/train; Agent_Cursor 2026-08-09 |
-| D-GAO-012 | `ExperienceEvent` bus from existing terminals | `PROPOSED` | Schema drafted GAO-0b |
+| D-GAO-011 | Reuse `MoveHolderClassifier` for GAO-0 observation | `LOCKED` | Prior consensus; no peer objection; prerequisite accepted with GAO-0 frontier 2026-08-09 |
+| D-GAO-012 | Existing terminals emit raw events into one pipeline; no parallel scanners/direct memory writes | `LOCKED` | Amended with D-GAO-022 separation; user peer review 2026-08-09 |
 | D-GAO-013 | Mood modulates readiness thresholds; never owns `descentPressure` | `PROPOSED` | MI-5 lesson |
 | D-GAO-014 | `DiscretionaryIntent` as data consumed by existing goals | `PROPOSED` | TTL + invalidation B-19 |
-| D-GAO-015 | Single `ActivityObservationService`; refactor `ExplorationActivityGoal` scan | `PROPOSED` | Avoid dual observers |
+| D-GAO-015 | Single `ActivityObservationService`; refactor `ExplorationActivityGoal` scan | `LOCKED` | Preserve readiness behavior and early-return ordering; user peer review 2026-08-09 |
 | D-GAO-016 | Dual predicates: expedition meaningful-work ≠ affect idle/rest | `PROPOSED` | Campfire B-17 |
 | D-GAO-017 | Selectable activity requires a designated executor | `PROPOSED` | B-25 |
 | D-GAO-018 | Discretionary selection requires voluntary yield | `PROPOSED` | B-22; equal-priority scheduler evidence |
 | D-GAO-019 | Affect pauses while selected downstream activity executes | `PROPOSED` | B-23 |
 | D-GAO-020 | GAO-4 proves at least two executable activities | `PROPOSED` | B-21 |
-| D-GAO-021 | Arrival-anchored `RestSessionClaim` represents sustained REST | `PROPOSED` | B-28; source correction |
-| D-GAO-022 | Episode-scoped, frequency-normalized experience attribution | `PROPOSED` | B-29/B-31 |
-| D-GAO-023 | Feasibility/safety/authority outcomes do not imply dislike | `PROPOSED` | B-30 |
-| D-GAO-024 | Goal liveness proves occupancy, not engagement/progress | `PROPOSED` | B-35 |
-| D-GAO-025 | Bounded decision trace is part of the validation surface | `PROPOSED` | B-34 |
+| D-GAO-021 | Sustained REST claim requires legitimate adopted authority + arrival | `LOCKED` | Source kind distinguishes discretionary rest from shelter recovery |
+| D-GAO-022 | Episode normalization separates bounded affect pulses from long-term learning | `LOCKED` | One raw event cannot double-apply |
+| D-GAO-023 | Outcome controls learning eligibility; exact cause controls sign | `LOCKED` | `VOLUNTARY_ABANDON` is not inherently negative |
+| D-GAO-024 | Occupancy, progress/restlessness, and discretionary preemption are independent | `LOCKED` | Closes stalled unknown-Goal affect hole without violating authority |
+| D-GAO-025 | Bounded end-to-end decision trace | `LOCKED` | Score through terminal; 16–32 initial capacity target, tune by evidence |
 
 ---
 
@@ -1078,6 +1246,7 @@ Runtime probes require separate Minecraft launch approval.
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | User peer review + Agent_Codex | **Contract amendment and convergence.** Promoted prior-consensus D-GAO-011 and locked amended D-GAO-012/015/021…025; accepted PD-GAO-06 Explore + Rest and PD-GAO-07 freeze persistent affect/opinion but invalidate ephemeral intent/claim state. Added adopted-authority identity to REST claims, split affect pulses from normalized learning, preserved exact terminal cause beneath outcome eligibility, separated stalled restlessness from preemption authority, expanded the trace through executor terminal, corrected multi-mob coordination wording, added GAO-M12, and made GAO-0 implementation-ready. No source implementation or runtime launch |
 | 2026-08-09 | Agent_Codex | **Brainstorm B-28…B-35 + MAIBS source correction.** `CampfireGoal` is capped at 200 ticks, increments its cap after arrival, and will not restart while already at its selected idle point; non-bed shelter waiting is likewise capped at 400 ticks. Replaced raw Goal-liveness REST with a proposed arrival-anchored `RestSessionClaim`; added episode/causal attribution, event-frequency normalization, outcome taxonomy, unloaded-time policy, multi-mob synchronization risk, and bounded decision tracing. Added D-GAO-021…025, GAO-0c, PD-GAO-06/07, and GAO-M7…M11. No source implementation or runtime launch |
 | 2026-08-09 | Agent_Claude | **Brainstorm B-21…B-27** — evidence transfer from the completed MI-14 multi-mode pass (389 tests). **B-22** is the load-bearing one: a utility ranking is inert because equal-priority goals cannot preempt — MI-14C2 shipped exactly that circularity — so GAO-4 needs a voluntary yield protocol, not a scoreboard. **B-21** one activity cannot falsify a director's genericity (three hidden single-mode assumptions surfaced only when the second mining mode landed). **B-24** `MiningProjectEnd`/`MiningTransition` are a ready experience-event source, and GAO-5 PLACE opinion is the deferred MI-14 Loop C consumer. **B-25** no selectable activity without an executor (Loop D, M5). **B-26** premise check: idle already dispatches four goals — GAO-3/4 replace a static priority ladder rather than fill a void. **B-27** commitment must be claim-anchored (C2-M2). Candidates D-GAO-017…020; PD-GAO-05 strengthened with the observer-ordering evidence from M1/M5 |
 | 2026-08-09 | Agent_ChatGPT (via user) + Agent_Cursor | Initial RFC — full design capture; status `PROPOSED` / deferred |
@@ -1252,3 +1421,46 @@ reliable than holding MOVE+LOOK during runtime tests.
 (recommend freeze while non-ticking); peer-review D-GAO-021…025; then request authorization for the
 dependency-ready GAO-0 implementation slice. No source implementation, build, runtime launch,
 commit, or push was performed.
+
+---
+
+## Contribution — User peer review + Agent_Codex amendments
+
+**Contributor:** User (independent peer review and product decisions); incorporated by `Agent_Codex`
+
+**Date/Session:** 2026-08-09
+
+**Contribution type:** `REVIEW / OBJECTION / DECISION`
+
+**Frontier before:** D-GAO-021…025 were proposed; PD-GAO-06/07 unresolved; GAO-0c had unresolved
+REST identity, double-application, stalled-affect, trace, and unload semantics.
+
+**Agreement:** arrival-bound REST claims, episode normalization, cause-aware attribution, occupancy
+versus progress, bounded tracing, Explore + Rest, and non-ticking freeze are the correct directions.
+
+**Material objection:** the previous D-GAO-024 prevented positive engagement but still allowed an
+unknown stalled Goal to suppress boredom indefinitely. The affect model had no state between idle
+and productive activity.
+
+**Amendments accepted:**
+
+1. REST claims require legitimate adopted authority plus arrival and distinguish discretionary rest
+   from shelter recovery.
+2. `ActivityEpisode` separately emits bounded affect pulses and normalized `OpinionMemory` evidence;
+   one raw event cannot be credited twice.
+3. `OutcomeClass` controls learning eligibility; preserved `ExperienceCause` controls meaning/sign.
+4. Scheduler occupancy, meaningful progress, affect/restlessness, and preemption authority are
+   independent. Stalling may raise restlessness but never grants Opinion authority.
+5. The trace covers score through executor terminal in a bounded per-mob ring.
+6. Non-ticking persistent state freezes; transient intent/claim state is invalidated or freshly
+   revalidated; only genuinely resumable persistent episodes suspend.
+7. Multi-mob safeguards target accidental lockstep and exclusive-resource contention, not legitimate
+   cooperative alignment.
+
+**Decision transition:** D-GAO-011/012/015/021…025 → `LOCKED`; PD-GAO-06/07 → `LOCKED`.
+
+**MAIBS result:** `PASS — BEHAVIORALLY_PLAUSIBLE` for the amended contract at static-design level.
+Runtime remains `UNVERIFIED`; the implementation must still falsify GAO-M7…M12.
+
+**Frontier after:** GAO-0 is dependency-ready but lacks implementation authorization. The next valid
+action is **Begin GAO-0**; further architecture brainstorming would circle a settled frontier.
