@@ -9,13 +9,13 @@
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
 | **Mode** | `PLANNING` |
-| **Status** | GAO-0 `BLOCKED` at pre-implementation gate by GAO-0-B1 outer early-return lease blind spot; no Java edits made |
+| **Status** | GAO-0 `IMPLEMENTED / STATIC VERIFIED`; GAO-0-B1 repaired; runtime parity remains `UNVERIFIED` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-09 (peer-review amendments and contract locks) |
+| **Last update** | 2026-08-09 (GAO-0-B1 repair and GAO-0 implementation/static validation) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,9 +39,9 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** resolve GAO-0-B1. The existing observer returns on `!cfg.enabled` before the
-only `MiningDirector.enforceLease` call, contradicting the locked observer-ordering gate. The
-taxonomy refactor is paused pending authorization for the narrow prerequisite repair.
+**Nearest frontier:** GAO-0b is dependency-ready but remains outside the current authorization.
+GAO-0 has completed its code/unit/build/static-MAIBS gates; Minecraft runtime parity remains
+`UNVERIFIED` because no launch was authorized.
 
 ---
 
@@ -304,9 +304,9 @@ After 2 in-game days without exploring, repetition penalty decays.
 
 ---
 
-## Topic: GAO-0 — Activity taxonomy & observation (`BLOCKED`)
+## Topic: GAO-0 — Activity taxonomy & observation (`IMPLEMENTED`)
 
-**Status:** `BLOCKED` — GAO-0-B1 found before Java edits; user required stop-and-report on prerequisite defects
+**Status:** `IMPLEMENTED / STATIC VERIFIED` — code, focused tests, full suite, clean build, and post-implementation MAIBS pass; runtime remains `UNVERIFIED`
 
 GAO-0 must answer: *what activity is this mob doing right now, and is that IDLE, REST, MANDATORY, or DISCRETIONARY?*
 
@@ -319,7 +319,7 @@ live-selector scan. GAO-0 reuses and extends the classifier's single-goal taxono
 
 | `MoveHolderClassification` | Example goals (suffix / type) | Opinion `ActivityClass` (proposed) |
 | --- | --- | --- |
-| `NOT_MOVE_HOLDER` | Flagless helpers (`PlayerMobDoorGoal`, `DigThroughGoal`) | `PASSIVE_HELPER` — does not count as meaningful work |
+| `NOT_MOVE_HOLDER` | Flagless helpers (`PlayerMobDoorGoal`, `DigThroughGoal`) | `PASSIVE_HELPER` — distinct taxonomy class, but still counts as readiness work for exact pre-GAO-0 parity |
 | `PROTECTED_SAFETY_RECOVERY` | `EnvironmentalEscapeGoal`, `SeekShelterGoal`, `FireBucketGoal`, `FleeFromCategoryGoal`, `TrainRecoveryGoal` | `MANDATORY_SAFETY` |
 | `PROTECTED_PLAYER_ORDER` | `CommandedActionGoal`, `StayNearGoal` | `MANDATORY_COMMAND` |
 | `PROTECTED_LOW_FOOD` | `EatFoodGoal` | `MANDATORY_SURVIVAL` |
@@ -330,7 +330,7 @@ live-selector scan. GAO-0 reuses and extends the classifier's single-goal taxono
 | `UNKNOWN_MOVE_HOLDER` | Unmapped addon/host goal | `UNKNOWN_ACTIVE` — fail safe, not idle |
 | Designated mining consumer | `ControlledDescentGoal`, `TunnelSearchGoal`, cave handoff explore | `PROJECT_EXECUTION` |
 
-**Recommendation (D-GAO-011):** GAO-0 defines `ActivityObservationService` as a **thin wrapper** over `MoveHolderClassifier` + addon goal-kind mapping — do **not** fork a second classifier.
+**Implemented (D-GAO-011):** GAO-0 defines `ActivityObservationService` as a **thin wrapper** over `MoveHolderClassifier` + addon goal-kind mapping; no second activity classifier was created.
 
 ### SPM host goal map (`CONFIRMED` — `PlayerMobEntity#registerGoals`, v0.86.0)
 
@@ -387,7 +387,7 @@ live-selector scan. GAO-0 reuses and extends the classifier's single-goal taxono
 - Only `TrackedLocalWanderGoal`, host `RandomStrollGoal`, look goals, `AnticsGoal`, and self → `recordIdleTicks(10)`.
 - `FollowLovedOneGoal` and raid goals → meaningful work (`CONFIRMED` by control flow).
 
-**Locked decision (D-GAO-015):** GAO-0 **refactors** this loop into
+**Implemented decision (D-GAO-015):** GAO-0 **refactors** this loop into
 `ActivityObservationService` rather than adding a second scanner. `ExplorationReadiness` keeps
 calling the same predicates; later Opinion stages add affect side-effects on the same cadence.
 
@@ -1097,11 +1097,11 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 `BLOCKED` — GAO-0-B1 prerequisite repair requires explicit scope decision
+**Status:** GAO-0 `IMPLEMENTED / STATIC VERIFIED`; GAO-0b and later phases remain unimplemented and unauthorized
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
-| **GAO-0** | Activity taxonomy + observation contract | `ActivityClass` enum; `ActivityObservationService` wrapping `MoveHolderClassifier`; SPM goal map table | MI-14C2-R2 pattern |
+| **GAO-0** | Activity taxonomy + observation contract | **IMPLEMENTED:** `ActivityClass`; one `ActivityObservationService` scan wrapping `MoveHolderClassifier`; host/addon taxonomy and parity tests | MI-14C2-R2 pattern |
 | **GAO-0b** | `ExperienceEvent` schema | Immutable raw events + `ExperiencePipeline.accept`; exact cause retained | GAO-0 |
 | **GAO-0c** | Episode + rest-claim contracts | `ActivityEpisode`, `OutcomeClass`, `RestSessionClaim`; affect-vs-learning and unload lifecycle tests | GAO-0, GAO-0b |
 | **GAO-1** | `AffectiveState` + observation | Boredom/engagement from experience events; scheduler-wide idle detection | GAO-0, GAO-0b, GAO-0c |
@@ -1117,7 +1117,7 @@ mandatory artificial diversity between cooperative mobs.
 
 | Field | Contract |
 | --- | --- |
-| Status | `BLOCKED` at pre-implementation gate — GAO-0-B1 |
+| Status | `IMPLEMENTED / STATIC VERIFIED`; runtime behavior `UNVERIFIED` |
 | Objective | Extract the existing 10-tick selector observation into one `ActivityObservationService` without changing behavior |
 | Primary systems | `ExplorationActivityGoal`, `ExplorationReadiness`, `MoveHolderClassifier`, new observer contract and unit tests |
 | Constraints | Opinion remains disabled/unimplemented; observer stays flagless and staggered; current unknown-goal fail-safe and director ordering remain intact; no second selector scan |
@@ -1216,11 +1216,62 @@ when ordinary readiness/activity processing is disabled.
 **Must not happen:** the repair assigns new mining work, changes Goal priority/flags, or runs
 activity/Opinion selection while disabled.
 
-**Gate result:** `FAIL — ARCHITECTURE_DEFECT`. GAO-0 implementation is paused before Java edits.
+**Resolution:** `IMPLEMENTED / STATIC VERIFIED`. The observer now runs existing
+`MiningDirector.enforceLease` ownership before the disabled return, then records the historical
+readiness reset and stops before activity observation, descent pressure, handoff, or assignment.
+Post-build MAIBS found a second path: when a mob loaded while the addon was already disabled,
+`installExploration()` installed no observer, so persisted authority still had no cleanup owner.
+The same flagless observer is now installed in permanent cleanup-only mode in that case (and when
+the host stroll shape is incompatible). Its construction-time authority bit prevents re-enabling
+the config from turning that cleanup observer into an assignment path.
 
-**Frontier when resumed:** resolve GAO-0-B1 first. If the recommended narrow repair is authorized,
-move lease enforcement ahead of the outer disabled return, add its regression test, then resume the
-original GAO-0 observer/taxonomy scope. GAO-0b/0c remain unauthorized.
+**Evidence:** `ExplorationDisabledCadenceTest` covers callback order, the absence of a new-work
+surface, enabled-path preservation, stale-authority non-resurrection, and the cleanup-only observer
+authority gate. `MiningExecutionC3R1Test` and `ExecutionLeasePolicyTest` preserve combat,
+safety/recovery, player-order, and lease-clock behavior. Focused tests passed; final
+`gradlew.bat clean build` passed with 405 tests, 0 failures/errors/skips.
+
+**Remaining evidence limit:** no Minecraft runtime was launched. Actual config-toggle behavior,
+save/reload cleanup, and observable parity are `UNVERIFIED` under Gate AV-1.
+
+### GAO-0 implementation evidence and post-implementation MAIBS
+
+| Layer | Result |
+| --- | --- |
+| Design intent | One observation substrate classifies current activity without changing scheduler authority or adding Opinion behavior |
+| Actual implementation | `ActivityObservationService` owns the sole activity scan and reduces independently classified `ActivityClass` values; `ExplorationActivityGoal` consumes only the legacy readiness predicates; `MoveHolderClassifier` owns addon types and SPM suffixes |
+| Test evidence | Focused GAO-0/B1/C3 suite passed; complete clean build passed **405 tests, 0 failures, 0 errors, 0 skipped**; `git diff --check` passed |
+| Parity | `CODE_CONFIRMED` and `UNIT_CONFIRMED` for the old idle/work/explore reducer and registration/priority non-change; runtime parity is `UNVERIFIED` |
+| Scope | No `ExperienceEvent`, episode, rest claim, affect, opinion memory, discretionary intent/director, scoring, or voluntary yield was added |
+
+| MAIBS scenario | PERCEIVE → CHOOSE → PHYSICAL RESULT | Static result |
+| --- | --- | --- |
+| Pure local wandering | observer sees wander + look/observer noise → readiness accumulates idle → existing wander keeps MOVE | `PASS` |
+| Follow loved one | suffix maps `SOCIAL_TRAVEL` → readiness resets as meaningful → host goal retains MOVE | `PASS` |
+| Combat / safety / command | maps mandatory/protected activity → readiness resets; no priority, flag, or preemption change | `PASS` |
+| Mining / cooperative work | designated executor maps project execution; participating chores can map productive cooperation → both remain meaningful | `PASS` |
+| Exploration | maps expedition → neither resets nor increments readiness while route remains active | `PASS` |
+| Campfire / shelter | Campfire remains approach/meaningful; shelter is safety and only reports REST while actually sleeping; no future claim semantics | `PASS` |
+| Unknown host goal | maps `UNKNOWN_ACTIVE` → occupied/meaningful fail-safe → no expedition is started over it | `PASS` |
+| Disabled during active lease | observer settles existing authority, resets readiness, then returns before pressure/handoff/assignment | `PASS` (static/unit) |
+| Load while already disabled | cleanup-only observer is installed without replacing stroll or adding executors; re-enable cannot grant it new-work authority | `PASS` (static/unit) |
+
+**Predicted weird behaviors:** a flagless helper still delays exploration because that is preserved
+legacy behavior; a cleanup-only observer installed while disabled will not dynamically grow an
+exploration executor stack after re-enable; and third-party Goal suffixes remain conservative
+`UNKNOWN_ACTIVE`. These are accepted GAO-0 parity/compatibility choices, not newly claimed product
+behavior. Runtime experiments that would falsify this pass are: a disabled reload retains a stale
+lease, local wander no longer accumulates readiness, FollowLovedOne becomes idle, or an unknown Goal
+permits an expedition.
+
+**Static ownership probes:** activity suffixes for `FollowLovedOneGoal`, raid, harvest, and train are
+not found outside `MoveHolderClassifier`; the old direct selector scan is not found in
+`ExplorationActivityGoal`; and no Opinion/affect/intent implementation is present in the GAO-0 diff.
+Other `getAvailableGoals()` calls remain for installation, mining arbitration, executor lookup, and
+companion coordination—not competing activity semantics.
+
+**Post-implementation gate:** `MAIBS_STATIC PASS — BEHAVIORALLY_PLAUSIBLE`.
+`RUNTIME_CONFIRMED` remains false because no Minecraft launch was authorized.
 
 ### Product decisions
 
@@ -1316,11 +1367,11 @@ Runtime probes require separate Minecraft launch approval.
 | D-GAO-008 | Opinion disabled ⇒ SPM parity | `PROPOSED` | Debug + ship gate |
 | D-GAO-009 | Three-layer model (Personality/Opinion/Mood) | `PROPOSED` | Agent_ChatGPT |
 | D-GAO-010 | Typed OpinionMemory taxonomy | `PROPOSED` | ACTIVITY/PLACE/ENTITY/ENV/PROJECT |
-| D-GAO-011 | Reuse `MoveHolderClassifier` for GAO-0 observation | `LOCKED` | Prior consensus; no peer objection; prerequisite accepted with GAO-0 frontier 2026-08-09 |
+| D-GAO-011 | Reuse `MoveHolderClassifier` for GAO-0 observation | `IMPLEMENTED` | One classifier owns addon types and SPM suffix taxonomy; clean build 2026-08-09 |
 | D-GAO-012 | Existing terminals emit raw events into one pipeline; no parallel scanners/direct memory writes | `LOCKED` | Amended with D-GAO-022 separation; user peer review 2026-08-09 |
 | D-GAO-013 | Mood modulates readiness thresholds; never owns `descentPressure` | `PROPOSED` | MI-5 lesson |
 | D-GAO-014 | `DiscretionaryIntent` as data consumed by existing goals | `PROPOSED` | TTL + invalidation B-19 |
-| D-GAO-015 | Single `ActivityObservationService`; refactor `ExplorationActivityGoal` scan | `LOCKED` | Preserve readiness behavior and early-return ordering; user peer review 2026-08-09 |
+| D-GAO-015 | Single `ActivityObservationService`; refactor `ExplorationActivityGoal` scan | `IMPLEMENTED` | Legacy readiness parity tests plus single activity-scan ownership; runtime unverified |
 | D-GAO-016 | Dual predicates: expedition meaningful-work ≠ affect idle/rest | `PROPOSED` | Campfire B-17 |
 | D-GAO-017 | Selectable activity requires a designated executor | `PROPOSED` | B-25 |
 | D-GAO-018 | Discretionary selection requires voluntary yield | `PROPOSED` | B-22; equal-priority scheduler evidence |
@@ -1338,6 +1389,7 @@ Runtime probes require separate Minecraft launch approval.
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Codex | **GAO-0-B1 + GAO-0 implementation.** Repaired disabled-cadence lease settlement and, during post-build MAIBS, found/repaired the disabled-at-entity-load observer absence with a permanently cleanup-only authority mode. Added `ActivityClass`, the single `ActivityObservationService`, reused/extended `MoveHolderClassifier`, refactored readiness observation, and added taxonomy/parity tests. Focused suite and clean build passed; 405 tests, 0 failures/errors/skips. Runtime remains unverified; no launch, commit, push, or out-of-scope GAO-0b+ work |
 | 2026-08-09 | Agent_Codex | **GAO-0 pre-implementation stop.** Found GAO-0-B1: `ExplorationActivityGoal.tick()` returns on global disable before the only production `MiningDirector.enforceLease` call, so the documented “lease first” invariant is false on that path. Recorded four probes, three options, behavioral prediction, and stop gate. No Java edits, tests, build, runtime launch, commit, or push |
 | 2026-08-09 | User peer review + Agent_Codex | **Contract amendment and convergence.** Promoted prior-consensus D-GAO-011 and locked amended D-GAO-012/015/021…025; accepted PD-GAO-06 Explore + Rest and PD-GAO-07 freeze persistent affect/opinion but invalidate ephemeral intent/claim state. Added adopted-authority identity to REST claims, split affect pulses from normalized learning, preserved exact terminal cause beneath outcome eligibility, separated stalled restlessness from preemption authority, expanded the trace through executor terminal, corrected multi-mob coordination wording, added GAO-M12, and made GAO-0 implementation-ready. No source implementation or runtime launch |
 | 2026-08-09 | Agent_Codex | **Brainstorm B-28…B-35 + MAIBS source correction.** `CampfireGoal` is capped at 200 ticks, increments its cap after arrival, and will not restart while already at its selected idle point; non-bed shelter waiting is likewise capped at 400 ticks. Replaced raw Goal-liveness REST with a proposed arrival-anchored `RestSessionClaim`; added episode/causal attribution, event-frequency normalization, outcome taxonomy, unloaded-time policy, multi-mob synchronization risk, and bounded decision tracing. Added D-GAO-021…025, GAO-0c, PD-GAO-06/07, and GAO-M7…M11. No source implementation or runtime launch |
@@ -1595,3 +1647,40 @@ Adding a second observer is rejected; preserving the bug fails the locked gate.
 
 **Frontier after:** GAO-0 paused exactly as the user's stop condition requires. Await a scope decision
 for GAO-0-B1; GAO-0b/0c/1 remain out of scope.
+
+---
+
+## Contribution — Agent_Codex (GAO-0-B1 repair and GAO-0 implementation)
+
+**Agent:** `Agent_Codex`
+
+**Date/Session:** 2026-08-09
+
+**Contribution type:** `IMPLEMENTATION / VALIDATION / REVIEW`
+
+**Frontier before:** GAO-0-B1 was explicitly authorized as a prerequisite; successful repair was to
+resume the previously authorized GAO-0 automatically.
+
+**Implementation:** retained `MiningDirector.enforceLease` as the sole settlement owner; made the
+disabled observer cadence cleanup-only; installed that same flagless observer when a mob loads while
+disabled or when the host stroll shape is incompatible; and construction-gated it against future
+assignment authority. Added the shared `ActivityClass` and `ActivityObservationService`, moved the
+legacy readiness scan into that service, and extended—not duplicated—`MoveHolderClassifier` for the
+full pinned host/addon taxonomy.
+
+**Peer/self-review discovery:** the first repair was insufficient across save/load because
+`installExploration()` returned before installing the observer when configuration was already
+disabled. That would have stranded persisted authority despite passing the initial helper tests.
+The lifecycle path was repaired before the final build.
+
+**Validation:** focused B1/GAO-0/C3 tests passed; the final `gradlew.bat clean build` executed 405
+tests with zero failures, errors, or skips; diff integrity passed. Static MAIBS covered local wander,
+social follow, combat/safety/command, mining/cooperation, exploration, current Campfire/Shelter
+lifecycle, unknown Goals, config disable, and disabled-at-load cleanup.
+
+**Evidence classification:** `CODE_CONFIRMED`, `UNIT_CONFIRMED`, and `BUILD_CONFIRMED`; observable
+Minecraft behavior and save/reload parity remain `UNVERIFIED` because runtime launch was explicitly
+out of scope.
+
+**Frontier after:** GAO-0 is implemented. GAO-0b is dependency-ready but not authorized. No GAO-0b,
+GAO-0c, GAO-1+, Opinion behavior, runtime launch, commit, push, or PR occurred.

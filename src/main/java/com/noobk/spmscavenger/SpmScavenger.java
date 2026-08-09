@@ -122,8 +122,18 @@ public class SpmScavenger implements ModInitializer {
     }
 
     private static void installExploration(Mob mob, GoalSelector selector) {
+        if (!(mob instanceof PathfinderMob pathfinderMob)) {
+            return;
+        }
         ScavengerConfig cfg = ScavengerConfig.get();
-        if (!cfg.enabled || !(mob instanceof PathfinderMob pathfinderMob)) {
+        ExplorationReadiness readiness = new ExplorationReadiness();
+
+        // GAO-0-B1: persisted mining authority still needs lease settlement when the global switch
+        // is already disabled at ENTITY_LOAD time. This flagless cleanup observer owns no executor,
+        // replaces no host stroll, and is permanently barred from pressure/handoff/assignment.
+        if (!cfg.enabled) {
+            selector.addGoal(9, new ExplorationActivityGoal(
+                    pathfinderMob, selector, readiness, false));
             return;
         }
 
@@ -136,6 +146,10 @@ public class SpmScavenger implements ModInitializer {
             }
         }
         if (originalStroll == null) {
+            // Preserve the compatibility fail-closed behavior while keeping persisted lease cleanup
+            // alive. An unknown host stroll shape must not accidentally authorize mining work.
+            selector.addGoal(9, new ExplorationActivityGoal(
+                    pathfinderMob, selector, readiness, false));
             if (!warnedStrollShape) {
                 warnedStrollShape = true;
                 LOGGER.warn("[spmscavenger] PlayerMob idle stroll shape changed; exploration left "
@@ -145,7 +159,6 @@ public class SpmScavenger implements ModInitializer {
         }
 
         selector.removeGoal(originalStroll);
-        ExplorationReadiness readiness = new ExplorationReadiness();
         selector.addGoal(3, new ControlledDescentGoal(pathfinderMob, 0.9, readiness));
         // Same priority as the other deliberate-excavation executor: mode selection belongs to
         // MiningDirector, and arbitration to the intent matrix, not to Minecraft's priority

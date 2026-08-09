@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.goal;
 
+import com.noobk.spmscavenger.activity.ActivityObservationService;
 import com.noobk.spmscavenger.DescentPressurePolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
@@ -14,15 +15,11 @@ import com.noobk.spmscavenger.mining.ExecutionIntent;
 import com.noobk.spmscavenger.mining.SchedulerConflictPolicy;
 import com.noobk.spmscavenger.DescentHeadingPolicy;
 import com.noobk.spmscavenger.WorkDemandPolicy;
-import com.noobk.spmscavenger.goal.AnticsGoal;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.GoalSelector;
-import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
-import net.minecraft.world.entity.ai.goal.RandomStrollGoal;
-import net.minecraft.world.entity.ai.goal.WrappedGoal;
 
 import java.util.EnumSet;
 
@@ -44,13 +41,23 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
     private final PathfinderMob mob;
     private final GoalSelector selector;
     private final ExplorationReadiness readiness;
+    private final boolean allowNewMiningWork;
 
     public ExplorationActivityGoal(
             PathfinderMob mob, GoalSelector selector, ExplorationReadiness readiness) {
+        this(mob, selector, readiness, true);
+    }
+
+    public ExplorationActivityGoal(
+            PathfinderMob mob,
+            GoalSelector selector,
+            ExplorationReadiness readiness,
+            boolean allowNewMiningWork) {
         super(mob);
         this.mob = mob;
         this.selector = selector;
         this.readiness = readiness;
+        this.allowNewMiningWork = allowNewMiningWork;
         setFlags(EnumSet.noneOf(Flag.class));
     }
 
@@ -83,42 +90,53 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         if (Math.floorMod(mob.tickCount + mob.getId(), OBSERVE_INTERVAL) != 0) {
             return;
         }
-        if (!ScavengerConfig.get().enabled) {
-            readiness.recordMeaningfulWork();
+        ScavengerConfig cfg = ScavengerConfig.get();
+        if (handleDisabledCadence(
+                cfg.enabled,
+                () -> directorTick(false),
+                readiness::recordMeaningfulWork)) {
             return;
         }
 
-        boolean exploring = false;
-        boolean meaningfulWork = false;
-        for (WrappedGoal wrapped : selector.getAvailableGoals()) {
-            if (!wrapped.isRunning()) {
-                continue;
-            }
-            Goal goal = wrapped.getGoal();
-            if (goal instanceof ExploringGoal) {
-                exploring = true;
-                continue;
-            }
-            if (goal == this
-                    || goal instanceof TrackedLocalWanderGoal
-                    || goal instanceof RandomStrollGoal
-                    || goal instanceof LookAtPlayerGoal
-                    || goal instanceof RandomLookAroundGoal
-                    || goal instanceof AnticsGoal) {
-                continue;
-            }
-            meaningfulWork = true;
-            break;
-        }
+        MiningProjectSavedData observationStore = mob.level() instanceof ServerLevel level
+                ? MiningProjectSavedData.get(level)
+                : null;
+        ActivityObservationService.Observation observation = ActivityObservationService.observe(
+                selector, mob, observationStore, mob.level().getGameTime());
 
-        if (meaningfulWork) {
+        if (observation.meaningfulWorkForExpedition()) {
             readiness.recordMeaningfulWork();
-        } else if (!exploring) {
+        } else if (!observation.exploring()) {
             readiness.recordIdleTicks(OBSERVE_INTERVAL);
         }
 
-        updateDescentPressure();
-        directorTick();
+        boolean mayCreateWork = permitsNewMiningWork(cfg.enabled, allowNewMiningWork);
+        if (mayCreateWork) {
+            updateDescentPressure();
+        }
+        directorTick(mayCreateWork);
+    }
+
+    /**
+     * GAO-0-B1 — disabled activity observation still owns mining lease cleanup.
+     *
+     * <p>The cleanup callback deliberately has no assignment callback alongside it. This keeps the
+     * disabled path structurally limited to existing-authority settlement followed by the legacy
+     * readiness reset. Returning {@code true} tells the caller to stop before activity observation,
+     * descent pressure, handoff claims, or assignment.
+     */
+    static boolean handleDisabledCadence(
+            boolean enabled, Runnable enforceExistingLease, Runnable recordMeaningfulWork) {
+        if (enabled) {
+            return false;
+        }
+        enforceExistingLease.run();
+        recordMeaningfulWork.run();
+        return true;
+    }
+
+    static boolean permitsNewMiningWork(boolean enabled, boolean installedWithExecutorStack) {
+        return enabled && installedWithExecutorStack;
     }
 
     /**
@@ -129,7 +147,7 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
      * {@code ControlledDescentGoal} picks that up on its next {@code canUse} and can no longer
      * create one itself.
      */
-    private void directorTick() {
+    private void directorTick(boolean allowNewWork) {
         if (!(mob.level() instanceof ServerLevel level)) {
             return;
         }
@@ -140,6 +158,11 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         // the director itself: combat or mobGriefing would stop the one component able to revoke.
         MiningDirector.enforceLease(level, mob, store, cfg);
 
+        // GAO-0-B1: global disable reaches lease settlement, but this pass is cleanup-only. Keeping
+        // this guard ahead of every assignment/handoff branch makes the negative authority explicit.
+        if (!allowNewWork) {
+            return;
+        }
         if (!cfg.enabled || !cfg.gatherResources || !cfg.exploring) {
             return;
         }

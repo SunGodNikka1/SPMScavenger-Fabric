@@ -1,12 +1,28 @@
 package com.noobk.spmscavenger.mining;
 
+import com.noobk.spmscavenger.activity.ActivityClass;
+import com.noobk.spmscavenger.goal.AnticsGoal;
+import com.noobk.spmscavenger.goal.CampfireGoal;
+import com.noobk.spmscavenger.goal.ControlledDescentGoal;
+import com.noobk.spmscavenger.goal.CraftTorchesGoal;
 import com.noobk.spmscavenger.goal.EnvironmentalEscapeGoal;
+import com.noobk.spmscavenger.goal.ExplorationActivityGoal;
+import com.noobk.spmscavenger.goal.ExploringGoal;
+import com.noobk.spmscavenger.goal.GatherResourcesGoal;
+import com.noobk.spmscavenger.goal.PlaceTorchGoal;
 import com.noobk.spmscavenger.goal.SeekShelterGoal;
+import com.noobk.spmscavenger.goal.SmeltAtFurnaceGoal;
+import com.noobk.spmscavenger.goal.TrackedLocalWanderGoal;
+import com.noobk.spmscavenger.goal.TunnelSearchGoal;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
+import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
+import net.minecraft.world.entity.ai.goal.RandomStrollGoal;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.UUID;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * MI-14C2/R1 — classifies running goals for arbitration and lease accounting without compiling
@@ -16,6 +32,127 @@ import java.util.Set;
 public final class MoveHolderClassifier {
 
     private MoveHolderClassifier() {
+    }
+
+    /**
+     * GAO-0 semantic taxonomy. This method is the shared source for SPM suffix knowledge; activity
+     * observers must not reproduce these strings in another classifier.
+     */
+    public static ActivityClass activityClass(
+            Goal goal,
+            @Nullable Mob mob,
+            @Nullable MiningProjectSavedData store,
+            UUID mobId,
+            long now) {
+        if (goal == null) {
+            return ActivityClass.UNKNOWN_ACTIVE;
+        }
+        ActivityClass base = staticActivityClass(goal.getClass());
+        if (goal instanceof SeekShelterGoal) {
+            return mob != null && mob.isSleeping()
+                    ? ActivityClass.REST
+                    : base;
+        }
+        if (goal instanceof ExploringGoal) {
+            if (store != null
+                    && MiningGoalKind.classifyExploring(store, mobId, now)
+                            == MiningGoalKind.EXPLORING_CAVE_HANDOFF) {
+                return ActivityClass.PROJECT_EXECUTION;
+            }
+            return ActivityClass.EXPEDITION;
+        }
+        if (goal instanceof GatherResourcesGoal
+                || goal instanceof CraftTorchesGoal
+                || goal instanceof SmeltAtFurnaceGoal) {
+            if (store != null) {
+                MiningGoalKind kind = MiningGoalKind.classify(goal, store, mobId, now)
+                        .orElseThrow();
+                ExecutionIntent intent = ExecutionIntentPolicy.derive(store, mobId, now);
+                if (MiningExecutionArbiter.decide(intent, kind) == ArbitrationDecision.ALLOW
+                        && !kind.isDesignatedConsumer()) {
+                    return ActivityClass.PRODUCTIVE_COOP;
+                }
+            }
+            return ActivityClass.SCAVENGE_WORK;
+        }
+        return base;
+    }
+
+    /** Static portion of the GAO-0 taxonomy; no Goal instance or Minecraft world is required. */
+    public static ActivityClass staticActivityClass(Class<? extends Goal> goalType) {
+        if (EnvironmentalEscapeGoal.class.isAssignableFrom(goalType)
+                || SeekShelterGoal.class.isAssignableFrom(goalType)) {
+            return ActivityClass.MANDATORY_SAFETY;
+        }
+        if (ControlledDescentGoal.class.isAssignableFrom(goalType)
+                || TunnelSearchGoal.class.isAssignableFrom(goalType)) {
+            return ActivityClass.PROJECT_EXECUTION;
+        }
+        if (PlaceTorchGoal.class.isAssignableFrom(goalType)) {
+            return ActivityClass.MAINTENANCE;
+        }
+        if (CampfireGoal.class.isAssignableFrom(goalType)) {
+            return ActivityClass.REST_APPROACH;
+        }
+        if (TrackedLocalWanderGoal.class.isAssignableFrom(goalType)
+                || RandomStrollGoal.class.isAssignableFrom(goalType)) {
+            return ActivityClass.IDLE_CANDIDATE;
+        }
+        if (ExplorationActivityGoal.class.isAssignableFrom(goalType)) {
+            return ActivityClass.PASSIVE_OBSERVER;
+        }
+        if (AnticsGoal.class.isAssignableFrom(goalType)
+                || LookAtPlayerGoal.class.isAssignableFrom(goalType)
+                || RandomLookAroundGoal.class.isAssignableFrom(goalType)) {
+            return ActivityClass.PASSIVE_COSMETIC;
+        }
+        if (ExploringGoal.class.isAssignableFrom(goalType)) {
+            return ActivityClass.EXPEDITION;
+        }
+        if (GatherResourcesGoal.class.isAssignableFrom(goalType)
+                || CraftTorchesGoal.class.isAssignableFrom(goalType)
+                || SmeltAtFurnaceGoal.class.isAssignableFrom(goalType)) {
+            return ActivityClass.SCAVENGE_WORK;
+        }
+
+        String className = goalType.getName();
+        if (endsWithAny(className,
+                "FireBucketGoal", "FleeFromCategoryGoal", "TrainRecoveryGoal")) {
+            return ActivityClass.MANDATORY_SAFETY;
+        }
+        if (endsWithAny(className, "CommandedActionGoal", "StayNearGoal")) {
+            return ActivityClass.MANDATORY_COMMAND;
+        }
+        if (className.endsWith("EatFoodGoal")) {
+            return ActivityClass.MANDATORY_SURVIVAL;
+        }
+        if (endsWithAny(className,
+                "SkepticalWatchGoal", "FriendlyGreetGoal", "DoorOperationGoal")) {
+            return ActivityClass.SOCIAL_REFLEX;
+        }
+        if (className.endsWith("FollowLovedOneGoal")) {
+            return ActivityClass.SOCIAL_TRAVEL;
+        }
+        if (endsWithAny(className, "SeekAmmoGoal", "BlockArrowsGoal")) {
+            return ActivityClass.COMBAT_PREP;
+        }
+        if (isKnownCombatGoal(className)) {
+            return ActivityClass.MANDATORY_COMBAT;
+        }
+        if (endsWithAny(className,
+                "RaidContainersGoal", "RaidArmorStandsGoal", "CollectFloorItemsGoal")) {
+            return ActivityClass.SCAVENGE_LOOT;
+        }
+        if (className.endsWith("HarvestCropsGoal")) {
+            return ActivityClass.FARMING;
+        }
+        if (endsWithAny(className, "AdvanceCarriageGoal", "CrossGroupGapGoal")) {
+            return ActivityClass.DUNGEON_TRAIN;
+        }
+        if (endsWithAny(className, "FloatGoal", "PlayerMobDoorGoal", "DigThroughGoal")) {
+            return ActivityClass.PASSIVE_HELPER;
+        }
+        return ActivityClass.UNKNOWN_ACTIVE;
     }
 
     public static MoveHolderClassification classify(
@@ -40,26 +177,22 @@ public final class MoveHolderClassifier {
         if (goal instanceof EnvironmentalEscapeGoal || goal instanceof SeekShelterGoal) {
             return MoveHolderClassification.PROTECTED_SAFETY_RECOVERY;
         }
-        String className = goal.getClass().getName();
-        if (endsWithAny(className,
-                "FireBucketGoal", "FleeFromCategoryGoal", "TrainRecoveryGoal")) {
-            return MoveHolderClassification.PROTECTED_SAFETY_RECOVERY;
-        }
-        if (endsWithAny(className, "CommandedActionGoal", "StayNearGoal")) {
-            return MoveHolderClassification.PROTECTED_PLAYER_ORDER;
-        }
-        if (className.endsWith("EatFoodGoal")) {
-            return MoveHolderClassification.PROTECTED_LOW_FOOD;
-        }
-        if (endsWithAny(className,
-                "SkepticalWatchGoal", "FriendlyGreetGoal", "DoorOperationGoal")) {
-            return MoveHolderClassification.PROTECTED_FINITE;
-        }
-        if (endsWithAny(className, "FollowLovedOneGoal", "SeekAmmoGoal")) {
-            return MoveHolderClassification.ORDINARY_HOST_WORK;
-        }
-        if (isProtectedCombatGoal(className, mob)) {
-            return MoveHolderClassification.PROTECTED_COMBAT;
+        ActivityClass activity = activityClass(goal, mob, store, mobId, now);
+        switch (activity) {
+            case MANDATORY_SAFETY:
+                return MoveHolderClassification.PROTECTED_SAFETY_RECOVERY;
+            case MANDATORY_COMMAND:
+                return MoveHolderClassification.PROTECTED_PLAYER_ORDER;
+            case MANDATORY_SURVIVAL:
+                return MoveHolderClassification.PROTECTED_LOW_FOOD;
+            case SOCIAL_REFLEX:
+                return MoveHolderClassification.PROTECTED_FINITE;
+            case SOCIAL_TRAVEL, COMBAT_PREP, SCAVENGE_LOOT, FARMING, DUNGEON_TRAIN:
+                return MoveHolderClassification.ORDINARY_HOST_WORK;
+            case MANDATORY_COMBAT:
+                return MoveHolderClassification.PROTECTED_COMBAT;
+            default:
+                break;
         }
         ExecutionIntent intent = ExecutionIntentPolicy.derive(store, mobId, now);
         return MiningGoalKind.classify(goal, store, mobId, now)
@@ -135,7 +268,7 @@ public final class MoveHolderClassifier {
         return false;
     }
 
-    private static boolean isProtectedCombatGoal(String className, @org.jetbrains.annotations.Nullable Mob mob) {
+    private static boolean isProtectedCombatGoal(String className, @Nullable Mob mob) {
         if (mob != null
                 && mob.getTarget() != null
                 && (className.contains("MeleeAttackGoal")
@@ -143,6 +276,10 @@ public final class MoveHolderClassifier {
                         || className.contains("BowAttackGoal"))) {
             return true;
         }
+        return isKnownCombatGoal(className);
+    }
+
+    private static boolean isKnownCombatGoal(String className) {
         return className.endsWith("PlayerMobAttackGoal")
                 || className.endsWith("TntCombatGoal")
                 || className.endsWith("EndCrystalCombatGoal")
