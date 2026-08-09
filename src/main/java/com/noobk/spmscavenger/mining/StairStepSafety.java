@@ -1,15 +1,20 @@
 package com.noobk.spmscavenger.mining;
 
+import com.noobk.spmscavenger.ToolBox;
 import net.minecraft.core.BlockPos;
-import net.minecraft.tags.BlockTags;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
- * MI-7D — minimum pre-break safety gate (full MI-18 extends later).
+ * MI-7D / MI-7R — minimum pre-break safety gate (full MI-18 extends later).
  */
 public final class StairStepSafety {
 
@@ -24,33 +29,71 @@ public final class StairStepSafety {
         NO_FOOTING
     }
 
+    /** Whether the mob can harvest a block with any owned tool (MI-7R R2). */
+    @FunctionalInterface
+    public interface BreakCapability {
+        boolean canHarvest(BlockState state);
+
+        static BreakCapability fromMob(Mob mob) {
+            return state -> state.isAir() || ToolBox.ownsToolFor(mob, state);
+        }
+
+        static BreakCapability fromTool(ItemStack tool) {
+            return state -> {
+                if (state.isAir()) {
+                    return true;
+                }
+                return tool.isEmpty() || tool.isCorrectToolForDrops(state);
+            };
+        }
+
+        static BreakCapability always() {
+            return state -> true;
+        }
+    }
+
     private StairStepSafety() {
     }
 
-    public static Rejection validatePlan(Level level, StairStepPlan plan, ItemStack tool) {
+    public static Rejection validatePlan(Level level, StairStepPlan plan, Mob mob) {
+        return validatePlan(level, plan, BreakCapability.fromMob(mob));
+    }
+
+    /**
+     * Validates hazards on blocks to break, harvest capability, then <b>post-break</b> geometry
+     * (MI-7R R1).
+     */
+    public static Rejection validatePlan(Level level, StairStepPlan plan, BreakCapability capability) {
+        return validatePlan((BlockGetter) level, plan, capability);
+    }
+
+    /**
+     * Validates hazards on blocks to break, harvest capability, then <b>post-break</b> geometry
+     * (MI-7R R1).
+     */
+    public static Rejection validatePlan(BlockGetter level, StairStepPlan plan, BreakCapability capability) {
         if (!plan.hasValidGeometry()) {
             return Rejection.NO_HEADROOM;
         }
+        Set<BlockPos> broken = breakSet(plan);
         for (BlockPos breakPos : plan.requiredBreaks()) {
-            Rejection breakReject = validateBreak(level, breakPos, tool);
-            if (breakReject != Rejection.NONE) {
-                return breakReject;
+            BlockState state = level.getBlockState(breakPos);
+            if (state.isAir()) {
+                continue;
+            }
+            Rejection hazard = validateBreakHazards(level, breakPos);
+            if (hazard != Rejection.NONE) {
+                return hazard;
+            }
+            if (!capability.canHarvest(state)) {
+                return Rejection.NO_HARVEST;
             }
         }
-        if (!hasFooting(level, plan.nextStandCell())) {
-            return Rejection.NO_FOOTING;
-        }
-        if (!hasHeadroom(level, plan.nextStandCell())) {
-            return Rejection.NO_HEADROOM;
-        }
-        int unsupported = unsupportedDrop(level, plan.nextStandCell());
-        if (unsupported > 1) {
-            return Rejection.DROP_TOO_DEEP;
-        }
-        return Rejection.NONE;
+        return validatePostBreakGeometry(level, plan, broken);
     }
 
-    public static Rejection validateBreak(Level level, BlockPos pos, ItemStack tool) {
+    /** Per-block hazard check at break time (after equip). */
+    public static Rejection validateBreakHazards(BlockGetter level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
         if (state.isAir()) {
             return Rejection.NONE;
@@ -67,23 +110,57 @@ public final class StairStepSafety {
         if (hardness < 0.0f) {
             return Rejection.UNBREAKABLE;
         }
-        if (!tool.isEmpty() && !tool.isCorrectToolForDrops(state)) {
+        return Rejection.NONE;
+    }
+
+    /** @deprecated use {@link #validatePlan(Level, StairStepPlan, BreakCapability)} */
+    @Deprecated
+    public static Rejection validateBreak(Level level, BlockPos pos, ItemStack tool) {
+        Rejection hazard = validateBreakHazards(level, pos);
+        if (hazard != Rejection.NONE) {
+            return hazard;
+        }
+        BlockState state = level.getBlockState(pos);
+        if (!state.isAir() && !tool.isEmpty() && !tool.isCorrectToolForDrops(state)) {
             return Rejection.NO_HARVEST;
         }
         return Rejection.NONE;
     }
 
-    static boolean hasFooting(Level level, BlockPos feet) {
+    static Rejection validatePostBreakGeometry(BlockGetter level, StairStepPlan plan, Set<BlockPos> broken) {
+        BlockPos feet = plan.nextStandCell();
+        if (!wouldBePassable(level, feet, broken)) {
+            return Rejection.NO_HEADROOM;
+        }
+        if (!wouldBePassable(level, feet.above(), broken)) {
+            return Rejection.NO_HEADROOM;
+        }
+        if (!hasFooting(level, feet)) {
+            return Rejection.NO_FOOTING;
+        }
+        if (unsupportedDrop(level, feet) > 1) {
+            return Rejection.DROP_TOO_DEEP;
+        }
+        return Rejection.NONE;
+    }
+
+    static Set<BlockPos> breakSet(StairStepPlan plan) {
+        return new HashSet<>(plan.requiredBreaks());
+    }
+
+    static boolean wouldBePassable(BlockGetter level, BlockPos pos, Set<BlockPos> broken) {
+        if (broken.contains(pos)) {
+            return true;
+        }
+        return level.getBlockState(pos).getCollisionShape(level, pos).isEmpty();
+    }
+
+    static boolean hasFooting(BlockGetter level, BlockPos feet) {
         BlockPos below = feet.below();
         return level.getBlockState(below).isFaceSturdy(level, below, net.minecraft.core.Direction.UP);
     }
 
-    static boolean hasHeadroom(Level level, BlockPos feet) {
-        return level.getBlockState(feet).getCollisionShape(level, feet).isEmpty()
-                && level.getBlockState(feet.above()).getCollisionShape(level, feet.above()).isEmpty();
-    }
-
-    static int unsupportedDrop(Level level, BlockPos feet) {
+    static int unsupportedDrop(BlockGetter level, BlockPos feet) {
         int drop = 0;
         BlockPos cursor = feet.below();
         while (drop < 4 && level.getBlockState(cursor).getCollisionShape(level, cursor).isEmpty()) {

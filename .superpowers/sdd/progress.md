@@ -50,7 +50,10 @@ runtime heading unverified)
 
 MI-7D: complete with concerns (StairStepPlan/Planner/Safety; 218 tests; runtime unverified)
 
-MI-7E: complete with concerns (ControlledDescentGoal + MiningProject usage; 218 tests; runtime
-staircase/cave-mouth probe unverified)
+MI-7E: BLOCKED — MAIBS-1 FAIL (R1–R4 architecture defects); MI-7R semantic repair required before MI-14
+
+MI-7R: complete with concerns (R1–R4 repaired; StairStepSafety + ControlledDescentCaveHandoff + ControlledDescentGoal wire; 225 tests; MAIBS static PASS_WITH_CONCERNS; runtime unverified)
+
+NEXT: MAIBS runtime falsifying probes (launch approval required) → MI-14
 
 No commits. No Minecraft launches (separate approval required).

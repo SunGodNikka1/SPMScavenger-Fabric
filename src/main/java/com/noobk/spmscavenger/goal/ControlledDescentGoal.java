@@ -7,6 +7,8 @@ import com.noobk.spmscavenger.SpmScavenger;
 import com.noobk.spmscavenger.ToolBox;
 import com.noobk.spmscavenger.ToolTier;
 import com.noobk.spmscavenger.ToolTierPolicy;
+import com.noobk.spmscavenger.WorkDemandPolicy;
+import com.noobk.spmscavenger.mining.ControlledDescentCaveHandoff;
 import com.noobk.spmscavenger.mining.MiningProject;
 import com.noobk.spmscavenger.mining.MiningProjectEnd;
 import com.noobk.spmscavenger.mining.MiningProjectSavedData;
@@ -17,6 +19,7 @@ import com.noobk.spmscavenger.mining.StairStepPlanner;
 import com.noobk.spmscavenger.mining.StairStepSafety;
 import com.noobk.spmscavenger.mixin.MobGoalSelectorAccessor;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Mob;
@@ -26,7 +29,6 @@ import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameRules;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 
@@ -159,6 +161,10 @@ public final class ControlledDescentGoal extends Goal {
             finish(level, MiningProjectEnd.SEARCH_BUDGET_EXHAUSTED);
             return;
         }
+        if (shouldHandoffTunnelSearch(level)) {
+            finish(level, MiningProjectEnd.HANDOFF_TUNNEL_SEARCH);
+            return;
+        }
         if (currentStep == null) {
             planNextStep(level);
             return;
@@ -225,10 +231,13 @@ public final class ControlledDescentGoal extends Goal {
             }
             return;
         }
-        StairStepSafety.Rejection rejection = StairStepSafety.validateBreak(
-                level, pos, mob.getMainHandItem());
+        StairStepSafety.Rejection rejection = StairStepSafety.validateBreakHazards(level, pos);
         if (rejection != StairStepSafety.Rejection.NONE) {
             finish(level, MiningProjectEnd.HAZARD);
+            return;
+        }
+        if (!ToolBox.ownsToolFor(mob, state)) {
+            finish(level, MiningProjectEnd.NO_PROGRESS);
             return;
         }
         breakTarget = pos.immutable();
@@ -243,8 +252,7 @@ public final class ControlledDescentGoal extends Goal {
         breakIndex = 0;
         BlockPos stand = mob.blockPosition();
         StairStepPlan plan = StairStepPlanner.planStep(stand, project.heading());
-        StairStepSafety.Rejection rejection = StairStepSafety.validatePlan(
-                level, plan, mob.getMainHandItem());
+        StairStepSafety.Rejection rejection = StairStepSafety.validatePlan(level, plan, mob);
         if (rejection != StairStepSafety.Rejection.NONE) {
             project = project.withBudgetUsage(project.budgetUsage().withFailedStep());
             if (project.budget().isFailuresExhausted(project.budgetUsage())) {
@@ -267,11 +275,48 @@ public final class ControlledDescentGoal extends Goal {
                         horizontalDistance(project.origin(), mob.blockPosition()),
                         project.origin().getY() - mob.blockPosition().getY()));
         persist(level);
-        if (openedCave(level, currentStep.nextStandCell())) {
+        if (ControlledDescentCaveHandoff.openedTraversableCave(
+                level, mob.blockPosition(), project.heading(), this::canStand)) {
             finish(level, MiningProjectEnd.CAVE_FOUND);
             return;
         }
+        if (shouldHandoffTunnelSearch(level)) {
+            finish(level, MiningProjectEnd.HANDOFF_TUNNEL_SEARCH);
+            return;
+        }
         planNextStep(level);
+    }
+
+    private boolean shouldHandoffTunnelSearch(ServerLevel level) {
+        int feetY = mob.blockPosition().getY();
+        if (!WorkDemandPolicy.isDiamondLocalGatherEligible(feetY)) {
+            return false;
+        }
+        ScavengerConfig cfg = ScavengerConfig.get();
+        return WorkDemandPolicy.diamondProgressionDemand(
+                PlayerMobs.backpack(mob),
+                mob.getMainHandItem(),
+                mob.getOffhandItem(),
+                cfg) > 0;
+    }
+
+    private boolean canStand(BlockPos position) {
+        if (!(mob.level() instanceof ServerLevel level)) {
+            return false;
+        }
+        if (!level.isPositionEntityTicking(position)) {
+            return false;
+        }
+        if (!level.getFluidState(position).isEmpty()
+                || !level.getFluidState(position.below()).isEmpty()) {
+            return false;
+        }
+        if (!level.getBlockState(position).getCollisionShape(level, position).isEmpty()
+                || !level.getBlockState(position.above()).getCollisionShape(level, position.above()).isEmpty()) {
+            return false;
+        }
+        BlockPos below = position.below();
+        return level.getBlockState(below).isFaceSturdy(level, below, Direction.UP);
     }
 
     private void finish(ServerLevel level, MiningProjectEnd end) {
@@ -286,12 +331,6 @@ public final class ControlledDescentGoal extends Goal {
 
     private void persist(ServerLevel level) {
         MiningProjectSavedData.get(level).putProject(mob.getUUID(), project);
-    }
-
-    private static boolean openedCave(Level level, BlockPos feet) {
-        return level.getBlockState(feet).isAir()
-                && level.getBlockState(feet.above()).isAir()
-                && level.getBlockState(feet.below()).isAir();
     }
 
     private static int horizontalDistance(BlockPos origin, BlockPos current) {
