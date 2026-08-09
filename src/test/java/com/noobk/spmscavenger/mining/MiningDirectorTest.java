@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.mining;
 
 import net.minecraft.SharedConstants;
+import com.noobk.spmscavenger.goal.ExploringGoal;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.Bootstrap;
@@ -121,7 +122,7 @@ class MiningDirectorTest {
         MiningProjectSavedData store = new MiningProjectSavedData();
         MiningTransition handoff = transition(MiningProjectEnd.CAVE_FOUND);
         store.recordTransition(MOB, handoff);
-        assertTrue(store.claimCaveContinuation(MOB, handoff, 0L));
+        assertTrue(store.claimCaveContinuation(MOB, handoff, 0L, ExploringGoal.MAX_EXPEDITION_TICKS));
         assertFalse(MiningDirector.mayStartControlledDescent(
                 store, MOB, NaturalDescentStatus.EXHAUSTED, true, 10L));
         store.clearCommitment(MOB);

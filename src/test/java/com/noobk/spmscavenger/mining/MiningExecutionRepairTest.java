@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.mining;
 
 import net.minecraft.SharedConstants;
+import com.noobk.spmscavenger.goal.ExploringGoal;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.Bootstrap;
@@ -40,7 +41,7 @@ class MiningExecutionRepairTest {
                 100L);
         store.recordTransition(MOB, handoff);
 
-        assertTrue(store.claimCaveContinuation(MOB, handoff, 110L));
+        assertTrue(store.claimCaveContinuation(MOB, handoff, 110L, ExploringGoal.MAX_EXPEDITION_TICKS));
         assertTrue(store.pendingTransition(MOB).isEmpty(), "transition must be consumed");
         assertTrue(store.hasActiveCaveContinuation(MOB, 111L));
 
@@ -66,7 +67,7 @@ class MiningExecutionRepairTest {
         MiningProjectSavedData store = MiningProjectSavedData.createEmpty();
         MiningTransition handoff = caveHandoff(200L);
         store.recordTransition(MOB, handoff);
-        store.claimCaveContinuation(MOB, handoff, 200L);
+        store.claimCaveContinuation(MOB, handoff, 200L, ExploringGoal.MAX_EXPEDITION_TICKS);
 
         store.clearCommitment(MOB);
 
@@ -78,9 +79,12 @@ class MiningExecutionRepairTest {
         MiningProjectSavedData store = MiningProjectSavedData.createEmpty();
         MiningTransition handoff = caveHandoff(0L);
         store.recordTransition(MOB, handoff);
-        store.claimCaveContinuation(MOB, handoff, 0L);
+        store.claimCaveContinuation(MOB, handoff, 0L, ExploringGoal.MAX_EXPEDITION_TICKS);
 
-        long afterExpiry = ExecutionIntentPolicy.CAVE_HANDOFF_LIFETIME_TICKS + 1L;
+        // MI-14C2-R2: authority runs from the claim, so expiry is the authority window - not
+        // the admission window. The behaviour under test is unchanged: expiring must not
+        // resurrect the consumed transition.
+        long afterExpiry = ExploringGoal.MAX_EXPEDITION_TICKS + 1L;
         assertFalse(store.hasActiveCaveContinuation(MOB, afterExpiry));
         assertEquals(ExecutionIntent.NONE, ExecutionIntentPolicy.derive(store, MOB, afterExpiry));
         assertTrue(store.pendingTransition(MOB).isEmpty());
@@ -91,7 +95,7 @@ class MiningExecutionRepairTest {
         MiningProjectSavedData store = MiningProjectSavedData.createEmpty();
         MiningTransition handoff = caveHandoff(50L);
         store.recordTransition(MOB, handoff);
-        store.claimCaveContinuation(MOB, handoff, 50L);
+        store.claimCaveContinuation(MOB, handoff, 50L, ExploringGoal.MAX_EXPEDITION_TICKS);
 
         assertFalse(MiningDirector.mayStartControlledDescent(
                 store, MOB, NaturalDescentStatus.EXHAUSTED, true, 60L));

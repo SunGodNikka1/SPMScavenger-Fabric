@@ -27,8 +27,34 @@ public record MiningExecutionCommitment(
         target = target.immutable();
     }
 
-    public static MiningExecutionCommitment caveContinuation(MiningTransition handoff, long now) {
-        long expiresAt = handoff.tick() + ExecutionIntentPolicy.CAVE_HANDOFF_LIFETIME_TICKS;
+    /**
+     * MI-14C2-R2 — authority runs from the <b>claim</b>, not from the discovery.
+     *
+     * <p>The previous version stored {@code claimedAt = now} and then computed
+     * {@code expiresAt = handoff.tick() + 400} — the same instant the admission window closes. A
+     * handoff claimed at discovery+399 therefore received a single tick of authority, and the
+     * 48-block continuation it exists to protect lost its protection immediately: intent fell to
+     * {@code NONE}, {@code ExploringGoal} reverted to ordinary exploration, and priority-3 chores
+     * outranked it again. Worse, expiry also unblocked {@code mayStartControlledDescent}, so the mob
+     * could begin a fresh staircase beside the cave it had just broken into.
+     *
+     * <p>Admission and authority answer different questions and need different clocks:
+     *
+     * <pre>
+     * admission  400 ticks from DISCOVERY  — is this find still fresh enough to act on?
+     * authority  {@code authorityTicks} from CLAIM — how long may an accepted expedition stay alive?
+     * </pre>
+     *
+     * <p>{@code authorityTicks} is supplied by the owner of the continuation's lifetime rather than
+     * invented here, so authority cannot expire while the expedition it protects is still legally
+     * running. It is a ceiling: the normal path clears the commitment when the expedition completes
+     * or is abandoned.
+     *
+     * @param authorityTicks maximum lifetime of the accepted continuation, from {@code now}
+     */
+    public static MiningExecutionCommitment caveContinuation(
+            MiningTransition handoff, long now, int authorityTicks) {
+        long expiresAt = now + Math.max(0, authorityTicks);
         return new MiningExecutionCommitment(
                 ExecutionCommitmentKind.CAVE_CONTINUATION,
                 handoff.at(),

@@ -77,7 +77,13 @@ public final class ExploringGoal extends Goal {
     private static final int MAX_WAYPOINT_FAILURES = 3;
     private static final int MAX_EXPEDITION_FAILURES = 6;
     private static final int REPLAN_DELAY_TICKS = 20;
-    private static final int MAX_EXPEDITION_TICKS = 2400;
+    /**
+     * Maximum lifetime of an expedition. Public because MI-14C2-R2 bounds cave-continuation
+     * authority by it: the commitment protecting a continuation must not expire while the
+     * expedition it protects is still legally running, and duplicating the number into the
+     * mining package would let the two drift apart silently.
+     */
+    public static final int MAX_EXPEDITION_TICKS = 2400;
     private static final int STALL_TICKS = 100;
     private static final int NAVIGATION_DONE_GRACE_TICKS = 20;
     private static final int COOLDOWN_TICKS = 600;
@@ -419,7 +425,11 @@ public final class ExploringGoal extends Goal {
             return false;
         }
 
-        if (!store.claimCaveContinuation(mob.getUUID(), handoff, now)) {
+        // MI-14C2-R2: the continuation is an expedition, so its own lifetime bounds the
+        // authority protecting it. Passing it from here keeps the constant with its owner instead
+        // of duplicating a number into the mining package that could drift out of step.
+        if (!store.claimCaveContinuation(
+                mob.getUUID(), handoff, now, MAX_EXPEDITION_TICKS)) {
             return false;
         }
         mob.getNavigation().stop();

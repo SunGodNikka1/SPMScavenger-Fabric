@@ -206,13 +206,15 @@ public final class MiningProjectSavedData extends SavedData {
      *
      * @return false when the expected handoff is no longer pending
      */
-    public boolean claimCaveContinuation(UUID mobId, MiningTransition expected, long now) {
+    public boolean claimCaveContinuation(
+            UUID mobId, MiningTransition expected, long now, int authorityTicks) {
         Optional<MiningTransition> pending = pendingTransition(mobId);
         if (pending.isEmpty() || !pending.get().equals(expected)) {
             return false;
         }
         consumeTransition(mobId);
-        putCommitment(mobId, MiningExecutionCommitment.caveContinuation(expected, now));
+        putCommitment(
+                mobId, MiningExecutionCommitment.caveContinuation(expected, now, authorityTicks));
         return true;
     }
 

@@ -1020,7 +1020,8 @@ Order: MI-14C -> `TUNNEL_SEARCH` executor -> the reason gains a real consumer ->
 mode -> genuine multi-mode `MiningDirector` selection over modes that correspond to executable
 behaviour.
 
-### MI-14C delivery state (reconciled 2026-08-09, suite **310 tests**)
+### MI-14C delivery state (reconciled 2026-08-09, suite **310 tests** at pass time;
+**321** after Protected Interruption Handling, **327** after MI-14C2-R2)
 
 | Task | State | Evidence |
 | --- | --- | --- |
@@ -1057,7 +1058,9 @@ discovery tick T
                                                           commitment expires T+400
 ```
 
-- `ExploringGoal.acceptCaveHandoff` admits while `now - transition.tick() <= 400`.
+- `ExploringGoal.acceptCaveHandoff` admits while `now - transition.tick() < 400`
+  (`MiningTransition.expired` is `>=`, so the window is **strictly** under 400; the last
+  admissible claim is discovery+399, which receives exactly one tick of authority).
 - `MiningExecutionCommitment.caveContinuation` sets `expiresAt = handoff.tick() + 400` — **the same
   instant the admission window closes**.
 - Protected travel is therefore `400 - ageAtAcceptance`, which can be ~0 ticks.
@@ -1077,21 +1080,43 @@ stopping `mayStartControlledDescent` from re-assigning a descent during the walk
 commitment expires early the mob does not merely abandon the cave it found — it may start digging a
 brand-new staircase while standing next to one.
 
-**Repair (MI-14C2-R2), small:** separate admission from authority, the same two-clock split C3
-already applies to progress.
+### MI-14C2-R2 — Cave Handoff Authority Clock (`IMPLEMENTED`, 327 tests)
+
+Separate admission from authority, the same two-clock split C3 already applies to progress.
 
 ```text
-admission window  = 400 ticks from DISCOVERY   (unchanged: is this handoff still relevant?)
-travel authority  = N ticks from CLAIM         (new: how long may the walk be protected?)
+admission  400 ticks from DISCOVERY   unchanged: is this find still fresh enough to act on?
+authority  MAX_EXPEDITION_TICKS from CLAIM   how long may an accepted expedition stay alive?
 ```
 
-`expiresAt = claimedAt + CAVE_CONTINUATION_TRAVEL_TICKS`. Bound the travel budget on its own terms;
-re-derive `N` from the 48-block route rather than reusing 400 because it is nearby.
+`expiresAt = now + authorityTicks`, and `authorityTicks` is **supplied by the owner of the
+continuation's lifetime** (`ExploringGoal.MAX_EXPEDITION_TICKS`, 2400) rather than invented in the
+mining package.
 
-**Falsifying tests:** (1) a handoff accepted at age 399 retains authority for the whole travel
-budget; (2) authority still expires — a mob that never arrives releases it; (3) while authority
-holds, `mayStartControlledDescent` is false; (4) an expired *admission* window still refuses a stale
-handoff, so widening authority must not widen admission.
+**Why the expedition lifetime and not a route-derived number (User, `LOCKED`).** Deriving a smaller
+budget from "48 blocks therefore N ticks" would repeat the defect in miniature: authority could
+expire while the expedition it protects is still legally running. The continuation *is* an
+expedition, its lifetime already exists, and both the completion and abandonment paths clear the
+commitment — verified at `ExploringGoal.completeExpedition` and `ExploringGoal.abandon`. So 2400 is a
+**ceiling**, and the normal path releases far earlier. A smaller cave-specific bound is admissible
+only if it is *proved* to exceed the continuation's own legitimate lifetime.
+
+The constant was made `public` rather than copied, so the two windows cannot drift apart silently
+(SPM-0: constants belong to whoever defines them). `claimCaveContinuation` now **requires** the
+window as a parameter — no defaulted overload, because a default is exactly how the discovery clock
+would creep back.
+
+**Tests (6):** a claim at discovery+399 keeps full authority *after* admission closes; the inverse
+— an unclaimed handoff at discovery+400 can never be claimed, so widening authority does not widen
+admission; authority still expires for a mob that never arrives; `mayStartControlledDescent` stays
+false for the whole protected walk and true once it lapses; intent and goal-kind classification
+track the same clock, so arbiter and director cannot disagree; and authority is never shorter than
+admission.
+
+Six pre-existing call sites were updated explicitly. One,
+`r1_commitmentExpiresWithoutKeepingTransitionPending`, was semantically affected — it measured expiry
+from the admission window — and now measures from the authority window with its behaviour under test
+unchanged.
 
 ### Design question for the user (not a defect)
 
@@ -3157,6 +3182,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Claude + User | **MI-14C2-R2 `IMPLEMENTED`** (327 tests): cave-handoff authority now runs from the claim (`now + ExploringGoal.MAX_EXPEDITION_TICKS`), not from discovery. User `LOCKED` the authority bound to the expedition's own lifetime rather than a route-derived estimate — a smaller invented budget could expire while the expedition it protects is still legally running. Constant made public rather than copied; `claimCaveContinuation` requires the window explicitly (no defaulted overload). Two corrections to my MAIBS report: admission is strictly `< 400` (`expired()` is `>=`), and the suite was 321 after Protected Interruption Handling, not 310 |
 | 2026-08-09 | Agent_Claude | MAIBS control-plane pass over shipped MI-14C1/C1-R1/C2/C2-R1/C3 (310 tests). Gate **FAIL: MI-14C2-M1** — the cave-continuation commitment expires on the *discovery* clock (`handoff.tick() + 400`), the same instant admission closes, so it grants ~0 protected travel for a 48-block route and Loop B returns mid-walk; `claimedAt` is stored and never read. Second-order: expiry also unblocks `mayStartControlledDescent`, so the mob can start a new staircase beside the cave it just found. Repair MI-14C2-R2 = separate admission (from discovery) from authority (from claim). Also recorded my own C1 defect (TEMPORARY grace measured from assignment age) repaired by another agent as C1-R1. Loop D confirmed correctly `NEUTRAL`; bounded authority confirmed — combat/survival unclassified |
 | 2026-08-09 | Agent_Codex | **MI-14C3 MAIBS-1 `FAIL`** — active 2400-tick total budget shadows strict >2400 progress timeout; protected MOVE owners bypass contention without another blocker; three NOT FOUND probes; repair required before Loop D |
 | 2026-08-09 | User + Agent_Codex | **MI-14C3-R1 `IMPLEMENTED`** — user locked required-flag taxonomy, condition-bound safety pause, player-order authority, pre-start pause, and 400-tick window; task-30 C3-F1…F7 + revoke→reassign repair; 321-test clean build; static MAIBS `PASS`, runtime `UNVERIFIED` |

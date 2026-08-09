@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.mining;
 
 import net.minecraft.SharedConstants;
+import com.noobk.spmscavenger.goal.ExploringGoal;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.Bootstrap;
@@ -111,7 +112,7 @@ class MiningExecutionC2Test {
                 new BlockPos(1, 30, 2),
                 500L);
         store.recordTransition(MOB, handoff);
-        assertTrue(store.claimCaveContinuation(MOB, handoff, 600L));
+        assertTrue(store.claimCaveContinuation(MOB, handoff, 600L, ExploringGoal.MAX_EXPEDITION_TICKS));
 
         ExecutionIntent intent = ExecutionIntentPolicy.derive(store, MOB, 601L);
         assertEquals(ExecutionIntent.CAVE_HANDOFF, intent);
