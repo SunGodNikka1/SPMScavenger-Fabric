@@ -10,7 +10,8 @@ import net.minecraft.world.level.block.state.BlockState;
  * Target legitimacy and priority among pass-one gather candidates (MI-2 / MI-13).
  *
  * <p>Blocking consumer demand outranks optional wealth among candidates that share the same
- * discovery legitimacy. Distance remains the tie-breaker.
+ * discovery legitimacy. Distance remains the tie-breaker. MI-6C applies cave ore bonus from
+ * per-candidate opportunity, not mob-only posture.
  */
 public final class GatherTargetPolicy {
 
@@ -44,9 +45,6 @@ public final class GatherTargetPolicy {
         return mode.isLegitimate();
     }
 
-    /**
-     * Higher score wins. {@link Integer#MIN_VALUE} means reject.
-     */
     public static int priority(
             GatherIntentPolicy.GatherIntent intent,
             BlockState state,
@@ -60,7 +58,7 @@ public final class GatherTargetPolicy {
             BlockState state,
             DiscoveryMode mode,
             float acquisitionCost,
-            boolean caveLike) {
+            boolean caveOpportunity) {
         if (!isLegitimateTarget(mode)) {
             return Integer.MIN_VALUE;
         }
@@ -69,7 +67,7 @@ public final class GatherTargetPolicy {
             return Integer.MIN_VALUE;
         }
         int tier = intent.requiredResources().contains(resource) ? BLOCKING_TIER : WEALTH_TIER;
-        tier += CaveContextPolicy.orePriorityBonus(caveLike, resource);
+        tier += CaveContextPolicy.orePriorityBonus(caveOpportunity, resource);
         if (mode == DiscoveryMode.NEWLY_EXPOSED) {
             tier += NEWLY_EXPOSED_BONUS;
         }
@@ -77,10 +75,6 @@ public final class GatherTargetPolicy {
         return tier * 256 - distPenalty;
     }
 
-    /**
-     * Reorders {@code [0, count)} indices of the pass-one buffer by {@link #priority} descending,
-     * then distance ascending.
-     */
     public static int[] sortIndicesByPriority(
             BlockPos[] positions,
             double[] distances,
@@ -89,9 +83,13 @@ public final class GatherTargetPolicy {
             GatherIntentPolicy.GatherIntent intent,
             DiscoveryPolicy.HarvestReveal reveal,
             long gameTime) {
-        return sortIndicesByPriority(positions, distances, count, level, intent, reveal, gameTime, false);
+        return sortIndicesByPriority(
+                positions, distances, count, level, intent, reveal, gameTime, null);
     }
 
+    /**
+     * @param caveOpportunityPerIndex length {@code count}; null treats every candidate as surface
+     */
     public static int[] sortIndicesByPriority(
             BlockPos[] positions,
             double[] distances,
@@ -100,7 +98,7 @@ public final class GatherTargetPolicy {
             GatherIntentPolicy.GatherIntent intent,
             DiscoveryPolicy.HarvestReveal reveal,
             long gameTime,
-            boolean caveLike) {
+            boolean[] caveOpportunityPerIndex) {
         int[] order = new int[count];
         int[] priorities = new int[count];
         for (int i = 0; i < count; i++) {
@@ -109,7 +107,10 @@ public final class GatherTargetPolicy {
             BlockState state = level.getBlockState(pos);
             float acquisitionCost = (float) (Math.sqrt(distances[i]) / 8.0D);
             DiscoveryMode mode = DiscoveryPolicy.classify(level, pos, state, reveal, gameTime);
-            priorities[i] = priority(intent, state, mode, acquisitionCost, caveLike);
+            boolean caveOpp = caveOpportunityPerIndex != null
+                    && i < caveOpportunityPerIndex.length
+                    && caveOpportunityPerIndex[i];
+            priorities[i] = priority(intent, state, mode, acquisitionCost, caveOpp);
         }
         for (int i = 1; i < count; i++) {
             int key = order[i];

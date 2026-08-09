@@ -48,10 +48,19 @@ public final class ExplorationReadiness {
                 || idleWorkTicks >= Math.max(1, idleTickThreshold));
     }
 
+    /**
+     * Consumes the readiness that unlocked an expedition.
+     *
+     * <p>Deliberately does <b>not</b> clear {@code descentPressure}: that field is owned solely by
+     * {@code ExplorationActivityGoal.updateDescentPressure}, which re-evaluates it every observation
+     * tick from live progression demand and band eligibility. Clearing it here ran <em>before</em>
+     * the expedition's first {@code planCurrentStage} in the same tick, so the one stage that sets
+     * the heading was sorted with no descent preference at all (MI-5 defect 1). Cooldown still gates
+     * re-entry, so leaving the flag alone cannot cause an expedition loop.
+     */
     void consume(long cooldownUntilTick) {
         successfulLocalTrips = 0;
         idleWorkTicks = 0;
-        descentPressure = false;
         this.cooldownUntilTick = Math.max(this.cooldownUntilTick, cooldownUntilTick);
     }
 

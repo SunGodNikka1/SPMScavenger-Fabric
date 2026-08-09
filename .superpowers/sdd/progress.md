@@ -30,4 +30,7 @@ explore + lower landing bias; 165 tests pass; runtime cave seek unverified)
 MI-6: complete with concerns (CaveContextPolicy; cave ore gather priority; explore under-surface
 landing bias; 169 tests; runtime unverified; no MiningMemory)
 
+MI-6A + MI-6D + MI-6B + MI-6C: complete with concerns (3D cave landings, DESCENT_IN_CAVE,
+local rim, per-candidate opportunity; 178 tests; runtime unverified; 6E/6F/6G deferred)
+
 No commits. No Minecraft launches (separate approval required).

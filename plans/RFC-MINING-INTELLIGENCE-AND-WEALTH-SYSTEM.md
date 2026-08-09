@@ -8,15 +8,15 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Target progression** | **Vanilla Minecraft 1.21.1 mining + resource wealth** (overworld ore tiers through diamond/deepslate; not Nether/endgame mining in gen-1) |
 | **Scope** | Autonomous *where* to mine, *how much* to stockpile (wealth), prerequisite planning hooks, capability gaps, integration methods, phased plan, validation — **design until implementation authorized** |
-| **Mode** | `WORKING_FROM_PLAN` (Agent_Cursor — MI-6 complete) |
-| **Status** | Gen-1 through MI-5 + **MI-6** `IMPLEMENTED` (169 tests); runtime cave/ravine `UNVERIFIED` |
+| **Mode** | `PROGRESSIVE_CONTINUATION` (Agent_Cursor — MI-6A/D/B/C implementation) |
+| **Status** | MI-6A+D+B+C `IMPLEMENTED` (task 18; 178 tests); MAIBS landing defects **code-repaired**, runtime `UNVERIFIED`; **MI-6F/G/E deferred**; MI-7 still blocked pending natural-descent proof |
 | **User constraint** | No Minecraft launch, commit, or push unless separately asked; implementation only after explicit Begin authorization |
 | **Baseline version** | `1.9.2` |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `TaskLifecycle.java` |
 | **Former name** | `RFC-MINING-INTELLIGENCE-AND-RESOURCE-GREED.md` — merged into this file (2026-08-08); “resource greed” → **wealth system** |
 | **Owners** | User (product) |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Cursor 2` · `Agent_Codex` · `Agent_Claude` |
-| **Last update** | 2026-08-08 ~22:05 PDT |
+| **Last update** | 2026-08-08 ~22:50 PDT |
 | **Gate** | MRFC-1 |
 
 ### Naming
@@ -53,19 +53,21 @@ PlayerMobs should progress through **vanilla mining** using **deterministic clas
 
 **Mining architecture (`CONSENSUS`, D-MIW-001):** `MiningDirector` / `MiningProject` / `MiningMemory` are policy + session state; `GatherResourcesGoal` owns physical dig; no clairvoyant ore map.
 
-**Continuation result (`CODE_CONFIRMED`, Agent_Cursor):** **MI-6 implemented** — `CaveContextPolicy`
-depth heuristic; gather prefers exposed ore while cave-like; explore prefers under-surface landings
-when already subterranean. 169 tests. Next: MI-7 staircase / MI-9–10 / runtime — ask first.
+**Continuation result (`CODE_CONFIRMED`, Agent_Cursor + user MAIBS review):** MI-6 heightmap
+landings were a **no-op**; repair package **MI-6A…G** recorded. **Task 18** shipped **MI-6A/D/B/C**
+(3D floors, `DESCENT_IN_CAVE`, local rim, per-candidate gather opportunity). **Deferred:** MI-6E
+(+15 redesign → MI-17), MI-6F commitment, MI-6G snapshot. Runtime cave/ravine behaviour remains
+`UNVERIFIED`. Nearest frontier: approved **MI-6A falsifying probe**, or **Begin MI-6F** when wanted.
 
 ---
 
 ## Collaboration Protocol
 
-- This continuation is **`Agent_Cursor`** (MI-6 implementation + static validation).
-- Evidence: `CONFIRMED` / `INFERRED` / `UNVERIFIED` (Gate AV-1).
+- This continuation is **`Agent_Cursor`** (MI-6A/D/B/C implementation; RFC + SDD update).
+- Evidence: `CONFIRMED` / `INFERRED` / `UNVERIFIED` (Gate AV-1); behavior gate **MAIBS-1**.
 - Reuse SPM + Scavenger executors; no duplicate scanners (Gate SPM-2).
 - **Anti-clairvoyance (D-MIW-008 `CONSENSUS`):** undiscovered ore behind solid stone is never an exact path target from server block query alone.
-- Physical break: `GatherResourcesGoal` (or thin `DigAction` helper it calls). Session intent: `MiningProject`. Orchestration: `MiningDirector`.
+- Physical break: `GatherResourcesGoal`. Session intent: `MiningProject`. Orchestration: `MiningDirector`.
 - Record frontier transitions in Contribution blocks.
 
 ---
@@ -96,7 +98,9 @@ when already subterranean. 169 tests. Next: MI-7 staircase / MI-9–10 / runtime
 | [Integration methods](#topic-integration-methods) | `CONSENSUS` | Per-capability ladder; SPI deferred |
 | [Task lifecycle](#topic-task-lifecycle) | `CONSENSUS` | RUNNING/SUCCESS/FAILURE/… |
 | [Utility scale (F-1…F-6)](#topic-utility-scale-and-policy-boundaries-5-blocking-findings) | F-1 Option A `LOCKED` + MI-4S `IMPLEMENTED` | Scale repair landed |
-| [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order | Next: MI-7 or MI-9/10 |
+| [MI-5 behavioural prediction](#topic-mi-5-behavioural-prediction-gate-maibs-1) | `FAIL` defects; partial code repair | Descent intent / depression-hunt |
+| [MI-6 behavioural prediction](#topic-mi-6-behavioural-prediction-gate-maibs-1) | Code repair `IMPLEMENTED`; runtime `UNVERIFIED` | 6A/D/B/C done; 6E/F/G deferred |
+| [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order | **Next: runtime probe or MI-6F** (MI-7 blocked) |
 | [Validation](#topic-validation) | `PARTIAL` | Policy units green; gather wealth + runtime open |
 | [Deferred](#topic-deferred-and-unverified) | — | Nether, branch mines, portfolio gen-1 |
 
@@ -399,7 +403,238 @@ revised).
 
 ---
 
-## Topic: Utility scale and policy boundaries (5 blocking findings)
+## Topic: MI-5 behavioural prediction (Gate MAIBS-1)
+
+**Status:** `FAIL — ARCHITECTURE_DEFECT` (two defects, both small and precise).
+**Analyst:** `Agent_Claude`, snapshot 21:5x. Mechanism read from source, not inferred.
+
+### Intent vs mechanism vs predicted behaviour
+
+| Layer | Result |
+| --- | --- |
+| Intended | "I should generally seek lower opportunities" — fallback pressure, not cave knowledge |
+| Implemented | `landingPreferenceKey = (landingY < mobY ? 0 : 1) * 1000 + abs(landingY - mobY)`, applied as a landing-candidate sort when `readiness.hasDescentPressure()` |
+| Predicted | Mob drifts into the **nearest one-block depression** and calls it descent |
+| Confidence | `CODE_CONFIRMED` mechanism; `GAME_MECHANICS_INFERRED` observable |
+
+At Y=70 the keys are: Y69 → **1**, Y66 → **4**, Y60 → **10**. Lowest key wins, so **Y69 beats Y60**.
+"Prefer lower terrain" is implemented as "prefer the smallest possible descent". `MAX_LANDING_ELEVATION`
+(16) already rejects anything deeper, so the deep-drop risk the conservative key guards against is
+**already bounded elsewhere** — the key is paying a second time for protection it does not need.
+
+### Defect 1 — the first stage of a descent expedition never sorts for descent (`CODE_CONFIRMED`)
+
+`ExploringGoal.canUse` calls `readiness.consume(...)` immediately after `createExpedition`, and
+`ExplorationReadiness.consume` sets `descentPressure = false`. `planCurrentStage` — and therefore
+`landingCandidates` — runs **after** that, in the same tick.
+
+```text
+T0    observer sets descentPressure = true      (ExplorationActivityGoal, every 10 ticks)
+T0    canUse → eligible → createExpedition
+T0    readiness.consume(...)  → descentPressure = FALSE
+T0    planCurrentStage → landingCandidates → hasDescentPressure() == false → NORMAL sort
+T+10  observer re-sets pressure = true
+T+n   hop arrival replans → descent sort finally applies
+```
+
+**The one stage that sets the expedition's heading is sorted without descent preference.** Every
+later hop gets it. So the mob commits to a direction chosen with no descent input, then shuffles
+downhill along it.
+
+### Defect 2 — descent intent lives in the wrong object (`CODE_CONFIRMED`)
+
+Pressure is a field on `ExplorationReadiness`; the journey is `ExpeditionState`, which carries **no
+descent intent** (`NOT FOUND`). At Y≤16 the observer clears pressure, but the expedition continues
+with its original heading and waypoints, now behaving as ordinary exploration. There is no
+completion semantics for "I was descending", so a descent cannot succeed, fail, or hand off — it can
+only dissolve.
+
+### Adversarial geometry
+
+| Scenario | Predicted |
+| --- | --- |
+| Rolling hills, Y70 | Picks Y69 repeatedly; ~1 block per stage; hundreds of blocks travelled for ~10 blocks of depth |
+| Flat plains | Almost no candidate is below; sort is a no-op; mob explores normally while "descending" |
+| Cliff/ravine edge | A Y=55 landing 15 below is legal (within 16) but loses to any Y=69; the ravine is passed by |
+| Cave mouth at Y=68 with surface still Y=70 | Heightmap landing is the **surface**, not the cave floor — invisible to this key entirely (MI-6's job) |
+| Already subterranean | `CaveContextPolicy.isCaveLike` branch takes over — descent sort is not the active comparator |
+
+### Threshold audit — Y=17 → Y=16
+
+| Question | Answer |
+| --- | --- |
+| Turns off | `descentPressure` (observer, next 10-tick tick) |
+| Turns on | `isDiamondLocalGatherEligible` → diamond enters gather intent |
+| Owns next action | `GatherResourcesGoal` if ore is visible; otherwise the **same** expedition continues |
+| Immediate reactivation? | No — but no completion either; the expedition simply loses its reason |
+| Gap where nothing progresses? | **Yes** — at depth with no visible ore, the mob explores generically with diamond demand unsatisfied and no descent identity |
+
+### Predicted weird behaviours
+
+1. **Depression-hunting** — mob walks 200 blocks to descend 10, preferring every 1-block dip.
+   `ARCHITECTURE_DEFECT` for the stated intent; bounded and non-corrupting.
+2. **Heading blindness** — heading is picked from novelty/interest/randomness *before* any terrain
+   input, so a mob can commit east while terrain trends down west, then "descend" east.
+   `ARCHITECTURE_DEFECT`.
+3. **Vertical oscillation** — no descent history exists (`lowestYReached` `NOT FOUND`). Y70→67→70→66→69
+   satisfies "below me *right now*" at each replan. `RUNTIME_QUESTION` — frequency unknown, needs a
+   flat-world probe.
+4. **Companion vertical divergence** — an invited companion inherits the leader's *heading* but sorts
+   landings by **its own** pressure, which is false if it wants no diamond. Leader sinks, companion
+   stays high, the pair separates. `ACCEPTABLE_STEPPING_STONE` — visible, harmless, arguably charming.
+5. **Silent descent death** — pressure clears at Y≤16 mid-expedition and nothing records that a
+   descent ever happened. `ARCHITECTURE_DEFECT` (defect 2).
+
+### Design options
+
+| Option | Content | Trade-off |
+| --- | --- | --- |
+| **A — full proposal** | descent window scoring, `ExplorationIntent`, `lowestYReached`, stall detector, heading terrain-trend bonus | Behaviour looks genuinely purposeful; five coupled changes, and the trend bonus adds surface sampling per route candidate — must be costed against F-6 |
+| **B — minimal correctness first** | fix the `consume()` ordering; add `ExplorationIntent{NORMAL,DESCENT}` to `ExpeditionState` | Removes both defects, changes no scoring; the mob still depression-hunts, but descent becomes a *named, terminable* task the later scoring can attach to |
+
+**Recommended: B then A.** The two defects are correctness, not tuning — and A's scoring lands on
+firmer ground once a descent expedition is a thing that can be identified and ended. Doing A first
+would tune a journey that still cannot report success or failure.
+
+### Boundary with MI-6 (**revised after MI-6 MAIBS**)
+
+`MI-6 concrete opportunity` must **outrank** the MI-5 heuristic when a real underground/ravine
+walkable exists. Earlier text claimed the comparators merely “separate”; live code is still
+`if (DESCENT) … else if (continueCave)` — so **DESCENT disables cave continuation** (`CODE_CONFIRMED`
+`ExploringGoal.landingCandidates`). That is **MI-6D**: combine into `DESCENT_IN_CAVE`, do not if/else.
+Without **MI-6A** (non-heightmap cave floors), MI-6 has almost nothing useful to rank anyway.
+
+---
+
+## Topic: MI-6 behavioural prediction (Gate MAIBS-1)
+
+**Status:** `FAIL — ARCHITECTURE_DEFECT` (landing preference no-op + classifier gaps).
+**Analyst:** User critique + `Agent_Cursor` (minecraft-ai-behavioral-simulation), 2026-08-08 ~22:35.
+**Scope:** Post task-17 semantic-drift review — not a new feature brainstorm in isolation.
+
+### Intent vs mechanism vs predicted behaviour
+
+| Layer | Result |
+| --- | --- |
+| Intended | Already cave-like → when exploring, prefer landings that **remain underground**; prefer exposed ore in cave/ravine |
+| Implemented (landings) | Candidates from `getHeight(MOTION_BLOCKING_NO_LEAVES)` then sorted by `landingPreferenceKey(landingY, mobY, surfaceY)` where `surfaceY` is **the same heightmap** (`CODE_CONFIRMED` `ExploringGoal` ~623–660) |
+| Implemented (context) | `isCaveLike = surfaceY - mobY >= 8` at mob column only; gather applies one mob-origin `caveLike` to all 24 candidates |
+| Predicted | Inside a true cave, heightmap landings sit on **roof/surface**; `surfaceY - landingY = 0` → every ordinary candidate fails `isCaveLike` → cave sort degrades to “nearest elevation to mob among surface points” — **stay-underground is a no-op** |
+| Confidence | Mechanism `CODE_CONFIRMED`; observable `GAME_MECHANICS_INFERRED` / runtime `UNVERIFIED` |
+
+### Defect A — heightmap landings cannot be “under surface” (`CODE_CONFIRMED`)
+
+```text
+candidate.y = heightmap(x,z)     // surface / roof top
+surfaceY    = heightmap(x,z)     // identical query
+isCaveLike(candidate.y, surfaceY) ⇔ (surfaceY - surfaceY) >= 8 ⇔ false
+```
+
+MI-6’s “prefer under-surface landing” has **no under-surface candidates** in the ordinary ring.
+Task-17 report already admitted heightmap tops cannot follow cave branches — this is that admission
+as an architecture defect, not a soft limitation.
+
+Gate MAIBS-1: selected coordinates represent **surface tops**, not cave floors →
+`FAIL — ARCHITECTURE_DEFECT`.
+
+### Defect B — open ravine miss (`CODE_CONFIRMED` classifier math)
+
+At the open-sky column of a ravine floor, heightmap ≈ mobY → delta ≈ 0 → **not cave-like**, so neither
+gather ore bonus nor explore cave branch activates. Wording “subterranean/ravine” overstates the
+heuristic (`ACCEPTABLE_STEPPING_STONE` only if documented; currently oversold → treat as defect for
+ravine-first mining story).
+
+### Defect C — mob-only cave context for gather (`CODE_CONFIRMED`)
+
+`GatherResourcesGoal` computes `caveLike` once at origin and passes it into every candidate’s
+priority. Ore just inside a cave mouth while the mob stands outside gets **no** bonus; hillside ore
+while the mob stands inside gets the cave bonus. Bonus describes mob posture, not opportunity.
+
+### Defect D — MI-5 disables MI-6 landing preference (`CODE_CONFIRMED`)
+
+```text
+if (descending) { MI-5 sort }
+else if (continueCave) { MI-6 sort }
+```
+
+Diamond need + already underground → DESCENT wins → cave continuation ignored — exactly when both
+should apply (`DESCENT_IN_CAVE`).
+
+### Geometry simulation (coordinate-level)
+
+| Scenario | Mob | Heightmap candidates | MI-6 sort effect |
+| --- | --- | --- | --- |
+| Enclosed cave Y=32, surface Y=70 | caveLike true | landings ≈ Y70 (± elev clamp) | all `isCaveLike(landing)=false`; preference useless |
+| Open ravine Y=25, rim Y=68 | caveLike **false** (delta 0 at column) | surface/floor tops | no cave path at all |
+| Surface plains | caveLike false | normal | MI-6 inert (OK) |
+| Cave mouth, ore inside | mob outside | gather caveLike false | exposed cave ore scored as surface |
+
+### Time loop (prolonged)
+
+```text
+T0     mob deep, explore hop → heightmap landing toward surface/roof
+T+60   gather may fire if exposed ore in radius (priority-3) — this part of MI-6 still helps
+T+200  explore resumes → again only surface landings → climbs / exits cave
+T+1200 oscillation: mine a bit, walk to heightmap “lower” surface point, lose depth
+```
+
+Gather ore-bonus while caveLike remains the only **partial** useful MI-6 piece
+(`ACCEPTABLE_STEPPING_STONE` for gather sorting only).
+
+### GoalSelector interaction
+
+| Goal | Pri | Flags | Interaction |
+| --- | ---: | --- | --- |
+| GatherResourcesGoal | 3 | MOVE | Can preempt explore when ore in radius — OK |
+| ExploringGoal | 8 | MOVE | Owns travel; landing set is the defect |
+| ExplorationActivityGoal | 9 | none | Sets descent pressure / cave observer only |
+
+### Predicted weird behaviours
+
+1. **Cave exit magnet** — heightmap-only landings — **mitigated in code by MI-6A** (runtime `UNVERIFIED`).
+2. **Ravine blindness** — **mitigated in code by MI-6B** (runtime `UNVERIFIED`).
+3. **Branch thrash without commitment** — no short-lived CaveOpportunity → left/right/surface flicker when multiple openings. `RUNTIME_QUESTION` / mitigated by MI-6F (**deferred**).
+4. **False cave under house** — Y60 under roof Y70 → caveLike true → basement treated as cave. `ACCEPTABLE_STEPPING_STONE` until MI-6G snapshot (**deferred**).
+5. **DESCENT ignores real cave floor** — **mitigated in code by MI-6D** (`DESCENT_IN_CAVE`; runtime `UNVERIFIED`).
+
+### Repair package (ordered)
+
+| ID | Change | MAIBS role | Status |
+| --- | --- | --- | --- |
+| **MI-6A** | Local 3D cave landing resolver (X±4, Z±4, Y±6 around hop; 2-high air + solid floor + fluids + ticking + path) | Supplies real underground candidates | **`IMPLEMENTED`** (task 18; unit; runtime `UNVERIFIED`) |
+| **MI-6D** | Combine MI-5+MI-6 → `NORMAL` / `DESCENT` / `CAVE_CONTINUATION` / `DESCENT_IN_CAVE` | Stops if/else exclusion | **`IMPLEMENTED`** (task 18) |
+| **MI-6B** | Local-rim / open-ravine detection (sample N/E/S/W…; rim − mobY) | Fixes ravine classifier | **`IMPLEMENTED`** (task 18) |
+| **MI-6C** | Candidate-specific cave context (not only mob origin) | Honest ore opportunity ranking | **`IMPLEMENTED`** (task 18) |
+| **MI-6F** | Short-lived `CaveOpportunity` commitment | Stops branch thrash | **`DEFERRED`** (user) |
+| **MI-6G** | `CaveContextSnapshot` (belowLocalTerrain, skyVisible, enclosureDepth, localRimDepth) | Extensible classifier | **`DEFERRED`** (user) |
+| **MI-6E** | Replace flat +15 with ranked comparator dimensions | Prep for MI-17 | **`DEFERRED`** (MI-17; user) |
+
+**Rejected for this package:** full cave mapper, MiningMemory, x-ray, Baritone.
+
+### Behavioral Prediction — MI-6A (Gate before implement)
+
+**Probable physical behavior:** When `isCaveLike(mob)`, hop planning adds up to N local standable cave-floor positions near the intended X/Z; vanilla `createPath` must reach them; heightmap tops remain fallback. Player sees mob walk to nearby cave floor, not pop to sky.
+
+**Over time:** T0 cave-like → 3D candidates; T+path → gather may preempt on exposed ore; if path fails → try next candidate / heightmap fallback; leave cave → stop 3D resolver.
+
+**Must happen:** ≥1 non-heightmap landing with `landingY + 8 ≤ localSurface` admitted when such floor exists in the ±4/±6 volume and path succeeds.
+**Must not happen:** buried ore targeting; scanning beyond local volume; committing to unticking chunks; preferring lava/water stands.
+
+**Weird risks:** picking one-block alcoves; pathing to cave roof air mistaken as stand; probe budget explosion — bound probes (e.g. ≤16) and reuse `safeStand`.
+
+**Falsifying runtime probe:** place PlayerMob in scripted cave at Y=32 under Y=70 stone; log chosen landing Y for 3 hops. Prediction without 6A: landings ≥~54 or surface. With 6A: landings near 32±6.
+
+**Options:** (A) 3D resolver as above — recommended; (B) only bias heightmap by sampling lower columns — still mostly surface; **reject B** as insufficient for MAIBS-1.
+
+**Gate for MI-6A plan:** `BEHAVIORALLY_PLAUSIBLE` if resolver + path + bounds shipped; current MI-6 landings remain `FAIL` until then.
+
+### Acceptance for the package
+
+**Must happen:** subterranean explore can select a standable floor with `surface − y ≥ 8`; open ravine recognized via rim; DESCENT_IN_CAVE prefers deeper *cave* floors; gather scores candidate cave context.
+**Must not happen:** clairvoyant ore; unbounded 3D flood fill; MI-7 staircase before natural descent exhausted.
+
+---
+
 
 **Status:** F-1 **Option A `LOCKED`** + **MI-4S `IMPLEMENTED`** (task 15); F-2/F-4/F-5 `CONSENSUS`; F-3/F-6 still open.
 **Blocks:** none for MI-4 acceptance on scale; runtime still `UNVERIFIED`.
@@ -860,7 +1095,7 @@ TaskLifecycle (RUNNING…INTERRUPTED)
 | Band gate | MI-2 + MI-5 `IMPLEMENTED` | Local gather Y-gated; progression drives descent |
 | Target priority | MI-2 `IMPLEMENTED` | Blocking > wealth among legitimate candidates |
 | Explore downward bias | MI-5 `IMPLEMENTED` | Descent pressure unlocks explore + lower landings |
-| Cave opportunism | MI-6 `IMPLEMENTED` | Cave-like → prefer exposed ore; under-surface landings |
+| Cave opportunism | MI-6A/D/B/C `IMPLEMENTED` | 3D floors + rim + modes; runtime `UNVERIFIED`; 6E/F/G deferred |
 | Bounded staircase | MI-7 | Last resort: 1×2 staircase max N blocks, torch check |
 | Torch pairing underground | MI-11 | `PlaceTorchGoal` + coal demand loop |
 | Search budget | MI-19 | Cap distance/blocks/time per trip |
@@ -1431,9 +1666,11 @@ Gen-1 uses **Java policy records** only; SPI when a second mod needs hooks.
 ### Gen-1 slice (D-MIW-025 `CONSENSUS`, revised)
 
 ```text
-DONE:     … → MI-5 → **MI-6** (CaveContextPolicy + cave ore priority)
-NEXT:     **MI-7** bounded staircase (or MI-9/MI-10 datapack) — await Begin implementation
-DEFER:    MI-15 MiningMemory, MI-14 director, vein, personalities, SPM greed trait
+DONE:     … → MI-6 → MI-6A/D/B/C (task 18; 178 tests; runtime UNVERIFIED)
+MAIBS:    heightmap no-op / rim / if-else — code-repaired; runtime proof open
+NEXT:     approved MI-6A falsifying probe, or Begin MI-6F when wanted
+DEFER:    MI-6E (+15→MI-17); MI-6F/G; MI-15 MiningMemory; full director
+BLOCKED:  MI-7 until natural descent runtime evidence
 ```
 
 `greed=0` / `wealthLevel=0` must reproduce today's exact-consumer behaviour (must-not regress iron/diamond craft).
@@ -1502,8 +1739,15 @@ boundary. Focused tests and `gradlew.bat clean build` pass (148/148); runtime re
 | MI-4 | P4 | Gather + config wire wealth without replacing consumer specs | `IMPLEMENTED` — accepted after MI-4S |
 | MI-4S | P4b | Apply locked D-MIW-028 Option A (+ D-MIW-029 boundary) | **`IMPLEMENTED`** (task 15; 158 tests) |
 | MI-5 | P5 | Explore downward bias | **`IMPLEMENTED`** (task 16; 165 tests) |
-| MI-6 | P6 | Cave opportunistic ore | **`IMPLEMENTED`** (task 17; 169 tests) |
-| MI-7 | P7 | Bounded staircase | **`READY`** design — await Begin implementation |
+| MI-6 | P6 | Cave opportunistic ore (gather bonus + heightmap cave sort) | `IMPLEMENTED` — MAIBS defects → 6A package |
+| MI-6A | P6a | Local 3D cave landing resolver | **`IMPLEMENTED`** (task 18; 178 tests; runtime `UNVERIFIED`) |
+| MI-6D | P6a | `DESCENT_IN_CAVE` combined sort (not if/else) | **`IMPLEMENTED`** (task 18) |
+| MI-6B | P6b | Local-rim open-ravine detection | **`IMPLEMENTED`** (task 18) |
+| MI-6C | P6b | Candidate-specific cave context for gather | **`IMPLEMENTED`** (task 18) |
+| MI-6F | P6c | Short-lived CaveOpportunity commitment | **`DEFERRED`** (user) |
+| MI-6G | P6c | CaveContextSnapshot fields | **`DEFERRED`** (user) |
+| MI-6E | P6d | Replace +15 with ranked comparator | **`DEFERRED`** (MI-17 prep; user) |
+| MI-7 | P7 | Bounded staircase | **BLOCKED** until natural descent runtime proof |
 | MI-8 | P12 | `RequirementResolver` v1 | `BLOCKED` |
 | MI-9 | P13 | Unit tests U-MIW-* | `PARTIAL` — MI-13/MI-2 policy tests added; full U-MIW matrix open |
 | MI-10 | P13 | Runtime datapack | `BLOCKED` |
@@ -1672,16 +1916,18 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] **MI-13 + MI-2** DiscoveryMode + priority (task 14; 155 tests)
 - [x] **MI-4S** Option A formula (task 15; 158 tests)
 - [x] **MI-5** descent pressure / D-MIW-031 (task 16; 165 tests)
-- [x] **MI-6** cave opportunistic ore (task 17; 169 tests)
+- [x] **MI-6** cave opportunistic ore (task 17; 169 tests) — MAIBS FAIL on landings → repair package
+- [x] **MI-6A + MI-6D + MI-6B + MI-6C** (task 18; 178 tests) — code repair; runtime `UNVERIFIED`
 - [ ] U-MIW matrix / runtime datapack (MI-9/MI-10)
-- [ ] **MI-7** bounded staircase (`READY` design)
+- [ ] **MI-7** bounded staircase (blocked until natural-descent runtime proof)
 
 ### Runtime Gate
 
 - [ ] Approved launch + RT matrix for mining/wealth
 - [ ] Dedicated-server smoke
+- [ ] MI-6A falsifying probe (scripted cave Y=32 under Y=70; log landing Y)
 
-**MRFC-1 status:** **PASS (implementation)** — MI-6 `IMPLEMENTED`; **MI-7 `READY` (design)**; runtime `UNVERIFIED`.
+**MRFC-1 status:** **PASS (implementation)** — MI-6A/D/B/C shipped; 6E/F/G deferred; MI-7 blocked on runtime.
 
 ---
 
@@ -1701,8 +1947,10 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] **MI-4S** — Option A applied (task 15; Continue the Plan)
 - [x] **Begin implementation for MI-5** — ProgressionDemand vs LocalGatherEligibility (task 16)
 - [x] **Begin implementation for MI-6** — cave opportunistic ore (task 17)
-- [ ] **Begin implementation for MI-7** — bounded staircase (last-resort descent)
-- [ ] Runtime launch (separate)
+- [x] **Accept MI-6 MAIBS finding** — heightmap landing preference no-op (user + Agent_Cursor)
+- [x] **Begin implementation for MI-6A, 6D, 6B, 6C** — task 18; defer 6E/6F/6G
+- [ ] **Begin implementation for MI-6F** — CaveOpportunity commitment (deferred)
+- [ ] Runtime launch / MI-6A falsifying probe (separate)
 
 ---
 
@@ -1730,6 +1978,9 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-08 | Agent_Cursor | **MI-6A/D/B/C implemented** (task 18; 178 tests); defer 6E/F/G; MI-7 still blocked on runtime |
+| 2026-08-08 | Agent_Cursor | MAIBS-1 on MI-6: landing no-op `FAIL`; package MI-6A…G; MI-6A READY; MI-7 blocked behind 6A |
+| 2026-08-08 | Agent_Claude | MI-5 behavioural simulation (MAIBS-1): confirmed smallest-descent-first and descent-intent leak; found the first stage never sorts for descent (`consume()` clears pressure before the first plan) and that `MAX_LANDING_ELEVATION` already bounds deep drops; 5 weird behaviours classified; gate `FAIL — ARCHITECTURE_DEFECT`, correctness-before-scoring recommended |
 | 2026-08-08 | Agent_Cursor | **MI-6 implemented** (CaveContextPolicy + cave ore priority); 169 tests; MI-7 READY design |
 | 2026-08-08 | Agent_Cursor | **MI-5 implemented** (D-MIW-031 + descent pressure); 165 tests; MI-6 READY |
 | 2026-08-08 | Agent_Cursor | **MI-4S implemented** (Option A + saturated scan gate); 158 tests; MI-5 READY |
@@ -1746,6 +1997,54 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 | 2026-08-08 | Agent_Cursor | Integrated Agent_ChatGPT mining architecture; expanded MI-13…MI-22, D-MIW-008…014 |
 | 2026-08-08 | Agent_Cursor | Renamed from resource-greed RFC; full mining+wealth RFC; user deliverable template; cave-vs-dig answer |
 | 2026-08-08 | Agent_Cursor | Initial greed/mining split from tool-tier Phase 3 |
+
+### Contribution — Agent_Claude (MI-5 behavioural simulation)
+
+Agent: Agent_Claude
+Date/Session: 2026-08-08 (snapshot 21:5x)
+Contribution type: REVIEW + VALIDATION (Gate MAIBS-1)
+
+Reviewed: MI-5 as implemented — `DescentPressurePolicy`, `ExplorationReadiness`,
+`ExplorationActivityGoal.updateDescentPressure`, `ExploringGoal.landingCandidates` — against the
+user's design critique. Mechanism read from source per MAIBS-1; nothing inferred from names.
+
+**Confirmed as reported:** the sort key is `belowFirst*1000 + |Δy|`, so at Y=70 a Y69 landing (key 1)
+beats Y60 (key 10). "Prefer lower" is implemented as "prefer the smallest descent". Also confirmed:
+descent pressure lives on `ExplorationReadiness` while the journey lives on `ExpeditionState`, which
+carries no descent intent, so clearing pressure cannot end the expedition it started.
+
+**Two defects the evidence pass added:**
+
+1. **The first stage never sorts for descent.** `readiness.consume(...)` clears `descentPressure`
+   immediately after `createExpedition`, and `planCurrentStage` runs after it in the same tick. The
+   observer re-arms pressure 10 ticks later, so hops 2+ get the descent sort but the stage that
+   *sets the heading* does not. This compounds the heading-blindness point: direction is chosen with
+   no descent input at all.
+2. **`MAX_LANDING_ELEVATION` (16) already bounds deep drops**, so the conservative key is paying a
+   second time for protection that exists elsewhere. That weakens the main argument for
+   smallest-descent-first.
+
+**Endorsed without change:** the descent window, `lowestYReached`, the stall detector owning
+detection but not the fallback, Y≤16 meaning *gather eligible* rather than *descent succeeded*,
+route-level terrain trend, and MI-6 outranking MI-5. `diamondProgressionDemand` /
+`isDiamondLocalGatherEligible` show F-2's two-signal split has already landed.
+
+**One prediction worth keeping:** an invited companion inherits the leader's heading but sorts
+landings by **its own** pressure — false if it wants no diamond — so the leader sinks and the
+companion stays high. Classified `ACCEPTABLE_STEPPING_STONE`: visible, harmless, and probably good
+to watch.
+
+Gate result: **`FAIL — ARCHITECTURE_DEFECT`** on defects 1 and 2. Recommended sequencing is
+correctness first (option B: `consume()` ordering + `ExplorationIntent` on `ExpeditionState`), then
+the scoring work (option A). Tuning a journey that cannot yet report success or failure would put
+the scoring on ground that shifts underneath it.
+
+Concerns: option A's route-level terrain-trend bonus samples surface heights per route candidate and
+must be costed against F-6 (no perception budget, no per-mob stagger) before it ships.
+
+RFC fields updated: new Topic: MI-5 behavioural prediction (MAIBS-1), Change Log, this contribution.
+
+---
 
 ### Contribution — Agent_Claude (utility scale verification)
 
@@ -2164,3 +2463,51 @@ under-surface landing preference. `gradlew.bat test`: 169 pass.
 
 **RFC fields updated:** Identity, Executive Summary, Collaboration, capability rows, Phased plan,
 Tasks, Gates, User approval, Change Log, this contribution.
+
+---
+
+### Contribution — Agent_Cursor (MI-6 MAIBS-1 + repair package)
+
+**Agent:** Agent_Cursor
+**Date/Session:** 2026-08-08 ~22:35 PDT
+**Contribution type:** `REVIEW / BEHAVIORAL_SIMULATION`
+**Skill:** `minecraft-ai-behavioral-simulation` (Gate MAIBS-1)
+
+**Frontier before:** MI-6 marked implemented; MI-7 next. User demonstrated heightmap landing
+preference is mathematically a no-op.
+
+**Evidence (CODE_CONFIRMED):**
+- `landingCandidates` sets `y = getHeight(MOTION_BLOCKING_NO_LEAVES)`
+- `landingPreferenceKey` calls `isCaveLike(landingY, surfaceY)` with the same heightmap
+- `surfaceY - landingY = 0` → never cave-like for ordinary candidates
+- `if (descending) else if (continueCave)` excludes cave sort under diamond DESCENT
+- Open-ravine: mob-column heightmap ≈ floor → not cave-like
+
+**Action:** Wrote Topic MI-6 behavioural prediction; repair order MI-6A→D→B→C→F→G (E deferred);
+blocked MI-7 behind natural descent fix; Behavioral Prediction for MI-6A. No Java.
+
+**Frontier after:** **MI-6A `READY`**. Ask `Begin implementation for MI-6A`.
+
+**RFC fields updated:** Identity, Executive Summary, Collaboration, Topic Index, MI-5 boundary note,
+new MI-6 MAIBS topic, Phased plan, Tasks, Gates, User approval, Change Log, this contribution.
+
+---
+
+### Contribution — Agent_Cursor (MI-6A/D/B/C implementation)
+
+**Agent:** Agent_Cursor
+**Date/Session:** 2026-08-08 ~22:50 PDT
+**Contribution type:** `IMPLEMENTATION / VALIDATION`
+
+**Frontier before:** User authorized Begin for MI-6A, 6D, 6B, 6C; defer 6E/6F/6G; keep +15 until MI-17.
+
+**Action:** Rewrote `CaveContextPolicy` (rim, modes, opportunity); added `CaveLandingResolver`;
+wired `ExploringGoal` + `GatherResourcesGoal` / `GatherTargetPolicy`. Unit suite **178** tests
+`BUILD SUCCESSFUL`. Artifacts: `.superpowers/sdd/task-18-brief.md`, `task-18-report.md`.
+No Minecraft launch; no commit.
+
+**Frontier after:** Code repair for MAIBS defects 1/2/5; runtime probe open; MI-6F next when wanted;
+MI-7 still blocked until natural descent proof.
+
+**RFC fields updated:** Identity, Executive Summary, Topic Index, repair table, gen-1 slice, tasks,
+gates, approval, change log, this contribution.

@@ -533,7 +533,30 @@ public class GatherResourcesGoal extends Goal {
 
         int surfaceY = level.getHeight(
                 Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, origin.getX(), origin.getZ());
-        boolean caveLike = CaveContextPolicy.isCaveLike(origin.getY(), surfaceY);
+        int[] rimSamples = new int[CaveContextPolicy.rimSampleOffsetsX().length];
+        int[] ox = CaveContextPolicy.rimSampleOffsetsX();
+        int[] oz = CaveContextPolicy.rimSampleOffsetsZ();
+        for (int i = 0; i < ox.length; i++) {
+            rimSamples[i] = level.getHeight(
+                    Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    origin.getX() + ox[i],
+                    origin.getZ() + oz[i]);
+        }
+        int mobRim = CaveContextPolicy.localRimHeight(rimSamples);
+        boolean mobCaveOrRavine =
+                CaveContextPolicy.isCaveOrRavineLike(origin.getY(), surfaceY, mobRim);
+
+        boolean[] caveOpportunity = new boolean[found];
+        for (int i = 0; i < found; i++) {
+            BlockPos pos = nearest[i];
+            int columnSurface = level.getHeight(
+                    Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, pos.getX(), pos.getZ());
+            boolean candidateColumn =
+                    CaveContextPolicy.isCaveLike(pos.getY(), columnSurface);
+            boolean underMobRim = CaveContextPolicy.isCaveLike(pos.getY(), mobRim);
+            caveOpportunity[i] = CaveContextPolicy.caveOpportunity(
+                    mobCaveOrRavine, candidateColumn, underMobRim);
+        }
 
         int[] probeOrder = GatherTargetPolicy.sortIndicesByPriority(
                 nearest,
@@ -543,7 +566,7 @@ public class GatherResourcesGoal extends Goal {
                 currentIntent(),
                 lastHarvest,
                 level.getGameTime(),
-                caveLike);
+                caveOpportunity);
 
         GatherTarget partialFallback = null;
         int pathProbes = 0;
@@ -559,7 +582,7 @@ public class GatherResourcesGoal extends Goal {
                             DiscoveryPolicy.classify(
                                     level, pos, state, lastHarvest, level.getGameTime()),
                             acquisitionCost,
-                            caveLike)
+                            caveOpportunity[i])
                     == Integer.MIN_VALUE) {
                 continue;
             }

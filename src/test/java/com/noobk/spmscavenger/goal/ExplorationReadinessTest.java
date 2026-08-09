@@ -47,7 +47,25 @@ class ExplorationReadinessTest {
         assertTrue(readiness.hasDescentPressure());
         assertTrue(readiness.eligible(100, 2, 600));
         readiness.consume(200);
-        assertFalse(readiness.hasDescentPressure());
-        assertFalse(readiness.eligible(100, 2, 600));
+        // MI-5 defect 1: consume() no longer clears descent pressure. That field is owned solely by
+        // ExplorationActivityGoal.updateDescentPressure, which re-derives it every observation tick.
+        // Clearing it here ran before the expedition's first plan, so the stage that sets the
+        // heading never sorted for descent.
+        assertTrue(readiness.hasDescentPressure(),
+                "pressure survives consume; the observer owns its lifecycle");
+        // The safety property that makes that acceptable: cooldown alone still blocks re-entry.
+        assertFalse(readiness.eligible(100, 2, 600), "cooldown must still gate a new expedition");
+    }
+
+    @Test
+    void descentPressureAloneCannotLoopExpeditionsInsideCooldown() {
+        ExplorationReadiness readiness = new ExplorationReadiness();
+        readiness.recordDescentPressure();
+        readiness.consume(500);
+        for (long now = 0; now < 500; now += 50) {
+            assertFalse(readiness.eligible(now, 2, 600),
+                    "retained pressure must not bypass the cooldown at tick " + now);
+        }
+        assertTrue(readiness.eligible(500, 2, 600), "and it re-arms once the cooldown expires");
     }
 }

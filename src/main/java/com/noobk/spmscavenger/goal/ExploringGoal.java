@@ -1,9 +1,10 @@
 package com.noobk.spmscavenger.goal;
 
 import com.noobk.spmscavenger.CaveContextPolicy;
-import com.noobk.spmscavenger.DescentPressurePolicy;
+import com.noobk.spmscavenger.CaveLandingResolver;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
+import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.SpmScavenger;
 import com.noobk.spmscavenger.mixin.MobGoalSelectorAccessor;
 import net.minecraft.core.BlockPos;
@@ -436,8 +437,12 @@ public final class ExploringGoal extends Goal {
             return null;
         }
         long now = level.getGameTime();
+        // Captured at creation: the journey keeps its identity even after the pressure clears.
+        ExplorationIntent intent = readiness.hasDescentPressure()
+                ? ExplorationIntent.DESCENT
+                : ExplorationIntent.NORMAL;
         return new ExpeditionState(
-                mob.getX(), mob.getZ(), best.headingX, best.headingZ,
+                intent, mob.getX(), mob.getZ(), best.headingX, best.headingZ,
                 best.headingSector, List.copyOf(best.waypoints), now);
     }
 
@@ -585,10 +590,9 @@ public final class ExploringGoal extends Goal {
     /**
      * Standable positions around an aim point, cheapest first.
      *
-     * <p>The surface heightmap is the top of whatever is there, which in a built-up area is a roof
-     * and on broken terrain is a cliff. Both stand up fine and neither is reachable, so a large
-     * elevation change is dropped outright and the rest are probed nearest to the mob's own level
-     * first - the probe budget is small enough that the ordering decides whether it finds anything.
+     * <p>Heightmap tops remain the surface/roof fallback. When the mob is already cave/ravine-like
+     * (MI-6B rim), MI-6A also probes a bounded 3D volume for real walkable floors so sorting can
+     * prefer staying underground (MI-6D modes).
      */
     private List<BlockPos> landingCandidates(
             ServerLevel level, int centreX, int centreZ, boolean allowResolvedTarget,
@@ -603,7 +607,28 @@ public final class ExploringGoal extends Goal {
         }
 
         int mobY = mob.blockPosition().getY();
+        int columnSurface = level.getHeight(
+                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                mob.blockPosition().getX(),
+                mob.blockPosition().getZ());
+        int localRim = sampleLocalRim(level, mob.blockPosition().getX(), mob.blockPosition().getZ());
+        boolean caveOrRavine = CaveContextPolicy.isCaveOrRavineLike(mobY, columnSurface, localRim);
+        boolean descending = expedition != null
+                && expedition.intent == ExplorationIntent.DESCENT
+                && !WorkDemandPolicy.isDiamondLocalGatherEligible(mobY);
+        CaveContextPolicy.LandingMode mode =
+                CaveContextPolicy.resolveLandingMode(descending, caveOrRavine);
+
         List<BlockPos> ring = new ArrayList<>();
+        if (caveOrRavine) {
+            for (BlockPos caveFloor : CaveLandingResolver.collectStandable(
+                    centreX, centreZ, mobY, pos -> safeStand(level, pos))) {
+                if (!alreadyAttempted.contains(caveFloor.asLong())) {
+                    ring.add(caveFloor);
+                }
+            }
+        }
+
         for (int radius = 0; radius <= LANDING_RADIUS; radius++) {
             for (int dx = -radius; dx <= radius; dx++) {
                 for (int dz = -radius; dz <= radius; dz++) {
@@ -626,30 +651,31 @@ public final class ExploringGoal extends Goal {
                 }
             }
         }
-        // Stable, so the radius ordering survives inside one elevation band.
-        // MI-5: under descent pressure prefer standable landings below the mob first.
-        // MI-6: when already subterranean, prefer landings that stay under the local surface.
-        int surfaceAtMob = level.getHeight(
-                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                mob.blockPosition().getX(),
-                mob.blockPosition().getZ());
-        boolean continueCave = CaveContextPolicy.isCaveLike(mobY, surfaceAtMob);
-        if (readiness.hasDescentPressure()) {
-            ring.sort(Comparator.comparingInt(
-                    position -> DescentPressurePolicy.landingPreferenceKey(position.getY(), mobY)));
-        } else if (continueCave) {
-            ring.sort(Comparator.comparingInt(position -> {
-                int surface = level.getHeight(
-                        Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                        position.getX(),
-                        position.getZ());
-                return CaveContextPolicy.landingPreferenceKey(position.getY(), mobY, surface);
-            }));
-        } else {
-            ring.sort(Comparator.comparingInt(position -> Math.abs(position.getY() - mobY)));
-        }
+
+        int terrainRef = Math.max(columnSurface, localRim);
+        ring.sort(Comparator.comparingInt(position -> {
+            int landingTerrain = level.getHeight(
+                    Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    position.getX(),
+                    position.getZ());
+            int ref = mode == CaveContextPolicy.LandingMode.NORMAL
+                    ? landingTerrain
+                    : Math.max(landingTerrain, terrainRef);
+            return CaveContextPolicy.landingPreferenceKey(mode, position.getY(), mobY, ref);
+        }));
         result.addAll(ring);
         return result;
+    }
+
+    private static int sampleLocalRim(ServerLevel level, int originX, int originZ) {
+        int[] ox = CaveContextPolicy.rimSampleOffsetsX();
+        int[] oz = CaveContextPolicy.rimSampleOffsetsZ();
+        int[] samples = new int[ox.length];
+        for (int i = 0; i < ox.length; i++) {
+            samples[i] = level.getHeight(
+                    Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, originX + ox[i], originZ + oz[i]);
+        }
+        return CaveContextPolicy.localRimHeight(samples);
     }
 
     private boolean safeStand(ServerLevel level, BlockPos position) {
@@ -790,8 +816,9 @@ public final class ExploringGoal extends Goal {
                 REGION_MEMORY_LIMIT);
         remember(recentCompletedHeadings, expedition.headingSector, HEADING_MEMORY_LIMIT);
         SpmScavenger.LOGGER.info(
-                "[spmscavenger] exploration completed entity={} stages={} hops={} endpoint={}",
-                mob.getId(), expedition.waypoints.size(), expedition.hops, actualEnd);
+                "[spmscavenger] exploration completed entity={} intent={} stages={} hops={} endpoint={}",
+                mob.getId(), expedition.intent, expedition.waypoints.size(), expedition.hops,
+                actualEnd);
         expedition = null;
         navigationState = null;
         readiness.consume(now + COOLDOWN_TICKS);
@@ -801,10 +828,11 @@ public final class ExploringGoal extends Goal {
         // A simulation frontier is not evidence that the heading or unseen destination was bad.
         if (expedition != null) {
             SpmScavenger.LOGGER.info(
-                    "[spmscavenger] exploration ended entity={} reason={} waypoint={}/{} hops={} "
-                            + "waypointFailures={} expeditionFailures={}",
-                    mob.getId(), reason, expedition.waypointIndex + 1, expedition.waypoints.size(),
-                    expedition.hops, expedition.perWaypointFailures, expedition.expeditionFailures);
+                    "[spmscavenger] exploration ended entity={} intent={} reason={} waypoint={}/{} "
+                            + "hops={} waypointFailures={} expeditionFailures={}",
+                    mob.getId(), expedition.intent, reason, expedition.waypointIndex + 1,
+                    expedition.waypoints.size(), expedition.hops, expedition.perWaypointFailures,
+                    expedition.expeditionFailures);
         }
         expedition = null;
         navigationState = null;
@@ -872,8 +900,16 @@ public final class ExploringGoal extends Goal {
             int score) {
     }
 
+    /**
+     * Why this expedition exists. {@code DESCENT} journeys stay recognisable for their whole life,
+     * so they can be logged and terminated for a named reason instead of silently dissolving when
+     * the pressure that started them goes away (MI-5 defect 2).
+     */
+    enum ExplorationIntent { NORMAL, DESCENT }
+
     /** Intent state only. Deliberately contains no Path or path-node index. */
     private static final class ExpeditionState {
+        final ExplorationIntent intent;
         final double originX;
         final double originZ;
         final double headingX;
@@ -896,6 +932,7 @@ public final class ExploringGoal extends Goal {
         int resolvedZ;
 
         ExpeditionState(
+                ExplorationIntent intent,
                 double originX,
                 double originZ,
                 double headingX,
@@ -903,6 +940,7 @@ public final class ExploringGoal extends Goal {
                 int headingSector,
                 List<IntendedWaypoint> waypoints,
                 long startedTick) {
+            this.intent = intent;
             this.originX = originX;
             this.originZ = originZ;
             this.headingX = headingX;
