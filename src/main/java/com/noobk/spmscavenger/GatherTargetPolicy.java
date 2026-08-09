@@ -52,6 +52,15 @@ public final class GatherTargetPolicy {
             BlockState state,
             DiscoveryMode mode,
             float acquisitionCost) {
+        return priority(intent, state, mode, acquisitionCost, false);
+    }
+
+    public static int priority(
+            GatherIntentPolicy.GatherIntent intent,
+            BlockState state,
+            DiscoveryMode mode,
+            float acquisitionCost,
+            boolean caveLike) {
         if (!isLegitimateTarget(mode)) {
             return Integer.MIN_VALUE;
         }
@@ -60,6 +69,7 @@ public final class GatherTargetPolicy {
             return Integer.MIN_VALUE;
         }
         int tier = intent.requiredResources().contains(resource) ? BLOCKING_TIER : WEALTH_TIER;
+        tier += CaveContextPolicy.orePriorityBonus(caveLike, resource);
         if (mode == DiscoveryMode.NEWLY_EXPOSED) {
             tier += NEWLY_EXPOSED_BONUS;
         }
@@ -79,6 +89,18 @@ public final class GatherTargetPolicy {
             GatherIntentPolicy.GatherIntent intent,
             DiscoveryPolicy.HarvestReveal reveal,
             long gameTime) {
+        return sortIndicesByPriority(positions, distances, count, level, intent, reveal, gameTime, false);
+    }
+
+    public static int[] sortIndicesByPriority(
+            BlockPos[] positions,
+            double[] distances,
+            int count,
+            BlockGetter level,
+            GatherIntentPolicy.GatherIntent intent,
+            DiscoveryPolicy.HarvestReveal reveal,
+            long gameTime,
+            boolean caveLike) {
         int[] order = new int[count];
         int[] priorities = new int[count];
         for (int i = 0; i < count; i++) {
@@ -87,7 +109,7 @@ public final class GatherTargetPolicy {
             BlockState state = level.getBlockState(pos);
             float acquisitionCost = (float) (Math.sqrt(distances[i]) / 8.0D);
             DiscoveryMode mode = DiscoveryPolicy.classify(level, pos, state, reveal, gameTime);
-            priorities[i] = priority(intent, state, mode, acquisitionCost);
+            priorities[i] = priority(intent, state, mode, acquisitionCost, caveLike);
         }
         for (int i = 1; i < count; i++) {
             int key = order[i];

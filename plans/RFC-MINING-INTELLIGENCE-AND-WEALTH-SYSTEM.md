@@ -8,15 +8,15 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Target progression** | **Vanilla Minecraft 1.21.1 mining + resource wealth** (overworld ore tiers through diamond/deepslate; not Nether/endgame mining in gen-1) |
 | **Scope** | Autonomous *where* to mine, *how much* to stockpile (wealth), prerequisite planning hooks, capability gaps, integration methods, phased plan, validation — **design until implementation authorized** |
-| **Mode** | `WORKING_FROM_PLAN` (Agent_Cursor — MI-5 complete) |
-| **Status** | Gen-1 through MI-4S + **MI-5** `IMPLEMENTED` (165 tests); runtime cave/ravine descent `UNVERIFIED` |
+| **Mode** | `WORKING_FROM_PLAN` (Agent_Cursor — MI-6 complete) |
+| **Status** | Gen-1 through MI-5 + **MI-6** `IMPLEMENTED` (169 tests); runtime cave/ravine `UNVERIFIED` |
 | **User constraint** | No Minecraft launch, commit, or push unless separately asked; implementation only after explicit Begin authorization |
 | **Baseline version** | `1.9.2` |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `TaskLifecycle.java` |
 | **Former name** | `RFC-MINING-INTELLIGENCE-AND-RESOURCE-GREED.md` — merged into this file (2026-08-08); “resource greed” → **wealth system** |
 | **Owners** | User (product) |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Cursor 2` · `Agent_Codex` · `Agent_Claude` |
-| **Last update** | 2026-08-08 ~22:00 PDT |
+| **Last update** | 2026-08-08 ~22:05 PDT |
 | **Gate** | MRFC-1 |
 
 ### Naming
@@ -53,15 +53,15 @@ PlayerMobs should progress through **vanilla mining** using **deterministic clas
 
 **Mining architecture (`CONSENSUS`, D-MIW-001):** `MiningDirector` / `MiningProject` / `MiningMemory` are policy + session state; `GatherResourcesGoal` owns physical dig; no clairvoyant ore map.
 
-**Continuation result (`CODE_CONFIRMED`, Agent_Cursor):** **MI-5 implemented** — D-MIW-031 split
-(`diamondProgressionDemand` vs local-gated `diamondDeficit`); descent pressure unlocks explore and
-biases landings lower. 165 tests pass. Next: MI-6 cave opportunism / MI-9–10 / runtime — ask first.
+**Continuation result (`CODE_CONFIRMED`, Agent_Cursor):** **MI-6 implemented** — `CaveContextPolicy`
+depth heuristic; gather prefers exposed ore while cave-like; explore prefers under-surface landings
+when already subterranean. 169 tests. Next: MI-7 staircase / MI-9–10 / runtime — ask first.
 
 ---
 
 ## Collaboration Protocol
 
-- This continuation is **`Agent_Cursor`** (MI-5 implementation + static validation).
+- This continuation is **`Agent_Cursor`** (MI-6 implementation + static validation).
 - Evidence: `CONFIRMED` / `INFERRED` / `UNVERIFIED` (Gate AV-1).
 - Reuse SPM + Scavenger executors; no duplicate scanners (Gate SPM-2).
 - **Anti-clairvoyance (D-MIW-008 `CONSENSUS`):** undiscovered ore behind solid stone is never an exact path target from server block query alone.
@@ -96,7 +96,7 @@ biases landings lower. 165 tests pass. Next: MI-6 cave opportunism / MI-9–10 /
 | [Integration methods](#topic-integration-methods) | `CONSENSUS` | Per-capability ladder; SPI deferred |
 | [Task lifecycle](#topic-task-lifecycle) | `CONSENSUS` | RUNNING/SUCCESS/FAILURE/… |
 | [Utility scale (F-1…F-6)](#topic-utility-scale-and-policy-boundaries-5-blocking-findings) | F-1 Option A `LOCKED` + MI-4S `IMPLEMENTED` | Scale repair landed |
-| [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order | Next: MI-6 or MI-9/10 |
+| [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order | Next: MI-7 or MI-9/10 |
 | [Validation](#topic-validation) | `PARTIAL` | Policy units green; gather wealth + runtime open |
 | [Deferred](#topic-deferred-and-unverified) | — | Nether, branch mines, portfolio gen-1 |
 
@@ -860,7 +860,7 @@ TaskLifecycle (RUNNING…INTERRUPTED)
 | Band gate | MI-2 + MI-5 `IMPLEMENTED` | Local gather Y-gated; progression drives descent |
 | Target priority | MI-2 `IMPLEMENTED` | Blocking > wealth among legitimate candidates |
 | Explore downward bias | MI-5 `IMPLEMENTED` | Descent pressure unlocks explore + lower landings |
-| Cave opportunism | MI-6 | Prefer exposed ore in ravine/cave during explore |
+| Cave opportunism | MI-6 `IMPLEMENTED` | Cave-like → prefer exposed ore; under-surface landings |
 | Bounded staircase | MI-7 | Last resort: 1×2 staircase max N blocks, torch check |
 | Torch pairing underground | MI-11 | `PlaceTorchGoal` + coal demand loop |
 | Search budget | MI-19 | Cap distance/blocks/time per trip |
@@ -1414,7 +1414,7 @@ Gen-1 uses **Java policy records** only; SPI when a second mod needs hooks.
 | **P3** | Target priority + deepen Y gate (MI-2) | P1, P3a | **READY** after MI-4 or parallel design |
 | **P4** | Wire wealth into gather (MI-4) | P2b, P3a | **`IMPLEMENTED`** — MI-4R candidate-aware repair (task 13) |
 | **P5** | Explore downward bias (MI-5) | P3 | **`IMPLEMENTED`** (task 16) |
-| **P6** | Cave opportunism + `MiningMemory` (MI-5, MI-15) | P5 | **PARTIAL** |
+| **P6** | Cave opportunism + `MiningMemory` (MI-6, MI-15) | P5 | **PARTIAL** — MI-6 done; MI-15 deferred |
 | **P7** | Bounded staircase (MI-6) | P5 | **PARTIAL** |
 | **P7b** | `DiscoveryMode` gate (MI-13) | P3 | **FULL** |
 | **P8** | `MiningDirector` + `MiningProject` (MI-14) | P6, P7b | **PARTIAL** |
@@ -1431,9 +1431,9 @@ Gen-1 uses **Java policy records** only; SPI when a second mod needs hooks.
 ### Gen-1 slice (D-MIW-025 `CONSENSUS`, revised)
 
 ```text
-DONE:     … → MI-4S → **MI-5** (D-MIW-031 progression vs local + descent pressure)
-NEXT:     **MI-6** cave opportunism (or MI-9/MI-10 datapack) — await Begin implementation
-DEFER:    MI-26 SPM trait, MI-27/28 portfolio/scarcity, MI-14 director, vein, staircase, personalities
+DONE:     … → MI-5 → **MI-6** (CaveContextPolicy + cave ore priority)
+NEXT:     **MI-7** bounded staircase (or MI-9/MI-10 datapack) — await Begin implementation
+DEFER:    MI-15 MiningMemory, MI-14 director, vein, personalities, SPM greed trait
 ```
 
 `greed=0` / `wealthLevel=0` must reproduce today's exact-consumer behaviour (must-not regress iron/diamond craft).
@@ -1502,8 +1502,8 @@ boundary. Focused tests and `gradlew.bat clean build` pass (148/148); runtime re
 | MI-4 | P4 | Gather + config wire wealth without replacing consumer specs | `IMPLEMENTED` — accepted after MI-4S |
 | MI-4S | P4b | Apply locked D-MIW-028 Option A (+ D-MIW-029 boundary) | **`IMPLEMENTED`** (task 15; 158 tests) |
 | MI-5 | P5 | Explore downward bias | **`IMPLEMENTED`** (task 16; 165 tests) |
-| MI-6 | P6 | Cave opportunistic ore | **`READY`** — await Begin implementation |
-| MI-7 | P7 | Bounded staircase | `BLOCKED` |
+| MI-6 | P6 | Cave opportunistic ore | **`IMPLEMENTED`** (task 17; 169 tests) |
+| MI-7 | P7 | Bounded staircase | **`READY`** design — await Begin implementation |
 | MI-8 | P12 | `RequirementResolver` v1 | `BLOCKED` |
 | MI-9 | P13 | Unit tests U-MIW-* | `PARTIAL` — MI-13/MI-2 policy tests added; full U-MIW matrix open |
 | MI-10 | P13 | Runtime datapack | `BLOCKED` |
@@ -1672,15 +1672,16 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] **MI-13 + MI-2** DiscoveryMode + priority (task 14; 155 tests)
 - [x] **MI-4S** Option A formula (task 15; 158 tests)
 - [x] **MI-5** descent pressure / D-MIW-031 (task 16; 165 tests)
+- [x] **MI-6** cave opportunistic ore (task 17; 169 tests)
 - [ ] U-MIW matrix / runtime datapack (MI-9/MI-10)
-- [ ] **MI-6** cave opportunism (`READY`)
+- [ ] **MI-7** bounded staircase (`READY` design)
 
 ### Runtime Gate
 
 - [ ] Approved launch + RT matrix for mining/wealth
 - [ ] Dedicated-server smoke
 
-**MRFC-1 status:** **PASS (implementation)** — MI-5 `IMPLEMENTED`; **MI-6 `READY`**; runtime `UNVERIFIED`.
+**MRFC-1 status:** **PASS (implementation)** — MI-6 `IMPLEMENTED`; **MI-7 `READY` (design)**; runtime `UNVERIFIED`.
 
 ---
 
@@ -1699,7 +1700,8 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] **Lock D-MIW-028 Option A** — desire × proximity; keep D-MIW-026 profiles (user 2026-08-08)
 - [x] **MI-4S** — Option A applied (task 15; Continue the Plan)
 - [x] **Begin implementation for MI-5** — ProgressionDemand vs LocalGatherEligibility (task 16)
-- [ ] **Begin implementation for MI-6** — cave opportunistic ore during explore
+- [x] **Begin implementation for MI-6** — cave opportunistic ore (task 17)
+- [ ] **Begin implementation for MI-7** — bounded staircase (last-resort descent)
 - [ ] Runtime launch (separate)
 
 ---
@@ -1728,6 +1730,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-08 | Agent_Cursor | **MI-6 implemented** (CaveContextPolicy + cave ore priority); 169 tests; MI-7 READY design |
 | 2026-08-08 | Agent_Cursor | **MI-5 implemented** (D-MIW-031 + descent pressure); 165 tests; MI-6 READY |
 | 2026-08-08 | Agent_Cursor | **MI-4S implemented** (Option A + saturated scan gate); 158 tests; MI-5 READY |
 | 2026-08-08 | Agent_Cursor | User **Lock D-MIW-028 Option A**; MI-4S → `READY`; no Java |
@@ -2140,6 +2143,24 @@ readiness unlock + `ExplorationActivityGoal` wire; `ExploringGoal` lower-Y landi
 `gradlew.bat test`: 165 pass.
 
 **Frontier after:** **MI-6 `READY`**. Ask `Begin implementation for MI-6`.
+
+**RFC fields updated:** Identity, Executive Summary, Collaboration, capability rows, Phased plan,
+Tasks, Gates, User approval, Change Log, this contribution.
+
+---
+
+### Contribution — Agent_Cursor (MI-6 implementation)
+
+**Agent:** Agent_Cursor
+**Date/Session:** 2026-08-08 ~22:05 PDT
+**Contribution type:** `IMPLEMENTATION / VALIDATION`
+
+**Frontier before:** MI-6 READY after MI-5; user authorized Begin implementation for MI-6.
+
+**Action:** Task 17 — `CaveContextPolicy`; gather ore priority when cave-like; explore
+under-surface landing preference. `gradlew.bat test`: 169 pass.
+
+**Frontier after:** **MI-7 `READY` (design)**. Ask `Begin implementation for MI-7` (or MI-9/10).
 
 **RFC fields updated:** Identity, Executive Summary, Collaboration, capability rows, Phased plan,
 Tasks, Gates, User approval, Change Log, this contribution.

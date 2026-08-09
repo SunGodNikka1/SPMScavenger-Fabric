@@ -94,6 +94,29 @@ class GatherTargetPolicyTest {
         assertEquals(0, order[1]);
     }
 
+    @Test
+    void caveContextRaisesExposedOreAboveSurfaceLogs() {
+        GatherIntentPolicy.GatherIntent intent = new GatherIntentPolicy.GatherIntent(
+                EnumSet.of(
+                        GatherIntentPolicy.Resource.LOGS,
+                        GatherIntentPolicy.Resource.COAL),
+                Map.of(),
+                ScavengerCrafting.Step.NOTHING);
+        BlockState coal = Blocks.COAL_ORE.defaultBlockState();
+        BlockState log = Blocks.OAK_LOG.defaultBlockState();
+        float cost = 1.0F;
+
+        int surfaceCoal = GatherTargetPolicy.priority(
+                intent, coal, DiscoveryMode.VISIBLE, cost, false);
+        int caveCoal = GatherTargetPolicy.priority(
+                intent, coal, DiscoveryMode.VISIBLE, cost, true);
+        int caveLog = GatherTargetPolicy.priority(
+                intent, log, DiscoveryMode.VISIBLE, cost, true);
+
+        assertTrue(caveCoal > surfaceCoal);
+        assertTrue(caveCoal > caveLog);
+    }
+
     private static void exposeOre(
             GatherProtectionTest.MapBlockGetter level, BlockPos ore, net.minecraft.world.level.block.Block block) {
         level.set(ore, block.defaultBlockState());

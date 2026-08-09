@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.goal;
 
+import com.noobk.spmscavenger.CaveContextPolicy;
 import com.noobk.spmscavenger.DescentPressurePolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
@@ -627,9 +628,23 @@ public final class ExploringGoal extends Goal {
         }
         // Stable, so the radius ordering survives inside one elevation band.
         // MI-5: under descent pressure prefer standable landings below the mob first.
+        // MI-6: when already subterranean, prefer landings that stay under the local surface.
+        int surfaceAtMob = level.getHeight(
+                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                mob.blockPosition().getX(),
+                mob.blockPosition().getZ());
+        boolean continueCave = CaveContextPolicy.isCaveLike(mobY, surfaceAtMob);
         if (readiness.hasDescentPressure()) {
             ring.sort(Comparator.comparingInt(
                     position -> DescentPressurePolicy.landingPreferenceKey(position.getY(), mobY)));
+        } else if (continueCave) {
+            ring.sort(Comparator.comparingInt(position -> {
+                int surface = level.getHeight(
+                        Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                        position.getX(),
+                        position.getZ());
+                return CaveContextPolicy.landingPreferenceKey(position.getY(), mobY, surface);
+            }));
         } else {
             ring.sort(Comparator.comparingInt(position -> Math.abs(position.getY() - mobY)));
         }

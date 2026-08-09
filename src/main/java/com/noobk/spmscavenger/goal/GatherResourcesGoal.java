@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.goal;
 
+import com.noobk.spmscavenger.CaveContextPolicy;
 import com.noobk.spmscavenger.DiscoveryMode;
 import com.noobk.spmscavenger.DiscoveryPolicy;
 import com.noobk.spmscavenger.FurnacePolicy;
@@ -29,6 +30,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -529,6 +531,10 @@ public class GatherResourcesGoal extends Goal {
             return null;
         }
 
+        int surfaceY = level.getHeight(
+                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, origin.getX(), origin.getZ());
+        boolean caveLike = CaveContextPolicy.isCaveLike(origin.getY(), surfaceY);
+
         int[] probeOrder = GatherTargetPolicy.sortIndicesByPriority(
                 nearest,
                 dists,
@@ -536,7 +542,8 @@ public class GatherResourcesGoal extends Goal {
                 level,
                 currentIntent(),
                 lastHarvest,
-                level.getGameTime());
+                level.getGameTime(),
+                caveLike);
 
         GatherTarget partialFallback = null;
         int pathProbes = 0;
@@ -551,7 +558,8 @@ public class GatherResourcesGoal extends Goal {
                             state,
                             DiscoveryPolicy.classify(
                                     level, pos, state, lastHarvest, level.getGameTime()),
-                            acquisitionCost)
+                            acquisitionCost,
+                            caveLike)
                     == Integer.MIN_VALUE) {
                 continue;
             }

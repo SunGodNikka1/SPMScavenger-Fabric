@@ -27,4 +27,7 @@ MI-4S: complete with concerns (D-MIW-028 Option A desire×proximity; saturated s
 MI-5: complete with concerns (D-MIW-031 progression vs local gather; descent pressure unlocks
 explore + lower landing bias; 165 tests pass; runtime cave seek unverified)
 
+MI-6: complete with concerns (CaveContextPolicy; cave ore gather priority; explore under-surface
+landing bias; 169 tests; runtime unverified; no MiningMemory)
+
 No commits. No Minecraft launches (separate approval required).
