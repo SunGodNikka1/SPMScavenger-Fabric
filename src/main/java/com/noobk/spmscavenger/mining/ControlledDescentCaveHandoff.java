@@ -120,6 +120,11 @@ public final class ControlledDescentCaveHandoff {
             Predicate<BlockPos> standable) {
 
         BlockPos origin = completedStep.standCell();
+        // MI-14-R2e: connectivity is measured in mob-sized space. A one-block-high slit connects
+        // air but not a two-block-tall PlayerMob, and a handoff it cannot walk through is a handoff
+        // it will fail. Standability still decides where the flood may stop.
+        Predicate<BlockPos> occupiable =
+                cell -> passable.test(cell) && passable.test(cell.above());
         Deque<BlockPos> frontier = new ArrayDeque<>();
         Set<BlockPos> seen = new HashSet<>();
 
@@ -137,7 +142,7 @@ public final class ControlledDescentCaveHandoff {
                 if (selfCorridor.contains(neighbour) || !seen.add(neighbour)) {
                     continue;
                 }
-                if (passable.test(neighbour)) {
+                if (occupiable.test(neighbour)) {
                     frontier.add(neighbour);
                 }
             }
@@ -166,7 +171,7 @@ public final class ControlledDescentCaveHandoff {
                 if (selfCorridor.contains(next) || !seen.add(next)) {
                     continue;
                 }
-                if (withinReach(origin, next) && passable.test(next)) {
+                if (withinReach(origin, next) && occupiable.test(next)) {
                     frontier.add(next);
                 }
             }
@@ -212,15 +217,14 @@ public final class ControlledDescentCaveHandoff {
      */
     static Set<BlockPos> selfCorridor(BlockPos feet, Direction heading) {
         Set<BlockPos> cells = new HashSet<>();
-        // Behind: the steps just cut. Ahead: the step about to be cut.
+        // MI-14-R2d: excavation history only. Planned cells were once included to stop an unbroken
+        // wall ahead being read as evidence, but the R2c seed guard already does that - solid cells
+        // cannot seed. Keeping them here caused the opposite failure: a cave that is *already open*
+        // directly ahead was masked, because its air occupied cells the planner would have dug.
+        // Self-created means dug, not intended.
         for (int back = 0; back <= SELF_CORRIDOR_BEHIND; back++) {
             BlockPos stand = feet.relative(heading.getOpposite(), back).above(back);
             addColumn(cells, stand);
-        }
-        StairStepPlan planned = StairStepPlanner.planStep(feet, heading);
-        addColumn(cells, planned.nextStandCell());
-        for (BlockPos required : planned.requiredBreaks()) {
-            cells.add(required.immutable());
         }
         return cells;
     }

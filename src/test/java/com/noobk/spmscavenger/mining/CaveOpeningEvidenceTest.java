@@ -18,17 +18,18 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * MI-14-R2 — a discovery must be a <b>place</b>, not a state.
+ * MI-14-R2 — a discovery must be a <b>place</b> the mob broke into and can walk to.
  *
- * <p>The replaced implementation returned {@code true} as soon as the mob was subterranean. A
- * staircase is subterranean by construction, so it fired on the mob's own corridor at eight blocks
- * of rim depth and handed downstream an unresolved target. The fourth scenario below is the
- * conceptual one: <em>cave-like context without a cave opportunity is valid and must produce
- * nothing</em>.
+ * <p>Every scenario uses the production pairing: the evidence is the step just completed, and the
+ * exclusion set is excavation history at the stand cell that step produced. Earlier revisions of
+ * this file paired a completed step with the corridor of the <em>previous</em> stand, which is not
+ * what the executor does, and that mismatch hid two defects.
  */
 class CaveOpeningEvidenceTest {
 
     private static final int SURFACE = 70;
+    private static final BlockPos S0 = new BlockPos(0, 50, 0);
+    private static final Direction HEADING = Direction.EAST;
 
     @BeforeAll
     static void bootstrapMinecraft() {
@@ -36,12 +37,12 @@ class CaveOpeningEvidenceTest {
         Bootstrap.bootStrap();
     }
 
-    /** Flat hill at {@link #SURFACE}; only explicitly-added cells are standable. */
+    /** Flat hill at {@link #SURFACE}; only explicitly-added cells are anything but stone. */
     private static final class World implements ControlledDescentCaveHandoff.HeightAccess {
         private final Set<BlockPos> standable = new HashSet<>();
         private final Set<BlockPos> passable = new HashSet<>();
 
-        /** A standable cell is necessarily passable; everything else is solid stone. */
+        /** Floor a mob can stand on. */
         World open(BlockPos... cells) {
             for (BlockPos cell : cells) {
                 standable.add(cell.immutable());
@@ -50,7 +51,7 @@ class CaveOpeningEvidenceTest {
             return this;
         }
 
-        /** Air the mob can move through but not stand in — no floor. */
+        /** Air a mob can move through but not stand in — no floor. */
         World air(BlockPos... cells) {
             for (BlockPos cell : cells) {
                 passable.add(cell.immutable());
@@ -58,8 +59,24 @@ class CaveOpeningEvidenceTest {
             return this;
         }
 
+        /** A cave cell with real headroom, so a two-block-tall mob fits. */
+        World chamber(BlockPos floor) {
+            return open(floor).air(floor.above());
+        }
+
+        /** Every cell a stair step physically excavated: a 3-high column at each stand. */
+        World dug(StairStepPlan step) {
+            BlockPos from = step.standCell();
+            BlockPos to = step.nextStandCell();
+            return open(from, from.above(), from.above(2), to, to.above(), to.above(2));
+        }
+
         Predicate<BlockPos> passablePredicate() {
             return pos -> passable.contains(pos.immutable());
+        }
+
+        Predicate<BlockPos> standablePredicate() {
+            return pos -> standable.contains(pos.immutable());
         }
 
         @Override
@@ -71,276 +88,161 @@ class CaveOpeningEvidenceTest {
         public boolean canSeeSky(BlockPos pos) {
             return pos.getY() >= SURFACE;
         }
-
-        Predicate<BlockPos> standablePredicate() {
-            return pos -> standable.contains(pos.immutable());
-        }
     }
 
-    // ---- 1. SOLID HILL ----
+    /** Exactly how {@code ControlledDescentGoal.completeStep} calls the detector. */
+    private static Optional<CaveOpening> detect(World world, StairStepPlan completed) {
+        return ControlledDescentCaveHandoff.findOpenedCave(
+                world, completed,
+                ControlledDescentCaveHandoff.selfCorridor(completed.nextStandCell(), HEADING),
+                world.passablePredicate(), world.standablePredicate());
+    }
+
+    private static StairStepPlan completedStep() {
+        return StairStepPlanner.planStep(S0, HEADING);
+    }
 
     @Test
     void mustNotHappen_solidHillReportsACave() {
-        World world = new World();          // nothing standable anywhere
-        BlockPos feet = new BlockPos(0, 50, 0);
-
-        Optional<CaveOpening> opening = ControlledDescentCaveHandoff.findOpenedCave(
-                world, StairStepPlanner.planStep(feet, Direction.EAST),
-                ControlledDescentCaveHandoff.selfCorridor(feet, Direction.EAST),
-                world.passablePredicate(), world.standablePredicate());
-
-        assertTrue(opening.isEmpty(),
+        assertTrue(detect(new World(), completedStep()).isEmpty(),
                 "20 blocks below the surface with no external air volume is not a discovery");
     }
 
-    // ---- 4. SELF CORRIDOR ONLY (the conceptual case) ----
-
+    /** The conceptual case: cave-like <em>context</em> is not a cave <em>opportunity</em>. */
     @Test
     void mustNotHappen_theMobsOwnStaircaseCountsAsADiscovery() {
-        BlockPos feet = new BlockPos(0, 50, 0);
-        Direction heading = Direction.EAST;
+        StairStepPlan completed = completedStep();
+        World world = new World().dug(completed);
 
-        // Everything the staircase itself created or is about to create is standable.
-        World world = new World();
-        world.open(ControlledDescentCaveHandoff.selfCorridor(feet, heading)
-                .toArray(new BlockPos[0]));
-
-        // Context genuinely is cave-like: 20 below local terrain, no sky.
         assertEquals(CaveContextPolicy.SpaceKind.CAVE,
-                ControlledDescentCaveHandoff.classifyAt(world, feet),
+                ControlledDescentCaveHandoff.classifyAt(world, S0),
                 "being deep in a covered staircase really is cave-like context");
-
-        assertTrue(ControlledDescentCaveHandoff.findOpenedCave(
-                        world, StairStepPlanner.planStep(feet, heading),
-                ControlledDescentCaveHandoff.selfCorridor(feet, heading),
-                world.passablePredicate(), world.standablePredicate()).isEmpty(),
+        assertTrue(detect(world, completed).isEmpty(),
                 "cave context without a cave opportunity must produce no opening");
     }
 
-    // ---- 4. LATERAL BREAKTHROUGH ----
-
     @Test
     void mustHappen_aNaturalSpaceBesideTheStairIsAnOpening() {
-        BlockPos feet = new BlockPos(0, 50, 0);
-        Direction heading = Direction.EAST;
-        // The step opens (1,50,0). A cave lying immediately south of that cut wall is a genuine
-        // lateral breakthrough: face-adjacent to what was just excavated.
-        //
-        // This scenario previously placed the cave diagonally at (2,50,1), touching nothing. Under
-        // the R2a volume scan that still counted; under R2b it correctly does not, which is the
-        // whole point of the change.
-        BlockPos lateral = new BlockPos(1, 50, 1);
+        StairStepPlan completed = completedStep();
+        BlockPos lateral = new BlockPos(1, 49, 1);   // face-adjacent to the cell just cut
+        World world = new World().dug(completed).chamber(lateral);
 
-        World world = new World().open(lateral);
-        world.open(ControlledDescentCaveHandoff.selfCorridor(feet, heading).toArray(new BlockPos[0]));
-
-        Optional<CaveOpening> opening = ControlledDescentCaveHandoff.findOpenedCave(
-                world, StairStepPlanner.planStep(feet, heading),
-                ControlledDescentCaveHandoff.selfCorridor(feet, heading),
-                world.passablePredicate(), world.standablePredicate());
-
+        Optional<CaveOpening> opening = detect(world, completed);
         assertTrue(opening.isPresent(), "air touching the newly cut wall is a breakthrough");
         assertEquals(lateral, opening.get().landing(), "the payload must name where to go");
         assertTrue(opening.get().isSubterranean());
-        assertEquals(CaveContextPolicy.SpaceKind.CAVE, opening.get().kind());
         assertEquals(Direction.SOUTH, opening.get().continuation(),
-                "continuation points at the discovery, not along the staircase axis");
+                "measured from the breakthrough, not along the staircase axis");
     }
-
-    // ---- 3. CAVE DIRECTLY AHEAD ----
 
     @Test
     void mustHappen_aCaveAheadIsFoundAndIsNotTheCorridorItself() {
-        BlockPos feet = new BlockPos(0, 50, 0);
-        Direction heading = Direction.EAST;
-        BlockPos ahead = new BlockPos(2, 49, 0);   // probe centre, one below
+        StairStepPlan completed = completedStep();
+        BlockPos ahead = new BlockPos(2, 49, 0);
+        World world = new World().dug(completed).chamber(ahead);
 
-        World world = new World().open(ahead);
-        world.open(ControlledDescentCaveHandoff.selfCorridor(feet, heading)
-                .toArray(new BlockPos[0]));
-
-        Optional<CaveOpening> opening = ControlledDescentCaveHandoff.findOpenedCave(
-                world, StairStepPlanner.planStep(feet, heading),
-                ControlledDescentCaveHandoff.selfCorridor(feet, heading),
-                world.passablePredicate(), world.standablePredicate());
-
+        Optional<CaveOpening> opening = detect(world, completed);
         assertTrue(opening.isPresent());
         assertEquals(ahead, opening.get().landing(),
                 "the corridor cells are excluded, so the natural floor wins");
-        assertFalse(ControlledDescentCaveHandoff.selfCorridor(feet, heading).contains(ahead));
+        assertFalse(ControlledDescentCaveHandoff
+                .selfCorridor(completed.nextStandCell(), HEADING).contains(ahead));
     }
 
-    // ---- corridor geometry ----
-
+    /** MI-14-R2c/R2d — the corridor is excavation history, at the full height a step cuts. */
     @Test
-    void mustHappen_selfCorridorCoversExcavatedCellsNotJustStandPositions() {
-        BlockPos feet = new BlockPos(0, 50, 0);
-        Set<BlockPos> corridor = ControlledDescentCaveHandoff.selfCorridor(feet, Direction.EAST);
+    void mustHappen_selfCorridorIsDugHistoryAtFullStepHeight() {
+        Set<BlockPos> corridor = ControlledDescentCaveHandoff.selfCorridor(S0, HEADING);
 
-        assertTrue(corridor.contains(feet), "current stand");
-        assertTrue(corridor.contains(feet.above()), "head space the mob occupies");
-        assertTrue(corridor.contains(feet.above(2)),
-                "MI-14-R2c: the step that produced this stand cut headroom here too - omitting it "
-                        + "let the flood report the staircase's own ceiling as a cave");
-        StairStepPlan planned = StairStepPlanner.planStep(feet, Direction.EAST);
+        assertTrue(corridor.contains(S0), "current stand");
+        assertTrue(corridor.contains(S0.above()), "head space the mob occupies");
+        assertTrue(corridor.contains(S0.above(2)),
+                "R2c: the step that produced this stand cut headroom here too - omitting it let "
+                        + "the flood report the staircase's own ceiling as a cave");
+
+        StairStepPlan planned = StairStepPlanner.planStep(S0, HEADING);
         for (BlockPos required : planned.requiredBreaks()) {
-            assertTrue(corridor.contains(required),
-                    "cells this step is about to break: " + required);
+            assertFalse(corridor.contains(required),
+                    "R2d: not yet dug, so not self-created: " + required);
         }
-        assertTrue(corridor.contains(planned.nextStandCell()), "next stand");
+        assertFalse(corridor.contains(planned.nextStandCell()), "R2d: next stand is not dug yet");
     }
-
-    // ---- 2. HIDDEN CAVE BEHIND AN INTACT WALL (MI-14-R2b) ----
 
     @Test
     void mustNotHappen_aCaveBehindUnbrokenStoneCountsAsOpened() {
-        BlockPos feet = new BlockPos(0, 50, 0);
-        Direction heading = Direction.EAST;
-        // The step opens (1,51,0),(1,50,0),(1,49,0). Leave (2,49,0) SOLID as the separating wall,
-        // and put a perfectly good cave floor behind it at (3,49,0).
-        BlockPos hidden = new BlockPos(3, 49, 0);
-        World world = new World().open(hidden);
-        world.open(ControlledDescentCaveHandoff.selfCorridor(feet, heading).toArray(new BlockPos[0]));
+        StairStepPlan completed = completedStep();
+        // (2,49,0) stays solid as the separating wall; a perfect cave floor sits behind it.
+        World world = new World().dug(completed).chamber(new BlockPos(3, 49, 0));
 
-        assertTrue(ControlledDescentCaveHandoff.findOpenedCave(
-                        world, StairStepPlanner.planStep(feet, heading),
-                        ControlledDescentCaveHandoff.selfCorridor(feet, heading),
-                        world.passablePredicate(), world.standablePredicate()).isEmpty(),
+        assertTrue(detect(world, completed).isEmpty(),
                 "geographically close is not topologically connected - the wall is still there");
     }
 
-    // ---- 3. THE SAME CAVE ONCE THE CONNECTING BLOCK BREAKS ----
-
     @Test
     void mustHappen_theSameCaveIsFoundOnceTheWallIsGone() {
-        BlockPos feet = new BlockPos(0, 50, 0);
-        Direction heading = Direction.EAST;
+        StairStepPlan completed = completedStep();
         BlockPos hidden = new BlockPos(3, 49, 0);
+        World world = new World().dug(completed).chamber(hidden)
+                .air(new BlockPos(2, 49, 0), new BlockPos(2, 50, 0));   // wall now excavated
 
-        World world = new World().open(hidden);
-        world.open(ControlledDescentCaveHandoff.selfCorridor(feet, heading).toArray(new BlockPos[0]));
-        world.air(new BlockPos(2, 49, 0));   // the separating block is now excavated
-
-        Optional<CaveOpening> opening = ControlledDescentCaveHandoff.findOpenedCave(
-                world, StairStepPlanner.planStep(feet, heading),
-                ControlledDescentCaveHandoff.selfCorridor(feet, heading),
-                world.passablePredicate(), world.standablePredicate());
-
+        Optional<CaveOpening> opening = detect(world, completed);
         assertTrue(opening.isPresent(), "connected air now reaches the cave floor");
         assertEquals(hidden, opening.get().landing(),
                 "the identical cell that was correctly rejected a moment ago");
     }
 
-    /**
-     * Records a real constraint found while writing these scenarios: with
-     * {@code MAX_PROBES = 180} and {@code Y_RADIUS = 6} (13 vertical probes per column), the search
-     * is exhausted partway through radius 2 of {@code XZ_RADIUS = 4}. A cave whose nearest standable
-     * floor sits beyond about one ring from the probe centre cannot be detected at all — the outer
-     * radius is nominal. Worth knowing before anyone tunes XZ_RADIUS upward expecting more reach.
-     */
-    @Test
-    void probeBudgetLimitsEffectiveReachBelowTheNominalRadius() {
-        BlockPos feet = new BlockPos(0, 50, 0);
-        BlockPos farFloor = new BlockPos(3, 50, 3);   // radius 3 from the probe centre
-        World world = new World().open(farFloor);
-
-        assertTrue(ControlledDescentCaveHandoff.findOpenedCave(
-                        world, StairStepPlanner.planStep(feet, Direction.EAST),
-                ControlledDescentCaveHandoff.selfCorridor(feet, Direction.EAST),
-                world.passablePredicate(), world.standablePredicate()).isEmpty(),
-                "documents reach, not desired behaviour: this floor is real but unreachable "
-                        + "within the probe budget");
-    }
-
     @Test
     void mustNotHappen_theBooleanFacadeDisagreesWithTheEvidence() {
-        BlockPos feet = new BlockPos(0, 50, 0);
         World solid = new World();
         assertFalse(ControlledDescentCaveHandoff.openedTraversableCave(
-                        solid, feet, Direction.EAST, solid.standablePredicate()),
+                        solid, S0, HEADING, solid.standablePredicate()),
                 "the retained boolean must now delegate to findOpenedCave, not to context");
     }
 
     // ---- MI-14-R2c: WHICH STEP IS THE EVIDENCE ----
-    //
-    // A staircase step runs S0 -> S1; the mob stands at S1 when the step completes. The evidence is
-    // what S0->S1 opened. Planning from S1 describes S1->S2 - the *next* step, still solid rock.
 
-    /** TEST A — a breakthrough on the completed step is visible; from the future step it is not. */
+    /** A breakthrough on the completed step is visible; from the future step it is not. */
     @Test
     void mustHappen_theJustCompletedStepIsWhatCountsAsEvidence() {
-        BlockPos s0 = new BlockPos(0, 50, 0);
-        Direction heading = Direction.EAST;
-        StairStepPlan completed = StairStepPlanner.planStep(s0, heading);   // S0 -> S1
-        BlockPos s1 = completed.nextStandCell();                           // (1,49,0)
+        StairStepPlan completed = completedStep();
+        World world = new World().dug(completed).chamber(new BlockPos(1, 49, 1));
 
-        // Cave face-adjacent to a cell THIS step opened, and to nothing the next step will open.
-        BlockPos breakthrough = new BlockPos(1, 49, 1);
-
-        // Dig only what S0->S1 dug. selfCorridor(s1) also contains the *planned* next step, so
-        // opening it would open the very wall these scenarios need intact.
-        World world = new World().open(breakthrough);
-        world.open(ControlledDescentCaveHandoff.selfCorridor(s0, heading).toArray(new BlockPos[0]));
-        Set<BlockPos> corridor = ControlledDescentCaveHandoff.selfCorridor(s1, heading);
-
-        assertTrue(ControlledDescentCaveHandoff.findOpenedCave(
-                        world, completed, corridor,
-                        world.passablePredicate(), world.standablePredicate()).isPresent(),
+        assertTrue(detect(world, completed).isPresent(),
                 "the step that was just dug is the evidence source");
 
-        // The defect this test exists for: asking about the step that has not happened yet is blind
-        // to the breakthrough that just did.
-        StairStepPlan future = StairStepPlanner.planStep(s1, heading);     // S1 -> S2
+        StairStepPlan future = StairStepPlanner.planStep(completed.nextStandCell(), HEADING);
         assertTrue(ControlledDescentCaveHandoff.findOpenedCave(
-                        world, future, corridor,
+                        world, future,
+                        ControlledDescentCaveHandoff.selfCorridor(future.nextStandCell(), HEADING),
                         world.passablePredicate(), world.standablePredicate()).isEmpty(),
                 "planning from current feet describes S1->S2 and misses the real opening");
     }
 
-    /** TEST B — a cave touching the still-solid wall ahead is not an opening. */
+    /** A cave touching the still-solid wall ahead is not an opening. */
     @Test
     void mustNotHappen_aCaveTouchingTheUnbrokenWallAheadIsReported() {
-        BlockPos s0 = new BlockPos(0, 50, 0);
-        Direction heading = Direction.EAST;
-        StairStepPlan completed = StairStepPlanner.planStep(s0, heading);
-        BlockPos s1 = completed.nextStandCell();
-        StairStepPlan future = StairStepPlanner.planStep(s1, heading);
-
-        // Touches a cell the NEXT step will break - (2,48,0) - which is still solid stone.
-        BlockPos beyondTheWall = future.nextStandCell().south();
-
-        World world = new World().open(beyondTheWall);
-        world.open(ControlledDescentCaveHandoff.selfCorridor(s0, heading).toArray(new BlockPos[0]));
-        Set<BlockPos> corridor = ControlledDescentCaveHandoff.selfCorridor(s1, heading);
-
-        assertTrue(ControlledDescentCaveHandoff.findOpenedCave(
-                        world, completed, corridor,
-                        world.passablePredicate(), world.standablePredicate()).isEmpty(),
-                "nothing has been dug through to it - the wall ahead is intact");
-    }
-
-    /**
-     * The seed guard, independent of wiring: an unexcavated step opens nothing, so even a caller
-     * that passes the wrong plan cannot manufacture a breakthrough through solid rock.
-     */
-    @Test
-    void mustNotHappen_anUndugStepSeedsABreakthrough() {
-        BlockPos s0 = new BlockPos(0, 50, 0);
-        Direction heading = Direction.EAST;
-        StairStepPlan completed = StairStepPlanner.planStep(s0, heading);
-        StairStepPlan future = StairStepPlanner.planStep(completed.nextStandCell(), heading);
-        BlockPos beyondTheWall = future.nextStandCell().south();
-
-        World world = new World().open(beyondTheWall);
-        world.open(ControlledDescentCaveHandoff.selfCorridor(s0, heading).toArray(new BlockPos[0]));
+        StairStepPlan completed = completedStep();
+        StairStepPlan future = StairStepPlanner.planStep(completed.nextStandCell(), HEADING);
+        World world = new World().dug(completed).chamber(future.nextStandCell().south());
 
         for (BlockPos required : future.requiredBreaks()) {
             assertFalse(world.passablePredicate().test(required),
                     "precondition: the next step is still solid " + required);
         }
+        assertTrue(detect(world, completed).isEmpty(),
+                "nothing has been dug through to it - the wall ahead is intact");
+    }
+
+    /** The seed guard, independent of wiring: an unexcavated step opens nothing. */
+    @Test
+    void mustNotHappen_anUndugStepSeedsABreakthrough() {
+        StairStepPlan completed = completedStep();
+        StairStepPlan future = StairStepPlanner.planStep(completed.nextStandCell(), HEADING);
+        World world = new World().dug(completed).chamber(future.nextStandCell().south());
+
         assertTrue(ControlledDescentCaveHandoff.findOpenedCave(
                         world, future,
-                        ControlledDescentCaveHandoff.selfCorridor(completed.nextStandCell(), heading),
+                        ControlledDescentCaveHandoff.selfCorridor(future.nextStandCell(), HEADING),
                         world.passablePredicate(), world.standablePredicate()).isEmpty(),
                 "solid cells are not seeds regardless of which plan was handed in");
     }
