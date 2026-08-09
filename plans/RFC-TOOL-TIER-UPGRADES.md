@@ -2477,6 +2477,20 @@ of scope. Focused tests and `clean build` passed with 107/107 tests. Runtime par
 
 **Not authorized:** Implementation.
 
+---
+
+### Contribution — Agent_Codex (task 19: looted diamond pick ownership)
+
+**Agent:** Agent_Codex
+**Date/Session:** 2026-08-08
+**Contribution type:** `IMPLEMENTATION / VALIDATION / BEHAVIORAL_SIMULATION`
+
+Diamond pick support was already present for backpack and main hand; off-hand loot was the confirmed
+gap. Task 19 extends tier, consumer, furnace, gather, exploration-demand, and equip paths to the
+off hand. A usable off-hand diamond pick suppresses lower-tier progression and is swapped into main
+hand for mining; a fully broken one does not count. `gradlew.bat clean build` passed 181 tests.
+MAIBS-1 is `PASS — BEHAVIORALLY_PLAUSIBLE`; runtime SPM loot/equipment behavior is `UNVERIFIED`.
+
 **RFC fields updated:** Phase 3 intro, mining architecture, Gathering topic, D-TTU-024/026/027, tasks TT-3c, decision registry, change log, this contribution.
 
 
@@ -2519,4 +2533,3 @@ of scope. Focused tests and `clean build` passed with 107/107 tests. Runtime par
 **Resource greed model:** `StockTarget(minimum, comfort)` — minimum from `ConsumerRecipeSpec`; comfort from config (`greedRawIronStock`, default 0 = legacy). Prioritization: survival > craft minimum > greed > idle.
 
 **Not authorized:** Implementation.
-

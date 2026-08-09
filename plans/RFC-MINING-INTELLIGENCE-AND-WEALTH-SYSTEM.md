@@ -2511,3 +2511,20 @@ MI-7 still blocked until natural descent proof.
 
 **RFC fields updated:** Identity, Executive Summary, Topic Index, repair table, gen-1 slice, tasks,
 gates, approval, change log, this contribution.
+
+---
+
+### Contribution — Agent_Codex (looted diamond pick equipment repair)
+
+**Agent:** Agent_Codex
+**Date/Session:** 2026-08-08
+**Contribution type:** `IMPLEMENTATION / VALIDATION / BEHAVIORAL_SIMULATION`
+
+Diamond/netherite tier recognition already existed, and backpack/main-hand loot was supported. The
+off hand was absent from `ToolTierPolicy`, `ToolBox`, and every live progression caller, explaining
+the observed slot specificity. Task 19 adds one backpack/main/off-hand ownership view through
+gather, craft, smelt, exploration demand, and tool drawing. `ToolBox` swaps an off-hand best tool
+into main hand without dropping either stack. Broken off-hand tools do not satisfy progression.
+
+Clean build passed 181 tests. MAIBS-1: `PASS — BEHAVIORALLY_PLAUSIBLE`; live SPM loot placement,
+combat re-arm/redraw, and equipment visuals remain `UNVERIFIED`.

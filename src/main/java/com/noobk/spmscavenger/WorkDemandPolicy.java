@@ -40,9 +40,14 @@ public final class WorkDemandPolicy {
     /** Select exactly one live demand. Stable ordering is class, utility, then reason. */
     public static Optional<WorkDemand> select(
             Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
+        return select(backpack, mainHand, ItemStack.EMPTY, cfg);
+    }
+
+    public static Optional<WorkDemand> select(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
         List<WorkDemand> candidates = new java.util.ArrayList<>(2);
         charcoalDemand(backpack, cfg).ifPresent(candidates::add);
-        ironToolDemand(backpack, mainHand, cfg).ifPresent(candidates::add);
+        ironToolDemand(backpack, mainHand, offHand, cfg).ifPresent(candidates::add);
         return candidates.stream().max(Comparator
                 .comparingInt((WorkDemand d) -> classWeight(d.demandClass()))
                 .thenComparingInt(WorkDemand::derivedUtility)
@@ -80,8 +85,13 @@ public final class WorkDemandPolicy {
      */
     public static int diamondProgressionDemand(
             Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
+        return diamondProgressionDemand(backpack, mainHand, ItemStack.EMPTY, cfg);
+    }
+
+    public static int diamondProgressionDemand(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
         Optional<ScavengerCrafting.ConsumerRecipeSpec> specOpt =
-                ScavengerCrafting.activeDiamondToolRecipe(backpack, mainHand, cfg);
+                ScavengerCrafting.activeDiamondToolRecipe(backpack, mainHand, offHand, cfg);
         if (specOpt.isEmpty()) {
             return 0;
         }
@@ -99,10 +109,19 @@ public final class WorkDemandPolicy {
      */
     public static int diamondDeficit(
             Container backpack, ItemStack mainHand, ScavengerConfig cfg, int mobBlockY) {
+        return diamondDeficit(backpack, mainHand, ItemStack.EMPTY, cfg, mobBlockY);
+    }
+
+    public static int diamondDeficit(
+            Container backpack,
+            ItemStack mainHand,
+            ItemStack offHand,
+            ScavengerConfig cfg,
+            int mobBlockY) {
         if (!isDiamondLocalGatherEligible(mobBlockY)) {
             return 0;
         }
-        return diamondProgressionDemand(backpack, mainHand, cfg);
+        return diamondProgressionDemand(backpack, mainHand, offHand, cfg);
     }
 
     /**
@@ -115,7 +134,12 @@ public final class WorkDemandPolicy {
      * dormant while the iron tier is unreachable.
      */
     public static int rawIronDeficit(Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
-        Optional<WorkDemand> demand = ironToolDemand(backpack, mainHand, cfg);
+        return rawIronDeficit(backpack, mainHand, ItemStack.EMPTY, cfg);
+    }
+
+    public static int rawIronDeficit(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
+        Optional<WorkDemand> demand = ironToolDemand(backpack, mainHand, offHand, cfg);
         if (demand.isEmpty()) {
             return 0;
         }
@@ -126,8 +150,13 @@ public final class WorkDemandPolicy {
 
     private static Optional<WorkDemand> ironToolDemand(
             Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
+        return ironToolDemand(backpack, mainHand, ItemStack.EMPTY, cfg);
+    }
+
+    private static Optional<WorkDemand> ironToolDemand(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
         Optional<ScavengerCrafting.ConsumerRecipeSpec> specOpt =
-                ScavengerCrafting.activeIronToolRecipe(backpack, mainHand, cfg);
+                ScavengerCrafting.activeIronToolRecipe(backpack, mainHand, offHand, cfg);
         if (specOpt.isEmpty()) return Optional.empty();
         ScavengerCrafting.ConsumerRecipeSpec spec = specOpt.get();
         int required = spec.requiredCount(Items.IRON_INGOT);

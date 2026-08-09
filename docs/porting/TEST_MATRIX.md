@@ -200,3 +200,15 @@ approval is required.
 
 Build evidence: `gradlew.bat clean build` passed with 148 tests and no failures, errors, or skips.
 Runtime mining and performance remain `UNVERIFIED` pending separate launch approval.
+
+## Looted tool equipment locations — task 19 / MAIBS-1
+
+| Check | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Ownership | Usable diamond pick in backpack, main hand, or off hand satisfies diamond tier | Off-hand loot triggers redundant iron/diamond progression | `ToolTierPolicyTest`, `GatherIntentPolicyTest` `CONFIRMED` |
+| Broken tool | Fully broken off-hand pick is rejected | Broken item suppresses replacement | `ToolTierPolicyTest` `CONFIRMED` |
+| Draw | Best off-hand tool swaps losslessly to main hand before mining | Tool or previous held item is dropped/deleted | Static `ToolBox` inspection `CONFIRMED`; runtime `UNVERIFIED` |
+| Goal composition | Existing gather/craft/smelt/explore policies receive one three-location view | A second loot/equipment Goal competes with SPM | Static call-path inspection `CONFIRMED` |
+
+Build evidence: clean build passed 181 tests. Runtime loot placement, combat interruption/re-arm,
+animation, save/reload, and multi-mob behavior remain `UNVERIFIED`.

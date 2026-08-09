@@ -33,4 +33,7 @@ landing bias; 169 tests; runtime unverified; no MiningMemory)
 MI-6A + MI-6D + MI-6B + MI-6C: complete with concerns (3D cave landings, DESCENT_IN_CAVE,
 local rim, per-candidate opportunity; 178 tests; runtime unverified; 6E/6F/6G deferred)
 
+Task 19: complete with concerns (looted diamond pick ownership across backpack/main/off hand;
+181 tests/build pass; runtime loot/equipment behavior unverified)
+
 No commits. No Minecraft launches (separate approval required).

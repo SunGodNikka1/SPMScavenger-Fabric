@@ -8,8 +8,8 @@ import net.minecraft.world.item.Items;
 /**
  * Pure policy for which tool tier a scavenger owns, wants, and may craft toward.
  *
- * <p>Operates on a {@link Container} only — no entity, no level — so tier gates are unit-testable
- * without bootstrapping item tags.
+ * <p>Operates on a {@link Container} plus explicit held stacks — no entity or level — so tier gates
+ * are unit-testable and looted tools count consistently in the backpack, main hand, or off hand.
  */
 public final class ToolTierPolicy {
 
@@ -50,11 +50,19 @@ public final class ToolTierPolicy {
     }
 
     public static ToolTier tierOfPick(Container backpack, ItemStack mainHand) {
-        return bestTier(backpack, mainHand, ToolKind.PICK);
+        return tierOfPick(backpack, mainHand, ItemStack.EMPTY);
+    }
+
+    public static ToolTier tierOfPick(Container backpack, ItemStack mainHand, ItemStack offHand) {
+        return bestTier(backpack, mainHand, offHand, ToolKind.PICK);
     }
 
     public static ToolTier tierOfAxe(Container backpack, ItemStack mainHand) {
-        return bestTier(backpack, mainHand, ToolKind.AXE);
+        return tierOfAxe(backpack, mainHand, ItemStack.EMPTY);
+    }
+
+    public static ToolTier tierOfAxe(Container backpack, ItemStack mainHand, ItemStack offHand) {
+        return bestTier(backpack, mainHand, offHand, ToolKind.AXE);
     }
 
     public static ToolTier targetPickTier(ScavengerConfig cfg) {
@@ -74,11 +82,21 @@ public final class ToolTierPolicy {
     }
 
     public static boolean needsPickUpgrade(Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
-        return targetPickTier(cfg).compareTo(tierOfPick(backpack, mainHand)) > 0;
+        return needsPickUpgrade(backpack, mainHand, ItemStack.EMPTY, cfg);
+    }
+
+    public static boolean needsPickUpgrade(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
+        return targetPickTier(cfg).compareTo(tierOfPick(backpack, mainHand, offHand)) > 0;
     }
 
     public static boolean needsAxeUpgrade(Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
-        return targetAxeTier(cfg).compareTo(tierOfAxe(backpack, mainHand)) > 0;
+        return needsAxeUpgrade(backpack, mainHand, ItemStack.EMPTY, cfg);
+    }
+
+    public static boolean needsAxeUpgrade(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
+        return targetAxeTier(cfg).compareTo(tierOfAxe(backpack, mainHand, offHand)) > 0;
     }
 
     public static boolean ownsAtLeast(Container backpack, ToolTier tier, ToolKind kind) {
@@ -131,10 +149,16 @@ public final class ToolTierPolicy {
      * toward ownership (D-TTU-011 / TT-1bR).
      */
     public static boolean cobbleBelowTarget(Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
+        return cobbleBelowTarget(backpack, mainHand, ItemStack.EMPTY, cfg);
+    }
+
+    public static boolean cobbleBelowTarget(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
         if (!cfg.craftTools) {
             return false;
         }
-        if (!needsPickUpgrade(backpack, mainHand, cfg) && !needsAxeUpgrade(backpack, mainHand, cfg)) {
+        if (!needsPickUpgrade(backpack, mainHand, offHand, cfg)
+                && !needsAxeUpgrade(backpack, mainHand, offHand, cfg)) {
             return false;
         }
         ToolTier pickTarget = targetPickTier(cfg);
@@ -145,11 +169,16 @@ public final class ToolTierPolicy {
         return ScavengerCrafting.count(backpack, Items.COBBLESTONE) < cfg.cobbleStockTarget;
     }
 
-    private static ToolTier bestTier(Container backpack, ItemStack mainHand, ToolKind kind) {
+    private static ToolTier bestTier(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ToolKind kind) {
         ToolTier best = ToolTier.NONE;
         ToolTier handTier = tierFromStack(mainHand, kind);
         if (handTier.compareTo(best) > 0) {
             best = handTier;
+        }
+        ToolTier offHandTier = tierFromStack(offHand, kind);
+        if (offHandTier.compareTo(best) > 0) {
+            best = offHandTier;
         }
         for (int i = 0; i < backpack.getContainerSize(); i++) {
             ToolTier tier = tierFromStack(backpack.getItem(i), kind);

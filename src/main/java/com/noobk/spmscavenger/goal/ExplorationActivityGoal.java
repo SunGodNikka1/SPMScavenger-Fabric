@@ -119,7 +119,7 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
             return;
         }
         int progression = WorkDemandPolicy.diamondProgressionDemand(
-                backpack, mob.getMainHandItem(), cfg);
+                backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg);
         boolean local = WorkDemandPolicy.isDiamondLocalGatherEligible(mob.blockPosition().getY());
         if (DescentPressurePolicy.wantsDescentExplore(progression, local, false)) {
             readiness.recordDescentPressure();

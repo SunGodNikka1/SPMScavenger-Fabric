@@ -784,3 +784,12 @@ only; path, dig-time, and danger costs remain later RFC work and must not be cla
 Diamond wealth is bounded by the existing generation-height rule, and log stock uses the Minecraft
 log tag rather than a species list. Static tests/build are `CONFIRMED`; runtime and performance are
 `UNVERIFIED`.
+
+## 2026-08-08 — Looted tools use one three-location ownership view
+
+Selected backpack + main hand + off hand ownership over requiring manual inventory placement or
+intercepting SPM loot. Manual placement creates unexplained slot specificity. Loot interception
+duplicates host behavior and risks full-inventory loss. The selected design lets every progression
+consumer see the same usable tool and lets `ToolBox` swap an off-hand winner directly into main hand
+without requiring backpack capacity. Broken tools remain excluded by tier policy. Static tests and
+build are `CONFIRMED`; live SPM loot placement and combat equipment arbitration are `UNVERIFIED`.

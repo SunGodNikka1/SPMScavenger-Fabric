@@ -377,11 +377,15 @@ public class GatherResourcesGoal extends Goal {
         // surplus → charcoal demand but empty plan → gather must keep chopping fuel).
         if (mob.level() instanceof ServerLevel server
                 && FurnacePolicy.shouldYieldGatherToSmelt(
-                        server, backpack, mob.getMainHandItem(), cfg)) {
+                        server, backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg)) {
             return false;
         }
         activeIntent = GatherIntentPolicy.evaluate(
-                backpack, mob.getMainHandItem(), cfg, mob.blockPosition().getY());
+                backpack,
+                mob.getMainHandItem(),
+                mob.getOffhandItem(),
+                cfg,
+                mob.blockPosition().getY());
         return activeIntent.shouldGather();
     }
 
@@ -426,6 +430,7 @@ public class GatherResourcesGoal extends Goal {
             activeIntent = GatherIntentPolicy.evaluate(
                     backpack,
                     mob.getMainHandItem(),
+                    mob.getOffhandItem(),
                     ScavengerConfig.get(),
                     mob.blockPosition().getY());
         }

@@ -159,14 +159,19 @@ public final class ScavengerCrafting {
      */
     public static Optional<ConsumerRecipeSpec> activeDiamondToolRecipe(
             Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
+        return activeDiamondToolRecipe(backpack, mainHand, ItemStack.EMPTY, cfg);
+    }
+
+    public static Optional<ConsumerRecipeSpec> activeDiamondToolRecipe(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
         if (!cfg.craftTools) return Optional.empty();
-        ToolTier pick = ToolTierPolicy.tierOfPick(backpack, mainHand);
+        ToolTier pick = ToolTierPolicy.tierOfPick(backpack, mainHand, offHand);
         if (ToolTierPolicy.targetPickTier(cfg).compareTo(ToolTier.DIAMOND) >= 0
                 && pick.compareTo(ToolTier.IRON) >= 0
                 && pick.compareTo(ToolTier.DIAMOND) < 0) {
             return Optional.of(DIAMOND_PICKAXE_RECIPE);
         }
-        ToolTier axe = ToolTierPolicy.tierOfAxe(backpack, mainHand);
+        ToolTier axe = ToolTierPolicy.tierOfAxe(backpack, mainHand, offHand);
         if (ToolTierPolicy.targetAxeTier(cfg).compareTo(ToolTier.DIAMOND) >= 0
                 && axe.compareTo(ToolTier.IRON) >= 0
                 && axe.compareTo(ToolTier.DIAMOND) < 0) {
@@ -178,14 +183,19 @@ public final class ScavengerCrafting {
     /** Single-frontier consumer: pickaxe first, then axe. */
     public static Optional<ConsumerRecipeSpec> activeIronToolRecipe(
             Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
+        return activeIronToolRecipe(backpack, mainHand, ItemStack.EMPTY, cfg);
+    }
+
+    public static Optional<ConsumerRecipeSpec> activeIronToolRecipe(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
         if (!cfg.craftTools) return Optional.empty();
-        ToolTier pick = ToolTierPolicy.tierOfPick(backpack, mainHand);
+        ToolTier pick = ToolTierPolicy.tierOfPick(backpack, mainHand, offHand);
         if (ToolTierPolicy.targetPickTier(cfg).compareTo(ToolTier.IRON) >= 0
                 && pick.compareTo(ToolTier.STONE) >= 0
                 && pick.compareTo(ToolTier.IRON) < 0) {
             return Optional.of(IRON_PICKAXE_RECIPE);
         }
-        ToolTier axe = ToolTierPolicy.tierOfAxe(backpack, mainHand);
+        ToolTier axe = ToolTierPolicy.tierOfAxe(backpack, mainHand, offHand);
         if (ToolTierPolicy.targetAxeTier(cfg).compareTo(ToolTier.IRON) >= 0
                 && axe.compareTo(ToolTier.STONE) >= 0
                 && axe.compareTo(ToolTier.IRON) < 0) {
@@ -208,16 +218,28 @@ public final class ScavengerCrafting {
     }
 
     public static Step nextStep(Container backpack, ScavengerConfig cfg, ItemStack mainHand) {
+        return nextStep(backpack, cfg, mainHand, ItemStack.EMPTY);
+    }
+
+    public static Step nextStep(
+            Container backpack, ScavengerConfig cfg, ItemStack mainHand, ItemStack offHand) {
         return nextStep(
                 backpack,
-                ToolTierPolicy.needsPickUpgrade(backpack, mainHand, cfg),
-                ToolTierPolicy.needsAxeUpgrade(backpack, mainHand, cfg),
+                ToolTierPolicy.needsPickUpgrade(backpack, mainHand, offHand, cfg),
+                ToolTierPolicy.needsAxeUpgrade(backpack, mainHand, offHand, cfg),
                 cfg,
-                mainHand);
+                mainHand,
+                offHand);
     }
 
     public static Step nextStep(Container backpack, boolean needPickaxe, boolean needAxe) {
-        return nextStep(backpack, needPickaxe, needAxe, ScavengerConfig.get(), ItemStack.EMPTY);
+        return nextStep(
+                backpack,
+                needPickaxe,
+                needAxe,
+                ScavengerConfig.get(),
+                ItemStack.EMPTY,
+                ItemStack.EMPTY);
     }
 
     /**
@@ -230,7 +252,12 @@ public final class ScavengerCrafting {
      * them, so a mob does not stand there carving indefinitely.
      */
     private static Step nextStep(
-            Container backpack, boolean needPickaxe, boolean needAxe, ScavengerConfig cfg, ItemStack mainHand) {
+            Container backpack,
+            boolean needPickaxe,
+            boolean needAxe,
+            ScavengerConfig cfg,
+            ItemStack mainHand,
+            ItemStack offHand) {
         int fuel = count(backpack, Items.COAL) + count(backpack, Items.CHARCOAL);
         int sticks = count(backpack, Items.STICK);
         int planks = countTag(backpack, true);
@@ -241,13 +268,15 @@ public final class ScavengerCrafting {
             return Step.MAKE_TORCHES;
         }
         if (needPickaxe) {
-            Step step = towardPickUpgrade(backpack, mainHand, planks, sticks, logs, cobble, cfg);
+            Step step = towardPickUpgrade(
+                    backpack, mainHand, offHand, planks, sticks, logs, cobble, cfg);
             if (step != Step.NOTHING) {
                 return step;
             }
         }
         if (needAxe) {
-            Step step = towardAxeUpgrade(backpack, mainHand, planks, sticks, logs, cobble, cfg);
+            Step step = towardAxeUpgrade(
+                    backpack, mainHand, offHand, planks, sticks, logs, cobble, cfg);
             if (step != Step.NOTHING) {
                 return step;
             }
@@ -288,12 +317,13 @@ public final class ScavengerCrafting {
     private static Step towardPickUpgrade(
             Container backpack,
             ItemStack mainHand,
+            ItemStack offHand,
             int planks,
             int sticks,
             int logs,
             int cobble,
             ScavengerConfig cfg) {
-        ToolTier owned = ToolTierPolicy.tierOfPick(backpack, mainHand);
+        ToolTier owned = ToolTierPolicy.tierOfPick(backpack, mainHand, offHand);
         ToolTier target = ToolTierPolicy.targetPickTier(cfg);
         if (owned.compareTo(target) >= 0) {
             return Step.NOTHING;
@@ -316,12 +346,13 @@ public final class ScavengerCrafting {
     private static Step towardAxeUpgrade(
             Container backpack,
             ItemStack mainHand,
+            ItemStack offHand,
             int planks,
             int sticks,
             int logs,
             int cobble,
             ScavengerConfig cfg) {
-        ToolTier owned = ToolTierPolicy.tierOfAxe(backpack, mainHand);
+        ToolTier owned = ToolTierPolicy.tierOfAxe(backpack, mainHand, offHand);
         ToolTier target = ToolTierPolicy.targetAxeTier(cfg);
         if (owned.compareTo(target) >= 0) {
             return Step.NOTHING;

@@ -152,4 +152,30 @@ class ToolTierPolicyTest {
 
         assertTrue(ToolTierPolicy.cobbleBelowTarget(backpack, woodenPick, cfg));
     }
+
+    @Test
+    void lootedDiamondPickInOffHandSatisfiesDiamondOwnership() {
+        SimpleContainer backpack = new SimpleContainer(BACKPACK_SIZE);
+        ScavengerConfig cfg = new ScavengerConfig();
+        cfg.maxPickTier = ToolTier.DIAMOND;
+        ItemStack offHand = new ItemStack(Items.DIAMOND_PICKAXE);
+
+        assertEquals(
+                ToolTier.DIAMOND,
+                ToolTierPolicy.tierOfPick(backpack, ItemStack.EMPTY, offHand));
+        assertFalse(ToolTierPolicy.needsPickUpgrade(
+                backpack, ItemStack.EMPTY, offHand, cfg));
+    }
+
+    @Test
+    void brokenDiamondPickInOffHandDoesNotSatisfyOwnership() {
+        SimpleContainer backpack = new SimpleContainer(BACKPACK_SIZE);
+        ScavengerConfig cfg = new ScavengerConfig();
+        cfg.maxPickTier = ToolTier.DIAMOND;
+        ItemStack broken = new ItemStack(Items.DIAMOND_PICKAXE);
+        broken.setDamageValue(broken.getMaxDamage());
+
+        assertTrue(ToolTierPolicy.needsPickUpgrade(
+                backpack, ItemStack.EMPTY, broken, cfg));
+    }
 }

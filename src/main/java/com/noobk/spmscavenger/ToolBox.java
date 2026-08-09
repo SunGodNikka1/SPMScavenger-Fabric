@@ -42,9 +42,10 @@ public final class ToolBox {
         return bestSpeed(mob, state) > USEFUL_SPEED;
     }
 
-    /** The best destroy speed available from the main hand or the backpack. */
+    /** The best destroy speed available from either hand or the backpack. */
     public static float bestSpeed(Mob mob, BlockState state) {
         float best = usefulSpeed(mob.getMainHandItem(), state);
+        best = Math.max(best, usefulSpeed(mob.getOffhandItem(), state));
         Container backpack = PlayerMobs.backpack(mob);
         if (backpack != null) {
             for (int i = 0; i < backpack.getContainerSize(); i++) {
@@ -60,7 +61,9 @@ public final class ToolBox {
      * the mob from picking a weapon it is about to need.
      */
     private static float usefulSpeed(ItemStack stack, BlockState state) {
-        if (stack.isEmpty() || !stack.isCorrectToolForDrops(state)) {
+        if (stack.isEmpty()
+                || (stack.isDamageableItem() && stack.getDamageValue() >= stack.getMaxDamage())
+                || !stack.isCorrectToolForDrops(state)) {
             return 1.0F;
         }
         return stack.getDestroySpeed(state);
@@ -70,8 +73,8 @@ public final class ToolBox {
      * Puts the best owned tool for {@code state} in the main hand, returning true if the mob is now
      * holding something better than its fist.
      *
-     * <p>A no-op when the held item is already the best option, or when the backpack is too full to
-     * take what is being put away.
+     * <p>A no-op when the held item is already the best option. An off-hand winner swaps hands
+     * losslessly; a backpack winner still requires room for the prior main-hand item.
      */
     public static boolean equipFor(Mob mob, BlockState state) {
         Container backpack = PlayerMobs.backpack(mob);
@@ -79,9 +82,10 @@ public final class ToolBox {
             return usefulSpeed(mob.getMainHandItem(), state) > USEFUL_SPEED;
         }
         float held = usefulSpeed(mob.getMainHandItem(), state);
+        float offHand = usefulSpeed(mob.getOffhandItem(), state);
 
         int bestSlot = -1;
-        float bestSpeed = held;
+        float bestSpeed = Math.max(held, offHand);
         for (int i = 0; i < backpack.getContainerSize(); i++) {
             float speed = usefulSpeed(backpack.getItem(i), state);
             if (speed > bestSpeed) {
@@ -90,6 +94,15 @@ public final class ToolBox {
             }
         }
         if (bestSlot < 0) {
+            if (offHand > held) {
+                // A looted tool may be equipped in the off hand by the host mod. Swap hands
+                // directly so mining does not depend on spare backpack capacity.
+                ItemStack oldMain = mob.getMainHandItem().copy();
+                ItemStack newMain = mob.getOffhandItem().copy();
+                mob.setItemSlot(EquipmentSlot.MAINHAND, newMain);
+                mob.setItemSlot(EquipmentSlot.OFFHAND, oldMain);
+                return offHand > USEFUL_SPEED;
+            }
             return held > USEFUL_SPEED; // already holding the best there is
         }
 

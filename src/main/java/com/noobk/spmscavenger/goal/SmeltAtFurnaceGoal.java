@@ -81,7 +81,8 @@ public class SmeltAtFurnaceGoal extends Goal {
         }
 
         Optional<FurnacePolicy.SmeltPlan> planned =
-                FurnacePolicy.plan(server, backpack, mob.getMainHandItem(), cfg);
+                FurnacePolicy.plan(
+                        server, backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg);
         if (planned.isEmpty()) {
             return false;
         }
@@ -182,7 +183,9 @@ public class SmeltAtFurnaceGoal extends Goal {
         }
 
         if (plan == null) {
-            plan = FurnacePolicy.plan(server, backpack, mob.getMainHandItem(), cfg).orElse(null);
+            plan = FurnacePolicy.plan(
+                            server, backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg)
+                    .orElse(null);
             if (plan == null) {
                 stop();
                 return;

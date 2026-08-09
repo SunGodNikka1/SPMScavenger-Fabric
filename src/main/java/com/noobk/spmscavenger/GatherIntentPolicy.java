@@ -87,7 +87,16 @@ public final class GatherIntentPolicy {
 
     public static GatherIntent evaluate(
             Container backpack, ItemStack mainHand, ScavengerConfig cfg, int mobBlockY) {
-        return evaluate(backpack, mainHand, cfg, mobBlockY, stack -> stack.is(ItemTags.LOGS));
+        return evaluate(backpack, mainHand, ItemStack.EMPTY, cfg, mobBlockY);
+    }
+
+    public static GatherIntent evaluate(
+            Container backpack,
+            ItemStack mainHand,
+            ItemStack offHand,
+            ScavengerConfig cfg,
+            int mobBlockY) {
+        return evaluate(backpack, mainHand, offHand, cfg, mobBlockY, stack -> stack.is(ItemTags.LOGS));
     }
 
     static GatherIntent evaluate(
@@ -96,14 +105,24 @@ public final class GatherIntentPolicy {
             ScavengerConfig cfg,
             int mobBlockY,
             Predicate<ItemStack> isLog) {
+        return evaluate(backpack, mainHand, ItemStack.EMPTY, cfg, mobBlockY, isLog);
+    }
+
+    static GatherIntent evaluate(
+            Container backpack,
+            ItemStack mainHand,
+            ItemStack offHand,
+            ScavengerConfig cfg,
+            int mobBlockY,
+            Predicate<ItemStack> isLog) {
         EnumSet<Resource> resources = EnumSet.noneOf(Resource.class);
 
         boolean wantsTorches =
                 ScavengerCrafting.count(backpack, Items.TORCH) < cfg.torchStockTarget;
         boolean wantsPickUpgrade =
-                cfg.craftTools && ToolTierPolicy.needsPickUpgrade(backpack, mainHand, cfg);
+                cfg.craftTools && ToolTierPolicy.needsPickUpgrade(backpack, mainHand, offHand, cfg);
         boolean wantsAxeUpgrade =
-                cfg.craftTools && ToolTierPolicy.needsAxeUpgrade(backpack, mainHand, cfg);
+                cfg.craftTools && ToolTierPolicy.needsAxeUpgrade(backpack, mainHand, offHand, cfg);
 
         if (wantsTorches || wantsPickUpgrade || wantsAxeUpgrade) {
             resources.add(Resource.LOGS);
@@ -111,14 +130,14 @@ public final class GatherIntentPolicy {
         if (wantsTorches) {
             resources.add(Resource.COAL);
         }
-        if (cfg.craftTools && ToolTierPolicy.cobbleBelowTarget(backpack, mainHand, cfg)) {
+        if (cfg.craftTools && ToolTierPolicy.cobbleBelowTarget(backpack, mainHand, offHand, cfg)) {
             resources.add(Resource.COBBLESTONE);
         }
-        if (cfg.craftTools && WorkDemandPolicy.rawIronDeficit(backpack, mainHand, cfg) > 0) {
+        if (cfg.craftTools && WorkDemandPolicy.rawIronDeficit(backpack, mainHand, offHand, cfg) > 0) {
             resources.add(Resource.RAW_IRON);
         }
         if (cfg.craftTools
-                && WorkDemandPolicy.diamondDeficit(backpack, mainHand, cfg, mobBlockY) > 0) {
+                && WorkDemandPolicy.diamondDeficit(backpack, mainHand, offHand, cfg, mobBlockY) > 0) {
             resources.add(Resource.DIAMOND);
         }
 
@@ -139,7 +158,9 @@ public final class GatherIntentPolicy {
         }
 
         return new GatherIntent(
-                resources, wealthContexts, ScavengerCrafting.nextStep(backpack, cfg, mainHand));
+                resources,
+                wealthContexts,
+                ScavengerCrafting.nextStep(backpack, cfg, mainHand, offHand));
     }
 
     /** Gather resources map onto wealth categories; the two enums are deliberately separate. */

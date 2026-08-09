@@ -140,8 +140,10 @@ public class CraftTorchesGoal extends Goal {
      */
     private ScavengerCrafting.Step chooseStep(ScavengerConfig cfg, Container backpack) {
         boolean stocked = ScavengerCrafting.count(backpack, Items.TORCH) >= cfg.torchStockTarget;
-        boolean needPickaxe = ToolTierPolicy.needsPickUpgrade(backpack, mob.getMainHandItem(), cfg);
-        boolean needAxe = ToolTierPolicy.needsAxeUpgrade(backpack, mob.getMainHandItem(), cfg);
+        boolean needPickaxe = ToolTierPolicy.needsPickUpgrade(
+                backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg);
+        boolean needAxe = ToolTierPolicy.needsAxeUpgrade(
+                backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg);
 
         if (stocked && !needPickaxe && !needAxe) {
             // Fully equipped: spend the surplus on a campfire to sit around, never before.
@@ -152,7 +154,8 @@ public class CraftTorchesGoal extends Goal {
             }
             return ScavengerCrafting.Step.NOTHING;
         }
-        return ScavengerCrafting.nextStep(backpack, cfg, mob.getMainHandItem());
+        return ScavengerCrafting.nextStep(
+                backpack, cfg, mob.getMainHandItem(), mob.getOffhandItem());
     }
 
     // ---- Crafting table ---------------------------------------------------

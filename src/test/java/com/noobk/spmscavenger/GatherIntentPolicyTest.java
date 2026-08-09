@@ -77,4 +77,24 @@ class GatherIntentPolicyTest {
         assertTrue(intent.hasDemand());
         assertFalse(intent.shouldGather());
     }
+
+    @Test
+    void lootedDiamondPickInOffHandSuppressesRedundantPickProgression() {
+        ScavengerConfig cfg = new ScavengerConfig();
+        cfg.maxPickTier = ToolTier.DIAMOND;
+        cfg.maxAxeTier = ToolTier.NONE;
+        cfg.torchStockTarget = 0;
+        SimpleContainer pack = new SimpleContainer(8);
+
+        GatherIntentPolicy.GatherIntent intent = GatherIntentPolicy.evaluate(
+                pack,
+                ItemStack.EMPTY,
+                new ItemStack(Items.DIAMOND_PICKAXE),
+                cfg,
+                0);
+
+        assertFalse(intent.wants(GatherIntentPolicy.Resource.RAW_IRON));
+        assertFalse(intent.wants(GatherIntentPolicy.Resource.DIAMOND));
+        assertFalse(intent.shouldGather());
+    }
 }

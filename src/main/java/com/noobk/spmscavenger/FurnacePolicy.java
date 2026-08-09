@@ -77,7 +77,12 @@ public final class FurnacePolicy {
     }
 
     public static SmeltDemand demand(Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
-        return WorkDemandPolicy.select(backpack, mainHand, cfg)
+        return demand(backpack, mainHand, ItemStack.EMPTY, cfg);
+    }
+
+    public static SmeltDemand demand(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
+        return WorkDemandPolicy.select(backpack, mainHand, offHand, cfg)
                 .map(d -> d.payload().materialKey().equals(BuiltInRegistries.ITEM.getKey(Items.CHARCOAL))
                         ? SmeltDemand.CHARCOAL
                         : SmeltDemand.IRON)
@@ -180,7 +185,17 @@ public final class FurnacePolicy {
     public static Optional<SmeltPlan> plan(
             Container backpack, ItemStack mainHand, ScavengerConfig cfg,
             RecipeLookup recipes, FuelLookup fuels) {
-        return plan(backpack, cfg, demand(backpack, mainHand, cfg), recipes, fuels);
+        return plan(backpack, mainHand, ItemStack.EMPTY, cfg, recipes, fuels);
+    }
+
+    public static Optional<SmeltPlan> plan(
+            Container backpack,
+            ItemStack mainHand,
+            ItemStack offHand,
+            ScavengerConfig cfg,
+            RecipeLookup recipes,
+            FuelLookup fuels) {
+        return plan(backpack, cfg, demand(backpack, mainHand, offHand, cfg), recipes, fuels);
     }
 
     /** Production entry: live {@link RecipeManager} + furnace fuel map. */
@@ -190,7 +205,16 @@ public final class FurnacePolicy {
 
     public static Optional<SmeltPlan> plan(
             ServerLevel level, Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
-        return plan(backpack, mainHand, cfg, liveRecipes(level), liveFuels());
+        return plan(level, backpack, mainHand, ItemStack.EMPTY, cfg);
+    }
+
+    public static Optional<SmeltPlan> plan(
+            ServerLevel level,
+            Container backpack,
+            ItemStack mainHand,
+            ItemStack offHand,
+            ScavengerConfig cfg) {
+        return plan(backpack, mainHand, offHand, cfg, liveRecipes(level), liveFuels());
     }
 
     /**
@@ -205,10 +229,19 @@ public final class FurnacePolicy {
 
     public static boolean shouldYieldGatherToSmelt(
             ServerLevel level, Container backpack, ItemStack mainHand, ScavengerConfig cfg) {
-        if (!cfg.smeltEnabled || demand(backpack, mainHand, cfg) == SmeltDemand.NONE) {
+        return shouldYieldGatherToSmelt(level, backpack, mainHand, ItemStack.EMPTY, cfg);
+    }
+
+    public static boolean shouldYieldGatherToSmelt(
+            ServerLevel level,
+            Container backpack,
+            ItemStack mainHand,
+            ItemStack offHand,
+            ScavengerConfig cfg) {
+        if (!cfg.smeltEnabled || demand(backpack, mainHand, offHand, cfg) == SmeltDemand.NONE) {
             return false;
         }
-        return plan(level, backpack, mainHand, cfg).isPresent();
+        return plan(level, backpack, mainHand, offHand, cfg).isPresent();
     }
 
     public static RecipeLookup liveRecipes(ServerLevel level) {
