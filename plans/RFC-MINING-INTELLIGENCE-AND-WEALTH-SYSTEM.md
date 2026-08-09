@@ -879,6 +879,119 @@ the director/flagless observer (it exists only in `ExploringGoal`). Full trace a
 protected MOVE ownership to prevent, pause, or revoke assignment. Do not proceed to the Loop-D
 tunnel consumer while this high-severity C3 objection remains unresolved.
 
+#### MI-14C3-R1 — Protected Interruption Lease Semantics — `PROPOSED / REOPEN_REQUESTED`
+
+**User review accepted:** C2's `PROTECTED_INTERRUPT` answer is correct for arbitration and
+incomplete for lease accounting. The classifier currently collapses two independent questions:
+
+| Question | Protected answer |
+| --- | --- |
+| May mining force this holder to yield? | **No** |
+| Is mining physically available while this holder owns MOVE? | **Also no** — must become a lease fact |
+
+Do not convert all protected work to ordinary CONTENTION. Preserve two dimensions:
+
+| Holder | Arbitration | Proposed lease meaning |
+| --- | --- | --- |
+| Controlled descent | `ALLOW` | executing |
+| Gather/smelt/follow/unknown ordinary MOVE | `YIELD` or non-protected | `CONTENTION` |
+| Environmental escape / shelter / train recovery | `PROTECTED` | `SAFETY_RECOVERY` explicit pause |
+| StayNear / persistent player command | `PROTECTED` | prevent assignment or hard `COMMAND_CONSTRAINT → PLAYER_ORDER` revoke |
+| Combat | `PROTECTED` | existing `COMBAT_TARGET`; do not duplicate |
+
+`SAFETY_RECOVERY` cannot simply reuse the current TEMPORARY policy unchanged: TEMPORARY revokes
+after 1200 ticks, so C3-F1's >2400-tick recovery could never resume. It needs an explicit pause
+lifetime policy (or a separately justified safety bound) distinct from combat grace.
+
+The mapping audit must also inspect host safety goals not currently labelled
+`PROTECTED_INTERRUPT`: `FireBucketGoal` and `FleeFromCategoryGoal` are registered above mining and
+currently fall through to unknown/CONTENTION. That pauses a started C3 clock but can expire a
+never-started C1 lease after 600 ticks. Do not claim the R1 taxonomy complete until every priority
+0–2 MOVE holder in the pinned SPM goal registration has an intentional lease meaning.
+
+The conflict scan must not stop at MOVE. `ControlledDescentGoal` owns `MOVE + LOOK`, while pinned
+SPM `EatFoodGoal` is priority 3 and owns `LOOK` only. If eating already runs, equal-priority
+replacement is not guaranteed and descent can fail admission while `MoveContentionPolicy` sees no
+holder (`CODE_CONFIRMED` flags/registration; equal-priority scheduler result
+`GAME_MECHANICS_INFERRED` pending mapped `WrappedGoal` body/runtime). R1 must evaluate intersection
+with the executor's complete required flag set, while ignoring truly flagless readout helpers.
+
+**Required invariants:**
+
+1. `PROTECTED != PREEMPTIBLE`: mining never forces safety, recovery, combat, or commands to yield.
+2. `PROTECTED != EXECUTION_AVAILABLE`: a protected MOVE owner cannot resolve to blocker `NONE`.
+3. Safety/recovery pauses both the progress clock and, before first start, the start-admission clock.
+4. A persistent command restriction cannot retain an incompatible assignment indefinitely.
+5. Combat retains its existing blocker and temporary-grace semantics.
+6. Blocker transitions settle each pause episode once; protected→combat→protected neither loses nor
+   duplicates time.
+
+The pre-start clause requires explicit accounting. Reusing only `progressPausedTicks` is
+insufficient because `MiningExecutionLease.recordBlocker` deliberately accumulates it only after
+`everStarted`. Candidate implementation: add persisted `startPausedTicks`, and evaluate the C1
+contention/start window as `now - assignedAt - startPausedTicks`. Mutating historical `assignedAt`
+is rejected.
+
+**Competing repair options:**
+
+| Option | Design | Benefit | Risk / decision |
+| --- | --- | --- | --- |
+| **A — typed lease blockers (recommended)** | Add `SAFETY_RECOVERY` with explicit pause semantics and `COMMAND_CONSTRAINT` with assignment prevention / `PLAYER_ORDER` revoke; keep arbitration classification separate | Preserves meaning and diagnoses player commands correctly | More enum/policy branches; every protected class must be mapped and tested |
+| B — scheduler effect record | Return `{preemptibility, leaseImpact}` from one classifier | Compiler-enforces the two axes and scales to more goal families | Larger C2 refactor for a small current taxonomy |
+| C — all protected → CONTENTION | Reuses existing pause | Small | **Rejected:** erases safety/command semantics and makes arbitration diagnostics misleading |
+
+**Progress-vs-total-budget companion repair:** the lease arithmetic is sound, but C3 must have an
+observable interval before the 2400-tick absolute project cap. Preferred direction is a progress
+window justified from the maximum 200-tick single-block break plus bounded one-step navigation and
+observer/replan allowance, strictly below 2400. Preserve the absolute project cap; specify that it
+may legitimately win only when less than one full progress window remains. Alternative removal of
+the tick cap is rejected unless another absolute lifetime bound replaces it. Exact timeout remains
+`CONTESTED` pending evidence-based selection; do not cargo-cult a new constant.
+
+**Falsification matrix:**
+
+| ID | Scenario | Must happen | Must not |
+| --- | --- | --- | --- |
+| C3-F1 | ACTIVE descent; environmental escape owns MOVE beyond the progress window | C3 pauses; clear escape resumes remaining window | `NO_PROGRESS` during safety recovery |
+| C3-F2 | ASSIGNED, never started; protected recovery owns MOVE beyond 600 ticks | Explicit suspended blocker and paused start clock | perpetual `NONE/AUTHORIZE` or immediate stale C1 expiry after clear |
+| C3-F3 | Persistent StayNear/player command | Mining does not preempt; assignment prevented or ends `PLAYER_ORDER` | zombie project or return↔dig loop |
+| C3-F4 | Protected interruption → NONE | Duration excluded exactly once | double pause credit |
+| C3-F5 | Protected → combat → protected | Separate blocker episode/grace clocks remain correct | lost/duplicated pause or combat reclassified |
+| C3-F6 | Early active denied break with ample total budget remaining | `NO_PROGRESS` occurs before total-budget terminal | isolated policy pass with unreachable integrated outcome |
+| C3-F7 | Priority-3 LOOK-only `EatFoodGoal` runs before never-started descent | Explicit scheduler blocker/pause and later clean admission | blocker `NONE` because the scan inspects MOVE only |
+
+**Pinned priority 0–2/3 conflict evidence:** FireBucket, CommandedAction, TrainRecovery,
+FleeFromCategory, SkepticalWatch, FriendlyGreet, DoorOperation, TNT/end-crystal/weapon combat,
+SeekAmmo, FollowLovedOne, and StayNear declare MOVE+LOOK; PlayerMobDoor/DigThrough/BlockArrows are
+flagless; EatFood declares LOOK only. Final mapping must distinguish safety, explicit command,
+combat, social reflex, and ordinary work rather than infer meaning solely from priority.
+
+**Proposed complete mapping for the pinned host version:**
+
+| Goal family | Executor flag conflict | Lease impact | Reason |
+| --- | --- | --- | --- |
+| Float | JUMP only | none | Can coexist with descent's MOVE+LOOK |
+| FireBucket, EnvironmentalEscape, Flee, SeekShelter, TrainRecovery | MOVE/LOOK | protected pause | Immediate safety/recovery; mining never preempts |
+| CommandedAction, StayNear | MOVE/LOOK | command prevent/revoke `PLAYER_ORDER` | Explicit or persistent player authority outranks autonomous mining |
+| SkepticalWatch, FriendlyGreet, DoorOperation | MOVE/LOOK | protected finite pause | Host priority-1 reflex deliberately interrupts ordinary tasks |
+| Weapon/TNT/crystal combat | MOVE/LOOK | existing `COMBAT_TARGET` when target exists; protected combat pause fallback otherwise | Preserve combat semantics |
+| SeekAmmo, FollowLovedOne, ordinary host/addon work | MOVE/LOOK | CONTENTION | Non-safety work may be released by the bounded start lease |
+| EatFood | LOOK | protected finite pause | Survival action conflicts with descent LOOK despite no MOVE |
+| PlayerMobDoor, DigThrough readout, BlockArrows | none | none | No scheduler conflict |
+
+**Proposed progress window: 400 ticks.** Evidence: one physical progress interval contains at most
+one `MAX_BREAK_TICKS=200` block attempt before a successful-break mark; the project's existing
+one-target approach bounds are 200 ticks for gather/craft/smelt/campfire, while a stair move is only
+one block forward/down. `400 = max break 200 + conservative approach/replan 200`, is strictly below
+the 2400 absolute project cap, and remains tick-time (low TPS lengthens wall time rather than causing
+false expiry). Alternative 600 provides more tolerance but delays recovery without a known legal
+single-step action requiring it. Dynamic remaining-budget windows were rejected as harder to
+diagnose. This value is **PROPOSED, not LOCKED**, pending user/peer acceptance and integrated RED
+tests.
+
+**Status:** design direction `STRONGLY_SUPPORTED`; task remains `REOPEN_REQUESTED`, not implementation
+ready, until the proposed 400-tick window and goal/flag→lease mapping are locked.
+
 #### Non-goals (`LOCKED`)
 
 - No progress lease for modes without an executor (tunnel search deferred).
@@ -2706,6 +2819,7 @@ boundary. Focused tests and `gradlew.bat clean build` pass (148/148); runtime re
 | MI-14C1 | P8 | Assignment/start lease and revocation | **`IMPLEMENTED`** |
 | MI-14C2 | P8 | Intent arbitration + scheduler contention | **`IMPLEMENTED`** (task-29 repair; runtime `UNVERIFIED`) |
 | MI-14C3 | P8 | Observable-progress lease | code `IMPLEMENTED`; **MAIBS-1 `FAIL` — repair required** |
+| MI-14C3-R1 | P8 | Protected/conflicting scheduler lease semantics + reachable progress timeout | **`REOPEN_REQUESTED / PROPOSED`** — C3-F1…F7 |
 | MI-15 | P6 | `MiningMemory` store | `BLOCKED` |
 | MI-16 | P9 | `VeinFrontier` + `ResourceTarget` | `BLOCKED` |
 | MI-17 | P9 | Ore utility scoring | `BLOCKED` |
@@ -2831,6 +2945,7 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 | D-MIW-037 | Intent vs blocker separation | **`CONSENSUS`** | `ExecutionIntent` ≠ `ExecutionBlocker`; `CONTENTION` is scheduler observation, not intent |
 | D-MIW-038 | Non-exclusive handoffs | **`CONSENSUS`** | `TUNNEL_HANDOFF_PENDING` arbitration `NEUTRAL` until executor exists; do not consume transition |
 | D-MIW-039 | Start vs progress lease | **`CONSENSUS`** | `lastExecutionProgressAt` + observable dig events only; pause during `TEMPORARY`/`CONTENTION`; revoke `NO_PROGRESS` |
+| D-MIW-040 | Protected arbitration vs lease availability | **`PROPOSED / REOPEN_REQUESTED`** | Preserve non-preemptibility while mapping safety to explicit pause and commands to prevent/revoke; add pre-start pause accounting |
 
 ---
 
@@ -2950,6 +3065,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 | Date | Agent | Change |
 | --- | --- | --- |
 | 2026-08-09 | Agent_Codex | **MI-14C3 MAIBS-1 `FAIL`** — active 2400-tick total budget shadows strict >2400 progress timeout; protected MOVE owners bypass contention without another blocker; three NOT FOUND probes; repair required before Loop D |
+| 2026-08-09 | User + Agent_Codex | **MI-14C3-R1 `PROPOSED / REOPEN_REQUESTED`** — split arbitration preemptibility from lease availability; safety pause, command prevent/revoke, separate pre-start pause accounting; all conflicting flags incl. LOOK; C3-F1…F7; evidence-derived 400-tick window proposed, not locked |
 | 2026-08-09 | Agent_Codex | **MI-14C3 `IMPLEMENTED`** — observable break/step/handoff progress; exact TEMPORARY/CONTENTION pause accumulator; NBT v3 + v2 migration; C3-A…E pass; 310-test clean build; runtime `UNVERIFIED`; task-28-report |
 | 2026-08-09 | User + Agent_Cursor | **MAIBS C2 FAIL** — M1 handoff authority lifetime, M2 host MOVE invisible to contention, M3 stop() resurrects revoked project; task-27-maibs-report; task-29-brief (R1/R2/R2); C3 blocked |
 | 2026-08-09 | Agent_Cursor | **MI-14C2 `IMPLEMENTED`** (task-27; MAIBS C2 static `PASS_WITH_CONCERNS` superseded); **MI-14C3 contract LOCKED** (D-MIW-039; C3-A…E; task-28-brief); frontier → Begin MI-14C3 |
@@ -3769,3 +3885,33 @@ protected interruptions can age a started progress clock while the executor cann
 remain valid but cannot support the behavioral claim. Three negative probes and two repair options
 are recorded in `task-28-report.md`. No code, runtime launch, commit, or push was performed during
 this audit.
+
+---
+
+### Contribution — User + Agent_Codex (MI-14C3-R1 repair contract)
+
+**Agent:** User (independent review) + Agent_Codex
+**Date/Session:** 2026-08-09
+**Contribution type:** `REVIEW / DESIGN / OBJECTION`
+
+**Frontier before:** C3 code/unit green; MAIBS failed on budget shadow and protected MOVE invisibility.
+
+**Agreement:** the progress timestamp, exact-once pause settlement, blocker-change handling,
+save/load, and no-fake-progress rules are sound. The protected defect lives at the
+scheduler-classification→lease-blocker boundary. `PROTECTED` correctly means “mining cannot force
+yield”; it must not imply “mining can execute.”
+
+**Refinement:** proposed D-MIW-040 and MI-14C3-R1. Safety/recovery gains explicit pause semantics;
+StayNear/player commands prevent or hard-end incompatible mining; combat remains unchanged. Added
+the missing pre-start pause requirement and C3-F1…F7. The pinned priority audit added LOOK-only
+`EatFoodGoal`, proving the lease must inspect all executor-conflicting flags, not MOVE alone.
+Preserved the separate total-budget objection:
+C3-A passes in isolation but needs an early-stall integrated scenario with enough remaining total
+budget. Exact progress timeout remains contested pending a bound derived from break/navigation cost.
+
+**Frontier after:** R1 architecture direction is strongly supported but not locked. No source
+implementation is authorized by this review. Next decision: choose/justify the progress window and
+lock the exact protected-goal→blocker mapping; only then create the implementation brief.
+
+**RFC fields updated:** MI-14C3 stable topic, task registry, D-MIW-040, C3-F1…F7, progress ledger,
+test matrix, task-28 report, change log, this contribution.

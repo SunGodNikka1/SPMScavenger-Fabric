@@ -164,3 +164,31 @@ Must happen after repair: a denied planned break produces exactly one `NO_PROGRE
 budget exhaustion, while a stay/player order either prevents assignment or records an explicit
 pause/revoke reason. Must not happen: a protected higher-priority MOVE owner is reported as
 admissible `NONE`, or a terminal budget event refreshes progress merely to erase the lease.
+
+### User peer review and R1 refinement
+
+The user independently reproduced the protected-MOVE blind spot and correctly separated the two
+questions C2 had coupled: protected goals must not yield to mining, but their ownership still means
+mining is unavailable. The C3 timestamp/pause arithmetic itself remains accepted; the failures are
+the scheduler→blocker bridge and the separate total-budget ordering.
+
+Repair is tracked as **MI-14C3-R1**. Recommended semantics:
+
+- safety/recovery → explicit pause without mining preemption;
+- persistent StayNear/player command → prevent assignment or revoke `PLAYER_ORDER`;
+- combat → keep `COMBAT_TARGET` unchanged;
+- never-started safety suspension → persist separate start-clock pause credit rather than mutating
+  `assignedAt`;
+- integrated active stall → give C3 an evidence-derived progress window below the absolute project
+  cap, while retaining the absolute cap.
+
+The existing TEMPORARY branch cannot be reused unchanged for safety: it revokes at 1200 ticks and
+would make the >2400-tick resume test impossible. The mapping also needs to include pinned SPM
+priority-0/1 safety goals such as `FireBucketGoal` and `FleeFromCategoryGoal`, which currently fall
+through as unknown/CONTENTION rather than protected safety.
+
+Required tests are C3-F1…F7 in the RFC. F7 covers the pinned priority-3 `EatFoodGoal`: it owns LOOK
+only, while descent requires MOVE+LOOK, so a MOVE-only holder scan can still report false
+availability. The evidence-derived proposal is **400 ticks**: the 200-tick maximum single-block
+break plus the existing 200-tick approach/replan scale used by gather/craft/smelt/campfire. It is
+strictly below the 2400 absolute project cap. This is proposed, not locked or implemented.

@@ -238,3 +238,8 @@ blocker; `StayNearGoal` can therefore prevent start while C1 sees `NONE`. Requir
 | Integrated active stall | Denied planned break reaches `NO_PROGRESS` before total-budget end | C3-A passes only as an isolated policy test | **FAIL — CODE_CONFIRMED** |
 | Protected owner before start | Stay/order either prevents assignment or produces explicit blocker | Unstarted assignment authorized forever while priority-2 MOVE is occupied | **FAIL — CODE_CONFIRMED** |
 | Protected owner after start | Escape/recovery/order has explicit pause/revoke semantics | C3 ages under blocker `NONE` while executor cannot run | **FAIL — CODE_CONFIRMED** |
+
+Repair scenarios are tracked as RFC C3-F1…F7: long environmental escape, never-started recovery,
+persistent StayNear/player command, exact-once protected→NONE pause, protected→combat→protected
+clock separation, an early denied break with enough absolute budget for C3 to win, and priority-3
+LOOK-only `EatFoodGoal` blocking a never-started MOVE+LOOK descent.

@@ -69,6 +69,14 @@ Next execution-control work: repair MI-14C3 budget reachability and protected-MO
 Do not advance to `TunnelSearchGoal` until MAIBS-1 passes. Runtime falsification remains open and
 requires separate Minecraft launch approval.
 
+MI-14C3-R1: PROPOSED / REOPEN_REQUESTED. Recommended design separates arbitration preemptibility
+from lease availability: `SAFETY_RECOVERY` pauses progress + pre-start clocks; persistent
+StayNear/player commands prevent assignment or revoke `PLAYER_ORDER`; combat remains unchanged.
+C3-F1…F7 specified. Proposed progress window is 400 ticks: 200 max single-block break + 200
+conservative one-step approach/replan allowance, below the 2400 absolute cap; not yet locked.
+R1 must scan all executor-conflicting flags, not MOVE alone: priority-3 SPM `EatFoodGoal` owns LOOK
+and can block the descent's LOOK flag without appearing in `MoveContentionPolicy`.
+
 GA-OPINION: RFC created (`PROPOSED` / deferred) — `plans/RFC-ADAPTIVE-OPINION-MOOD-AND-ENGAGEMENT.md`; author Agent_ChatGPT; no implementation
 
 No commits. No Minecraft launches (separate approval required).
