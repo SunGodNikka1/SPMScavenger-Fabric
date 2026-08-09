@@ -30,16 +30,16 @@ class MiningExecutionC3Test {
         MiningExecutionLease lease = MiningExecutionLease
                 .issued(MiningProjectMode.CONTROLLED_DESCENT, 0L)
                 .started(100L)
-                .recordBlocker(ExecutionBlocker.COMBAT_TARGET, 1_000L)
-                .recordBlocker(ExecutionBlocker.NONE, 2_000L);
+                .recordBlocker(ExecutionBlocker.COMBAT_TARGET, 300L)
+                .recordBlocker(ExecutionBlocker.NONE, 1_300L);
 
         assertEquals(1_000L, lease.progressPausedTicks());
         assertTrue(ExecutionLeasePolicy.evaluate(
-                ExecutionBlocker.NONE, lease, 3_500L).authorized(),
-                "100 start + 1000 paused + 2400 lease is still valid at the boundary");
+                ExecutionBlocker.NONE, lease, 1_500L).authorized(),
+                "100 start + 1000 paused + 400 lease is still valid at the boundary");
         assertEquals(MiningProjectEnd.NO_PROGRESS,
                 ExecutionLeasePolicy.evaluate(
-                        ExecutionBlocker.NONE, lease, 3_501L).revokeReason());
+                        ExecutionBlocker.NONE, lease, 1_501L).revokeReason());
     }
 
     @Test
@@ -52,16 +52,16 @@ class MiningExecutionC3Test {
                 started.lastExecutionProgressAt(),
                 "markExecutorStarted must not masquerade as physical progress");
         assertTrue(ExecutionLeasePolicy.evaluate(
-                ExecutionBlocker.NONE, started, 2_501L).revoked(),
+                ExecutionBlocker.NONE, started, 501L).revoked(),
                 "ordinary elapsed ticks cannot refresh the progress lease");
 
         MiningExecutionLease progressed = started.markProgress(2_400L);
         assertEquals(2_400L, progressed.lastExecutionProgressAt());
         assertTrue(ExecutionLeasePolicy.evaluate(
-                ExecutionBlocker.NONE, progressed, 4_800L).authorized());
+                ExecutionBlocker.NONE, progressed, 2_800L).authorized());
         assertEquals(MiningProjectEnd.NO_PROGRESS,
                 ExecutionLeasePolicy.evaluate(
-                        ExecutionBlocker.NONE, progressed, 4_801L).revokeReason());
+                        ExecutionBlocker.NONE, progressed, 2_801L).revokeReason());
     }
 
     @Test
@@ -85,15 +85,15 @@ class MiningExecutionC3Test {
         MiningExecutionLease lease = MiningExecutionLease
                 .issued(MiningProjectMode.CONTROLLED_DESCENT, 0L)
                 .started(100L)
-                .recordBlocker(ExecutionBlocker.CONTENTION, 1_000L)
-                .recordBlocker(ExecutionBlocker.NONE, 5_000L);
+                .recordBlocker(ExecutionBlocker.CONTENTION, 300L)
+                .recordBlocker(ExecutionBlocker.NONE, 4_300L);
 
         assertEquals(4_000L, lease.progressPausedTicks());
         assertTrue(ExecutionLeasePolicy.evaluate(
-                ExecutionBlocker.NONE, lease, 6_500L).authorized());
+                ExecutionBlocker.NONE, lease, 4_500L).authorized());
         assertEquals(MiningProjectEnd.NO_PROGRESS,
                 ExecutionLeasePolicy.evaluate(
-                        ExecutionBlocker.NONE, lease, 6_501L).revokeReason());
+                        ExecutionBlocker.NONE, lease, 4_501L).revokeReason());
     }
 
     @Test
@@ -109,10 +109,10 @@ class MiningExecutionC3Test {
         assertEquals(0L, lease.progressPausedTicks(),
                 "a past suspension must not extend every future progress window");
         assertTrue(ExecutionLeasePolicy.evaluate(
-                ExecutionBlocker.NONE, lease, 3_900L).authorized());
+                ExecutionBlocker.NONE, lease, 1_900L).authorized());
         assertEquals(MiningProjectEnd.NO_PROGRESS,
                 ExecutionLeasePolicy.evaluate(
-                        ExecutionBlocker.NONE, lease, 3_901L).revokeReason());
+                        ExecutionBlocker.NONE, lease, 1_901L).revokeReason());
     }
 
     @Test
@@ -134,12 +134,15 @@ class MiningExecutionC3Test {
                 .started(20L)
                 .save();
         v2.remove("leaseV3");
+        v2.remove("leaseV4");
         v2.remove("lastProgressAt");
         v2.remove("progressPausedTicks");
+        v2.remove("startPausedTicks");
 
         MiningExecutionLease migrated = MiningExecutionLease.load(v2);
         assertEquals(MiningExecutionLease.NO_PROGRESS_RECORDED,
                 migrated.lastExecutionProgressAt());
         assertEquals(0L, migrated.progressPausedTicks());
+        assertEquals(0L, migrated.startPausedTicks());
     }
 }

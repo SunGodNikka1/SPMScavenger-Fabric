@@ -9,6 +9,9 @@ import net.minecraft.server.level.ServerLevel;
 import com.noobk.spmscavenger.mining.NaturalDescentStatus;
 import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.mining.MiningDirector;
+import com.noobk.spmscavenger.mining.ExecutionBlocker;
+import com.noobk.spmscavenger.mining.ExecutionIntent;
+import com.noobk.spmscavenger.mining.SchedulerConflictPolicy;
 import com.noobk.spmscavenger.DescentHeadingPolicy;
 import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.goal.AnticsGoal;
@@ -144,6 +147,11 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
                 || !level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
             return;
         }
+        // Persistent player authority prevents assignment even while StayNearGoal is not actively
+        // pathing. UNAVAILABLE fails closed so an SPM API rename cannot silently bypass the order.
+        if (PlayerMobs.stayAnchorState(mob) != PlayerMobs.StayAnchorState.ABSENT) {
+            return;
+        }
         ExploringGoal exploring = ControlledDescentGoal.exploringGoalOf(mob);
         if (exploring == null) {
             return;
@@ -152,6 +160,16 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         NaturalDescentStatus status = exploring.naturalDescentStatus(level, now);
         if (!MiningDirector.mayStartControlledDescent(
                 store, mob.getUUID(), status, readiness.hasDescentPressure(), now)) {
+            return;
+        }
+        ExecutionBlocker admissionBlocker = SchedulerConflictPolicy.resolveBlocker(
+                mob,
+                null,
+                store,
+                now,
+                EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK),
+                ExecutionIntent.CONTROLLED_DESCENT);
+        if (SchedulerConflictPolicy.preventsAssignment(admissionBlocker)) {
             return;
         }
         DescentHeadingPolicy.Heading heading = DescentHeadingPolicy.chooseBest(

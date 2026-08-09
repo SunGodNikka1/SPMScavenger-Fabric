@@ -106,7 +106,8 @@ class MiningExecutionRepairTest {
         assertTrue(MoveHolderClassifier.blocksMiningExecution(
                 ExecutionIntent.CONTROLLED_DESCENT, MoveHolderClassification.UNKNOWN_MOVE_HOLDER));
         assertFalse(MoveHolderClassifier.blocksMiningExecution(
-                ExecutionIntent.CONTROLLED_DESCENT, MoveHolderClassification.PROTECTED_INTERRUPT));
+                ExecutionIntent.CONTROLLED_DESCENT,
+                MoveHolderClassification.PROTECTED_SAFETY_RECOVERY));
     }
 
     @Test

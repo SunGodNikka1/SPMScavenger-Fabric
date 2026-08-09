@@ -15,6 +15,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.EnumSet;
 
 /**
  * MI-14B — owns when a {@link MiningProject} starts and how it ends.
@@ -151,6 +152,14 @@ public final class MiningDirector {
         if (mob.getTarget() != null) {
             return ExecutionBlocker.COMBAT_TARGET;
         }
+        PlayerMobs.StayAnchorState stayAnchor = PlayerMobs.stayAnchorState(mob);
+        if (stayAnchor == PlayerMobs.StayAnchorState.PRESENT) {
+            return ExecutionBlocker.PLAYER_ORDER;
+        }
+        if (stayAnchor == PlayerMobs.StayAnchorState.UNAVAILABLE) {
+            // Fail closed: an unreadable host order must not be silently overridden by mining.
+            return ExecutionBlocker.FEATURE_DISABLED;
+        }
         if (ToolTierPolicy.tierOfPick(
                         PlayerMobs.backpack(mob), mob.getMainHandItem(), mob.getOffhandItem())
                 == ToolTier.NONE) {
@@ -173,11 +182,12 @@ public final class MiningDirector {
         if (!blocker.permitsExecution()) {
             return blocker;
         }
-        if (MoveContentionPolicy.hasBlockingMoveHolder(
-                mob, callingGoal, store, level.getGameTime())) {
-            return ExecutionBlocker.CONTENTION;
-        }
-        return ExecutionBlocker.NONE;
+        return SchedulerConflictPolicy.resolveBlocker(
+                mob,
+                callingGoal,
+                store,
+                level.getGameTime(),
+                EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
     /**

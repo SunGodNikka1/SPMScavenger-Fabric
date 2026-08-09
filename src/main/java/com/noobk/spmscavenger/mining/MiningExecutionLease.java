@@ -18,6 +18,7 @@ import net.minecraft.nbt.CompoundTag;
  * @param state coarse lifecycle, for logging and for MI-14C3's stale detection
  * @param lastExecutionProgressAt last observable dig progress, or {@link #NO_PROGRESS_RECORDED}
  * @param progressPausedTicks blocker time excluded from the current progress window
+ * @param startPausedTicks protected pre-start time excluded from the admission window
  */
 public record MiningExecutionLease(
         MiningProjectMode mode,
@@ -27,7 +28,8 @@ public record MiningExecutionLease(
         long blockedSince,
         LeaseState state,
         long lastExecutionProgressAt,
-        long progressPausedTicks) {
+        long progressPausedTicks,
+        long startPausedTicks) {
 
     /** Sentinel: the executor has never begun this assignment. */
     public static final long NEVER_STARTED = -1L;
@@ -40,6 +42,7 @@ public record MiningExecutionLease(
 
     private static final String NBT_V2 = "leaseV2";
     private static final String NBT_V3 = "leaseV3";
+    private static final String NBT_V4 = "leaseV4";
 
     public enum LeaseState {
         /** Issued, never executed. Subject to the start lease. */
@@ -53,7 +56,7 @@ public record MiningExecutionLease(
     public static MiningExecutionLease issued(MiningProjectMode mode, long now) {
         return new MiningExecutionLease(
                 mode, now, NEVER_STARTED, ExecutionBlocker.NONE, NOT_BLOCKED, LeaseState.ASSIGNED,
-                NO_PROGRESS_RECORDED, 0L);
+                NO_PROGRESS_RECORDED, 0L, 0L);
     }
 
     public boolean everStarted() {
@@ -70,18 +73,29 @@ public record MiningExecutionLease(
                 return this;
             }
             long paused = settledProgressPause(now);
+            long startPaused = settledStartPause(now);
             return new MiningExecutionLease(
                     mode, assignedAt, executorStartedAt,
                     ExecutionBlocker.NONE, NOT_BLOCKED, state,
-                    lastExecutionProgressAt, paused);
+                    lastExecutionProgressAt, paused, startPaused);
         }
         if (currentBlocker != blocker || blockedSince == NOT_BLOCKED) {
             long paused = settledProgressPause(now);
+            long startPaused = settledStartPause(now);
             return new MiningExecutionLease(
                     mode, assignedAt, executorStartedAt, blocker, now, state,
-                    lastExecutionProgressAt, paused);
+                    lastExecutionProgressAt, paused, startPaused);
         }
         return this;
+    }
+
+    private long settledStartPause(long now) {
+        if (everStarted() || blockedSince == NOT_BLOCKED || !pausesStart(currentBlocker)) {
+            return startPausedTicks;
+        }
+        long episode = Math.max(0L, now - blockedSince);
+        long room = Long.MAX_VALUE - startPausedTicks;
+        return startPausedTicks + Math.min(episode, room);
     }
 
     private long settledProgressPause(long now) {
@@ -95,7 +109,12 @@ public record MiningExecutionLease(
 
     private static boolean pausesProgress(ExecutionBlocker blocker) {
         return blocker.blockerClass() == ExecutionBlocker.BlockerClass.TEMPORARY
-                || blocker.blockerClass() == ExecutionBlocker.BlockerClass.CONTENTION;
+                || blocker.blockerClass() == ExecutionBlocker.BlockerClass.CONTENTION
+                || blocker.blockerClass() == ExecutionBlocker.BlockerClass.PROTECTED_PAUSE;
+    }
+
+    private static boolean pausesStart(ExecutionBlocker blocker) {
+        return blocker.blockerClass() == ExecutionBlocker.BlockerClass.PROTECTED_PAUSE;
     }
 
     public MiningExecutionLease started(long now) {
@@ -103,7 +122,7 @@ public record MiningExecutionLease(
                 ? this
                 : new MiningExecutionLease(
                         mode, assignedAt, now, currentBlocker, blockedSince, LeaseState.ACTIVE,
-                        lastExecutionProgressAt, progressPausedTicks);
+                        lastExecutionProgressAt, progressPausedTicks, startPausedTicks);
     }
 
     /** Records physical or terminal executor progress and starts a fresh progress window. */
@@ -111,7 +130,7 @@ public record MiningExecutionLease(
         return new MiningExecutionLease(
                 mode, assignedAt, executorStartedAt, currentBlocker,
                 blockedSince == NOT_BLOCKED ? NOT_BLOCKED : now,
-                state, now, 0L);
+                state, now, 0L, startPausedTicks);
     }
 
     public MiningExecutionLease suspended() {
@@ -120,7 +139,7 @@ public record MiningExecutionLease(
                 : new MiningExecutionLease(
                         mode, assignedAt, executorStartedAt,
                         currentBlocker, blockedSince, LeaseState.SUSPENDED,
-                        lastExecutionProgressAt, progressPausedTicks);
+                        lastExecutionProgressAt, progressPausedTicks, startPausedTicks);
     }
 
     public MiningExecutionLease resumed() {
@@ -130,7 +149,7 @@ public record MiningExecutionLease(
                 : new MiningExecutionLease(
                         mode, assignedAt, executorStartedAt,
                         currentBlocker, blockedSince, next,
-                        lastExecutionProgressAt, progressPausedTicks);
+                        lastExecutionProgressAt, progressPausedTicks, startPausedTicks);
     }
 
     public CompoundTag save() {
@@ -143,8 +162,10 @@ public record MiningExecutionLease(
         tag.putLong("blockedSince", blockedSince);
         tag.putLong("lastProgressAt", lastExecutionProgressAt);
         tag.putLong("progressPausedTicks", progressPausedTicks);
+        tag.putLong("startPausedTicks", startPausedTicks);
         tag.putBoolean(NBT_V2, true);
         tag.putBoolean(NBT_V3, true);
+        tag.putBoolean(NBT_V4, true);
         return tag;
     }
 
@@ -177,12 +198,16 @@ public record MiningExecutionLease(
         }
         long lastProgressAt = NO_PROGRESS_RECORDED;
         long progressPausedTicks = 0L;
+        long startPausedTicks = 0L;
         if (tag.getBoolean(NBT_V3)) {
             lastProgressAt = tag.getLong("lastProgressAt");
             progressPausedTicks = Math.max(0L, tag.getLong("progressPausedTicks"));
         }
+        if (tag.getBoolean(NBT_V4)) {
+            startPausedTicks = Math.max(0L, tag.getLong("startPausedTicks"));
+        }
         return new MiningExecutionLease(
                 mode, tag.getLong("assignedAt"), startedAt, blocker, blockedSince, state,
-                lastProgressAt, progressPausedTicks);
+                lastProgressAt, progressPausedTicks, startPausedTicks);
     }
 }

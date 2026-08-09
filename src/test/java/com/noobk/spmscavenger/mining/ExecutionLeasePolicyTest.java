@@ -253,6 +253,12 @@ class ExecutionLeasePolicyTest {
             if (blocker.permitsExecution()) {
                 continue;
             }
+            if (blocker.blockerClass() == ExecutionBlocker.BlockerClass.PROTECTED_PAUSE) {
+                assertEquals(ExecutionLeasePolicy.LeaseDecision.SUSPEND,
+                        evaluateSinceAssignment(blocker, false, past).decision(),
+                        "condition-bound safety pauses until the safety owner clears it");
+                continue;
+            }
             assertTrue(evaluateSinceAssignment(blocker, false, past).revoked(),
                     blocker + " could strand a RUNNING project with no execution and no bound");
         }
@@ -268,6 +274,8 @@ class ExecutionLeasePolicyTest {
                 ExecutionBlocker.CAPABILITY_MISSING.blockerClass());
         assertSame(ExecutionBlocker.BlockerClass.CONTENTION,
                 ExecutionBlocker.CONTENTION.blockerClass());
+        assertSame(ExecutionBlocker.BlockerClass.PROTECTED_PAUSE,
+                ExecutionBlocker.SAFETY_RECOVERY.blockerClass());
         assertTrue(ExecutionBlocker.NONE.permitsExecution());
         assertFalse(ExecutionBlocker.CONTENTION.permitsExecution());
     }

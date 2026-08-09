@@ -61,21 +61,14 @@ runtime unverified; verified commit a6e9793)
 MI-14C2: repair complete (R1 commitment + R2 scheduler-wide contention + C1-R2 safe stop;
 MAIBS C2 re-pass PASS_WITH_RUNTIME_UNVERIFIED; 302 tests; task-29-report)
 
-MI-14C3: code implemented, but MAIBS-1 FAIL (task-28; C3-A…E pure tests green; 310 tests).
-Integration defects: active executor's 2400-tick project budget (`>=`) shadows C3's >2400 progress
-timeout; protected MOVE owners are excluded from contention without becoming another blocker.
+MI-14C3: historical task-28 code passed C3-A…E (310 tests) but failed integrated MAIBS because the
+2400 project budget shadowed its old >2400 progress timeout and protected holders were invisible.
+This state is superseded by MI-14C3-R1 below.
 
-Next execution-control work: repair MI-14C3 budget reachability and protected-MOVE classification.
-Do not advance to `TunnelSearchGoal` until MAIBS-1 passes. Runtime falsification remains open and
-requires separate Minecraft launch approval.
-
-MI-14C3-R1: PROPOSED / REOPEN_REQUESTED. Recommended design separates arbitration preemptibility
-from lease availability: `SAFETY_RECOVERY` pauses progress + pre-start clocks; persistent
-StayNear/player commands prevent assignment or revoke `PLAYER_ORDER`; combat remains unchanged.
-C3-F1…F7 specified. Proposed progress window is 400 ticks: 200 max single-block break + 200
-conservative one-step approach/replan allowance, below the 2400 absolute cap; not yet locked.
-R1 must scan all executor-conflicting flags, not MOVE alone: priority-3 SPM `EatFoodGoal` owns LOOK
-and can block the descent's LOOK flag without appearing in `MoveContentionPolicy`.
+MI-14C3-R1: complete with concerns (task-30; required-flag scheduler resolver; condition-bound
+safety pause; player-order prevention/revocation; pre-start pause NBT v4; 400-tick progress lease;
+C3-F1…F7; 321 tests/clean build; MAIBS static PASS; runtime unverified). Post-GREEN review also
+repaired a same-observer CommandedAction revoke→reassign loop. No Tunnel Search work performed.
 
 GA-OPINION: RFC created (`PROPOSED` / deferred) — `plans/RFC-ADAPTIVE-OPINION-MOOD-AND-ENGAGEMENT.md`; author Agent_ChatGPT; no implementation
 

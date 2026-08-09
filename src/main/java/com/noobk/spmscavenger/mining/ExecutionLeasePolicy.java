@@ -23,7 +23,7 @@ public final class ExecutionLeasePolicy {
     public static final int TEMPORARY_GRACE_TICKS = 1200; // 60s
 
     /** Admissible time a started executor may spend without observable dig progress. */
-    public static final int PROGRESS_LEASE_TICKS = 2400;  // 120s
+    public static final int PROGRESS_LEASE_TICKS = 400;   // 20s admissible time
 
     private ExecutionLeasePolicy() {
     }
@@ -72,12 +72,23 @@ public final class ExecutionLeasePolicy {
             long assignedAt,
             long blockedSince,
             long now) {
+        return evaluate(blocker, everStarted, assignedAt, 0L, blockedSince, now);
+    }
+
+    private static LeaseOutcome evaluate(
+            ExecutionBlocker blocker,
+            boolean everStarted,
+            long assignedAt,
+            long startPausedTicks,
+            long blockedSince,
+            long now) {
 
         if (blocker.permitsExecution()) {
             return AUTHORIZE;
         }
 
-        long heldSinceAssignment = Math.max(0L, now - assignedAt);
+        long heldSinceAssignment = Math.max(
+                0L, Math.max(0L, now - assignedAt) - Math.max(0L, startPausedTicks));
 
         switch (blocker.blockerClass()) {
             case HARD -> {
@@ -91,6 +102,11 @@ public final class ExecutionLeasePolicy {
                         ? Math.max(0L, now - blockedSince)
                         : 0L;
                 return blockedFor > TEMPORARY_GRACE_TICKS ? revoke(blocker) : SUSPEND;
+            }
+            case PROTECTED_PAUSE -> {
+                // Condition-bound: safety/recovery owns its own termination. Mining cannot make
+                // the mob less trapped by deleting its assignment after an arbitrary grace.
+                return SUSPEND;
             }
             case CONTENTION -> {
                 // Arbitration (MI-14C2) is what should actually resolve this. Until it exists, an
@@ -118,6 +134,7 @@ public final class ExecutionLeasePolicy {
                 blocker,
                 lease.everStarted(),
                 lease.assignedAt(),
+                lease.startPausedTicks(),
                 lease.blockedSince(),
                 now);
         if (!base.authorized() || !lease.everStarted()) {

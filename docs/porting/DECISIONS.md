@@ -818,3 +818,30 @@ does not. Controlled descent's total project clock also ends at 2400 ticks using
 protected MOVE holders are deliberately excluded from CONTENTION without being represented as a
 different blocker. This decision is therefore **not accepted behaviorally** until timeout ordering
 and protected-interrupt ownership are repaired. See `.superpowers/sdd/task-28-report.md`.
+
+## 2026-08-09 — MI-14C3-R1 separates scheduler arbitration from lease availability
+
+**Decision D-MIW-040 — IMPLEMENTED.** A running goal is now tested against every flag required by
+the designated executor (`MOVE + LOOK` for controlled descent), then mapped independently to a
+lease blocker. Arbitration still decides whether mining may force a goal to yield; it no longer
+stands in for whether mining can physically acquire its flags.
+
+Safety/recovery maps to condition-bound `SAFETY_RECOVERY`: start and progress clocks pause for the
+exact observable episode, mining never preempts it, and the 1200-tick combat grace does not apply.
+Combat retains `COMBAT_TARGET`; eating and short host reflexes remain bounded temporary blockers.
+Persistent stay anchors prevent assignment, and running commanded actions prevent or revoke with
+`PLAYER_ORDER`. Lease NBT v4 persists `startPausedTicks`; historical `assignedAt` is not mutated.
+
+The progress lease is 400 admissible ticks while the total project budget remains 2400 executor
+ticks. A successful block removal marks progress immediately; 400 conservatively exceeds the
+known <=200-tick break operation and leaves tolerance for one-step navigation, replanning, observer
+cadence, and server-tick irregularity. Alternative 600 delayed stall recovery without a known legal
+operation requiring it. A general two-axis scheduler-effect record remains an option if more
+executors make the taxonomy materially larger; mapping all protected work to CONTENTION was
+rejected because it erases safety and player-authority semantics.
+
+Must happen: long observable safety interruption resumes with the exact remaining lease window,
+and an admissibly stuck descent reaches `NO_PROGRESS` before the total cap. Must not happen:
+LOOK-only eating resolves to `NONE`, a player command creates a revoke/reassign loop, or blocker
+changes duplicate pause time. C3-F1…F7 and the full 321-test clean build are `CONFIRMED`; Minecraft
+runtime behavior remains `UNVERIFIED`. Evidence: `.superpowers/sdd/task-30-report.md`.

@@ -28,6 +28,18 @@ public enum ExecutionBlocker {
     /** Survival interrupt placeholder — director classification deferred; not wired in MI-14C2. */
     LOW_FOOD(BlockerClass.TEMPORARY, MiningProjectEnd.LOW_FOOD),
 
+    /** A bounded host reflex (social reaction, door operation, or combat fallback). */
+    HOST_INTERRUPT(BlockerClass.TEMPORARY, MiningProjectEnd.LEASE_EXPIRED),
+
+    /**
+     * Observable safety/recovery work owns required scheduler flags. Mining may neither preempt it
+     * nor infer failure from its duration; the owning safety system decides when recovery ends.
+     */
+    SAFETY_RECOVERY(BlockerClass.PROTECTED_PAUSE, null),
+
+    /** An explicit or persistent player command outranks autonomous mining. */
+    PLAYER_ORDER(BlockerClass.HARD, MiningProjectEnd.PLAYER_ORDER),
+
     /** The feature was switched off. Not the mob's problem to wait out. */
     FEATURE_DISABLED(BlockerClass.HARD, MiningProjectEnd.EXECUTION_UNAVAILABLE),
 
@@ -47,6 +59,7 @@ public enum ExecutionBlocker {
     public enum BlockerClass {
         NONE,
         TEMPORARY,
+        PROTECTED_PAUSE,
         HARD,
         CONTENTION
     }

@@ -1,13 +1,10 @@
 package com.noobk.spmscavenger.mining;
 
-import com.noobk.spmscavenger.mixin.MobGoalSelectorAccessor;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.ai.goal.GoalSelector;
-import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.UUID;
+import java.util.Set;
 
 /**
  * MI-14C2 — detects when an actionable mining intent exists but another goal still holds
@@ -26,30 +23,8 @@ public final class MoveContentionPolicy {
             @Nullable Goal excluded,
             MiningProjectSavedData store,
             long now) {
-        ExecutionIntent intent = ExecutionIntentPolicy.derive(store, mob.getUUID(), now);
-        if (!intent.isActionable()) {
-            return false;
-        }
-        GoalSelector selector = ((MobGoalSelectorAccessor) mob).spmscavenger$getGoalSelector();
-        if (selector == null) {
-            return false;
-        }
-        UUID mobId = mob.getUUID();
-        for (WrappedGoal wrapped : selector.getAvailableGoals()) {
-            if (!wrapped.isRunning()) {
-                continue;
-            }
-            Goal goal = wrapped.getGoal();
-            if (goal == excluded) {
-                continue;
-            }
-            MoveHolderClassification classification =
-                    MoveHolderClassifier.classify(goal, mob, store, mobId, now);
-            if (MoveHolderClassifier.blocksMiningExecution(intent, classification)) {
-                return true;
-            }
-        }
-        return false;
+        return SchedulerConflictPolicy.resolveBlocker(
+                mob, excluded, store, now, Set.of(Goal.Flag.MOVE)) == ExecutionBlocker.CONTENTION;
     }
 
     /** @deprecated use {@link #hasBlockingMoveHolder} */

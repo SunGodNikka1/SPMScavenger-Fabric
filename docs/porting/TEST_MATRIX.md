@@ -217,29 +217,30 @@ animation, save/reload, and multi-mob behavior remain `UNVERIFIED`.
 
 | Check | Must happen | Must not happen | Evidence |
 | --- | --- | --- | --- |
-| Started then stuck | Revoke `NO_PROGRESS` after more than 2400 admissible ticks | Eternal ACTIVE assignment | `MiningExecutionC3Test.c3A_*` `CONFIRMED` (unit); runtime `UNVERIFIED` |
+| Started then stuck | Revoke `NO_PROGRESS` after more than 400 admissible ticks | Eternal ACTIVE assignment | `MiningExecutionC3Test.c3A_*`, C3-F6 `CONFIRMED` (unit); runtime `UNVERIFIED` |
 | Combat pause | Exclude the exact TEMPORARY episode from progress age | Timeout during/promptly after a short combat interruption | `c3B_*` `CONFIRMED`; C1's separate 1200-tick combat grace remains |
 | Observable refresh | Successful planned break and completed step call the progress marker | Goal tick, path replan, rejection, or executor start counts as progress | C3-C test + `ControlledDescentGoal` call-site inspection `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 | Never started | C1 start lease remains the only expiry clock | C3 double revoke or invented progress | `c3D_*` `CONFIRMED` |
-| Contention pause | A completed CONTENTION episode contributes exact paused ticks | Immediate C3 expiry when the MOVE holder yields | `c3E_*` `CONFIRMED`; runtime `UNVERIFIED` |
-| Persistence | v3 round-trip preserves progress/pause; v2 migration records neither | Reload resets or invents progress | C3 persistence/migration tests `CONFIRMED` |
+| Contention pause | A completed CONTENTION episode contributes exact paused ticks | Immediate C3 expiry when a required-flag holder yields | `c3E_*` `CONFIRMED`; runtime `UNVERIFIED` |
+| Protected safety pause | Observable safety/recovery pauses start + progress clocks without mining-side expiry | Safety is preempted or ages C1/C3 | C3-F1/F2/F4/F5 `CONFIRMED` (unit); runtime `UNVERIFIED` |
+| Player authority | Stay anchor prevents assignment; commanded action prevents/revokes `PLAYER_ORDER` | Zombie assignment or revoke→reassign loop | C3-F3 + admission call-path `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| Complete flag set | LOOK-only eating is a bounded blocker for MOVE+LOOK descent | MOVE-only scan returns `NONE` | C3-F7 `CONFIRMED` (unit); real scheduler order `UNVERIFIED` |
+| Persistence | v4 round-trip preserves progress/pre-start pauses; v2/v3 migration invents neither | Reload resets or invents progress | C3 persistence/migration tests `CONFIRMED` |
 
-Build evidence: `gradlew.bat clean build` passed 310 tests with no failures/errors/skips. Runtime
-falsification requires separate launch approval; see `.superpowers/sdd/task-28-report.md`.
+Build evidence: `gradlew.bat clean build` passed 321 tests with no failures/errors. Runtime
+falsification requires separate launch approval; see `.superpowers/sdd/task-30-report.md`.
 
-**MAIBS-1 integration result: FAIL.** These unit rows validate lease arithmetic, but active
-controlled descent has an equal 2400-tick total project budget checked at `>=`, so it emits
-`SEARCH_BUDGET_EXHAUSTED` before C3's strict `>2400` `NO_PROGRESS` threshold. Additionally,
-`PROTECTED_INTERRUPT` MOVE owners are excluded from CONTENTION without being mapped to another
-blocker; `StayNearGoal` can therefore prevent start while C1 sees `NONE`. Required repair tests:
+**MAIBS-1 static integration result: PASS — BEHAVIORALLY_PLAUSIBLE.** R1 makes the progress timeout
+reachable before the 2400-tick total budget, maps protected owners explicitly, and checks the full
+required flag set. Runtime remains `UNVERIFIED`:
 
 | Check | Must happen | Must not happen | Current |
 | --- | --- | --- | --- |
-| Integrated active stall | Denied planned break reaches `NO_PROGRESS` before total-budget end | C3-A passes only as an isolated policy test | **FAIL — CODE_CONFIRMED** |
-| Protected owner before start | Stay/order either prevents assignment or produces explicit blocker | Unstarted assignment authorized forever while priority-2 MOVE is occupied | **FAIL — CODE_CONFIRMED** |
-| Protected owner after start | Escape/recovery/order has explicit pause/revoke semantics | C3 ages under blocker `NONE` while executor cannot run | **FAIL — CODE_CONFIRMED** |
+| Integrated active stall | Denied planned break reaches `NO_PROGRESS` before total-budget end | C3-A passes only as an isolated policy test | **PASS — C3-F6 CODE_CONFIRMED; runtime UNVERIFIED** |
+| Protected owner before start | Stay/order either prevents assignment or produces explicit blocker | Unstarted assignment authorized forever while required flags are occupied | **PASS — C3-F2/F3 CODE_CONFIRMED; runtime UNVERIFIED** |
+| Protected owner after start | Escape/recovery/order has explicit pause/revoke semantics | C3 ages under blocker `NONE` while executor cannot run | **PASS — C3-F1/F4/F5 CODE_CONFIRMED; runtime UNVERIFIED** |
+| LOOK-only owner | Eating blocks full MOVE+LOOK admission and later releases it | MOVE-only scan authorizes descent | **PASS — C3-F7 CODE_CONFIRMED; runtime UNVERIFIED** |
 
-Repair scenarios are tracked as RFC C3-F1…F7: long environmental escape, never-started recovery,
-persistent StayNear/player command, exact-once protected→NONE pause, protected→combat→protected
-clock separation, an early denied break with enough absolute budget for C3 to win, and priority-3
-LOOK-only `EatFoodGoal` blocking a never-started MOVE+LOOK descent.
+Runtime probe must cover: long environmental escape, never-started recovery, persistent
+StayNear/player command, protected→combat→protected, an admissible >400-tick stall, and priority-3
+LOOK-only `EatFoodGoal` blocking then releasing a never-started MOVE+LOOK descent.

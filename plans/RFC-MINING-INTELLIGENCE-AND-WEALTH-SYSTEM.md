@@ -9,7 +9,7 @@
 | **Target progression** | **Vanilla Minecraft 1.21.1 mining + resource wealth** (overworld ore tiers through diamond/deepslate; not Nether/endgame mining in gen-1) |
 | **Scope** | Autonomous *where* to mine, *how much* to stockpile (wealth), prerequisite planning hooks, capability gaps, integration methods, phased plan, validation — **design until implementation authorized** |
 | **Mode** | `PROGRESSIVE_CONTINUATION` (User — Continue the RFC) |
-| **Status** | MI-14C3 code `IMPLEMENTED` (task-28; 310 tests); **MAIBS-1 `FAIL — ARCHITECTURE_DEFECT`** (budget shadow + protected-MOVE blocker gap) |
+| **Status** | MI-14C3-R1 `IMPLEMENTED` (task-30; 321 tests); MAIBS static re-pass `PASS — BEHAVIORALLY_PLAUSIBLE`; runtime `UNVERIFIED` |
 | **User constraint** | No Minecraft launch, commit, or push unless separately asked; implementation only after explicit Begin authorization |
 | **Baseline version** | `1.9.2` |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-FURNACE-SMELTING.md`; `RFC-ADAPTIVE-OPINION-MOOD-AND-ENGAGEMENT.md` (discretionary layer — deferred); stubs `progression/ProgressGoal.java`, `TaskLifecycle.java` |
@@ -103,7 +103,7 @@ novelty before terrain** (MI-5H), not MI-7 session types alone.
 | [MI-5 behavioural prediction](#topic-mi-5-behavioural-prediction-gate-maibs-1) | `FAIL` heading blindness | **MI-5H `READY`** — `DescentHeadingPolicy` |
 | [MI-6 behavioural prediction](#topic-mi-6-behavioural-prediction-gate-maibs-1) | 6A/D/B/C `IMPLEMENTED`; runtime `UNVERIFIED` | **MI-6F wire before MI-7B+C** |
 | [MI-7 controlled excavation descent](#topic-mi-7-controlled-excavation-descent-gate-maibs-1) | MI-7R `IMPLEMENTED` | MI-14C control plane active |
-| [MI-14C execution control](#topic-mi-14c--execution-control-plane-proposed-user--agent_claude) | C3 code green; MAIBS integration fail | **Next: repair budget shadow + protected-MOVE classification** |
+| [MI-14C execution control](#topic-mi-14c--execution-control-plane-proposed-user--agent_claude) | C3-R1 implemented; static MAIBS pass | **Next: approved runtime falsification or Loop-D product decision** |
 | [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order (revised) | **Next: C2 repair → MAIBS re-pass → C3** |
 | [Validation](#topic-validation) | `PARTIAL` | Policy units green; gather wealth + runtime open |
 | [Deferred](#topic-deferred-and-unverified) | — | Nether, branch mines, portfolio gen-1 |
@@ -879,7 +879,7 @@ the director/flagless observer (it exists only in `ExploringGoal`). Full trace a
 protected MOVE ownership to prevent, pause, or revoke assignment. Do not proceed to the Loop-D
 tunnel consumer while this high-severity C3 objection remains unresolved.
 
-#### MI-14C3-R1 — Protected Interruption Lease Semantics — `PROPOSED / REOPEN_REQUESTED`
+#### MI-14C3-R1 — Protected Interruption Lease Semantics — `IMPLEMENTED` (task-30)
 
 **User review accepted:** C2's `PROTECTED_INTERRUPT` answer is correct for arbitration and
 incomplete for lease accounting. The classifier currently collapses two independent questions:
@@ -940,13 +940,11 @@ is rejected.
 | B — scheduler effect record | Return `{preemptibility, leaseImpact}` from one classifier | Compiler-enforces the two axes and scales to more goal families | Larger C2 refactor for a small current taxonomy |
 | C — all protected → CONTENTION | Reuses existing pause | Small | **Rejected:** erases safety/command semantics and makes arbitration diagnostics misleading |
 
-**Progress-vs-total-budget companion repair:** the lease arithmetic is sound, but C3 must have an
-observable interval before the 2400-tick absolute project cap. Preferred direction is a progress
-window justified from the maximum 200-tick single-block break plus bounded one-step navigation and
-observer/replan allowance, strictly below 2400. Preserve the absolute project cap; specify that it
-may legitimately win only when less than one full progress window remains. Alternative removal of
-the tick cap is rejected unless another absolute lifetime bound replaces it. Exact timeout remains
-`CONTESTED` pending evidence-based selection; do not cargo-cult a new constant.
+**Progress-vs-total-budget companion repair (`LOCKED`):** the lease arithmetic remains sound, and
+the progress window is 400 admissible ticks—conservatively above the maximum 200-tick block break
+with navigation/replan/cadence tolerance, yet strictly below the 2400-tick absolute cap. The total
+cap is preserved and may legitimately win only when less than one full progress window remains.
+Removing the cap was rejected unless another absolute lifetime bound replaces it.
 
 **Falsification matrix:**
 
@@ -966,7 +964,7 @@ SeekAmmo, FollowLovedOne, and StayNear declare MOVE+LOOK; PlayerMobDoor/DigThrou
 flagless; EatFood declares LOOK only. Final mapping must distinguish safety, explicit command,
 combat, social reflex, and ordinary work rather than infer meaning solely from priority.
 
-**Proposed complete mapping for the pinned host version:**
+**Locked complete mapping for the pinned host version:**
 
 | Goal family | Executor flag conflict | Lease impact | Reason |
 | --- | --- | --- | --- |
@@ -979,18 +977,26 @@ combat, social reflex, and ordinary work rather than infer meaning solely from p
 | EatFood | LOOK | protected finite pause | Survival action conflicts with descent LOOK despite no MOVE |
 | PlayerMobDoor, DigThrough readout, BlockArrows | none | none | No scheduler conflict |
 
-**Proposed progress window: 400 ticks.** Evidence: one physical progress interval contains at most
-one `MAX_BREAK_TICKS=200` block attempt before a successful-break mark; the project's existing
-one-target approach bounds are 200 ticks for gather/craft/smelt/campfire, while a stair move is only
-one block forward/down. `400 = max break 200 + conservative approach/replan 200`, is strictly below
-the 2400 absolute project cap, and remains tick-time (low TPS lengthens wall time rather than causing
-false expiry). Alternative 600 provides more tolerance but delays recovery without a known legal
-single-step action requiring it. Dynamic remaining-budget windows were rejected as harder to
-diagnose. This value is **PROPOSED, not LOCKED**, pending user/peer acceptance and integrated RED
-tests.
+**Locked progress window: 400 ticks.** A successful block removal marks progress immediately; the
+known worst physical break is capped at 200 ticks. The second 200 ticks are conservative tolerance
+for one-step navigation, replanning, observer cadence, and server-tick irregularity—not a claim that
+every legal interval is a 200+200 sequence. This remains strictly below the 2400 absolute project
+cap. Alternative 600 delayed recovery without a known legitimate operation requiring it; dynamic
+remaining-budget windows were rejected as harder to diagnose.
 
-**Status:** design direction `STRONGLY_SUPPORTED`; task remains `REOPEN_REQUESTED`, not implementation
-ready, until the proposed 400-tick window and goal/flag→lease mapping are locked.
+**Implementation result:** `SchedulerConflictPolicy` now evaluates every required flag (`MOVE +
+LOOK`) separately from arbitration. Typed protected classifications map safety/recovery to a
+condition-bound `SAFETY_RECOVERY` pause, commands/stay anchors to `PLAYER_ORDER`, eating and finite
+host reflexes to bounded blockers, and combat to its existing bounded semantics. Lease NBT v4 adds
+`startPausedTicks`; progress remains independently paused. Persistent stay anchors prevent
+assignment, and the intended-authority admission scan prevents `CommandedActionGoal` revoke→reassign
+loops. C3-F1…F7 pass in `MiningExecutionC3R1Test`; 321-test clean build passes.
+
+**Post-implementation MAIBS static result:** `PASS — BEHAVIORALLY_PLAUSIBLE`. The earlier three
+cross-layer defects are closed in code: protected holders cannot become `NONE`, LOOK-only eating is
+visible, and the 400-tick local-stall timeout can fire while the 2400-tick total budget still has
+room. Runtime animation/timing and real GoalSelector ordering remain `UNVERIFIED` pending separately
+approved Minecraft launch. Evidence: `.superpowers/sdd/task-30-report.md`.
 
 #### Non-goals (`LOCKED`)
 
@@ -2818,8 +2824,8 @@ boundary. Focused tests and `gradlew.bat clean build` pass (148/148); runtime re
 | MI-14 | P8 | `MiningDirector` orchestration (extends MI-7A project) | `BLOCKED` until MI-7A |
 | MI-14C1 | P8 | Assignment/start lease and revocation | **`IMPLEMENTED`** |
 | MI-14C2 | P8 | Intent arbitration + scheduler contention | **`IMPLEMENTED`** (task-29 repair; runtime `UNVERIFIED`) |
-| MI-14C3 | P8 | Observable-progress lease | code `IMPLEMENTED`; **MAIBS-1 `FAIL` — repair required** |
-| MI-14C3-R1 | P8 | Protected/conflicting scheduler lease semantics + reachable progress timeout | **`REOPEN_REQUESTED / PROPOSED`** — C3-F1…F7 |
+| MI-14C3 | P8 | Observable-progress lease | `IMPLEMENTED`; R1 static MAIBS repair complete; runtime `UNVERIFIED` |
+| MI-14C3-R1 | P8 | Protected/conflicting scheduler lease semantics + reachable progress timeout | **`IMPLEMENTED`** — task-30; C3-F1…F7; 321 tests |
 | MI-15 | P6 | `MiningMemory` store | `BLOCKED` |
 | MI-16 | P9 | `VeinFrontier` + `ResourceTarget` | `BLOCKED` |
 | MI-17 | P9 | Ore utility scoring | `BLOCKED` |
@@ -2945,7 +2951,7 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 | D-MIW-037 | Intent vs blocker separation | **`CONSENSUS`** | `ExecutionIntent` ≠ `ExecutionBlocker`; `CONTENTION` is scheduler observation, not intent |
 | D-MIW-038 | Non-exclusive handoffs | **`CONSENSUS`** | `TUNNEL_HANDOFF_PENDING` arbitration `NEUTRAL` until executor exists; do not consume transition |
 | D-MIW-039 | Start vs progress lease | **`CONSENSUS`** | `lastExecutionProgressAt` + observable dig events only; pause during `TEMPORARY`/`CONTENTION`; revoke `NO_PROGRESS` |
-| D-MIW-040 | Protected arbitration vs lease availability | **`PROPOSED / REOPEN_REQUESTED`** | Preserve non-preemptibility while mapping safety to explicit pause and commands to prevent/revoke; add pre-start pause accounting |
+| D-MIW-040 | Protected arbitration vs lease availability | **`IMPLEMENTED`** | Required-flag scheduler resolver; condition-bound safety pause; command prevent/revoke; NBT v4 pre-start pause; 400-tick progress window |
 
 ---
 
@@ -2991,7 +2997,7 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] **MI-6** cave opportunistic ore (task 17; 169 tests) — MAIBS FAIL on landings → repair package
 - [x] **MI-6A + MI-6D + MI-6B + MI-6C** (task 18; 178 tests) — code repair; runtime `UNVERIFIED`
 - [x] **Accept MI-7 redesign** — Controlled Excavation Descent MI-7A…E; D-MIW-033/034 (user 2026-08-09)
-- [ ] **MI-14C3 integration repair** — unit policy green, but total-budget shadow and protected-MOVE blocker gap fail MAIBS-1
+- [x] **MI-14C3 integration repair** — task-30; protected/LOOK conflicts and budget reachability repaired; static MAIBS pass; runtime unverified
 - [ ] **Begin implementation for MI-6F or MI-7B+C** (6F first per dependency)
 - [ ] U-MIW matrix / runtime datapack (MI-9/MI-10)
 - [ ] **MI-7E** controlled staircase (blocked until MI-7A–D + MI-6 runtime probe)
@@ -3002,16 +3008,23 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [ ] Dedicated-server smoke
 - [ ] MI-6A falsifying probe (scripted cave Y=32 under Y=70; log landing Y)
 - [ ] MI-7E falsifying probe (`NaturalDescentStatus` transitions; no dig beside cave mouth)
-- [ ] MI-14C3 runtime probe: >2400-tick CONTENTION resume, then admissible obstruction → one `NO_PROGRESS`
+- [ ] MI-14C3 runtime probe: >2400-tick safety pause and CONTENTION resume, then >400 admissible
+      obstruction ticks → one `NO_PROGRESS`; LOOK-only eating must delay clean admission
 
-**MRFC-1 status:** **FAIL at MAIBS-1** — MI-14C3's pure policy passes, but its active-stall outcome
-is shadowed by the total project budget and protected MOVE ownership is not represented. Repair C3
-before advancing execution control to the tunnel-search consumer.
+**MRFC-1 status:** **PASS for implemented/static scope; runtime remains UNVERIFIED** — MI-14C3-R1
+closes protected ownership, LOOK-only conflict, pre-start pause, command-authority, and timeout
+reachability defects. Runtime falsification still requires separate launch approval.
+
+Historical pre-R1 result: the pure policy passed while the active-stall outcome was shadowed by the
+total budget and protected ownership was invisible. Task-30 supersedes that failed static state;
+Tunnel Search remains a separate, unimplemented product scope.
 
 ---
 
 ## User approval
 
+- [x] **Lock and begin MI-14C3-R1** — typed required-flag blockers, condition-bound safety pause,
+      player-order prevention/revocation, pre-start pause NBT, 400-tick progress lease, C3-F1…F7
 - [x] **Lock D-MIW-025** gen-1 slice (revised — MI-13a first)
 - [x] **Lock D-MIW-026** gen-1 profile v1 constants
 - [x] **Accept D-MIW-027** — MI-13a perception prerequisite (Agent_Claude)
@@ -3065,6 +3078,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 | Date | Agent | Change |
 | --- | --- | --- |
 | 2026-08-09 | Agent_Codex | **MI-14C3 MAIBS-1 `FAIL`** — active 2400-tick total budget shadows strict >2400 progress timeout; protected MOVE owners bypass contention without another blocker; three NOT FOUND probes; repair required before Loop D |
+| 2026-08-09 | User + Agent_Codex | **MI-14C3-R1 `IMPLEMENTED`** — user locked required-flag taxonomy, condition-bound safety pause, player-order authority, pre-start pause, and 400-tick window; task-30 C3-F1…F7 + revoke→reassign repair; 321-test clean build; static MAIBS `PASS`, runtime `UNVERIFIED` |
 | 2026-08-09 | User + Agent_Codex | **MI-14C3-R1 `PROPOSED / REOPEN_REQUESTED`** — split arbitration preemptibility from lease availability; safety pause, command prevent/revoke, separate pre-start pause accounting; all conflicting flags incl. LOOK; C3-F1…F7; evidence-derived 400-tick window proposed, not locked |
 | 2026-08-09 | Agent_Codex | **MI-14C3 `IMPLEMENTED`** — observable break/step/handoff progress; exact TEMPORARY/CONTENTION pause accumulator; NBT v3 + v2 migration; C3-A…E pass; 310-test clean build; runtime `UNVERIFIED`; task-28-report |
 | 2026-08-09 | User + Agent_Cursor | **MAIBS C2 FAIL** — M1 handoff authority lifetime, M2 host MOVE invisible to contention, M3 stop() resurrects revoked project; task-27-maibs-report; task-29-brief (R1/R2/R2); C3 blocked |
@@ -3915,3 +3929,36 @@ lock the exact protected-goal→blocker mapping; only then create the implementa
 
 **RFC fields updated:** MI-14C3 stable topic, task registry, D-MIW-040, C3-F1…F7, progress ledger,
 test matrix, task-28 report, change log, this contribution.
+
+---
+
+### Contribution — User + Agent_Codex (MI-14C3-R1 implementation)
+
+**Agent:** User (lock/product decision) + Agent_Codex
+**Date/Session:** 2026-08-09
+**Contribution type:** `DECISION / IMPLEMENTATION / VALIDATION / MAIBS`
+
+**Frontier before:** MI-14C3 arithmetic green; MAIBS failed on protected scheduler ownership,
+LOOK-only conflicts, and a progress timeout shadowed by the total project budget.
+
+**Decision:** User locked D-MIW-040, the pinned goal-family mapping, condition-bound
+`SAFETY_RECOVERY`, hard `PLAYER_ORDER`, NBT-backed pre-start pause accounting, the 400-tick
+admissible progress window, and C3-F1…F7.
+
+**Implementation:** Added `SchedulerConflictPolicy` to inspect intersection with the designated
+executor's complete required flags while leaving C2 preemption arbitration independent. Expanded
+the host taxonomy, added typed lease blockers, persisted `startPausedTicks` in lease NBT v4,
+prevented stay/command assignment, and retained the 2400-tick absolute project cap. A semantic
+review found and repaired a same-observer revoke→reassign loop by evaluating the intended
+controlled-descent authority during pre-assignment scanning.
+
+**Validation:** Targeted RED failed on all missing R1 APIs. Targeted GREEN passed. `clean test` and
+`clean build` each passed 321 tests; C3-R1 has 11 tests with zero failures/errors. Post-code MAIBS
+static result is `PASS — BEHAVIORALLY_PLAUSIBLE`; runtime remains `UNVERIFIED` because no Minecraft
+launch was authorized.
+
+**Frontier after:** MI-14C3-R1 is `IMPLEMENTED`; the next control-plane frontier is approved runtime
+falsification or a separate Loop-D/Tunnel Search product decision. No Tunnel Search work occurred.
+
+**RFC fields updated:** identity, MI-14C3/R1 topic, D-MIW-040, tasks, gates, user approval, change
+log, and this contribution. Evidence: `.superpowers/sdd/task-30-report.md`.
