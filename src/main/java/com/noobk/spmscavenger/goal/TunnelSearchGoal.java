@@ -7,6 +7,7 @@ import com.noobk.spmscavenger.mining.ControlledDescentCaveHandoff;
 import com.noobk.spmscavenger.mining.ExposureOpportunityPolicy;
 import com.noobk.spmscavenger.mining.HorizontalStepPlanner;
 import com.noobk.spmscavenger.mining.HorizontalStepSafety;
+import com.noobk.spmscavenger.mining.MiningBreakTiming;
 import com.noobk.spmscavenger.mining.MiningDirector;
 import com.noobk.spmscavenger.mining.MiningExecutionGuard;
 import com.noobk.spmscavenger.mining.MiningGoalKind;
@@ -44,6 +45,7 @@ import java.util.Optional;
 public final class TunnelSearchGoal extends Goal {
 
     private static final int MAX_BREAK_TICKS = 200;
+    private static final int MIN_BREAK_TICKS = 5;
     private static final double ARRIVAL_DISTANCE = 1.5;
 
     private final PathfinderMob mob;
@@ -286,7 +288,13 @@ public final class TunnelSearchGoal extends Goal {
     private void completeStep(ServerLevel level) {
         StairStepPlan completed = currentStep;
         project = project.pushReturnStep(mob.blockPosition())
-                .withLastSafeAnchor(mob.blockPosition());
+                .withLastSafeAnchor(mob.blockPosition())
+                // The 48-block distance cap was configured and never fed: withProgress is the only
+                // thing that raises recorded horizontal distance, so isDistanceExhausted compared
+                // against a permanent zero. A mostly-air corridor could run to the tick cap while
+                // mining far fewer than 64 blocks.
+                .withBudgetUsage(project.budgetUsage().withProgress(
+                        horizontalDistance(project.origin(), mob.blockPosition()), 0));
         persist(level);
 
         if (completed != null) {
@@ -312,6 +320,13 @@ public final class TunnelSearchGoal extends Goal {
             }
         }
         currentStep = null;
+    }
+
+    /** Horizontal displacement from the corridor's origin, for the distance budget. */
+    private static int horizontalDistance(BlockPos origin, BlockPos current) {
+        int dx = current.getX() - origin.getX();
+        int dz = current.getZ() - origin.getZ();
+        return (int) Math.sqrt(dx * dx + dz * dz);
     }
 
     private boolean canPass(BlockPos position) {
@@ -340,15 +355,15 @@ public final class TunnelSearchGoal extends Goal {
     }
 
     private int breakTicksFor(BlockState state) {
-        float speedOf = state.getDestroySpeed(mob.level(), breakTarget);
-        if (speedOf <= 0.0f) {
-            return MAX_BREAK_TICKS;
-        }
-        float multiplier = mob.getMainHandItem().isEmpty()
-                ? 1.0f
-                : mob.getMainHandItem().getDestroySpeed(state);
-        int ticks = (int) Math.ceil(1.0f / (speedOf * Math.max(0.1f, multiplier)) * 20.0f);
-        return Math.max(1, Math.min(MAX_BREAK_TICKS, ticks));
+        // Shared physics: harder blocks take longer, better tools take less. Previously this was
+        // 20 / (hardness * toolSpeed), which inverted the hardness relationship - obsidian would
+        // have broken faster than stone.
+        return MiningBreakTiming.breakTicks(
+                state,
+                state.getDestroySpeed(mob.level(), breakTarget),
+                ToolBox.bestSpeed(mob, state),
+                MIN_BREAK_TICKS,
+                MAX_BREAK_TICKS);
     }
 
     private void persist(ServerLevel level) {

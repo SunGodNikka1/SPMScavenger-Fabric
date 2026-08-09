@@ -14,6 +14,7 @@ import com.noobk.spmscavenger.mining.MiningGoalKind;
 import com.noobk.spmscavenger.mining.MiningProjectEnd;
 import com.noobk.spmscavenger.mining.CaveOpening;
 import java.util.Optional;
+import com.noobk.spmscavenger.mining.MiningBreakTiming;
 import com.noobk.spmscavenger.mining.MiningDirector;
 import com.noobk.spmscavenger.mining.MiningProject;
 import com.noobk.spmscavenger.mining.MiningProjectMode;
@@ -47,6 +48,7 @@ import java.util.UUID;
 public final class ControlledDescentGoal extends Goal {
 
     private static final int MAX_BREAK_TICKS = 200;
+    private static final int MIN_BREAK_TICKS = 5;
     private static final double ARRIVAL_DISTANCE_SQR = 2.25;
 
     private final PathfinderMob mob;
@@ -414,14 +416,14 @@ public final class ControlledDescentGoal extends Goal {
 
 
     private int breakTicksFor(BlockState state) {
-        float speed = state.getDestroySpeed(mob.level(), breakTarget);
-        if (speed <= 0.0f) {
-            return MAX_BREAK_TICKS;
-        }
-        ItemStack tool = mob.getMainHandItem();
-        float multiplier = tool.isEmpty() ? 1.0f : tool.getDestroySpeed(state);
-        int ticks = (int) Math.ceil(1.0f / (speed * Math.max(0.1f, multiplier)) * 20.0f);
-        return Math.max(1, Math.min(MAX_BREAK_TICKS, ticks));
+        // Same inverted formula as the tunnel had; repaired in one place rather than two, so the
+        // third excavation mode inherits the physics instead of a copy of it.
+        return MiningBreakTiming.breakTicks(
+                state,
+                state.getDestroySpeed(mob.level(), breakTarget),
+                ToolBox.bestSpeed(mob, state),
+                MIN_BREAK_TICKS,
+                MAX_BREAK_TICKS);
     }
 
     static ExploringGoal exploringGoalOf(Mob other) {

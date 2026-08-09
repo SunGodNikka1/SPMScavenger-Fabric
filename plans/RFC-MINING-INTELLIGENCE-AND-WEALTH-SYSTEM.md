@@ -1377,12 +1377,82 @@ Tunnel Search digs east
      no unrelated resource excursion
 ```
 
+### Multi-mode MAIBS pass — `PASS_WITH_RUNTIME_UNVERIFIED` (387 tests)
+
+First pass: **`FAIL_ARCHITECTURE_DEFECT`**, five source-confirmed control-flow breaks. Every
+component was individually correct and unit-tested; the chain between them was not.
+
+| ID | Break | Repair |
+| --- | --- | --- |
+| **M1** | `claimTunnelSearch` had **no caller**. Descent emits `HANDOFF_TUNNEL_SEARCH`, the transition blocks restart, nothing consumes it — the mob finishes its staircase and stops forever | wired into `directorTick` ahead of `mayStartControlledDescent` |
+| **M2** | Tunnel yielded only on `ACQUIRING`. Both goals sit at priority 3, so gather cannot preempt, so the probe never runs, so `ACQUIRING` is never reached — **circular handoff** | yield on any live exposure (`OFFERED` or `ACQUIRING`) |
+| **M3** | Cooperative admission was placed **after** `wantsMore()` — behind the very gate it exists to bypass. Described as fixed; shipped unfixed | `wantsMore` moved after the cooperative branch |
+| **M4** | Tunnel checked only the raw blocker in `canContinueToUse` and persisted its local copy unconditionally in `stop()` — a revoked project kept running and was **resurrected** on stop. The second executor copied the pre-C2-R1 lifecycle | mirror descent: assignment + session + guard + `authorizeExecution` each tick; `shouldPersistExecutorCheckpoint` on stop |
+| **M5** | `completeProject` keeps `INTERRUPTED`/`RETRY`, `isActive()` means only `RUNNING`. A `NO_PROGRESS` revocation left a record that `mayStartControlledDescent` and `claimTunnelSearch` both refuse past, and the observer skipped for not being active — **one stall permanently ended all mining for that mob** | `assignedProject` requires `isActive`; observer retires non-resumable stored projects |
+
+**M5 is Loop A returning through the persistence rule rather than the lease** — a door none of the
+C1/C2/C3 gates watch. Found by the chain test, not by any component test.
+`MiningProjectEnd.resumable()` has **zero consumers**: nothing resumes an interrupted project, so the
+record was pure blocking state.
+
+### Two behavioural repairs before runtime
+
+**Break timing was inverted in both executors.** `20 / (hardness * toolSpeed)`, where
+`getDestroySpeed` returns *hardness* — so the expression is `1 / hardness`:
+
+```text
+hardness  1.5 (stone)     slowest
+hardness  3.0 (deepslate) faster
+hardness 50.0 (obsidian)  near-instant
+```
+
+The mob would have laboured over soft rock and flicked through the hardest blocks. `GatherResourcesGoal`
+already had the correct shape (`hardness * 30 / toolSpeed`); duplication is how they drifted, so
+`MiningBreakTiming` now owns the physics for all three callers. Tests state **invariants, not
+constants** — harder never faster, better tool never slower, always bounded, unbreakable never enters
+ordinary timing — so a retune cannot quietly restore the inversion.
+
+**The tunnel's distance budget was dead.** `maxDistanceFromAnchor = 48` was configured, but
+`withProgress` — the only thing that raises recorded distance — was never called, so
+`isDistanceExhausted` compared against a permanent zero. A mostly-air corridor could run to the tick
+cap while mining far fewer than 64 blocks.
+
+### Evidence labels (precise, per User)
+
+```text
+CODE_CONFIRMED             yes
+UNIT_CONFIRMED             yes   387 tests
+CHAIN_STATE_MACHINE        yes   TunnelExecutionChainTest
+MAIBS_BEHAVIOR_PREDICTED   yes   after M1-M5
+RUNTIME_CONFIRMED          NO
+```
+
+`TunnelExecutionChainTest` is a **state-machine integration test**: it advances handoff claiming,
+exposure, probe and cooperative acquisition manually. Far stronger than isolated matrix tests, and
+**not** Minecraft's `GoalSelector` running these goals over real ticks.
+
+### Deferred topic — Project Resumption Semantics (`OPEN`)
+
+Retiring a non-resumable project is honest while no resumption path exists, but it is not the right
+long-term behaviour. For a generally competent agent:
+
+```text
+combat interrupts a tunnel -> survive -> remember the unfinished project -> return -> resume it
+```
+
+is clearly better than retiring it and possibly starting something unrelated. What must **not**
+happen is fake resumption via persistence: a stored record nothing can resume is a blocker, not a
+memory. Build the capability, then change the retirement rule — not the reverse.
+
 ### Frontier
 
-`TUNNEL_SEARCH` executor (D-MIW-TS1..TS4 locked) -> `HANDOFF_TUNNEL_SEARCH` gains its first real
-consumer -> second executable mode -> `MiningDirector` makes a genuine mode choice -> multi-mode
-MAIBS -> **a runtime milestone finally worth spending**, because by then more than one strategy
-exists to observe.
+**Runtime milestone.** One deliberate session, not continuous testing: descent → diamond band →
+tunnel handoff → horizontal digging → visible ore exposure → gather takeover → vein follow → same
+tunnel resumes → cave breakthrough → cave handoff. Runtime is no longer testing unfinished
+scaffolding; it is testing the first genuinely multi-strategy autonomous mining loop.
+
+**Requires explicit launch approval** (`AGENTS.md` gate 6) — not implied by any planning or
+implementation trigger.
 
 ### Design question for the user (not a defect)
 
@@ -3448,6 +3518,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | User + Agent_Claude | **Multi-mode MAIBS: FAIL then PASS_WITH_RUNTIME_UNVERIFIED** (387 tests). Five control-flow breaks found and repaired: **M1** `claimTunnelSearch` had no caller (mob stops at the band forever); **M2** tunnel yielded only on `ACQUIRING`, circular at equal priority so the probe could never run; **M3** cooperative admission sat behind the `wantsMore` gate it exists to bypass (described as fixed, shipped unfixed); **M4** tunnel copied the pre-C2-R1 lifecycle and could resurrect a revoked project; **M5** a `NO_PROGRESS` revocation persisted as RETRY and permanently blocked all future assignment - Loop A through the persistence rule, found only by the chain test. Plus two behavioural repairs: break timing was **inverted** in both executors (`20/(hardness*tool)`; obsidian faster than stone) - now `MiningBreakTiming` owns the physics; and the tunnel's 48-block distance cap was never fed by `withProgress`. New deferred topic **Project Resumption Semantics**. Next: runtime milestone, requires explicit launch approval |
 | 2026-08-09 | User + Agent_Claude | **D-MIW-TS2/TS3/TS4 `LOCKED`** before Tunnel Search code. **TS2 Exposure Opportunity Handoff**: `ALLOW` is necessary but not sufficient — verified that equal priority-3 cannot preempt, that `GatherResourcesGoal`'s 60-tick `SCAN_INTERVAL` is checked *after* the arbitration guard (so a one-tick yield is unreliable), and that `wantsMore`/`GatherIntentPolicy` is global rather than tunnel-scoped (so a yield could fund an unrelated excursion that `COOPERATIVE_WORK` would wrongly pause the lease for). Tunnel records cells it physically opened; gather gets one exposure-local probe bypassing the cooldown. Two additions from source: the probe must be **consumed whether or not it succeeds** (else the cooldown is defeated), and `wantsMore` gates *before* the guard, so the tunnel's trigger demand and gather's intent must be proven to agree or the loop is silently open. **TS3**: reuse `StairStepSafety.validateBreakHazards`/`validateBreak`, not `validatePlan` (staircase-specific geometry). **TS4**: breakthrough emits `CAVE_FOUND` under the existing connected-opening evidence rules. `HarvestReveal` → `ExcavationReveal` deferred out of Gen-1 |
 | 2026-08-09 | Agent_Claude | Review branch closed; **TUNNEL_SEARCH pre-implementation MAIBS pass** (Gate MAIBS-1). **D-MIW-TS1**: the executor creates *exposure*, it does not find ore — scanning would be clairvoyance (ore in rock is `UNDISCOVERED` by the mod's own contract) and would duplicate `GatherCandidatePolicy`/`GatherResourcesGoal` (SPM-2). **TS-M1**: the arbitration row is a real decision — inheriting `GATHER_RESOURCES -> YIELD` from `CONTROLLED_DESCENT` makes the mob tunnel past ore it just exposed; recommended `ALLOW`. Severity checked not assumed: exposed ore stays `VISIBLE`, so the loss is the 40-tick vein-follow window and scan range, not the ore. Same inversion noted as an open question for shipped `CONTROLLED_DESCENT`. Corridor geometry `OPEN` — recommend straight corridor first, branch mine as a superset later |
 | 2026-08-09 | User + Agent_Claude | **Lifetime Semantics Sweep `COMPLETE`** — bounded review of every independently implemented lifetime/expiry contract (owner / epoch / predicate / persistence / consumers). One finding: **L1**, `CAVE_HANDOFF_LIFETIME_TICKS` defined twice and kept in step by a comment — latent, no behavioural contradiction, fixed by deletion. Five PASS, including the User's two named candidates (`FurnaceStations` complementary predicates, `SeekShelterGoal` single consumer) and the `PROGRESS_LEASE_TICKS` / `MAX_BREAK_TICKS` bound relationship, now documented. Coincidental equal values left alone per the stop condition. Frontier: `TUNNEL_SEARCH` executor |
