@@ -25,13 +25,30 @@ class ControlledDescentCaveHandoffTest {
         assertFalse(ControlledDescentCaveHandoff.isSubterraneanAt(surface, feet));
     }
 
+    /**
+     * MI-14-R2b/R2c changed this contract deliberately. A standable floor two blocks below and
+     * ahead used to be an opening; it no longer is unless air actually connects the excavation to
+     * it. That is the "cave behind unbroken stone" case, and it was a false handoff.
+     */
     @Test
-    void openedCaveDetectsSubterraneanAheadWithoutThreeAirHeuristic() {
+    void aDisconnectedFloorAheadIsNoLongerAnOpening() {
+        ControlledDescentCaveHandoff.HeightAccess underground = uniformHeight(72, false);
+        BlockPos feet = new BlockPos(0, 40, 0);
+
+        assertFalse(ControlledDescentCaveHandoff.openedTraversableCave(
+                        underground, feet, Direction.NORTH, pos -> pos.getY() == 38),
+                "a floor with no air path from the excavation is not something the mob broke into");
+    }
+
+    @Test
+    void openedCaveDetectsSubterraneanAheadOnceAirConnectsToIt() {
         ControlledDescentCaveHandoff.HeightAccess underground = uniformHeight(72, false);
         BlockPos feet = new BlockPos(0, 40, 0);
 
         assertTrue(ControlledDescentCaveHandoff.openedTraversableCave(
-                underground, feet, Direction.NORTH, pos -> pos.getY() == 38));
+                        underground, feet, Direction.NORTH,
+                        pos -> pos.getY() >= 38 && pos.getY() <= 41),
+                "connected air from the cells the step opened down to the cave floor");
     }
 
     @Test

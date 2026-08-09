@@ -66,18 +66,24 @@ public final class ControlledDescentCaveHandoff {
      * distinguishes a mob's own tunnel from a cave, because both are deep.
      */
     public static Optional<CaveOpening> findOpenedCave(
-            Level level, BlockPos feet, Direction heading,
+            Level level, StairStepPlan completedStep, Direction heading,
             Predicate<BlockPos> passable, Predicate<BlockPos> standable) {
         return findOpenedCave(
-                fromLevel(level), StairStepPlanner.planStep(feet, heading),
-                selfCorridor(feet, heading), passable, standable);
+                fromLevel(level), completedStep,
+                selfCorridor(completedStep.nextStandCell(), heading), passable, standable);
     }
 
+    /**
+     * Legacy boolean path. Reconstructs the step that <em>ended</em> at {@code feet}, because
+     * callers of the boolean have no plan object; production must pass its real
+     * {@link StairStepPlan} instead.
+     */
     static Optional<CaveOpening> findOpenedCave(
             HeightAccess heights, BlockPos feet, Direction heading, Predicate<BlockPos> standable) {
+        BlockPos previousStand = feet.relative(heading.getOpposite()).above();
         return findOpenedCave(
-                heights, StairStepPlanner.planStep(feet, heading), selfCorridor(feet, heading),
-                standable, standable);
+                heights, StairStepPlanner.planStep(previousStand, heading),
+                selfCorridor(feet, heading), standable, standable);
     }
 
     /**
@@ -98,6 +104,11 @@ public final class ControlledDescentCaveHandoff {
      * is both cheaper and more accurate than a 180-probe volume scan whose outer radii are
      * unreachable anyway.
      *
+     * <p><b>MI-14-R2c:</b> {@code completedStep} is the step that was <em>just excavated</em>, never
+     * the one about to be. Reconstructing it from the mob's current feet plans the <em>next</em>
+     * step, whose cells are still solid rock — which both hides the real breakthrough and lets a
+     * cave touching the unbroken wall ahead qualify.
+     *
      * @param passable cells a mob could move through — no collision, no fluid
      * @param standable cells a mob could stand in — passable, with a sturdy floor
      */
@@ -115,6 +126,12 @@ public final class ControlledDescentCaveHandoff {
         // Seeds: air immediately beyond the cells this step opened. Anything still solid is not a
         // seed, which is exactly why a hidden cave behind a wall cannot be reached.
         for (BlockPos excavated : excavatedCells(completedStep)) {
+            // MI-14-R2c — a cell only counts as excavated if it is open *now*. Belt-and-braces
+            // against a caller handing us a step that has not been dug yet: a solid wall seeds
+            // nothing, so the through-wall bug cannot reappear one step ahead.
+            if (!passable.test(excavated)) {
+                continue;
+            }
             for (Direction face : Direction.values()) {
                 BlockPos neighbour = excavated.relative(face).immutable();
                 if (selfCorridor.contains(neighbour) || !seen.add(neighbour)) {
@@ -208,10 +225,19 @@ public final class ControlledDescentCaveHandoff {
         return cells;
     }
 
-    /** A stand cell plus the 2-high space a mob occupies there. */
+    /**
+     * Every cell a stair step cut at this stand position.
+     *
+     * <p>MI-14-R2c: three high, not two. {@link StairStepPlanner#planStep} breaks
+     * {@code forwardFeet.above()}, {@code forwardFeet} and {@code nextStand} — which, measured from
+     * the resulting stand cell, is {@code stand}, {@code stand+1} and {@code stand+2}. A 2-high
+     * column left each step's own headroom outside the corridor, so the flood could find the
+     * staircase's dug ceiling and report it as a cave.
+     */
     private static void addColumn(Set<BlockPos> cells, BlockPos stand) {
         cells.add(stand.immutable());
         cells.add(stand.above().immutable());
+        cells.add(stand.above(2).immutable());
     }
 
     private static Direction continuationTo(BlockPos from, BlockPos to) {

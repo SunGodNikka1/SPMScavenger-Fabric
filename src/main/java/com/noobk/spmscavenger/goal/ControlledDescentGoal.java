@@ -267,8 +267,13 @@ public final class ControlledDescentGoal extends Goal {
         // MI-14-R2: report the opening, not the fact of being underground. A staircase is
         // subterranean by construction; only a standable space outside the corridor it just cut
         // counts as a discovery.
-        Optional<CaveOpening> opening = ControlledDescentCaveHandoff.findOpenedCave(
-                level, mob.blockPosition(), project.heading(), this::canPass, this::canStand);
+        // MI-14-R2c: the evidence source is the step that was just excavated. currentStep still
+        // holds it here - it is cleared below - whereas planning from current feet would describe
+        // the next, still-solid step.
+        StairStepPlan completed = currentStep;
+        Optional<CaveOpening> opening = completed == null ? Optional.empty()
+                : ControlledDescentCaveHandoff.findOpenedCave(
+                        level, completed, project.heading(), this::canPass, this::canStand);
         if (opening.isPresent()) {
             MiningDirector.completeWithOpening(
                     level, mob, project, opening.get(), mob.blockPosition());
