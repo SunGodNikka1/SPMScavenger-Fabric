@@ -1203,6 +1203,94 @@ a redesign: the private copy is gone and `ExploringGoal` reads the owner's const
 two subsystems must agree on a lifetime, share the predicate; where they must agree on a bound,
 record the relationship.* Next work is the `TUNNEL_SEARCH` executor.
 
+---
+
+## Topic: TUNNEL_SEARCH executor — pre-implementation MAIBS pass (Gate MAIBS-1)
+
+**Analyst:** `Agent_Claude`, source-verified 2026-08-09. Review branch closed; this is the design
+pass that must precede the executor, not a review of shipped code.
+
+**Scope note (User).** The Lifetime Semantics Sweep clears *shipped* control-plane code. Tunnel
+Search introduces its own executor lifecycle, budget, transitions, arbitration row, anti-clairvoyance
+surface and handoff behaviour. Future code is **not** pre-cleared by that sweep.
+
+### What already constrains the design (`CODE_CONFIRMED`)
+
+| Fact | Evidence |
+| --- | --- |
+| Trigger already exists and is narrow | `ControlledDescentGoal.shouldHandoffTunnelSearch` — fires only at `Y <= 16` (`DIAMOND_GENERATION_CEILING_Y`) with unmet `diamondProgressionDemand` |
+| The mode enum predates the executor | `MiningProjectMode.TUNNEL_SEARCH`, catalogued for MI-14 |
+| Ore perception already exists | `DiscoveryPolicy.classify` → `NEWLY_EXPOSED` (within 40 ticks, adjacent to a break) / `VISIBLE` (`GatherProtection.isExposedToAir`) / `UNDISCOVERED` |
+| The gather consumer already exists | `GatherResourcesGoal` imports `DiscoveryPolicy`, tracks `lastHarvest` for vein-follow, and `GatherCandidatePolicy` handles `DIAMOND_ORE` / `DEEPSLATE_DIAMOND_ORE` |
+| Budget shape already exists | `MiningBudget(maxBlocksMined, maxDistanceFromAnchor, maxTicks, maxFailedSteps, maxVerticalProgress)` |
+
+### D-MIW-TS1 — Tunnel Search **creates exposure**; it does not find ore (`PROPOSED`, strong)
+
+The obvious implementation — scan for nearby diamond, tunnel toward it — is wrong twice:
+
+1. **It is clairvoyance.** A scan reads block state through solid stone. Ore inside rock is
+   `UNDISCOVERED` by the mod's own perception contract, and a mode that routes around that contract
+   makes every other anti-clairvoyance guarantee decorative.
+2. **It duplicates a shipped subsystem** (Gate SPM-2). `GatherCandidatePolicy` +
+   `GatherResourcesGoal` already select, approach, break and vein-follow exposed ore.
+
+So the executor's job is **physical**: cut corridor at the diamond band and let the existing
+perception/gather loop consume what the cut reveals. Success is *ore exposed and gathered*, never
+*ore located*. This keeps the loop closed with an existing consumer rather than growing a second one.
+
+### MAIBS finding TS-M1 — the arbitration row is a real decision, not an inherited one
+
+The C2 matrix yields `GATHER_RESOURCES` under `CONTROLLED_DESCENT`. Copying that row for
+`TUNNEL_SEARCH` **defeats the mode's own purpose**: the mob cuts past the diamond it just exposed
+and keeps tunnelling.
+
+Accurate severity, after checking `classifyOre` rather than assuming: exposed ore stays `VISIBLE`
+indefinitely while adjacent to air, so this **does not permanently lose the ore**. What it loses is
+the `NEWLY_EXPOSED` vein-follow window (40 ticks) and, progressively, scan range — the tunnel keeps
+extending away from the find. The closed loop then depends on post-session pickup at increasing
+distance, which is exactly the "producer with a technically-reachable consumer" shape this workstream
+keeps rejecting.
+
+**Recommendation:** under `TUNNEL_SEARCH` intent, `GATHER_RESOURCES` is `ALLOW`, not `YIELD`.
+Tunnelling is the *means*; gathering is the *end*. Yielding the end to protect the means inverts the
+mode.
+
+**The same question applies to shipped `CONTROLLED_DESCENT`** and is *not* being changed here: a
+staircase cutting through the diamond band exposes ore it then declines to gather. Severity is lower
+(descent is short, terminates, and the ore stays `VISIBLE`), but it is the same inversion and is
+recorded as an open question rather than silently inherited or silently fixed.
+
+### Open product decision — corridor geometry (`OPEN`)
+
+Vein-hit probability, blocks mined per diamond, and how *human* the result looks are one trade-off
+with no evidence-only answer:
+
+| Option | Shape | Trade |
+| --- | --- | --- |
+| **A** straight corridor | 1x2, single heading | Cheapest, lowest yield per session, reads as purposeful |
+| **B** branch mine | 1x2 spine with ribs every 3 blocks | Standard player technique, best coverage per block, most blocks mined |
+| **C** opportunistic | straight until exposure, then vein-follow via existing gather | Smallest new code; coverage depends entirely on luck |
+
+**Recommendation: A now, B behind the same budget once A is observed running.** A is the smallest
+closed loop (cut → expose → existing gather consumes), reuses `MiningBudget` unchanged, and does not
+commit to a geometry before any tunnel has ever been watched in a running game. B is a superset and
+can extend A without redesign.
+
+### Acceptance (must / must-not), before any code
+
+**Must happen:** a tunnel session at `Y <= 16` with unmet diamond demand cuts corridor, and diamond
+adjacent to that corridor is gathered by the **existing** `GatherResourcesGoal` — no new ore-seeking
+code path. **Must not happen:** any block-state read that treats non-exposed ore as a target; a
+second inventory, scanner, or gather implementation; `HANDOFF_TUNNEL_SEARCH` being consumed to make
+tests green without an executor actually running.
+
+### Frontier
+
+`TUNNEL_SEARCH` executor (D-MIW-TS1 + TS-M1 locked) -> `HANDOFF_TUNNEL_SEARCH` gains its first real
+consumer -> second executable mode -> `MiningDirector` makes a genuine mode choice -> multi-mode
+MAIBS -> **a runtime milestone finally worth spending**, because by then more than one strategy
+exists to observe.
+
 ### Design question for the user (not a defect)
 
 `CraftTorchesGoal` `YIELD`s under `CONTROLLED_DESCENT`. Torch supply is a descent prerequisite, so a
@@ -3267,6 +3355,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Claude | Review branch closed; **TUNNEL_SEARCH pre-implementation MAIBS pass** (Gate MAIBS-1). **D-MIW-TS1**: the executor creates *exposure*, it does not find ore — scanning would be clairvoyance (ore in rock is `UNDISCOVERED` by the mod's own contract) and would duplicate `GatherCandidatePolicy`/`GatherResourcesGoal` (SPM-2). **TS-M1**: the arbitration row is a real decision — inheriting `GATHER_RESOURCES -> YIELD` from `CONTROLLED_DESCENT` makes the mob tunnel past ore it just exposed; recommended `ALLOW`. Severity checked not assumed: exposed ore stays `VISIBLE`, so the loss is the 40-tick vein-follow window and scan range, not the ore. Same inversion noted as an open question for shipped `CONTROLLED_DESCENT`. Corridor geometry `OPEN` — recommend straight corridor first, branch mine as a superset later |
 | 2026-08-09 | User + Agent_Claude | **Lifetime Semantics Sweep `COMPLETE`** — bounded review of every independently implemented lifetime/expiry contract (owner / epoch / predicate / persistence / consumers). One finding: **L1**, `CAVE_HANDOFF_LIFETIME_TICKS` defined twice and kept in step by a comment — latent, no behavioural contradiction, fixed by deletion. Five PASS, including the User's two named candidates (`FurnaceStations` complementary predicates, `SeekShelterGoal` single consumer) and the `PROGRESS_LEASE_TICKS` / `MAX_BREAK_TICKS` bound relationship, now documented. Coincidental equal values left alone per the stop condition. Frontier: `TUNNEL_SEARCH` executor |
 | 2026-08-09 | User + Agent_Claude | **MI-14C2-M2 `IMPLEMENTED`** (330 tests). MAIBS re-pass found predicate drift surviving the C2-R2 constant unification: commitment `now < claimedAt + 2400` vs expedition `now - startedTick > 2400` left one tick where the expedition was alive and its authority gone, reopening both `CAVE_HANDOFF -> NONE` and `mayStartControlledDescent`. Repaired by sharing the predicate (`ExploringGoal.expeditionExpired`) and storing `authorityTicks` instead of a derived `expiresAt`; legacy saves recover the window. Lesson `PROVEN`: deduplicating a constant does not deduplicate a boundary |
 | 2026-08-09 | Agent_Claude + User | **MI-14C2-R2 `IMPLEMENTED`** (327 tests): cave-handoff authority now runs from the claim (`now + ExploringGoal.MAX_EXPEDITION_TICKS`), not from discovery. User `LOCKED` the authority bound to the expedition's own lifetime rather than a route-derived estimate — a smaller invented budget could expire while the expedition it protects is still legally running. Constant made public rather than copied; `claimCaveContinuation` requires the window explicitly (no defaulted overload). Two corrections to my MAIBS report: admission is strictly `< 400` (`expired()` is `>=`), and the suite was 321 after Protected Interruption Handling, not 310 |
