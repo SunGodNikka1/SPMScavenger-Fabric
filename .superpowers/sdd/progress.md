@@ -36,4 +36,7 @@ local rim, per-candidate opportunity; 178 tests; runtime unverified; 6E/6F/6G de
 Task 19: complete with concerns (looted diamond pick ownership across backpack/main/off hand;
 181 tests/build pass; runtime loot/equipment behavior unverified)
 
+MI-7A: complete with concerns (MiningProject session types + SavedData; 200 tests; no goal wire;
+runtime unverified; MI-7B/C next)
+
 No commits. No Minecraft launches (separate approval required).
