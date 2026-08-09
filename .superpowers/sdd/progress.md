@@ -69,4 +69,6 @@ Next execution-control work: repair MI-14C3 budget reachability and protected-MO
 Do not advance to `TunnelSearchGoal` until MAIBS-1 passes. Runtime falsification remains open and
 requires separate Minecraft launch approval.
 
+GA-OPINION: RFC created (`PROPOSED` / deferred) — `plans/RFC-ADAPTIVE-OPINION-MOOD-AND-ENGAGEMENT.md`; author Agent_ChatGPT; no implementation
+
 No commits. No Minecraft launches (separate approval required).
