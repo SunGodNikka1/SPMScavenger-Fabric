@@ -2348,7 +2348,7 @@ no intent gate; `ExploringGoal.canUse` readiness-independent discretionary start
 | `PENDING_INTENT_TTL_TICKS` | `200` | 20 × 10-tick observation passes (legacy B-19) |
 | `TRACE_CAPACITY` | `24` | D-GAO-025 bounded ring |
 
-**Evidence (`CONFIRMED`):** `.\gradlew.bat clean build` — BUILD SUCCESSFUL; 466 tests, 0 failures.
+**Evidence (`CONFIRMED`):** `.\gradlew.bat clean build` — BUILD SUCCESSFUL; 485 tests, 0 failures.
 
 **GAO-4 repair (2026-08-09, static `CONFIRMED`):** Four architecture defects found post-461-green:
 (1) running/pending intent split — yield callbacks target `intentId`, challenger survives REST→EXPLORE;
@@ -2357,8 +2357,14 @@ no intent gate; `ExploringGoal.canUse` readiness-independent discretionary start
 (4) switch margin compares challenger to incumbent's **current** scored utility, not adoption snapshot;
 `adoptedAtTick==0` maps to tick 1 for commitment. Full-chain M3/M4/M12 + toggle/claim/margin tests.
 
+**GAO-4 REST closure attribution (2026-08-09, static `CONFIRMED`):** `RestCloseAttribution` shared
+policy; combat/mandatory/player-order/unload/environment closes no longer terminal as `SUCCEEDED` or
+collapse to `VOLUNTARY_ABANDON` + `REST_SESSION_CLOSE`. Observer-order tests in
+`RestCloseObserverOrderTest`.
+
 **MAIBS (`CODE_CONFIRMED`, runtime `UNVERIFIED`):** GAO-4-M1…M12 static scenarios pass; voluntary
 REST→EXPLORE full handoff chain proven in director tests; consumer gates compile against locked paths.
+GAO-4 static frontier closed — next evidence is runtime validation.
 
 **Not delivered:** runtime launch, disk persistence, PLACE/ENTITY opinions, PersonalityModel,
 `ExplorationReadiness` threshold modulation.

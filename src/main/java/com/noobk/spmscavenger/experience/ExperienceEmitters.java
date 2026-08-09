@@ -95,18 +95,16 @@ public final class ExperienceEmitters {
 
     public static void restSessionClosed(
             UUID mobId, RestSessionClaim claim, RestCloseReason reason, long gameTime) {
-        OutcomeClass outcome = reason == RestCloseReason.CHUNK_UNLOAD
-                ? OutcomeClass.PROTECTED_INTERRUPT
-                : OutcomeClass.VOLUNTARY_ABANDON;
+        RestCloseAttribution.Semantics semantics = RestCloseAttribution.forReason(reason);
         pipeline(mobId).accept(new ExperienceEvent(
                 ExperienceKind.REST_SESSION,
                 gameTime,
                 claim.claimId(),
-                outcome,
-                ExperienceCause.REST_SESSION_CLOSE,
+                semantics.experienceOutcome(),
+                semantics.experienceCause(),
                 0.0f,
                 0.0f,
-                reason == RestCloseReason.TIMEOUT ? 0.1f : 0.0f,
+                semantics.satisfactionDelta(),
                 0.0f,
                 0.0f,
                 Optional.of(ActivityKind.REST),

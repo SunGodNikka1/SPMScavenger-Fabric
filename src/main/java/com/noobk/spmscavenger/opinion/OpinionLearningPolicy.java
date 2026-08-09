@@ -31,7 +31,9 @@ public final class OpinionLearningPolicy {
                 || cause == ExperienceCause.PROTECTED_INTERRUPT
                 || cause == ExperienceCause.SIMULATION_FRONTIER
                 || cause == ExperienceCause.ENVIRONMENT_BLOCKED
-                || cause == ExperienceCause.MINING_PLAYER_ORDER;
+                || cause == ExperienceCause.MINING_PLAYER_ORDER
+                || cause == ExperienceCause.REST_COMBAT
+                || cause == ExperienceCause.REST_MANDATORY_WORK;
     }
 
     public static void apply(

@@ -298,7 +298,7 @@ class DiscretionaryActivityDirectorTest {
 
         DiscretionaryAuthority.onRestClaimClosed(MOB, 250L, com.noobk.spmscavenger.experience.RestCloseReason.TIMEOUT);
         assertTrue(director.runningIntent().isEmpty());
-        assertTrue(hasTerminalDetail("rest-claim-closed"));
+        assertTrue(hasTerminalDetail("SUCCEEDED:rest-claim-closed:TIMEOUT"));
     }
 
     @Test

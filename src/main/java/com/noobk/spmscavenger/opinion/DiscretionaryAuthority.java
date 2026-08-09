@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.opinion;
 
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
+import com.noobk.spmscavenger.experience.RestCloseAttribution;
 import com.noobk.spmscavenger.experience.RestCloseReason;
 
 import java.util.UUID;
@@ -160,10 +161,11 @@ public final class DiscretionaryAuthority {
         if (restId == null) {
             return;
         }
+        RestCloseAttribution.Semantics semantics = RestCloseAttribution.forReason(reason);
         stateFor(mobId).markTerminalForIntent(
                 restId,
-                IntentLifecycle.SUCCEEDED,
-                InvalidationCause.NONE,
+                semantics.directorLifecycle(),
+                semantics.directorCause(),
                 gameTime,
                 "rest-claim-closed:" + reason);
     }
