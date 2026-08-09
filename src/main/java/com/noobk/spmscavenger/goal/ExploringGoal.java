@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Low-priority, generic spatial exploration. It knows nothing about resources, structures or POIs:
@@ -230,7 +231,11 @@ public final class ExploringGoal extends Goal {
         }
         if (DiscretionaryAuthority.mustYieldDiscretionaryExplore(mob.getUUID())) {
             if (mob.level() instanceof ServerLevel level) {
-                DiscretionaryAuthority.onExploreYieldedForRest(mob.getUUID(), level.getGameTime());
+                UUID exploreIntentId = DiscretionaryAuthority.runningExploreIntentId(mob.getUUID());
+                if (exploreIntentId != null) {
+                    DiscretionaryAuthority.onExploreYieldedForRest(
+                            mob.getUUID(), exploreIntentId, level.getGameTime());
+                }
             }
             return false;
         }

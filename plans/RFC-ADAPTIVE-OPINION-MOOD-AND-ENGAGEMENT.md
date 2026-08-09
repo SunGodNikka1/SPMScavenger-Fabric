@@ -2348,10 +2348,17 @@ no intent gate; `ExploringGoal.canUse` readiness-independent discretionary start
 | `PENDING_INTENT_TTL_TICKS` | `200` | 20 × 10-tick observation passes (legacy B-19) |
 | `TRACE_CAPACITY` | `24` | D-GAO-025 bounded ring |
 
-**Evidence (`CONFIRMED`):** `.\gradlew.bat clean build` — BUILD SUCCESSFUL; 461 tests, 0 failures.
+**Evidence (`CONFIRMED`):** `.\gradlew.bat clean build` — BUILD SUCCESSFUL; 466 tests, 0 failures.
+
+**GAO-4 repair (2026-08-09, static `CONFIRMED`):** Four architecture defects found post-461-green:
+(1) running/pending intent split — yield callbacks target `intentId`, challenger survives REST→EXPLORE;
+(2) production director always ticks state so `OPINION_DISABLED` invalidates before consumer gates relax;
+(3) `CampfireGoal` delivery stop preserves REST director authority while `RestSessionClaim` live;
+(4) switch margin compares challenger to incumbent's **current** scored utility, not adoption snapshot;
+`adoptedAtTick==0` maps to tick 1 for commitment. Full-chain M3/M4/M12 + toggle/claim/margin tests.
 
 **MAIBS (`CODE_CONFIRMED`, runtime `UNVERIFIED`):** GAO-4-M1…M12 static scenarios pass; voluntary
-REST→EXPLORE yield flag proven in director tests; consumer gates compile against locked paths.
+REST→EXPLORE full handoff chain proven in director tests; consumer gates compile against locked paths.
 
 **Not delivered:** runtime launch, disk persistence, PLACE/ENTITY opinions, PersonalityModel,
 `ExplorationReadiness` threshold modulation.

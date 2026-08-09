@@ -99,9 +99,9 @@ public final class DiscretionaryIntent {
 
     void markAdopted(long gameTime) {
         lifecycle = IntentLifecycle.ADOPTED;
-        adoptedAtTick = gameTime;
+        adoptedAtTick = gameTime == 0L ? 1L : gameTime;
         commitmentUntilTick =
-                gameTime + DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS;
+                adoptedAtTick + DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS;
     }
 
     void markRunning() {

@@ -2,6 +2,8 @@ package com.noobk.spmscavenger.experience;
 
 import com.noobk.spmscavenger.activity.ActivityClass;
 import com.noobk.spmscavenger.activity.ActivityObservationService;
+import com.noobk.spmscavenger.opinion.DiscretionaryAuthority;
+import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.Level;
@@ -93,6 +95,9 @@ public final class RestSessionCoordinator {
         RestSessionClaim closed = claim.closed(reason, gameTime);
         context.setRestClaim(Optional.of(closed));
         ExperienceEmitters.restSessionClosed(context.mobId(), closed, reason, gameTime);
+        if (claim.sourceKind() == RestSourceKind.DISCRETIONARY_REST && OpinionFeatureGate.isEnabled()) {
+            DiscretionaryAuthority.onRestClaimClosed(context.mobId(), gameTime, reason);
+        }
     }
 
     private static Optional<RestCloseReason> invalidationReason(

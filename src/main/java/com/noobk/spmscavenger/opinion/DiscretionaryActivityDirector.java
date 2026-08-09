@@ -3,6 +3,7 @@ package com.noobk.spmscavenger.opinion;
 import com.noobk.spmscavenger.activity.ActivityObservationService;
 import com.noobk.spmscavenger.experience.MobExperienceContext;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
+import com.noobk.spmscavenger.experience.RestCloseReason;
 
 import java.util.UUID;
 
@@ -19,23 +20,19 @@ public final class DiscretionaryActivityDirector {
             ActivityObservationService.Observation observation,
             DiscretionaryAvailability availability,
             boolean combatTarget) {
-        if (!OpinionFeatureGate.isEnabled()) {
-            return;
-        }
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
-        if (context.isFrozen()) {
-            return;
-        }
-        boolean eligible = DiscretionaryEligibility.isDiscretionaryEligible(observation, combatTarget);
+        boolean opinionEnabled = OpinionFeatureGate.isEnabled();
+        boolean eligible = opinionEnabled
+                && DiscretionaryEligibility.isDiscretionaryEligible(observation, combatTarget);
         DiscretionaryScoringInput scoringInput = new DiscretionaryScoringInput(
                 context.affectiveState(),
                 context.opinionMemory(),
                 availability,
                 eligible,
-                true);
+                opinionEnabled);
         context.discretionaryDirector().tick(new DirectorTickInput(
                 gameTime,
-                true,
+                opinionEnabled,
                 context.isFrozen(),
                 combatTarget,
                 observation,

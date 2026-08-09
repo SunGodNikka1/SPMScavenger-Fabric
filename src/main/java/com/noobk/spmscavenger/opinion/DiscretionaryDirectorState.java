@@ -4,21 +4,37 @@ import com.noobk.spmscavenger.activity.ActivityObservationService;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * GAO-4 — per-mob discretionary director state and tick logic.
+ *
+ * <p>Running (incumbent) and pending (challenger) intents are stored separately so yield callbacks
+ * cannot terminal the wrong authority.
  */
 public final class DiscretionaryDirectorState {
 
-    private DiscretionaryIntent intent;
+    private DiscretionaryIntent runningIntent;
+    private DiscretionaryIntent pendingIntent;
     private DiscretionaryActivity incumbentActivity;
-    private float incumbentUtility;
+    private RestAuthorityPhase restAuthorityPhase = RestAuthorityPhase.NONE;
     private boolean restYieldRequested;
     private boolean exploreYieldRequested;
     private final OpinionDecisionTrace trace = new OpinionDecisionTrace();
 
     public Optional<DiscretionaryIntent> intent() {
-        return Optional.ofNullable(intent);
+        if (pendingIntent != null && pendingIntent.isActive()) {
+            return Optional.of(pendingIntent);
+        }
+        return Optional.ofNullable(runningIntent).filter(DiscretionaryIntent::isActive);
+    }
+
+    public Optional<DiscretionaryIntent> runningIntent() {
+        return Optional.ofNullable(runningIntent);
+    }
+
+    public Optional<DiscretionaryIntent> pendingIntent() {
+        return Optional.ofNullable(pendingIntent);
     }
 
     public OpinionDecisionTrace trace() {
@@ -37,24 +53,28 @@ public final class DiscretionaryDirectorState {
         return Optional.ofNullable(incumbentActivity);
     }
 
+    public RestAuthorityPhase restAuthorityPhase() {
+        return restAuthorityPhase;
+    }
+
     public void tick(DirectorTickInput input) {
         Objects.requireNonNull(input, "input");
         restYieldRequested = false;
         exploreYieldRequested = false;
 
         if (!input.opinionEnabled()) {
-            invalidateActive(IntentLifecycle.INVALIDATED, InvalidationCause.OPINION_DISABLED, input.gameTime());
+            invalidateAll(IntentLifecycle.INVALIDATED, InvalidationCause.OPINION_DISABLED, input.gameTime());
             return;
         }
         if (input.frozen()) {
-            invalidateActive(IntentLifecycle.INVALIDATED, InvalidationCause.UNLOAD_FREEZE, input.gameTime());
+            invalidateAll(IntentLifecycle.INVALIDATED, InvalidationCause.UNLOAD_FREEZE, input.gameTime());
             return;
         }
 
         InvalidationCause mandatory = DiscretionaryEligibility.invalidationForObservation(
                 input.observation(), input.combatTarget());
         if (mandatory != InvalidationCause.NONE) {
-            invalidateActive(IntentLifecycle.INVALIDATED, mandatory, input.gameTime());
+            invalidateAll(IntentLifecycle.INVALIDATED, mandatory, input.gameTime());
             return;
         }
 
@@ -73,136 +93,223 @@ public final class DiscretionaryDirectorState {
             trace.record(
                     input.gameTime(),
                     OpinionDecisionTrace.Stage.ABSTAIN,
-                    intent == null ? null : intent.intentId(),
+                    traceIntentId(),
                     top.activity(),
                     "top=" + top.total());
-            clearNonRunningIntent(IntentLifecycle.ABSTAINED, InvalidationCause.NONE, input.gameTime());
+            clearPending(IntentLifecycle.ABSTAINED, InvalidationCause.NONE, input.gameTime(), "abstain");
             return;
         }
 
         trace.record(
                 input.gameTime(),
                 OpinionDecisionTrace.Stage.SELECT,
-                intent == null ? null : intent.intentId(),
+                traceIntentId(),
                 top.activity(),
                 "top=" + top.total() + " runnerUp=" + runnerUp);
 
         DiscretionaryActivity winner = top.activity();
-        if (!canSwitchTo(winner, top.total(), input.gameTime())) {
-            updateYieldRequests(winner, top.total(), input.gameTime());
+        if (!canSwitchTo(winner, top.total(), scoring.get(), input.gameTime())) {
+            updateYieldRequests(winner, top.total(), scoring.get(), input.gameTime());
             return;
         }
 
-        if (intent == null
-                || !intent.isActive()
-                || intent.activity() != winner
-                || intent.lifecycle() == IntentLifecycle.PENDING && intent.isExpiredPending(input.gameTime())) {
+        if (needsPendingIssue(winner, input.gameTime())) {
             issuePending(winner, top.total(), runnerUp, input.gameTime());
         }
 
-        updateYieldRequests(winner, top.total(), input.gameTime());
+        updateYieldRequests(winner, top.total(), scoring.get(), input.gameTime());
     }
 
     public boolean hasActionableIntent(DiscretionaryActivity activity) {
-        return intent != null
-                && intent.isActive()
-                && intent.activity() == activity;
+        if (pendingIntent != null
+                && pendingIntent.isActive()
+                && pendingIntent.activity() == activity) {
+            return true;
+        }
+        return runningIntent != null
+                && runningIntent.isActive()
+                && runningIntent.activity() == activity;
     }
 
     public void adopt(DiscretionaryActivity activity, long gameTime) {
-        if (intent == null || intent.activity() != activity || !intent.isActive()) {
+        DiscretionaryIntent target = resolveAdoptTarget(activity);
+        if (target == null) {
             return;
         }
-        intent.markAdopted(gameTime);
+        if (target == pendingIntent) {
+            runningIntent = pendingIntent;
+            pendingIntent = null;
+        }
+        target.markAdopted(gameTime);
         incumbentActivity = activity;
-        incumbentUtility = intent.selectedUtility();
+        if (activity == DiscretionaryActivity.REST) {
+            restAuthorityPhase = RestAuthorityPhase.DELIVERY;
+        }
         trace.record(
                 gameTime,
                 OpinionDecisionTrace.Stage.ADOPT,
-                intent.intentId(),
+                target.intentId(),
                 activity,
-                "utility=" + intent.selectedUtility());
+                "utility=" + target.selectedUtility());
     }
 
     public void markRunning(DiscretionaryActivity activity, long gameTime) {
-        if (intent == null || intent.activity() != activity) {
+        DiscretionaryIntent target = runningIntent;
+        if (target == null || target.activity() != activity) {
             return;
         }
-        intent.markRunning();
+        target.markRunning();
         trace.record(
                 gameTime,
                 OpinionDecisionTrace.Stage.EXECUTOR,
-                intent.intentId(),
+                target.intentId(),
                 activity,
                 "running");
     }
 
-    public void markYield(DiscretionaryActivity released, DiscretionaryActivity adopted, long gameTime) {
+    public void markRestClaimOpened(long gameTime) {
+        if (runningIntent != null && runningIntent.activity() == DiscretionaryActivity.REST) {
+            restAuthorityPhase = RestAuthorityPhase.CLAIMED;
+            trace.record(
+                    gameTime,
+                    OpinionDecisionTrace.Stage.EXECUTOR,
+                    runningIntent.intentId(),
+                    DiscretionaryActivity.REST,
+                    "rest-claim-opened");
+        }
+    }
+
+    public void markRestDeliveryComplete(long gameTime) {
+        if (restAuthorityPhase == RestAuthorityPhase.DELIVERY) {
+            restAuthorityPhase = RestAuthorityPhase.DELIVERY_COMPLETE;
+        }
+    }
+
+    public void markYield(
+            UUID releasedIntentId,
+            DiscretionaryActivity released,
+            DiscretionaryActivity adopted,
+            long gameTime) {
         trace.record(
                 gameTime,
                 OpinionDecisionTrace.Stage.YIELD,
-                intent == null ? null : intent.intentId(),
+                releasedIntentId,
                 adopted,
                 "released=" + released);
     }
 
-    public void markTerminal(
-            IntentLifecycle terminal, InvalidationCause cause, long gameTime, String detail) {
-        if (intent == null || intent.lifecycle().isTerminal()) {
+    public void markTerminalForIntent(
+            UUID intentId,
+            IntentLifecycle terminal,
+            InvalidationCause cause,
+            long gameTime,
+            String detail) {
+        if (intentId == null) {
             return;
         }
-        intent.markTerminal(terminal, cause);
-        trace.record(
-                gameTime,
-                OpinionDecisionTrace.Stage.TERMINAL,
-                intent.intentId(),
-                intent.activity(),
-                terminal + (detail == null || detail.isBlank() ? "" : ":" + detail));
-        if (incumbentActivity == intent.activity()) {
-            incumbentActivity = null;
-            incumbentUtility = 0f;
+        if (pendingIntent != null && pendingIntent.intentId().equals(intentId)) {
+            terminalize(pendingIntent, terminal, cause, gameTime, detail);
+            pendingIntent = null;
+            return;
         }
-        intent = null;
+        if (runningIntent != null && runningIntent.intentId().equals(intentId)) {
+            terminalize(runningIntent, terminal, cause, gameTime, detail);
+            if (runningIntent.activity() == DiscretionaryActivity.REST) {
+                restAuthorityPhase = RestAuthorityPhase.NONE;
+            }
+            runningIntent = null;
+            incumbentActivity = null;
+        }
+    }
+
+    public void markTerminal(
+            IntentLifecycle terminal, InvalidationCause cause, long gameTime, String detail) {
+        if (pendingIntent != null && pendingIntent.isActive()) {
+            terminalize(pendingIntent, terminal, cause, gameTime, detail);
+            pendingIntent = null;
+        }
+        if (runningIntent != null && runningIntent.isActive()) {
+            terminalize(runningIntent, terminal, cause, gameTime, detail);
+            if (runningIntent.activity() == DiscretionaryActivity.REST) {
+                restAuthorityPhase = RestAuthorityPhase.NONE;
+            }
+            runningIntent = null;
+            incumbentActivity = null;
+        }
+    }
+
+    private DiscretionaryIntent resolveAdoptTarget(DiscretionaryActivity activity) {
+        if (pendingIntent != null
+                && pendingIntent.isActive()
+                && pendingIntent.activity() == activity) {
+            return pendingIntent;
+        }
+        if (runningIntent != null
+                && runningIntent.isActive()
+                && runningIntent.activity() == activity) {
+            return runningIntent;
+        }
+        return null;
+    }
+
+    private boolean needsPendingIssue(DiscretionaryActivity winner, long gameTime) {
+        if (pendingIntent != null
+                && pendingIntent.isActive()
+                && pendingIntent.activity() == winner
+                && !pendingIntent.isExpiredPending(gameTime)) {
+            return false;
+        }
+        if (runningIntent != null
+                && runningIntent.isActive()
+                && runningIntent.activity() == winner
+                && pendingIntent == null) {
+            return false;
+        }
+        return true;
     }
 
     private void issuePending(
             DiscretionaryActivity winner, float utility, float runnerUp, long gameTime) {
-        if (intent != null && intent.isActive()) {
-            intent.markTerminal(IntentLifecycle.INTERRUPTED, InvalidationCause.SUPERSEDED);
-            trace.record(
-                    gameTime,
-                    OpinionDecisionTrace.Stage.TERMINAL,
-                    intent.intentId(),
-                    intent.activity(),
-                    "SUPERSEDED");
+        if (pendingIntent != null && pendingIntent.isActive()) {
+            terminalize(pendingIntent, IntentLifecycle.INTERRUPTED, InvalidationCause.SUPERSEDED, gameTime, "superseded-pending");
+            pendingIntent = null;
         }
-        intent = DiscretionaryIntent.pending(winner, utility, runnerUp, gameTime);
+        pendingIntent = DiscretionaryIntent.pending(winner, utility, runnerUp, gameTime);
         trace.record(
                 gameTime,
                 OpinionDecisionTrace.Stage.INTENT,
-                intent.intentId(),
+                pendingIntent.intentId(),
                 winner,
                 "utility=" + utility);
     }
 
-    private boolean canSwitchTo(DiscretionaryActivity winner, float winnerUtility, long gameTime) {
+    private boolean canSwitchTo(
+            DiscretionaryActivity winner,
+            float winnerUtility,
+            ScoringResult scoring,
+            long gameTime) {
         if (incumbentActivity == null) {
             return true;
         }
         if (incumbentActivity == winner) {
             return true;
         }
-        if (intent != null && intent.isWithinCommitment(gameTime)) {
+        if (runningIntent != null && runningIntent.isWithinCommitment(gameTime)) {
             return false;
         }
-        return winnerUtility >= incumbentUtility + DiscretionaryDirectorConstants.SWITCH_MARGIN;
+        float currentIncumbentUtility = utilityFor(scoring, incumbentActivity);
+        return winnerUtility >= currentIncumbentUtility + DiscretionaryDirectorConstants.SWITCH_MARGIN;
     }
 
-    private void updateYieldRequests(DiscretionaryActivity winner, float winnerUtility, long gameTime) {
+    private void updateYieldRequests(
+            DiscretionaryActivity winner,
+            float winnerUtility,
+            ScoringResult scoring,
+            long gameTime) {
         if (incumbentActivity == null || incumbentActivity == winner) {
             return;
         }
-        if (!canSwitchTo(winner, winnerUtility, gameTime)) {
+        if (!canSwitchTo(winner, winnerUtility, scoring, gameTime)) {
             return;
         }
         if (incumbentActivity == DiscretionaryActivity.REST && winner == DiscretionaryActivity.EXPLORE) {
@@ -213,31 +320,65 @@ public final class DiscretionaryDirectorState {
         }
     }
 
+    private static float utilityFor(ScoringResult scoring, DiscretionaryActivity activity) {
+        return scoring.ranked().stream()
+                .filter(breakdown -> breakdown.activity() == activity)
+                .map(ActivityUtilityBreakdown::total)
+                .findFirst()
+                .orElse(Float.NEGATIVE_INFINITY);
+    }
+
     private void expirePendingIfNeeded(long gameTime) {
-        if (intent != null && intent.isExpiredPending(gameTime)) {
-            intent.markTerminal(IntentLifecycle.EXPIRED, InvalidationCause.NONE);
-            trace.record(
-                    gameTime,
-                    OpinionDecisionTrace.Stage.TERMINAL,
-                    intent.intentId(),
-                    intent.activity(),
-                    "EXPIRED pending TTL");
-            intent = null;
+        if (pendingIntent != null && pendingIntent.isExpiredPending(gameTime)) {
+            terminalize(pendingIntent, IntentLifecycle.EXPIRED, InvalidationCause.NONE, gameTime, "EXPIRED pending TTL");
+            pendingIntent = null;
         }
     }
 
-    private void invalidateActive(IntentLifecycle terminal, InvalidationCause cause, long gameTime) {
-        if (intent != null && intent.isActive()) {
-            markTerminal(terminal, cause, gameTime, cause.name());
+    private void invalidateAll(IntentLifecycle terminal, InvalidationCause cause, long gameTime) {
+        if (pendingIntent != null && pendingIntent.isActive()) {
+            terminalize(pendingIntent, terminal, cause, gameTime, cause.name());
+            pendingIntent = null;
+        }
+        if (runningIntent != null && runningIntent.isActive()) {
+            terminalize(runningIntent, terminal, cause, gameTime, cause.name());
+            runningIntent = null;
         }
         incumbentActivity = null;
-        incumbentUtility = 0f;
+        restAuthorityPhase = RestAuthorityPhase.NONE;
     }
 
-    private void clearNonRunningIntent(IntentLifecycle terminal, InvalidationCause cause, long gameTime) {
-        if (intent != null && intent.lifecycle() != IntentLifecycle.RUNNING) {
-            markTerminal(terminal, cause, gameTime, "abstain");
+    private void clearPending(
+            IntentLifecycle terminal, InvalidationCause cause, long gameTime, String detail) {
+        if (pendingIntent != null) {
+            terminalize(pendingIntent, terminal, cause, gameTime, detail);
+            pendingIntent = null;
         }
+    }
+
+    private void terminalize(
+            DiscretionaryIntent target,
+            IntentLifecycle terminal,
+            InvalidationCause cause,
+            long gameTime,
+            String detail) {
+        target.markTerminal(terminal, cause);
+        trace.record(
+                gameTime,
+                OpinionDecisionTrace.Stage.TERMINAL,
+                target.intentId(),
+                target.activity(),
+                terminal + (detail == null || detail.isBlank() ? "" : ":" + detail));
+    }
+
+    private UUID traceIntentId() {
+        if (pendingIntent != null) {
+            return pendingIntent.intentId();
+        }
+        if (runningIntent != null) {
+            return runningIntent.intentId();
+        }
+        return null;
     }
 
     private void recordScores(ScoringResult scoring, long gameTime) {
@@ -245,7 +386,7 @@ public final class DiscretionaryDirectorState {
             trace.record(
                     gameTime,
                     OpinionDecisionTrace.Stage.SCORE,
-                    intent == null ? null : intent.intentId(),
+                    traceIntentId(),
                     breakdown.activity(),
                     breakdown.total()
                             + " pref="
@@ -262,25 +403,28 @@ public final class DiscretionaryDirectorState {
         return scoring.ranked().get(1).total();
     }
 
-    /** Test seam — seed incumbent for switch/yield scenarios. */
+    /** Test seam — seed running incumbent for switch/yield scenarios. */
     void seedIncumbent(DiscretionaryActivity activity, float utility, long gameTime) {
         incumbentActivity = activity;
-        incumbentUtility = utility;
-        intent = DiscretionaryIntent.pending(activity, utility, 0f, gameTime);
-        intent.markAdopted(gameTime);
-        intent.markRunning();
+        runningIntent = DiscretionaryIntent.pending(activity, utility, 0f, gameTime);
+        runningIntent.markAdopted(Math.max(1L, gameTime));
+        runningIntent.markRunning();
+        if (activity == DiscretionaryActivity.REST) {
+            restAuthorityPhase = RestAuthorityPhase.DELIVERY;
+        }
     }
 
     void clearForTest() {
-        intent = null;
+        runningIntent = null;
+        pendingIntent = null;
         incumbentActivity = null;
-        incumbentUtility = 0f;
+        restAuthorityPhase = RestAuthorityPhase.NONE;
         restYieldRequested = false;
         exploreYieldRequested = false;
         trace.clear();
     }
 
     public void onFreeze() {
-        invalidateActive(IntentLifecycle.INVALIDATED, InvalidationCause.UNLOAD_FREEZE, 0L);
+        invalidateAll(IntentLifecycle.INVALIDATED, InvalidationCause.UNLOAD_FREEZE, 0L);
     }
 }

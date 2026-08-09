@@ -19,6 +19,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.EnumSet;
+import java.util.UUID;
 
 /**
  * Puts down a campfire and hangs around it when there is nothing else to do.
@@ -110,8 +111,11 @@ public class CampfireGoal extends Goal {
     @Override
     public boolean canContinueToUse() {
         if (DiscretionaryAuthority.mustYieldDiscretionaryRest(mob.getUUID())) {
-            DiscretionaryAuthority.onRestYieldedForExplore(
-                    mob.getUUID(), mob.level().getGameTime());
+            UUID restIntentId = DiscretionaryAuthority.runningRestIntentId(mob.getUUID());
+            if (restIntentId != null) {
+                DiscretionaryAuthority.onRestYieldedForExplore(
+                        mob.getUUID(), restIntentId, mob.level().getGameTime());
+            }
             return false;
         }
         return ScavengerConfig.get().campfire
@@ -136,11 +140,16 @@ public class CampfireGoal extends Goal {
     @Override
     public void stop() {
         if (DiscretionaryAuthority.opinionGatesConsumers()) {
-            DiscretionaryAuthority.onRestTerminal(
-                    mob.getUUID(),
-                    IntentLifecycle.INTERRUPTED,
-                    mob.level().getGameTime(),
-                    "campfire-stop");
+            long gameTime = mob.level().getGameTime();
+            if (DiscretionaryAuthority.shouldPreserveRestIntentOnCampfireStop(mob.getUUID())) {
+                DiscretionaryAuthority.onRestDeliveryComplete(mob.getUUID(), gameTime);
+            } else {
+                DiscretionaryAuthority.onRestTerminal(
+                        mob.getUUID(),
+                        IntentLifecycle.INTERRUPTED,
+                        gameTime,
+                        "campfire-stop");
+            }
         }
         firePos = null;
         idlePos = null;
@@ -177,6 +186,7 @@ public class CampfireGoal extends Goal {
                 RestSessionCoordinator.openCampfireRest(
                         mob, firePos, idlePos, level.getGameTime());
                 restClaimOpened = true;
+                DiscretionaryAuthority.onRestClaimOpened(mob.getUUID(), level.getGameTime());
             }
             mob.getNavigation().stop();   // arrived — stand and watch the fire
             return;

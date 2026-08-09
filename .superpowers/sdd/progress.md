@@ -71,6 +71,8 @@ C3-F1…F7; 321 tests/clean build; MAIBS static PASS; runtime unverified). Post-
 repaired a same-observer CommandedAction revoke→reassign loop. No Tunnel Search work performed.
 
 GA-OPINION: GAO-0 through GAO-4 `IMPLEMENTED / STATIC VERIFIED` — scoring, director, intent
-lifecycle, voluntary yield, consumer gates; 461 tests/clean build pass; runtime unverified.
+lifecycle, voluntary yield, consumer gates; GAO-4 repair (handoff identity, opinion-disable
+invalidation, REST claim authority, current-utility switch margin); 466 tests/clean build pass;
+runtime unverified.
 
 No commits. No Minecraft launches (separate approval required).

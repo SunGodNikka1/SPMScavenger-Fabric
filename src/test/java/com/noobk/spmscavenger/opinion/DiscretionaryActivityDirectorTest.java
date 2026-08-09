@@ -70,9 +70,20 @@ class DiscretionaryActivityDirectorTest {
         director.tick(tick(afterCommitment, idleObservation(), true));
 
         assertTrue(director.restYieldRequested());
-        assertEquals(
-                DiscretionaryActivity.EXPLORE,
-                director.intent().map(DiscretionaryIntent::activity).orElseThrow());
+        UUID exploreIntentId = director.pendingIntent()
+                .map(DiscretionaryIntent::intentId)
+                .orElseThrow();
+        UUID restIntentId = director.runningIntent()
+                .map(DiscretionaryIntent::intentId)
+                .orElseThrow();
+
+        DiscretionaryAuthority.onRestYieldedForExplore(MOB, restIntentId, afterCommitment + 1L);
+
+        assertEquals(exploreIntentId, director.pendingIntent().map(DiscretionaryIntent::intentId).orElseThrow());
+        assertTrue(director.runningIntent().isEmpty());
+        DiscretionaryAuthority.onExploreAdopted(MOB, afterCommitment + 2L);
+        assertEquals(exploreIntentId, director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow());
+        assertEquals(IntentLifecycle.RUNNING, director.runningIntent().get().lifecycle());
     }
 
   // GAO-4-M1 / explore wins
@@ -107,10 +118,23 @@ class DiscretionaryActivityDirectorTest {
         seedOpinions(55f, 5f, 11f, 4f);
         neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
         director.seedIncumbent(DiscretionaryActivity.REST, 15f, 0L);
+        long afterCommitment = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 5L;
 
-        director.tick(tick(DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 5L, idleObservation(), true));
+        director.tick(tick(afterCommitment, idleObservation(), true));
 
         assertTrue(director.restYieldRequested());
+        UUID exploreIntentId = director.pendingIntent()
+                .map(DiscretionaryIntent::intentId)
+                .orElseThrow();
+        UUID restIntentId = director.runningIntent()
+                .map(DiscretionaryIntent::intentId)
+                .orElseThrow();
+
+        DiscretionaryAuthority.onRestYieldedForExplore(MOB, restIntentId, afterCommitment + 1L);
+        assertEquals(exploreIntentId, director.pendingIntent().map(DiscretionaryIntent::intentId).orElseThrow());
+
+        DiscretionaryAuthority.onExploreAdopted(MOB, afterCommitment + 2L);
+        assertEquals(exploreIntentId, director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow());
     }
 
   // GAO-4-M4
@@ -119,10 +143,23 @@ class DiscretionaryActivityDirectorTest {
         seedOpinions(10f, 5f, 30f, 5f);
         neutralMood().seedChannels(0f, 5f, 0f, 85f, 0f);
         director.seedIncumbent(DiscretionaryActivity.EXPLORE, 25f, 0L);
+        long afterCommitment = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 5L;
 
-        director.tick(tick(DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 5L, idleObservation(), true));
+        director.tick(tick(afterCommitment, idleObservation(), true));
 
         assertTrue(director.exploreYieldRequested());
+        UUID restIntentId = director.pendingIntent()
+                .map(DiscretionaryIntent::intentId)
+                .orElseThrow();
+        UUID exploreIntentId = director.runningIntent()
+                .map(DiscretionaryIntent::intentId)
+                .orElseThrow();
+
+        DiscretionaryAuthority.onExploreYieldedForRest(MOB, exploreIntentId, afterCommitment + 1L);
+        assertEquals(restIntentId, director.pendingIntent().map(DiscretionaryIntent::intentId).orElseThrow());
+
+        DiscretionaryAuthority.onRestAdopted(MOB, afterCommitment + 2L);
+        assertEquals(restIntentId, director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow());
     }
 
   // GAO-4-M5
@@ -217,6 +254,92 @@ class DiscretionaryActivityDirectorTest {
 
         assertTrue(traceContainsIntent(intentId, OpinionDecisionTrace.Stage.ADOPT));
         assertTrue(traceContainsIntent(intentId, OpinionDecisionTrace.Stage.EXECUTOR));
+    }
+
+    @Test
+    void opinionDisableInvalidatesIntentBeforeConsumerGatesRelax() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
+        DiscretionaryActivityDirector.tick(
+                MOB, 10L, idleObservation(), DiscretionaryAvailability.bothPresent(), false);
+        UUID staleId = director.intent().get().intentId();
+        assertTrue(director.intent().isPresent());
+
+        OpinionFeatureGate.testOverride = false;
+        DiscretionaryActivityDirector.tick(
+                MOB, 20L, idleObservation(), DiscretionaryAvailability.bothPresent(), false);
+
+        assertTrue(director.intent().isEmpty());
+        assertTrue(hasTerminalDetail("OPINION_DISABLED"));
+        assertTrue(DiscretionaryAuthority.mayStartDiscretionaryExplore(MOB));
+
+        OpinionFeatureGate.testOverride = true;
+        DiscretionaryActivityDirector.tick(
+                MOB, 30L, idleObservation(), DiscretionaryAvailability.bothPresent(), false);
+
+        assertTrue(director.intent().isPresent());
+        assertFalse(staleId.equals(director.intent().get().intentId()));
+    }
+
+    @Test
+    void restDeliveryStopPreservesDirectorAuthorityWhileClaimLive() {
+        seedOpinions(20f, 40f, 30f, 5f);
+        neutralMood().seedChannels(0f, 5f, 0f, 80f, 0f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 30f, 100L);
+        UUID restIntentId = director.runningIntent().get().intentId();
+
+        director.markRestClaimOpened(150L);
+        assertEquals(RestAuthorityPhase.CLAIMED, director.restAuthorityPhase());
+
+        DiscretionaryAuthority.onRestDeliveryComplete(MOB, 200L);
+        assertTrue(DiscretionaryAuthority.shouldPreserveRestIntentOnCampfireStop(MOB));
+        assertTrue(director.runningIntent().isPresent());
+        assertEquals(restIntentId, director.runningIntent().get().intentId());
+
+        DiscretionaryAuthority.onRestClaimClosed(MOB, 250L, com.noobk.spmscavenger.experience.RestCloseReason.TIMEOUT);
+        assertTrue(director.runningIntent().isEmpty());
+        assertTrue(hasTerminalDetail("rest-claim-closed"));
+    }
+
+    @Test
+    void switchMarginUsesCurrentIncumbentUtilityNotAdoptionSnapshot() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
+        director.seedIncumbent(DiscretionaryActivity.EXPLORE, 70f, 0L);
+        long afterCommitment = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 5L;
+
+        neutralMood().seedChannels(0f, 5f, 0f, 85f, 0f);
+        director.tick(tick(afterCommitment, idleObservation(), true));
+
+        assertTrue(director.exploreYieldRequested());
+    }
+
+    @Test
+    void switchMarginBlocksSmallChallengerLead() {
+        seedOpinions(30f, 5f, 28f, 5f);
+        neutralMood().seedChannels(0f, 42f, 0f, 40f, 5f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 40f, 0L);
+        long afterCommitment = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 5L;
+
+        director.tick(tick(afterCommitment, idleObservation(), true));
+
+        assertFalse(director.restYieldRequested());
+        assertTrue(director.pendingIntent().isEmpty());
+    }
+
+    @Test
+    void adoptedAtTickZeroStillHonorsCommitment() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
+        director.tick(tick(0L, idleObservation(), true));
+        UUID exploreId = director.intent().get().intentId();
+        DiscretionaryAuthority.onExploreAdopted(MOB, 0L);
+
+        neutralMood().seedChannels(0f, 5f, 0f, 85f, 0f);
+        director.tick(tick(50L, idleObservation(), true));
+
+        assertFalse(director.exploreYieldRequested());
+        assertEquals(exploreId, director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow());
     }
 
     private DirectorTickInput tick(long gameTime, ActivityObservationService.Observation observation, boolean eligible) {
