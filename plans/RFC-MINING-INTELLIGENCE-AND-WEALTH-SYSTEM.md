@@ -1284,9 +1284,102 @@ code path. **Must not happen:** any block-state read that treats non-exposed ore
 second inventory, scanner, or gather implementation; `HANDOFF_TUNNEL_SEARCH` being consumed to make
 tests green without an executor actually running.
 
+### D-MIW-TS2 — Exposure Opportunity Handoff (`LOCKED`, User)
+
+`GATHER_RESOURCES -> ALLOW` is necessary and **not sufficient**. Three source facts, each verified:
+
+| Fact | Evidence | Consequence |
+| --- | --- | --- |
+| Equal priority cannot preempt | both goals registered at priority 3; `WrappedGoal.canBeReplacedBy` yields only to strictly lower numbers | `ALLOW` permits gather; it cannot *hand* gather control |
+| Gather has a 60-tick scan cooldown, checked **after** the arbitration guard | `GatherResourcesGoal.canUse` — guard, then `if (scanCooldown > 0) return false`; `SCAN_INTERVAL = 60` | a one-tick yield is unreliable: gather may decline for up to 59 ticks and the tunnel simply reacquires |
+| Gather's appetite is global, not tunnel-scoped | `wantsMore` → `GatherIntentPolicy.evaluate(...)` over logs / coal / cobblestone / raw iron / diamond plus wealth variants | a yield can send the mob off after an unrelated resource, which `COOPERATIVE_WORK` would then faithfully pause the tunnel lease for — semantically wrong |
+
+**The contract.** Tunnel Search never asks *"is there diamond nearby"*. After cutting a corridor cell
+it knows only *"I just opened these cells"* — legitimate physical evidence. It records an
+`ExposureOpportunity` (cells opened, tick, owning project session), voluntarily releases `MOVE`+`LOOK`,
+and gather gets **one immediate probe** scoped to that excavation boundary, bypassing the scan
+cooldown. Nothing useful → opportunity cleared, tunnel resumes. Something legitimate → gather takes
+over, `COOPERATIVE_WORK` pauses the lease, gather's own `lastHarvest` drives vein-follow from its
+first break, and the **same** project and frontier resume afterwards.
+
+This upgrades the definition of cooperative work from *"a non-designated goal happened to get
+`ALLOW`"* to **"a downstream executor is consuming a physical opportunity produced by this active
+project"** — which is what the lease pause should have meant all along.
+
+**Two additions from source verification, not yet in the User's sketch:**
+
+1. **The probe must be consumed whether or not it succeeds.** A bypass that re-fires on every opened
+   cell turns a 60-tick cooldown into continuous scanning — a performance regression the cooldown
+   exists to prevent. One probe per exposure event, consumed on use.
+2. **`wantsMore` gates *before* the arbitration guard.** Gather's admission still requires
+   `GatherIntentPolicy.evaluate(...).shouldGather()`. Tunnel Search is triggered by
+   `diamondProgressionDemand > 0`, so the two normally agree — but nothing *enforces* that, and if
+   gather's intent resolves elsewhere the handoff silently never fires. The tunnel's trigger demand
+   and gather's intent must be proven to agree, or this is an open loop with a green test suite.
+
+### D-MIW-TS3 — Horizontal Corridor Safety (`LOCKED`, User)
+
+Geometry A is simple, which is not the same as safe. At `Y <= 16` a corridor meets lava, water,
+gravel, bedrock, missing footing and natural openings. `StairStepSafety.validateBreakHazards(BlockGetter,
+BlockPos)` and `validateBreak(Level, BlockPos, ItemStack)` are already geometry-independent and
+public — reuse them. Do **not** reuse `validatePlan`, whose post-break geometry is staircase-specific.
+
+Gen-1 horizontal step: `current stand -> forward feet + forward head`, break only those two cells,
+require solid footing and 2-high passability, hazards via the shared primitives.
+
+### D-MIW-TS4 — Tunnel breakthrough is a cave handoff (`LOCKED`, User)
+
+If the corridor opens into a natural cave, emit `CAVE_FOUND` rather than tunnelling on through it.
+The R2 family already owns what counts as evidence: **connected through air from cells actually
+excavated**, never perceived through a wall. Tunnel Search inherits that invariant rather than
+restating it.
+
+### Implementation order (locked)
+
+```text
+1  ExposureOpportunity + exposure-local probe + consume-on-use
+2  horizontal 1x2 step plan reusing StairStepSafety hazard primitives
+3  ExecutionIntent.TUNNEL_SEARCH  (also add to isActionable)
+   MiningGoalKind.TUNNEL_SEARCH   (also add to isDesignatedConsumer)
+   arbiter row: TunnelSearch ALLOW / GatherResources ALLOW / chores YIELD
+4  TunnelSearchGoal executor + cooperative yield
+5  breakthrough -> CAVE_FOUND via existing connected-opening evidence
+```
+
+Step 3 is when the staged machinery goes live: `CooperativeResourceHandoffTest`'s
+`documentsThatTheCooperativePathIsNotYetReachable` must be **rewritten** — not deleted — to prove
+`TUNNEL_SEARCH` + `GATHER_RESOURCES` → `COOPERATIVE_PROJECT_WORK` → `COOPERATIVE_WORK`.
+
+### Deferred, deliberately
+
+`DiscoveryPolicy.HarvestReveal` is supplied only by gather's own break, which is why tunnel-exposed
+ore is `VISIBLE` rather than `NEWLY_EXPOSED`. The general concept is an **excavation** reveal, not a
+gather reveal, and `HarvestReveal` probably wants to become `ExcavationReveal`. **Not required for
+Gen-1** — exposure-local handoff works on today's legitimate-visibility rules, and `NEWLY_EXPOSED` is
+only a priority bonus on top of legitimate visibility. Recorded so the redesign is a choice later
+rather than a surprise.
+
+### End-to-end MAIBS scenario (acceptance for the executor)
+
+```text
+Tunnel Search digs east
+  -> completes one safe 1x2 cell
+  -> exposes diamond in the side wall
+  -> records the physical exposure
+  -> voluntarily yields MOVE+LOOK
+  -> gather bypasses its cooldown, ONE probe
+  -> sees only the legitimately exposed opportunity
+  -> takes the diamond; COOPERATIVE_WORK pauses the tunnel lease
+  -> gather vein-follows via its own lastHarvest
+  -> gather finishes
+  -> same TunnelProject, same heading and frontier resume
+  -> no false NO_PROGRESS, no second staircase, no hidden-ore scan,
+     no unrelated resource excursion
+```
+
 ### Frontier
 
-`TUNNEL_SEARCH` executor (D-MIW-TS1 + TS-M1 locked) -> `HANDOFF_TUNNEL_SEARCH` gains its first real
+`TUNNEL_SEARCH` executor (D-MIW-TS1..TS4 locked) -> `HANDOFF_TUNNEL_SEARCH` gains its first real
 consumer -> second executable mode -> `MiningDirector` makes a genuine mode choice -> multi-mode
 MAIBS -> **a runtime milestone finally worth spending**, because by then more than one strategy
 exists to observe.
@@ -3355,6 +3448,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | User + Agent_Claude | **D-MIW-TS2/TS3/TS4 `LOCKED`** before Tunnel Search code. **TS2 Exposure Opportunity Handoff**: `ALLOW` is necessary but not sufficient — verified that equal priority-3 cannot preempt, that `GatherResourcesGoal`'s 60-tick `SCAN_INTERVAL` is checked *after* the arbitration guard (so a one-tick yield is unreliable), and that `wantsMore`/`GatherIntentPolicy` is global rather than tunnel-scoped (so a yield could fund an unrelated excursion that `COOPERATIVE_WORK` would wrongly pause the lease for). Tunnel records cells it physically opened; gather gets one exposure-local probe bypassing the cooldown. Two additions from source: the probe must be **consumed whether or not it succeeds** (else the cooldown is defeated), and `wantsMore` gates *before* the guard, so the tunnel's trigger demand and gather's intent must be proven to agree or the loop is silently open. **TS3**: reuse `StairStepSafety.validateBreakHazards`/`validateBreak`, not `validatePlan` (staircase-specific geometry). **TS4**: breakthrough emits `CAVE_FOUND` under the existing connected-opening evidence rules. `HarvestReveal` → `ExcavationReveal` deferred out of Gen-1 |
 | 2026-08-09 | Agent_Claude | Review branch closed; **TUNNEL_SEARCH pre-implementation MAIBS pass** (Gate MAIBS-1). **D-MIW-TS1**: the executor creates *exposure*, it does not find ore — scanning would be clairvoyance (ore in rock is `UNDISCOVERED` by the mod's own contract) and would duplicate `GatherCandidatePolicy`/`GatherResourcesGoal` (SPM-2). **TS-M1**: the arbitration row is a real decision — inheriting `GATHER_RESOURCES -> YIELD` from `CONTROLLED_DESCENT` makes the mob tunnel past ore it just exposed; recommended `ALLOW`. Severity checked not assumed: exposed ore stays `VISIBLE`, so the loss is the 40-tick vein-follow window and scan range, not the ore. Same inversion noted as an open question for shipped `CONTROLLED_DESCENT`. Corridor geometry `OPEN` — recommend straight corridor first, branch mine as a superset later |
 | 2026-08-09 | User + Agent_Claude | **Lifetime Semantics Sweep `COMPLETE`** — bounded review of every independently implemented lifetime/expiry contract (owner / epoch / predicate / persistence / consumers). One finding: **L1**, `CAVE_HANDOFF_LIFETIME_TICKS` defined twice and kept in step by a comment — latent, no behavioural contradiction, fixed by deletion. Five PASS, including the User's two named candidates (`FurnaceStations` complementary predicates, `SeekShelterGoal` single consumer) and the `PROGRESS_LEASE_TICKS` / `MAX_BREAK_TICKS` bound relationship, now documented. Coincidental equal values left alone per the stop condition. Frontier: `TUNNEL_SEARCH` executor |
 | 2026-08-09 | User + Agent_Claude | **MI-14C2-M2 `IMPLEMENTED`** (330 tests). MAIBS re-pass found predicate drift surviving the C2-R2 constant unification: commitment `now < claimedAt + 2400` vs expedition `now - startedTick > 2400` left one tick where the expedition was alive and its authority gone, reopening both `CAVE_HANDOFF -> NONE` and `mayStartControlledDescent`. Repaired by sharing the predicate (`ExploringGoal.expeditionExpired`) and storing `authorityTicks` instead of a derived `expiresAt`; legacy saves recover the window. Lesson `PROVEN`: deduplicating a constant does not deduplicate a boundary |
