@@ -10,7 +10,10 @@ public final class MiningExecutionArbiter {
 
     public static ArbitrationDecision decide(ExecutionIntent intent, MiningGoalKind kind) {
         return switch (intent) {
-            case NONE, TUNNEL_HANDOFF_PENDING -> ArbitrationDecision.NEUTRAL;
+            // TUNNEL_SEARCH is NEUTRAL until step 3 gives it a designated consumer and a real
+            // row. Neutral is the honest placeholder: it grants no authority to a mode whose
+            // executor does not exist yet.
+            case NONE, TUNNEL_HANDOFF_PENDING, TUNNEL_SEARCH -> ArbitrationDecision.NEUTRAL;
             case CONTROLLED_DESCENT -> switch (kind) {
                 case CONTROLLED_DESCENT -> ArbitrationDecision.ALLOW;
                 case GATHER_RESOURCES, SMELT_AT_FURNACE, CRAFT_TORCHES, EXPLORING_ORDINARY,

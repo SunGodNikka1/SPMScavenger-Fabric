@@ -9,6 +9,8 @@ package com.noobk.spmscavenger.mining;
 public enum ExecutionIntent {
     /** Active {@link MiningProjectMode#CONTROLLED_DESCENT} assignment. */
     CONTROLLED_DESCENT,
+    /** An active deliberate horizontal search project. */
+    TUNNEL_SEARCH,
     /** Pending {@link MiningProjectEnd#CAVE_FOUND} transition awaiting explore consumption. */
     CAVE_HANDOFF,
     /**

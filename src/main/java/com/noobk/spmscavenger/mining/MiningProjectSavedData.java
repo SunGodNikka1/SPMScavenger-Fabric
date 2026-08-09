@@ -335,6 +335,26 @@ public final class MiningProjectSavedData extends SavedData {
                 .isPresent();
     }
 
+    /**
+     * Step 2.5 - atomic tunnel-handoff claim, mirroring {@link #claimCaveContinuation}.
+     *
+     * <p>Consuming the transition, storing the project and issuing the lease are one operation, so
+     * no interleaving can leave a consumed handoff with no project, or a project with no lease.
+     *
+     * @return the stored project, or empty when the expected handoff is no longer pending
+     */
+    public Optional<MiningProject> claimTunnelSearchHandoff(
+            UUID mobId, MiningTransition expected, MiningProject project, long now) {
+        Optional<MiningTransition> pending = pendingTransition(mobId);
+        if (pending.isEmpty() || !pending.get().equals(expected) || byMob.containsKey(mobId)) {
+            return Optional.empty();
+        }
+        consumeTransition(mobId);
+        putProject(mobId, project);
+        putLease(mobId, MiningExecutionLease.issued(project.mode(), now));
+        return Optional.of(project);
+    }
+
     public Optional<MiningProject> projectOf(UUID mobId) {
         return Optional.ofNullable(byMob.get(mobId));
     }
@@ -359,6 +379,10 @@ public final class MiningProjectSavedData extends SavedData {
             byMob.remove(mobId);
             setDirty();
         }
+        // Step 2.5 - an exposure has no meaning without the project that cut it. Session binding
+        // already makes a stale one unusable, but leaving dead runtime state per mob until a
+        // restart is untidy rather than harmless: it survives every later inspection of this map.
+        exposures.remove(mobId);
         return Optional.of(finished);
     }
 

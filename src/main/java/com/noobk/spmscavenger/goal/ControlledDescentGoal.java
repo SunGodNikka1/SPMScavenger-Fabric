@@ -93,7 +93,7 @@ public final class ControlledDescentGoal extends Goal {
         }
         return MiningDirector.authorizeExecution(
                 level, mob, store, assigned.get(),
-                MiningDirector.resolveControlledDescentBlocker(
+                MiningDirector.resolveMiningExecutionBlocker(
                         level, mob, ScavengerConfig.get(), store, this));
     }
 
@@ -114,7 +114,7 @@ public final class ControlledDescentGoal extends Goal {
                 mob,
                 store,
                 project,
-                MiningDirector.resolveControlledDescentBlocker(
+                MiningDirector.resolveMiningExecutionBlocker(
                         level, mob, ScavengerConfig.get(), store, this));
     }
 

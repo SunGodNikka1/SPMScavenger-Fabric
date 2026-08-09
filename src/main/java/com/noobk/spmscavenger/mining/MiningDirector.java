@@ -3,6 +3,7 @@ package com.noobk.spmscavenger.mining;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.SpmScavenger;
+import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.ToolTier;
 import com.noobk.spmscavenger.ToolTierPolicy;
 import net.minecraft.core.BlockPos;
@@ -141,7 +142,15 @@ public final class MiningDirector {
      * <em>before</em> looking up its assignment, so any of them failing after assignment left a
      * {@code RUNNING} project that blocked every future decision and could never time out.
      */
-    public static ExecutionBlocker controlledDescentBlocker(
+    /**
+     * Step 2.5 — blockers shared by every deliberate excavation mode.
+     *
+     * <p>Renamed from {@code controlledDescentBlocker}: every clause here (feature switch,
+     * {@code mobGriefing}, combat, host order, pickaxe) governs any mode that deliberately breaks
+     * blocks. Leaving the shared lifecycle API named after one mode is how the third mode ends up
+     * bolted around it instead of through it. Mode-specific physical checks stay in executors.
+     */
+    public static ExecutionBlocker miningExecutionBlocker(
             ServerLevel level, Mob mob, ScavengerConfig cfg) {
         if (!cfg.enabled || !cfg.gatherResources || !cfg.exploring) {
             return ExecutionBlocker.FEATURE_DISABLED;
@@ -172,13 +181,13 @@ public final class MiningDirector {
      * MI-14C2 — base preconditions plus scheduler contention when an actionable intent exists but a
      * chore that should yield still owns {@code MOVE}.
      */
-    public static ExecutionBlocker resolveControlledDescentBlocker(
+    public static ExecutionBlocker resolveMiningExecutionBlocker(
             ServerLevel level,
             Mob mob,
             ScavengerConfig cfg,
             MiningProjectSavedData store,
             @Nullable Goal callingGoal) {
-        ExecutionBlocker blocker = controlledDescentBlocker(level, mob, cfg);
+        ExecutionBlocker blocker = miningExecutionBlocker(level, mob, cfg);
         if (!blocker.permitsExecution()) {
             return blocker;
         }
@@ -243,20 +252,33 @@ public final class MiningDirector {
      */
     public static void enforceLease(
             ServerLevel level, Mob mob, MiningProjectSavedData store, ScavengerConfig cfg) {
-        Optional<MiningProject> assigned =
-                assignedProject(store, mob.getUUID(), MiningProjectMode.CONTROLLED_DESCENT);
+        // Step 2.5 — serve whatever executable project is assigned, not one hard-coded mode.
+        // Asking only for CONTROLLED_DESCENT meant a running TUNNEL_SEARCH project looked orphaned:
+        // the observer deleted its lease, the executor recreated one, and every guarantee the lease
+        // provides - start window, progress watchdog, cooperative pause accounting - stopped being
+        // persistent for the second mode.
+        Optional<MiningProject> assigned = store.projectOf(mob.getUUID())
+                .filter(MiningProject::isActive)
+                .filter(project -> ExecutionIntentPolicy.intentOf(project.mode()).isPresent());
         if (assigned.isEmpty()) {
             if (store.leaseOf(mob.getUUID()).isPresent()) {
                 store.clearLease(mob.getUUID());
             }
             return;
         }
+        MiningProject project = assigned.get();
+        // A lease issued for another mode cannot authorize this one. Reissue rather than honour it.
+        store.leaseOf(mob.getUUID())
+                .filter(lease -> lease.mode() != project.mode())
+                .ifPresent(stale -> store.putLease(
+                        mob.getUUID(),
+                        MiningExecutionLease.issued(project.mode(), level.getGameTime())));
         authorizeExecution(
                 level,
                 mob,
                 store,
-                assigned.get(),
-                resolveControlledDescentBlocker(level, mob, cfg, store, null));
+                project,
+                resolveMiningExecutionBlocker(level, mob, cfg, store, null));
     }
 
     /** The executor reports that it has actually begun. Only it knows this. */
@@ -290,6 +312,67 @@ public final class MiningDirector {
                 .filter(stored -> stored.matchesSession(localCopy))
                 .isPresent();
     }
+    /**
+     * Step 2.5 — atomically claim a pending {@code HANDOFF_TUNNEL_SEARCH} as a real project.
+     *
+     * <p>The cave-handoff lesson applied to the tunnel: consuming the transition, creating the
+     * project and issuing the lease are one operation, so no interleaving can leave a consumed
+     * handoff with no project or a project with no lease.
+     *
+     * <p><b>Demand is revalidated here, not trusted from the handoff.</b> The descent observed
+     * diamond demand when it emitted the transition; by the time the tunnel gets scheduler access
+     * the mob may have obtained diamonds elsewhere. A satisfied requirement retires the handoff
+     * instead of starting deliberate excavation on fossilised intent.
+     *
+     * @return the created project, or empty when nothing was claimed
+     */
+    public static Optional<MiningProject> claimTunnelSearch(
+            ServerLevel level, Mob mob, MiningProjectSavedData store, ScavengerConfig cfg) {
+
+        Optional<MiningTransition> pending = store.pendingTransition(mob.getUUID())
+                .filter(transition ->
+                        transition.reason() == MiningProjectEnd.HANDOFF_TUNNEL_SEARCH);
+        if (pending.isEmpty() || store.projectOf(mob.getUUID()).isPresent()) {
+            return Optional.empty();
+        }
+        MiningTransition handoff = pending.get();
+
+        if (!tunnelDemandStillLive(mob, cfg)) {
+            store.consumeTransition(mob.getUUID());
+            SpmScavenger.LOGGER.info(
+                    "[spmscavenger] director retired stale HANDOFF_TUNNEL_SEARCH entity={} "
+                            + "reason=demand_satisfied",
+                    mob.getId());
+            return Optional.empty();
+        }
+
+        MiningProject project = MiningProject.start(
+                MiningProjectMode.TUNNEL_SEARCH,
+                mob.blockPosition(),
+                handoff.heading(),
+                MiningBudget.controlledDescentDefaults(),
+                level.getGameTime());
+        Optional<MiningProject> claimed =
+                store.claimTunnelSearchHandoff(mob.getUUID(), handoff, project, level.getGameTime());
+        claimed.ifPresent(started -> SpmScavenger.LOGGER.info(
+                "[spmscavenger] director claimed TUNNEL_SEARCH entity={} heading={} origin={}",
+                mob.getId(), started.heading(), started.origin()));
+        return claimed;
+    }
+
+    /** Current demand, not the demand that existed when the handoff was emitted. */
+    private static boolean tunnelDemandStillLive(Mob mob, ScavengerConfig cfg) {
+        if (!WorkDemandPolicy.isDiamondLocalGatherEligible(mob.blockPosition().getY())) {
+            return false;
+        }
+        return WorkDemandPolicy.diamondProgressionDemand(
+                        PlayerMobs.backpack(mob),
+                        mob.getMainHandItem(),
+                        mob.getOffhandItem(),
+                        cfg)
+                > 0;
+    }
+
     /** The project this mob is assigned, if any. Executors ask; they do not create. */
     public static Optional<MiningProject> assignedProject(
             MiningProjectSavedData store, UUID mobId, MiningProjectMode mode) {
