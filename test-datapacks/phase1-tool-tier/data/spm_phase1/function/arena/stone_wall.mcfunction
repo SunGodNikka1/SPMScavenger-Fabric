@@ -1,0 +1,9 @@
+setblock ~5 ~ ~10 stone
+setblock ~6 ~ ~10 stone
+setblock ~7 ~ ~10 stone
+setblock ~5 ~1 ~10 air
+setblock ~6 ~1 ~10 air
+setblock ~7 ~1 ~10 air
+setblock ~4 ~ ~11 oak_planks
+setblock ~4 ~1 ~11 oak_planks
+setblock ~8 ~ ~11 oak_planks

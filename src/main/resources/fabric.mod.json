@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "spmscavenger",
+  "version": "${version}",
+  "name": "Social Player Mobs: Scavenger",
+  "description": "Gives Social Player Mobs purposeful exploration, environmental escape, and scavenging: they explore active territory, light dark places, take shelter, and gather wood and coal to craft more torches.",
+  "authors": ["noobk"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.noobk.spmscavenger.SpmScavenger"],
+    "modmenu": ["com.noobk.spmscavenger.client.SpmScavengerModMenu"]
+  },
+  "mixins": ["spmscavenger.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "recommends": { "playermob": "*" },
+  "suggests": { "cloth-config": ">=15.0.0", "modmenu": ">=11.0.0" }
+}

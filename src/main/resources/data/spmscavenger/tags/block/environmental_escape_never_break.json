@@ -1,0 +1,17 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:crops",
+    "#minecraft:coral_blocks",
+    "#minecraft:corals",
+    "#minecraft:coral_plants",
+    "minecraft:turtle_egg",
+    "minecraft:dragon_egg",
+    "minecraft:budding_amethyst",
+    { "id": "minecraft:sniffer_egg", "required": false },
+    { "id": "minecraft:reinforced_deepslate", "required": false },
+    { "id": "minecraft:spawner", "required": false },
+    { "id": "minecraft:trial_spawner", "required": false },
+    { "id": "minecraft:vault", "required": false }
+  ]
+}

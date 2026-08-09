@@ -1,0 +1,197 @@
+# Social Player Mobs: Scavenger
+
+An AI and survival-behavior addon for **Social Player Mobs** on **Minecraft 1.21.1 Fabric**.
+
+Scavenger gives PlayerMobs purposeful work outside Dungeon Train: they gather resources, craft and
+upgrade tools, use furnaces, place torches, seek shelter, explore, recover from environmental traps,
+and perform small player-like social behaviors.
+
+> Current mod version: **1.9.2**  
+> Minecraft: **1.21.1** · Fabric Loader: **0.16.14+** · Java: **21**
+
+## Requirements
+
+| Dependency | Requirement | Purpose |
+| --- | --- | --- |
+| Minecraft | 1.21.1 | Target game version |
+| Fabric Loader | 0.16.0 or newer | Mod loader |
+| Fabric API | Required | Events and Fabric integration |
+| Social Player Mobs | Recommended | Supplies the PlayerMob entities this addon enhances |
+| Cloth Config | Optional | Configuration screen |
+| Mod Menu | Optional | Opens the Cloth Config screen |
+
+The addon loads safely without Social Player Mobs and logs that it is inactive. It does not bundle
+or redistribute Social Player Mobs.
+
+## Installation
+
+1. Install Minecraft 1.21.1, Fabric Loader, and Fabric API.
+2. Install Social Player Mobs.
+3. Copy `spmscavenger-1.9.2.jar` into the instance's `mods` directory.
+4. Optionally install Cloth Config and Mod Menu.
+5. Keep the vanilla `mobGriefing` rule enabled if mobs should gather or place blocks:
+
+   ```mcfunction
+   /gamerule mobGriefing true
+   ```
+
+## Features
+
+### Gathering and tool progression
+
+PlayerMobs can:
+
+- fell approved natural trees instead of breaking one log and abandoning the trunk;
+- clear a small number of directly obstructing leaves after a real navigation stall;
+- gather exposed coal, stone/cobblestone, iron ore, and deep exposed diamond ore when demanded;
+- retain required drops directly when SPM's ordinary pickup policy would ignore them;
+- craft planks, sticks, torches, crafting tables, furnaces, and campfires;
+- craft wooden, stone, iron, and diamond pickaxes and axes;
+- upgrade the pickaxe before the axe and drop the replaced tool only after an atomic craft succeeds;
+- stop ore demand when the active tool consumer is satisfied or a suitable tool is looted.
+
+Diamond demand is disabled above Y=16 until deeper mining intelligence is implemented. This avoids
+surface mobs repeatedly scanning for ore that cannot exist within their local search volume.
+
+### Furnace work
+
+Mobs use real furnaces for charcoal and iron progression. Furnace jobs reserve input, fuel, output,
+and ownership state so interruption or save/reload does not silently duplicate or lose resources.
+Communal player/village furnaces are opt-in; by default mobs use furnaces they own or place.
+
+### Purposeful exploration
+
+The addon replaces SPM's ordinary idle stroll with two compatible layers:
+
+- **Local wandering** for short idle movement.
+- **Exploration expeditions** with a persistent heading and 2–4 forward-biased stages.
+
+Expeditions retain intended waypoints across temporary combat or work interruptions, but calculate a
+new Minecraft path when resuming. They never force chunk loading and validate server entity-ticking
+territory rather than merely checking whether chunks are loaded. Recent destination memory reduces
+repeated trips, and bounded failure/replan limits prevent permanent path loops.
+
+Friendly PlayerMobs may join an expedition when both mobs' SPM relationship values are positive.
+Persistent stay-near orders always win and cancel an incompatible expedition.
+
+### Environmental escape
+
+Trapped mobs attempt movement first, then may mine the actual entrapping powder snow, sand, gravel,
+or suffocating block when configured. Escape mining:
+
+- respects `mobGriefing`, hardness limits, allow/deny tags, and a per-incident block cap;
+- temporarily equips the best owned tool;
+- uses visible swing and block-breaking progress instead of instant deletion;
+- spends tool durability and restores previous equipment after completion or interruption;
+- yields immediately to SPM's existing fire/water escape behavior.
+
+### Shelter, lighting, and camp life
+
+- Seek ranked shelter at dusk, preferring an available bed, enclosure, and safe light.
+- Sleep in real beds and release them at dawn or after interruption.
+- Place backpack torches at dark supported positions; torches are consumed, never conjured.
+- Craft and place a campfire after essential torch/tool needs are satisfied.
+- Crouch with nearby players and bunny-hop while chasing when collision space permits.
+
+## Configuration
+
+Open **Mod Menu → Social Player Mobs: Scavenger**, or edit:
+
+```text
+config/spmscavenger.json
+```
+
+Important defaults:
+
+| Setting | Default | Meaning |
+| --- | ---: | --- |
+| `enabled` | `true` | Master switch |
+| `gatherResources` | `true` | Allows the destructive gathering goal |
+| `protectPlayerBuilds` | `true` | Restricts gathering to natural/protected-safe targets |
+| `clearLeafObstructions` | `true` | Bounded leaf recovery while approaching a tree |
+| `craftTools` | `true` | Enables crafting-table and tool progression |
+| `maxPickTier` / `maxAxeTier` | `STONE` | Maximum autonomous tool tier; supports NONE through DIAMOND |
+| `cobbleStockTarget` | `6` | Cobble required while stone upgrades remain |
+| `torchStockTarget` | `8` | Torch-chain stopping target |
+| `smeltEnabled` | `true` | Enables charcoal and iron furnace work |
+| `useCommunalFurnaces` | `false` | Allows empty non-owned furnaces |
+| `exploring` | `true` | Enables local wander tracking and expeditions |
+| `exploreIdleTicks` | `600` | Idle time before exploration becomes eligible |
+| `exploreMinStageDistance` / `exploreMaxStageDistance` | `24` / `48` | Intended blocks per expedition stage |
+| `environmentalEscape` | `true` | Enables powder-snow and suffocation recovery |
+| `environmentalEscapeMaxBlocks` | `3` | Maximum removals in one continuous incident |
+| `greed` / `wealthLevel` | `0.0` / `0.0` | Reserved wealth controls; zero preserves exact-consumer behavior |
+
+All world-changing behavior also respects `mobGriefing`. Turning the gamerule off prevents block
+breaking and placement even when the corresponding addon setting is enabled.
+
+## Compatibility design
+
+- Goals are attached only to confirmed Social Player Mobs on Fabric's server entity-load event.
+- One accessor mixin exposes vanilla `Mob.goalSelector`; SPM code is not copied or bundled.
+- Existing SPM combat, fleeing, food, looting, social, order, and fire-escape goals retain higher
+  priority.
+- The addon reuses the PlayerMob backpack through vanilla inventory interfaces.
+- Unknown or changed SPM APIs fail closed for the affected optional behavior.
+
+## Building from source
+
+From this directory on Windows:
+
+```powershell
+.\gradlew.bat clean build
+```
+
+On Linux or macOS:
+
+```bash
+./gradlew clean build
+```
+
+The installable artifact is written to:
+
+```text
+build/libs/spmscavenger-1.9.2.jar
+```
+
+The latest verified clean build completed with **131 tests, zero failures, zero errors, and zero
+skips**. Its SHA-256 was:
+
+```text
+1FEC64FEAE21700D03BA34B496D04F75C7A8D6DE985C9243F7F869E1056B438F
+```
+
+That hash changes whenever source or packaged resources change.
+
+## Development documentation
+
+- [`plans/RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md`](plans/RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md) — active mining/wealth architecture and tasks.
+- [`plans/RFC-TOOL-TIER-UPGRADES.md`](plans/RFC-TOOL-TIER-UPGRADES.md) — tool progression decisions and parity.
+- [`plans/RFC-FURNACE-SMELTING.md`](plans/RFC-FURNACE-SMELTING.md) — furnace ownership, transactions, and recovery.
+- [`docs/porting/TEST_MATRIX.md`](docs/porting/TEST_MATRIX.md) — must-happen/must-not-happen checks.
+- [`docs/porting/DECISIONS.md`](docs/porting/DECISIONS.md) — implementation decisions and failure history.
+- [`.superpowers/sdd/progress.md`](.superpowers/sdd/progress.md) — completed implementation-task ledger.
+
+## Verification status and known gaps
+
+`CONFIRMED` means supported by current source, automated tests, or build/package evidence. It does not
+automatically mean the behavior has been observed in Minecraft.
+
+- **Build/unit/package:** confirmed for the current source tree.
+- **Selected earlier gameplay:** bed use and basic gathering were observed in prior sessions.
+- **Current combined 1.9.2 behavior:** runtime verification remains incomplete for the full
+  gather → smelt → iron/diamond upgrade loop, long expeditions, companions, save/reload recovery,
+  dedicated servers, and large-mob performance.
+- **Mining intelligence:** MI-1 gather intent and MI-3/MI-23 NEED allocation exist. Marginal wealth,
+  legitimate ore discovery classification, cave seeking, vein memory, and bounded deep mining remain
+  planned or deferred.
+- **Performance:** gathering and exploration contain bounded scans and staggered work, but current
+  1/10/50/100-mob profiling is still unverified.
+
+Minecraft runtime launches require explicit project approval. See the test matrix for reproducible
+scenarios and the evidence needed before upgrading these claims.
+
+## License
+
+This addon is licensed under **MIT** and contains no Social Player Mobs source code. Social Player
+Mobs has its own license, which applies to that project separately.

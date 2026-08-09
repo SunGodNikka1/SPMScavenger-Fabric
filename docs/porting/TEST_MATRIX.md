@@ -1,0 +1,189 @@
+# SPM Scavenger test matrix
+
+## Stay-near/exploration arbitration — 1.9.2
+
+| Check | Must happen | Must not happen | Evidence |
+|---|---|---|---|
+| Existing anchor | A PlayerMob with a confirmed stay anchor remains available to SPM's native `StayNearGoal`; Scavenger does not start or accept an expedition | Alternation between `Staying near` and `Exploring` | `ExplorationPolicyTest.onlyConfirmedAbsenceOfAStayAnchorPermitsExploration` `CONFIRMED`; runtime readout `UNVERIFIED` |
+| Anchor assigned mid-route | The active expedition is abandoned with `reason=STAY_ANCHOR` and its outward waypoints are discarded | Returning inside the tether radius resumes the old outward waypoint | `ExploringGoal.yieldToStayAnchor` static inspection `CONFIRMED`; runtime log/readout `UNVERIFIED` |
+| Transient interruption | Combat, gathering, looting, or another transient higher-priority goal still preserves the expedition | The stay-anchor repair destroys routes after every ordinary interruption | `ExploringGoal.stop` state boundary inspection `CONFIRMED`; runtime resume `UNVERIFIED` |
+| Changed SPM API | Missing `getStayAnchor` warns once and disables exploration only | Crash, warning spam, or silently ignoring a possibly active player order | `PlayerMobs.stayAnchorState` inspection and compile `CONFIRMED`; changed-version runtime `UNVERIFIED` |
+
+Runtime acceptance requires a separately approved Minecraft launch: start an expedition, issue a
+stay-near order while it is moving, and observe one `STAY_ANCHOR` end followed by no further
+`Exploring` objective while the anchor exists. Clear the order and confirm exploration can later
+start again. Repeat with combat interruption and confirm the remaining route resumes.
+
+## Tool tier upgrades — Phase 1 stone (1.9.1+)
+
+Canonical design: `plans/RFC-TOOL-TIER-UPGRADES.md`. Runtime rows stay `UNVERIFIED` until an
+approved Minecraft launch.
+
+| Check | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Atomic craft (TT-0R) | Full mid-upgrade pack crafts stone pick once recipe frees a slot | Ingredient loss on failed craft; false refuse of a valid full-capacity recipe | U-0A/U-0B/U-0C `CONFIRMED`; runtime `UNVERIFIED` |
+| Stone craft + disposal | 3 cobble + 2 sticks → stone tool; wooden predecessor removed/dropped | Planks consumed for stone tools; both wood and stone kept forever | `ScavengerCraftingTest` `CONFIRMED`; runtime drop visual `UNVERIFIED` |
+| Gold ranking (TT-1aR) | Gold pick/axe rank as `WOOD`; stone upgrade still pursued | Gold classified as `IRON` or suppressing stone craft | U-9A/U-9B `CONFIRMED` |
+| Config caps (TT-1aC/TT-2d min) | Cycle selector exposes NONE/WOOD/STONE/IRON; load clamps DIAMOND/null → IRON with warn | Unimplemented DIAMOND pressure; stuck Cloth dropdown | U-10A/U-10B `CONFIRMED`; UI glance `UNVERIFIED` |
+| Cobble gather + protection | Exposed surface stone/cobble when upgrade pending; infested skipped | Player stone structures mined when protection on | U-6/U-7 `CONFIRMED`; runtime TT-1 must-not `UNVERIFIED` |
+| Equipped ownership (TT-1bR) | Stone pick in hand + stone axe in pack stops cobble demand | Wooden pick in hand suppresses pending stone upgrade | U-11A/U-11B `CONFIRMED`; runtime TT-2 `UNVERIFIED` |
+| Torch primacy | At `torchStockTarget`, gather (including cobble) stops | Upgrade loop blocks torch crafting forever | Policy/static `INFERRED`; runtime TT-4 `UNVERIFIED` |
+
+**Runtime test datapack:** `test-datapacks/phase1-tool-tier/` (namespace `spm_phase1`).  
+Spec: `docs/agent-workflows/RUNTIME_TEST_DATAPACK.md`. Quick start: `/function spm_phase1:quickstart`.
+
+### Runtime acceptance (requires launch approval)
+
+| ID | Datapack setup | Spawn preset | Must happen | Must not happen |
+| --- | --- | --- | --- | --- |
+| TT-0R | `arena/build` | `spawn/full_pack` | Stone pick crafts at full capacity; no ingredient loss | Loss or false refuse |
+| TT-1 | `arena/build` or `arena/stone_only` | `spawn/need_cobble` | Mine exposed stone → cobble → stone pick at table | Mine stone wall |
+| TT-2 | — | `spawn/equipped_done` | No further cobble gather when both stone tools owned | Infinite cobble strip-mining |
+| TT-3 | coal in `arena/build` | `spawn/looted_stone` | Use stone pick; no redundant stone craft | Craft wooden over stone |
+| TT-4 | — | `spawn/torch_stocked` | Gather stops including cobble | Upgrade loop blocks torches |
+| TT-5 | — | `spawn/need_cobble` + `tools/break_mainhand` | Re-craft pick from stock | Idle toolless with materials |
+| TT-6 | manual powder snow | any with pick | Escape spends durability; chain replaces tool | Stranded toolless |
+
+## Furnace smelting — Phase 2 (1.9.2+)
+
+Canonical design: `plans/RFC-FURNACE-SMELTING.md`. Runtime rows stay `UNVERIFIED` until an approved
+Minecraft launch.
+
+| Check | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Charcoal demand (U-F1) | No coal + surplus logs + torch fuel need → `SmeltDemand.CHARCOAL` | Smelt when coal present | `FurnacePolicyTest` `CONFIRMED` |
+| Consumer iron smelt (U-F2/U-F7/FS-8) | IRON-capped stone-tool owner derives 3→1→0 ingot deficit and plans only with input+fuel | Raw iron alone creates demand; both frontiers emit; consume ore without fuel | `FurnacePolicyTest` `CONFIRMED` |
+| Iron craft transaction (TT-2b) | Shared 3-ingot+2-stick spec crafts pick before axe and disposes backpack/main-hand stone tool | Duplicate quantities or lose ingredients/output on failure | `ScavengerCraftingTest` `CONFIRMED` |
+| Atomic insert/extract (U-F4/U-F5) | Roll back failed insert; extract only job output | Steal pre-existing furnace stacks | `FurnaceTransfersTest` `CONFIRMED` |
+| Horizontal fuel face (U-F10) | EAST-only fuel face is selected without mutating rejected faces | Assume NORTH, split a transfer across faces, or lose stacks when no face accepts | `FurnaceTransfersTest` `CONFIRMED` |
+| Furnace ownership (U-F6) | Tickets survive save/load | Duplicate output on reclaim | `FurnaceStationsTest` `CONFIRMED` |
+
+**Runtime test datapack:** `test-datapacks/phase2-furnace/` (namespace `spm_phase2`).  
+Spec: `docs/agent-workflows/RUNTIME_TEST_DATAPACK.md`. Quick start: `/function spm_phase2:quickstart`.
+
+### Runtime acceptance (requires launch approval)
+
+| ID | Datapack setup | Spawn preset | Must happen | Must not happen |
+| --- | --- | --- | --- | --- |
+| RT-F1 | `quickstart` | `spawn/need_charcoal` | Charcoal → torches at owned furnace | Burn all logs |
+| RT-F2 | Set `maxPickTier=IRON`, then `arena/build` | `spawn/need_iron_smelt` | Smelt three ingots, craft iron pick, drop stone pick | Producer-only hoard or axe before pick |
+| RT-F3 | `arena/build` | `spawn/player_furnace_test` | Skip busy furnace at anchor+6 | Steal player coal |
+| RT-F4 | RT-F2 + interrupt | manual `/reload` | Reclaim or fail-closed | Duplicate stacks |
+| RT-F5 | RT-F2 then wait | `spawn/second_claimant` | One mob claims furnace | Double insert |
+
+## Environmental escape 1.9.1
+
+| Check | Must happen | Must not happen | Evidence |
+|---|---|---|---|
+| Hazard ownership | Powder snow and `isInWall()` activate priority-0 escape; fire makes it yield to SPM's `FireBucketGoal` | A duplicate fire, water-bucket, drowning, or general survival system | Mapped API and goal predicates `CONFIRMED`; runtime `UNVERIFIED` |
+| Hazard-specific grace | Powder Snow gets the configured 8-tick movement grace; true `isInWall()` suffocation starts mining immediately | A universal delay leaves a suffocating mob waiting for impossible movement | Goal branch/policy inspection `CONFIRMED`; runtime `UNVERIFIED` |
+| Player-like mining | Mob faces and swings; crack stages advance for hardness/tool-derived ticks | Instant block deletion or an unbounded mining loop | `MiningPolicyTest` and integration inspection `CONFIRMED`; runtime visual proof `UNVERIFIED` |
+| Best owned tool | Lowest calculated break time across actual main hand + `InventoryCarrier` backpack is temporarily equipped | Conjured tool, copied stack, second inventory, or permanent combat-equipment replacement | Pinned SPM `getInventory()` plus swap inspection `CONFIRMED`; runtime `UNVERIFIED` |
+| Equipment transaction | Previous main hand is parked in the selected backpack slot and restored; interruption clears cracks and restores it | Item loss, duplication, stale crack overlay, or overwriting a concurrently changed slot | Static state paths `CONFIRMED`; runtime interruption/save proof `UNVERIFIED` |
+| Tool mechanics | Chosen stack controls loot and receives one durability use | Generic empty-hand loot or free tool use | `Block.dropResources(..., usedTool)` and `hurtAndBreak` inspection `CONFIRMED`; runtime `UNVERIFIED` |
+| Exact obstruction | Only a powder-snow/suffocating block intersecting the mob's current AABB is eligible | Nearby wall, floor, or unrelated block selected by a scan | AABB-bounded candidate stream/policy test `CONFIRMED`; runtime `UNVERIFIED` |
+| Mutation safety | Config + `mobGriefing` + no block entity + tag policy + natural/allowlisted material + hardness + incident cap all pass | Chest, unbreakable/hard, deny-tagged, non-natural, non-intersecting block, or fourth block breaks | `EnvironmentalEscapePolicyTest` `CONFIRMED`; runtime `UNVERIFIED` |
+| Chunk/TPS safety | Candidate standing positions are entity-ticking; search radius ≤8 and planning occurs only on start/replan | Chunk loading, world scan, or path creation in `canUse()` | Static inspection `CONFIRMED`; profiler/runtime `UNVERIFIED` |
+| Completion | Goal stops and clears incident state immediately after the mob is safe | Continued excavation after escape | State transition inspection `CONFIRMED`; runtime `UNVERIFIED` |
+
+Runtime acceptance: place a PlayerMob in one and several layers of powder snow, then repeat inside
+falling sand/gravel. Give it competing tools in its backpack and interrupt it with fire mid-crack.
+It must attempt movement immediately, select the fastest owned tool, visibly mine at the calculated
+duration, restore equipment on success/interruption, remove at most one eligible intersecting block
+at each decision, and never exceed three in the continuous incident. Negative cases:
+`mobGriefing=false`, breaking disabled, chest at eye level, hardness above the configured cap,
+deny-tagged block, and fire beginning mid-recovery. Minecraft execution requires explicit approval.
+
+## Purposeful exploration 1.8.0
+
+### Objective-readout regression (1.8.1)
+
+| Check | Must happen | Must not happen | Evidence |
+|---|---|---|---|
+| Background observer visibility | SPM displays only the mob's real visible objective (`Idle`, `Wandering`, `Exploring`, or higher-priority work) | The always-running readiness observer appears as `Exploration activity` | `ExplorationActivityVisibilityTest`; runtime visual confirmation remains `UNVERIFIED` |
+| Movement arbitration | `ExploringGoal` at priority 8 or local wander at priority 9 owns `MOVE` | Wandering and actual exploration navigate concurrently | Static goal flags/priorities `CONFIRMED`; runtime visual confirmation remains `UNVERIFIED` |
+
+### Route interest scoring (1.8.5)
+
+| Check | Must happen | Must not happen | Evidence |
+|---|---|---|---|
+| Wilderness is never punished | An empty or unknown chunk scores exactly 0 | Absence of block entities treated as a penalty, biasing mobs away from unexplored terrain | `anEmptyChunkIsWorthNothingAndIsNeverAPenalty` `CONFIRMED` |
+| Presence, not quantity | 180 chests score what one chest scores | Count-weighted attractiveness | `presenceIsScoredAndQuantityIsNotRepresentable` (set-typed API) `CONFIRMED` |
+| Interest cannot defeat anti-repetition | `ROUTE_CAP` < the 100-point recent-destination penalty | A mob returning to the same rewarding chunk expedition after expedition | `interestCannotOverrideTheRecentDestinationPenalty` `CONFIRMED` |
+| Interest still breaks ties | Beats a repeated heading (-35) and a visited region (-20) | An interest term too small to change any decision | `interestOutweighsTheWeakerNoveltyTermsSoItCanActuallyBreakTies` `CONFIRMED` |
+| No chunk loading | Only `getChunkNow`; `null` scores 0 | Any accessor that can load or generate a chunk during scoring | Static inspection of `ChunkInterest.inspect` `CONFIRMED` |
+| Bounded sampling | ≤32 entries per chunk, early exit on a saturating signal | Iterating a base's full block-entity map | `SAMPLE_LIMIT` + `onlyTheStrongestSignalSaturatesAChunk` `CONFIRMED` |
+| Cold path only | Scoring runs solely inside `createExpedition` | Any call from `canUse`, `tick`, or another per-tick path | Static inspection `CONFIRMED`; profiler confirmation `UNVERIFIED` |
+| Per-call cache | A chunk crossed by several candidate routes is inspected once | Eight inspections of the same chunk in one planning call | `ChunkInterest` cache inspection `CONFIRMED` |
+
+### Travelling companions (1.8.4)
+
+| Check | Must happen | Must not happen | Evidence |
+|---|---|---|---|
+| Companion eligibility | Both mobs strictly above SPM's neutral feeling (5.0) before they travel together | Neutral strangers recruited, or a one-sided regard treated as mutual | `ExplorationPolicyTest.neutralRegardIsNotFriendshipAndBothSidesMustAgree` `CONFIRMED` |
+| Fails closed | An unreadable `feelingToward` disables companions and warns once | A missing SPM method silently treated as friendship | `anUnreadableFeelingIsNeverTreatedAsFriendship` `CONFIRMED` |
+| No SPM state written | Feeling is only ever read through SPM's public accessor | Reflection into `FeelingLedger`, or any bond raised by this mod | Static inspection `CONFIRMED` |
+| No duplicated following | Companions build their own parallel routes | A follow/group goal reimplementing `FollowLovedOneGoal` (priority 2, 64-block scan) | Static inspection `CONFIRMED` (Gate SPM-2) |
+| Invitation cannot bypass safety | Cooldown, combat, sleeping, passenger and frontier checks still refuse | A mob recruited mid-fight, asleep, or inside its replan cooldown | `acceptCompanionInvitation` inspection `CONFIRMED`; runtime `UNVERIFIED` |
+| Departure is visible | `exploration departed … companions=N` in `latest.log` | Company that cannot be confirmed from a log | Post-fix log **pending** |
+
+### Path-range and standing regression (1.8.3)
+
+| Check | Must happen | Must not happen | Evidence |
+|---|---|---|---|
+| Path request length | Every `createPath` target is within `maxPathStep(FOLLOW_RANGE)` of the mob | A request longer than the mob's follow range, which vanilla A* cannot expand to and always answers with an unreachable partial path | `ExplorationPolicyTest.oneHopNeverExceedsWhatThePathfinderWillExpand` `CONFIRMED`; `PathFinder.findPath` cutoff and `PlayerMobEntity` `FOLLOW_RANGE=32` read from bytecode `CONFIRMED` |
+| Hop progression | A distant stage is walked as successive hops on the same line; only the waypoint completes the stage | Hop arrival advances `waypointIndex`, regenerates the heading, or clears the route | `ExplorationPolicyTest` hop interpolation `CONFIRMED`; runtime route proof `UNVERIFIED` |
+| Failure releases movement | A failed plan ends the activation so local wander owns `MOVE` for the 20-tick wait | A mob standing motionless while the readout says `Exploring` | `canUse`/`canContinueToUse` inspection `CONFIRMED`; runtime visual proof `UNVERIFIED` |
+| Landing selection | Same-level ground is probed before roofs and cliff tops; landings beyond 16 blocks of elevation are skipped | The 20-probe budget spent on a standable rooftop no path can reach | Static inspection `CONFIRMED`; city-world runtime proof `UNVERIFIED` |
+| Outcome diagnosability | `exploration completed … hops=N` appears in `latest.log` | Only `exploration ended` lines, as in the 1.8.2 session (0 completed of 140) | Prior log `CONFIRMED`; post-fix log **pending** |
+
+### Background decorator and exploration replan regression (1.8.2)
+
+| Check | Must happen | Must not happen | Evidence |
+|---|---|---|---|
+| Antics visibility | Mimicry and bunny-hop continue as flagless decoration | `Antics` appears as an objective or claims `MOVE`/`LOOK` | Cosmetic-class regression test and constructor inspection `CONFIRMED`; runtime visual proof `UNVERIFIED` |
+| Navigation completion grace | A prematurely completed path receives 20 ticks to enter arrival range | One `navigation.isDone()` observation immediately fails the stage | `ExplorationPolicyTest` boundary cases `CONFIRMED`; runtime terrain proof `UNVERIFIED` |
+| Replan presentation | A retryable path failure remains visibly `Exploring` during the 20-tick replan delay | The internal retry window is presented as `Idle` or `Wandering` | State-transition inspection `CONFIRMED`; runtime visual proof `UNVERIFIED` |
+| Bounded recovery | A viable retry resumes the retained expedition; final completion/abandonment logs a reason | Retrying regenerates the heading or continues forever | Existing failure-policy tests plus final-reason logging `CONFIRMED`; runtime route proof `UNVERIFIED` |
+
+| Scenario | Must happen | Must not happen | Evidence status |
+| --- | --- | --- | --- |
+| Activation by walking | Two naturally completed local trips unlock exploration | A started or interrupted stroll counts as completed | Pure-policy test `CONFIRMED`; runtime `UNVERIFIED` |
+| Activation by time | Sustained idle time independently unlocks exploration | Look-around activity resets idle time | Pure-policy test `CONFIRMED`; runtime `UNVERIFIED` |
+| Real work | Combat, loot, farms, gathering, orders and unknown work reset activation signals | Cosmetic/look/local wander goals count as work | Static classification `CONFIRMED`; runtime `UNVERIFIED` |
+| Forward route | One heading produces 2–4 forward-biased intended centres | Each waypoint chooses an independent heading | Pure geometry `CONFIRMED`; runtime `UNVERIFIED` |
+| Interruption | Work preempts; resumption creates a new path to the same remaining centre | Old `Path` survives or remaining waypoints regenerate | Static state split `CONFIRMED`; runtime `UNVERIFIED` |
+| Displacement | Forward displacement skips an obsolete stage; sideways displacement creates a rejoin on the original heading | Rebase changes the expedition heading | Pure-policy test `CONFIRMED`; runtime `UNVERIFIED` |
+| Terrain | Exact safe standing position resolves near intended X/Z when the stage begins | Intended route is rewritten for ordinary terrain variation | Static bounds `CONFIRMED`; runtime `UNVERIFIED` |
+| Path failures | Maximum three planning failures per waypoint and six per expedition; a bad non-final stage may be skipped | Infinite re-path loop | Pure-policy test `CONFIRMED`; runtime `UNVERIFIED` |
+| Simulation frontier | Deduplicated path chunks and their 3×3 guards are entity-ticking; frontier ends cleanly | `hasChunk` substitutes for ticking, chunks are forced, or frontier penalizes heading/destination | Mapped API/static path `CONFIRMED`; runtime `UNVERIFIED` |
+| Region memory | Reached stages are weakly visited; successful final areas are strongly penalized as destinations | Crossing a region marks it completed exploration | Static collections `CONFIRMED`; runtime `UNVERIFIED` |
+| Goal compatibility | Priorities 0–7 preempt exploring at 8; local wander remains at 9 | Exploration duplicates combat, loot, farms, POIs or scanning | Static goal setup `CONFIRMED`; runtime `UNVERIFIED` |
+| Scale | Planning is staggered and full validation runs only on new paths | Full corridor/guard scan repeats every travel tick | Static bounds `CONFIRMED`; 1/10/50/100-mob profile `UNVERIFIED` |
+
+Runtime execution requires separate user approval under repository policy. Record Minecraft version,
+simulation distance, mob count, route duration, interruptions, frontier outcomes, path failures and
+Spark median/p95/p99 MSPT before upgrading any runtime or performance row to `CONFIRMED`.
+
+## Mining intelligence MI-1 — gather intent consolidation
+
+| Check | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Torch need | One snapshot requests logs and coal | Separate scanners or stored demand | `GatherIntentPolicyTest` `CONFIRMED` |
+| Iron need | Existing consumer deficit requests raw iron | New iron stock target | `GatherIntentPolicyTest` `CONFIRMED` |
+| Diamond plausibility | Diamond intent exists at depth and not at surface | Eternal surface diamond scan | `GatherIntentPolicyTest` `CONFIRMED` |
+| Craft boundary | Ready craft suppresses another gather trip | Gather competes with an immediately committable craft | `GatherIntentPolicyTest` `CONFIRMED` |
+| Scan cost | One immutable intent is reused through the target scan | Full recipe/inventory evaluation for every scanned block | Static inspection `CONFIRMED`; profiler `UNVERIFIED` |
+
+Runtime acceptance: observe a mob transition through log/coal, iron, and deep-diamond demands, then
+confirm demand de-latches after craft/loot and `latest.log` contains no goal failure. Separate launch
+approval is required.
+
+## Mining wealth MI-3/MI-23 — NEED allocation
+
+| Check | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Blocking priority | Immediate, replacement, and project receive stock before reserve | Reserve consumes blocking stock | `ResourceWealthPolicyTest` `CONFIRMED` |
+| Single allocation | Each carried unit satisfies at most one layer | Shortfalls double-count one stack | `ResourceWealthPolicyTest` `CONFIRMED` |
+| Input safety | Negative quantities fail fast | Negative utility silently propagates | `ResourceWealthPolicyTest` `CONFIRMED` |
+| Scope boundary | NEED utility contains no wealth score | Example curve values become defaults | Static inspection `CONFIRMED` |

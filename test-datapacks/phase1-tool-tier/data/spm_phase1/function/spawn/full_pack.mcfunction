@@ -1,0 +1,3 @@
+function spm_phase1:spawn/_summon
+data modify entity @e[type=playermob:player_mob,tag=spm_p1_test,limit=1] Inventory set value [{Slot:0b,id:"minecraft:oak_log",count:1b},{Slot:1b,id:"minecraft:oak_log",count:1b},{Slot:2b,id:"minecraft:stick",count:4b},{Slot:3b,id:"minecraft:cobblestone",count:3b},{Slot:4b,id:"minecraft:coal",count:1b},{Slot:5b,id:"minecraft:torch",count:1b},{Slot:6b,id:"minecraft:wooden_pickaxe",count:1b},{Slot:7b,id:"minecraft:wooden_axe",count:1b}]
+tellraw @s [{"text":"[SPM Phase1] ","color":"gold"},{"text":"TT-0R: 8/8 pack — watch atomic stone-pick craft.","color":"green"}]
