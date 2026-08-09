@@ -25,6 +25,9 @@ public enum ExecutionBlocker {
     /** Fighting or being hunted. Bounded, and worth keeping the project across. */
     COMBAT_TARGET(BlockerClass.TEMPORARY, MiningProjectEnd.COMBAT),
 
+    /** Survival interrupt. Bounded like combat; director may classify this later. */
+    LOW_FOOD(BlockerClass.TEMPORARY, MiningProjectEnd.LOW_FOOD),
+
     /** The feature was switched off. Not the mob's problem to wait out. */
     FEATURE_DISABLED(BlockerClass.HARD, MiningProjectEnd.EXECUTION_UNAVAILABLE),
 

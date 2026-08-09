@@ -174,24 +174,32 @@ public final class MiningDirector {
                     return issued;
                 });
 
+        MiningExecutionLease withBlocker = lease.recordBlocker(blocker, now);
         ExecutionLeasePolicy.LeaseOutcome outcome = ExecutionLeasePolicy.evaluate(
-                blocker, lease.everStarted(), lease.assignedAt(), now);
+                blocker,
+                withBlocker.everStarted(),
+                withBlocker.assignedAt(),
+                withBlocker.blockedSince(),
+                now);
 
         if (outcome.revoked()) {
             MiningProjectEnd reason = outcome.revokeReason();
+            long blockedFor = withBlocker.blockedSince() >= 0L
+                    ? now - withBlocker.blockedSince()
+                    : 0L;
             SpmScavenger.LOGGER.info(
                     "[spmscavenger] director revoked mode={} entity={} blocker={} reason={} "
-                            + "heldTicks={} everStarted={}",
+                            + "blockedFor={} assignedAge={} everStarted={}",
                     project.mode(), mob.getId(), blocker, reason,
-                    now - lease.assignedAt(), lease.everStarted());
+                    blockedFor, now - withBlocker.assignedAt(), withBlocker.everStarted());
             completeProject(level, mob, project, reason, mob.blockPosition());
             return false;
         }
         if (outcome.authorized()) {
-            store.putLease(mob.getUUID(), lease.resumed());
+            store.putLease(mob.getUUID(), withBlocker.resumed());
             return true;
         }
-        store.putLease(mob.getUUID(), lease.suspended());
+        store.putLease(mob.getUUID(), withBlocker.suspended());
         return false;
     }
 

@@ -26,15 +26,34 @@ class ExecutionLeasePolicyTest {
     private static final long ASSIGNED_AT = 1_000L;
 
     private static ExecutionLeasePolicy.LeaseOutcome evaluate(
-            ExecutionBlocker blocker, boolean everStarted, long heldTicks) {
+            ExecutionBlocker blocker,
+            boolean everStarted,
+            long assignedAt,
+            long blockedSince,
+            long now) {
         return ExecutionLeasePolicy.evaluate(
-                blocker, everStarted, ASSIGNED_AT, ASSIGNED_AT + heldTicks);
+                blocker, everStarted, assignedAt, blockedSince, now);
+    }
+
+    private static ExecutionLeasePolicy.LeaseOutcome evaluateSinceAssignment(
+            ExecutionBlocker blocker, boolean everStarted, long heldTicks) {
+        long now = ASSIGNED_AT + heldTicks;
+        long blockedSince = blocker.blockerClass() == ExecutionBlocker.BlockerClass.TEMPORARY
+                ? now - heldTicks
+                : MiningExecutionLease.NOT_BLOCKED;
+        return evaluate(blocker, everStarted, ASSIGNED_AT, blockedSince, now);
     }
 
     @Test
     void mustHappen_anUnblockedAssignmentIsAuthorised() {
-        assertTrue(evaluate(ExecutionBlocker.NONE, false, 0).authorized());
-        assertTrue(evaluate(ExecutionBlocker.NONE, false, 100_000).authorized(),
+        assertTrue(evaluate(
+                        ExecutionBlocker.NONE, false, ASSIGNED_AT,
+                        MiningExecutionLease.NOT_BLOCKED, ASSIGNED_AT)
+                .authorized());
+        assertTrue(evaluate(
+                        ExecutionBlocker.NONE, false, ASSIGNED_AT,
+                        MiningExecutionLease.NOT_BLOCKED, ASSIGNED_AT + 100_000L)
+                .authorized(),
                 "age alone never blocks an assignment that can actually run");
     }
 
@@ -42,8 +61,8 @@ class ExecutionLeasePolicyTest {
 
     @Test
     void mustHappen_aLostPickaxeReleasesTheAssignmentAtOnce() {
-        ExecutionLeasePolicy.LeaseOutcome outcome =
-                evaluate(ExecutionBlocker.CAPABILITY_MISSING, false, 0);
+        ExecutionLeasePolicy.LeaseOutcome outcome = evaluateSinceAssignment(
+                ExecutionBlocker.CAPABILITY_MISSING, false, 0);
 
         assertTrue(outcome.revoked(),
                 "holding a dig assignment while unable to dig blocks the very systems that would "
@@ -57,18 +76,19 @@ class ExecutionLeasePolicyTest {
                 new ExecutionBlocker[] {
                     ExecutionBlocker.FEATURE_DISABLED, ExecutionBlocker.WORLD_RULE_DISABLED
                 }) {
-            ExecutionLeasePolicy.LeaseOutcome outcome = evaluate(blocker, true, 0);
+            ExecutionLeasePolicy.LeaseOutcome outcome = evaluateSinceAssignment(blocker, true, 0);
             assertTrue(outcome.revoked(), blocker + " is not going to resolve itself");
             assertSame(MiningProjectEnd.EXECUTION_UNAVAILABLE, outcome.revokeReason());
         }
     }
 
-    // ---- TEMPORARY: suspend, but bounded ----
+    // ---- TEMPORARY: suspend, but bounded by episode clock ----
 
     @Test
     void mustHappen_combatSuspendsRatherThanDestroyingTheStaircase() {
-        ExecutionLeasePolicy.LeaseOutcome outcome =
-                evaluate(ExecutionBlocker.COMBAT_TARGET, true, 200);
+        long episodeStart = ASSIGNED_AT + 200L;
+        ExecutionLeasePolicy.LeaseOutcome outcome = evaluate(
+                ExecutionBlocker.COMBAT_TARGET, true, ASSIGNED_AT, episodeStart, episodeStart + 200L);
 
         assertEquals(ExecutionLeasePolicy.LeaseDecision.SUSPEND, outcome.decision(),
                 "a mob fighting a zombie for ten seconds should keep its dig");
@@ -77,13 +97,90 @@ class ExecutionLeasePolicyTest {
 
     @Test
     void mustNotHappen_aTemporaryBlockerHoldsTheAssignmentForever() {
-        long beyondGrace = ExecutionLeasePolicy.TEMPORARY_GRACE_TICKS + 1;
-        ExecutionLeasePolicy.LeaseOutcome outcome =
-                evaluate(ExecutionBlocker.COMBAT_TARGET, true, beyondGrace);
+        long episodeStart = ASSIGNED_AT + 5_000L;
+        long beyondGrace = episodeStart + ExecutionLeasePolicy.TEMPORARY_GRACE_TICKS + 1;
+        ExecutionLeasePolicy.LeaseOutcome outcome = evaluate(
+                ExecutionBlocker.COMBAT_TARGET, true, ASSIGNED_AT, episodeStart, beyondGrace);
 
         assertTrue(outcome.revoked(),
                 "an unbounded suspension is the same deadlock wearing a different label");
         assertSame(MiningProjectEnd.COMBAT, outcome.revokeReason());
+    }
+
+    @Test
+    void mi14c1r1_oldHealthyProjectNewCombatSuspendsNotRevokes() {
+        long assignedAt = 0L;
+        long combatAt = 6_001L;
+
+        ExecutionLeasePolicy.LeaseOutcome outcome = evaluate(
+                ExecutionBlocker.COMBAT_TARGET, true, assignedAt, combatAt, combatAt);
+
+        assertEquals(ExecutionLeasePolicy.LeaseDecision.SUSPEND, outcome.decision(),
+                "combat on a long-running project must suspend, not revoke on assignment age");
+        assertNull(outcome.revokeReason());
+    }
+
+    @Test
+    void mi14c1r1_temporaryGraceExpiresOnEpisodeAge() {
+        long combatAt = 6_000L;
+
+        assertEquals(
+                ExecutionLeasePolicy.LeaseDecision.SUSPEND,
+                evaluate(ExecutionBlocker.COMBAT_TARGET, true, 0L, combatAt, 7_199L).decision(),
+                "1199 episode ticks remain inside the 1200-tick grace window");
+
+        assertTrue(
+                evaluate(ExecutionBlocker.COMBAT_TARGET, true, 0L, combatAt, 7_201L).revoked(),
+                "grace expires on episode age, not assignment age");
+    }
+
+    @Test
+    void mi14c1r1_recoveryResetsTemporaryBlockerClock() {
+        MiningExecutionLease lease =
+                MiningExecutionLease.issued(MiningProjectMode.CONTROLLED_DESCENT, 0L).started(20L);
+
+        lease = lease.recordBlocker(ExecutionBlocker.COMBAT_TARGET, 6_000L);
+        assertEquals(6_000L, lease.blockedSince());
+
+        lease = lease.recordBlocker(ExecutionBlocker.NONE, 6_100L);
+        assertEquals(MiningExecutionLease.NOT_BLOCKED, lease.blockedSince());
+
+        lease = lease.recordBlocker(ExecutionBlocker.COMBAT_TARGET, 7_001L);
+        assertEquals(7_001L, lease.blockedSince(),
+                "a second combat episode must receive its own grace window");
+
+        assertEquals(
+                ExecutionLeasePolicy.LeaseDecision.SUSPEND,
+                evaluate(
+                                ExecutionBlocker.COMBAT_TARGET,
+                                true,
+                                0L,
+                                lease.blockedSince(),
+                                7_100L)
+                        .decision());
+    }
+
+    @Test
+    void mi14c1r1_blockerChangeStartsFreshEpisode() {
+        MiningExecutionLease lease =
+                MiningExecutionLease.issued(MiningProjectMode.CONTROLLED_DESCENT, 0L).started(20L);
+
+        lease = lease.recordBlocker(ExecutionBlocker.COMBAT_TARGET, 6_000L);
+        lease = lease.recordBlocker(ExecutionBlocker.LOW_FOOD, 6_500L);
+
+        assertEquals(ExecutionBlocker.LOW_FOOD, lease.currentBlocker());
+        assertEquals(6_500L, lease.blockedSince(),
+                "a new temporary blocker must not inherit the previous episode clock");
+
+        assertEquals(
+                ExecutionLeasePolicy.LeaseDecision.SUSPEND,
+                evaluate(
+                                ExecutionBlocker.LOW_FOOD,
+                                true,
+                                0L,
+                                lease.blockedSince(),
+                                7_000L)
+                        .decision());
     }
 
     // ---- CONTENTION: the original Loop A ----
@@ -92,11 +189,12 @@ class ExecutionLeasePolicyTest {
     void mustNotHappen_anAssignmentThatNeverRanIsHeldForever() {
         long beyondStartLease = ExecutionLeasePolicy.START_LEASE_TICKS + 1;
 
-        assertEquals(ExecutionLeasePolicy.LeaseDecision.SUSPEND,
-                evaluate(ExecutionBlocker.CONTENTION, false, 10).decision(),
+        assertEquals(
+                ExecutionLeasePolicy.LeaseDecision.SUSPEND,
+                evaluateSinceAssignment(ExecutionBlocker.CONTENTION, false, 10).decision(),
                 "brief contention is normal goal churn");
         ExecutionLeasePolicy.LeaseOutcome expired =
-                evaluate(ExecutionBlocker.CONTENTION, false, beyondStartLease);
+                evaluateSinceAssignment(ExecutionBlocker.CONTENTION, false, beyondStartLease);
         assertTrue(expired.revoked(),
                 "never once admitted within the start lease - release it so something else can be "
                         + "decided");
@@ -110,8 +208,11 @@ class ExecutionLeasePolicyTest {
      */
     @Test
     void mustNotHappen_aStartedProjectIsRevokedByTheStartLease() {
-        ExecutionLeasePolicy.LeaseOutcome outcome = ExecutionLeasePolicy.evaluate(
-                ExecutionBlocker.CONTENTION, true, ASSIGNED_AT,
+        ExecutionLeasePolicy.LeaseOutcome outcome = evaluate(
+                ExecutionBlocker.CONTENTION,
+                true,
+                ASSIGNED_AT,
+                MiningExecutionLease.NOT_BLOCKED,
                 ASSIGNED_AT + ExecutionLeasePolicy.START_LEASE_TICKS * 10L);
 
         assertEquals(ExecutionLeasePolicy.LeaseDecision.SUSPEND, outcome.decision(),
@@ -125,7 +226,8 @@ class ExecutionLeasePolicyTest {
         for (ExecutionBlocker blocker : ExecutionBlocker.values()) {
             for (boolean started : new boolean[] {false, true}) {
                 for (long held : new long[] {0, 100, 10_000, 1_000_000}) {
-                    ExecutionLeasePolicy.LeaseOutcome outcome = evaluate(blocker, started, held);
+                    ExecutionLeasePolicy.LeaseOutcome outcome =
+                            evaluateSinceAssignment(blocker, started, held);
                     if (outcome.revoked()) {
                         assertNotNull(outcome.revokeReason(),
                                 "a revocation must record why: " + blocker);
@@ -151,7 +253,7 @@ class ExecutionLeasePolicyTest {
             if (blocker.permitsExecution()) {
                 continue;
             }
-            assertTrue(evaluate(blocker, false, past).revoked(),
+            assertTrue(evaluateSinceAssignment(blocker, false, past).revoked(),
                     blocker + " could strand a RUNNING project with no execution and no bound");
         }
     }
@@ -160,6 +262,8 @@ class ExecutionLeasePolicyTest {
     void mustHappen_blockerClassificationMatchesRecoverability() {
         assertSame(ExecutionBlocker.BlockerClass.TEMPORARY,
                 ExecutionBlocker.COMBAT_TARGET.blockerClass());
+        assertSame(ExecutionBlocker.BlockerClass.TEMPORARY,
+                ExecutionBlocker.LOW_FOOD.blockerClass());
         assertSame(ExecutionBlocker.BlockerClass.HARD,
                 ExecutionBlocker.CAPABILITY_MISSING.blockerClass());
         assertSame(ExecutionBlocker.BlockerClass.CONTENTION,
@@ -175,6 +279,7 @@ class ExecutionLeasePolicyTest {
         MiningExecutionLease issued =
                 MiningExecutionLease.issued(MiningProjectMode.CONTROLLED_DESCENT, 500L);
         assertFalse(issued.everStarted());
+        assertEquals(MiningExecutionLease.NEVER_STARTED, issued.executorStartedAt());
         assertSame(MiningExecutionLease.LeaseState.ASSIGNED, issued.state());
 
         MiningExecutionLease active = issued.started(700L);
@@ -189,10 +294,20 @@ class ExecutionLeasePolicyTest {
     }
 
     @Test
+    void mustHappen_executorMayStartAtGameTimeZero() {
+        MiningExecutionLease active =
+                MiningExecutionLease.issued(MiningProjectMode.CONTROLLED_DESCENT, 0L).started(0L);
+
+        assertTrue(active.everStarted());
+        assertEquals(0L, active.executorStartedAt());
+    }
+
+    @Test
     void mustHappen_leaseSurvivesASaveLoadRound() {
         MiningExecutionLease lease =
                 MiningExecutionLease.issued(MiningProjectMode.CONTROLLED_DESCENT, 42L)
                         .started(99L)
+                        .recordBlocker(ExecutionBlocker.COMBAT_TARGET, 150L)
                         .suspended();
 
         assertEquals(lease, MiningExecutionLease.load(lease.save()),

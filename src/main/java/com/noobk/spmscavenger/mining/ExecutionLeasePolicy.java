@@ -6,7 +6,7 @@ import org.jetbrains.annotations.Nullable;
  * MI-14C1 — pure decision layer for an assignment that is not currently executing.
  *
  * <p>No world access, no side effects: it answers "authorize, suspend, or revoke" from the blocker
- * class and two timestamps. The director performs whatever it says.
+ * class and lease clocks. The director performs whatever it says.
  *
  * <p><b>Invariant this exists to enforce:</b> no {@code RUNNING} {@link MiningProject} may exist
  * indefinitely without either execution progress or an explicit suspension reason.
@@ -19,7 +19,7 @@ public final class ExecutionLeasePolicy {
      */
     public static final int START_LEASE_TICKS = 600;      // 30s
 
-    /** How long a temporary blocker may hold an assignment before it is released instead. */
+    /** How long a temporary blocker episode may persist before the assignment is released. */
     public static final int TEMPORARY_GRACE_TICKS = 1200; // 60s
 
     private ExecutionLeasePolicy() {
@@ -59,16 +59,22 @@ public final class ExecutionLeasePolicy {
      * @param blocker why execution is not happening, or {@link ExecutionBlocker#NONE}
      * @param everStarted whether the executor has ever begun this assignment
      * @param assignedAt game time the director created the assignment
+     * @param blockedSince game time the current blocking episode began, or
+     *     {@link MiningExecutionLease#NOT_BLOCKED}
      * @param now current game time
      */
     public static LeaseOutcome evaluate(
-            ExecutionBlocker blocker, boolean everStarted, long assignedAt, long now) {
+            ExecutionBlocker blocker,
+            boolean everStarted,
+            long assignedAt,
+            long blockedSince,
+            long now) {
 
         if (blocker.permitsExecution()) {
             return AUTHORIZE;
         }
 
-        long heldFor = Math.max(0L, now - assignedAt);
+        long heldSinceAssignment = Math.max(0L, now - assignedAt);
 
         switch (blocker.blockerClass()) {
             case HARD -> {
@@ -77,14 +83,18 @@ public final class ExecutionLeasePolicy {
                 return revoke(blocker);
             }
             case TEMPORARY -> {
-                // Worth waiting out, but not forever - an unbounded suspension is the same deadlock
-                // wearing a different label.
-                return heldFor > TEMPORARY_GRACE_TICKS ? revoke(blocker) : SUSPEND;
+                // Grace measures the current blocking episode, not assignment age.
+                long blockedFor = blockedSince >= 0L
+                        ? Math.max(0L, now - blockedSince)
+                        : 0L;
+                return blockedFor > TEMPORARY_GRACE_TICKS ? revoke(blocker) : SUSPEND;
             }
             case CONTENTION -> {
                 // Arbitration (MI-14C2) is what should actually resolve this. Until it exists, an
                 // assignment that never once got to run is released rather than held forever.
-                return !everStarted && heldFor > START_LEASE_TICKS ? revoke(blocker) : SUSPEND;
+                return !everStarted && heldSinceAssignment > START_LEASE_TICKS
+                        ? revoke(blocker)
+                        : SUSPEND;
             }
             default -> {
                 return SUSPEND;

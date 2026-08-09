@@ -54,6 +54,10 @@ MI-7E: BLOCKED — MAIBS-1 FAIL (R1–R4 architecture defects); MI-7R semantic r
 
 MI-7R: complete with concerns (R1–R4 repaired; StairStepSafety + ControlledDescentCaveHandoff + ControlledDescentGoal wire; 225 tests; MAIBS static PASS_WITH_CONCERNS; runtime unverified)
 
-NEXT: MAIBS runtime falsifying probes (launch approval required) → MI-14
+NEXT: MI-14C2 (ExecutionIntent + admission + continuation/yield) after MI-14C1-R1
+
+MI-14C1-R1: complete with concerns (temporary-blocker episode clock via blockedSince +
+currentBlocker; executorStartedAt NEVER_STARTED sentinel; 4 regression tests; full suite pass;
+runtime unverified)
 
 No commits. No Minecraft launches (separate approval required).
