@@ -406,6 +406,113 @@ revised).
 
 ---
 
+## Topic: MI-14 reconciliation + prolonged-loop pass (Gate MAIBS-1)
+
+**Analyst:** `Agent_Claude`, snapshot 2026-08-09 01:5x. Source-verified.
+**Gate result:** `FAIL — ARCHITECTURE_DEFECT` (**MI-14-M1**), plus four classified loops.
+
+### Reconciliation — task-table state vs shipped code
+
+| Task | RFC said | Reality |
+| --- | --- | --- |
+| MI-14A transition protocol | not started | **`IMPLEMENTED`** — `MiningTransition`, pending store, atomic `completeProject(…, transition)` |
+| MI-14A-T contract tests | — | **`IMPLEMENTED`** — 14 tests |
+| MI-14A-R1 `CAVE_FOUND` restart lock | — | **`IMPLEMENTED`** — corrected a wrong invariant, see below |
+| MI-14B ownership extraction | not started | **`IMPLEMENTED`** — `MiningDirector` owns admission/start/completion; executor runs assigned work only |
+| MI-6F / MI-6G | `DEFERRED` | **`IMPLEMENTED`** — `CaveOpportunityPolicy`, `CaveContextSnapshot` + `classify` |
+| MI-7A "current", MI-6F/7B+C "next" | current | **stale** — superseded by the above |
+
+Suite: **249 tests, zero failures.** Everything below runtime remains `UNVERIFIED`.
+
+**MI-14A-R1 correction, recorded because the first version was wrong.** MI-14A-T originally asserted
+that `CAVE_FOUND` does *not* block a fresh controlled descent, as "reason isolation". That invariant
+starved its own consumer: the rebase lives in `ExploringGoal` at priority **8**, a new descent in
+`ControlledDescentGoal` at priority **3**, so with descent pressure still live the executor
+reacquires `MOVE` before the rebase can run. Every handoff reason now holds the descent lock, released
+by consumption or by the 400-tick expiry.
+
+### MI-14-M1 — false `CAVE_FOUND` from self-dug geometry (`CODE_CONFIRMED`)
+
+`ControlledDescentCaveHandoff.openedTraversableCave` opens with:
+
+```java
+if (isSubterraneanAt(heights, feet)) {
+    return true;          // ← being underground is treated as having opened a cave
+}
+```
+
+`isSubterraneanAt` builds a `CaveContextSnapshot` and calls `CaveContextPolicy.isSubterranean`, which
+requires `belowLocalTerrain()` — rim depth ≥ 8. Trace a staircase from surface Y=70:
+
+```text
+Y=69 … Y=63   rimDepth < 8      → no trigger
+Y=62          localRim ≈ 70, rimDepth = 8, sky = false (covered stair)
+              → classify = CAVE → isSubterranean = true
+              → openedTraversableCave = TRUE
+              → finish(CAVE_FOUND)
+```
+
+**The mob opened nothing. It dug its own hole and declared it a cave.**
+
+This is *context ≠ opportunity* again, the same distinction MI-6 already established: `CaveContext`
+answers "where am I standing", `CaveOpportunity` answers "is there somewhere legitimate to continue".
+Line 41 uses the first as proof of the second.
+
+**MI-6G does not rescue this, and it is worth saying why.** `ENCLOSED_STRUCTURE` separates a cellar
+from a cave by noticing the local rim sits at the cellar's own ground level. A staircase cut into a
+hillside has a genuinely higher rim, so it classifies as `CAVE` correctly — the classifier is right
+and the *question being asked of it* is wrong.
+
+The second branch is sound: it probes `AHEAD_PROBE` blocks ahead, which for a descending staircase is
+unexcavated rock, so `collectStandable` finds nothing. The defect is the early return alone.
+
+**Interaction with MI-14A makes it costly rather than merely wrong:**
+
+```text
+false CAVE_FOUND → descent ends → transition persisted → fresh descent LOCKED
+   → ExploringGoal rebases toward a cave that does not exist
+   → rebase fails or wanders → 400 ticks → expiry → lock released → descent may restart
+```
+
+So a false positive now costs a cancelled descent plus up to 400 ticks of confused exploration.
+
+**Repair (MI-14-R2), not a threshold change.** Raising 8 → 12 or 16 only moves the depth at which the
+mob lies to itself. Change the signature to return evidence:
+
+```java
+Optional<CaveOpening> findOpenedCave(...)
+```
+
+where an opening requires: a standable 2-high destination, **outside the staircase's own excavated
+corridor**, in legitimate subterranean context, reachable from the current stair position. The result
+then populates the transition's `target` and a real continuation `heading` — which is what makes
+MI-14A's payload worth having. Today it ships `target = unresolved, heading = staircase heading`.
+
+### Prolonged-loop classifications
+
+| ID | Loop | Class |
+| --- | --- | --- |
+| **A** | **Zombie assignment.** Director assigns `CONTROLLED_DESCENT`; a priority-3 chore already holds `MOVE`; the executor never starts; the project stays `RUNNING`; `mayStartControlledDescent` refuses a new one because `projectOf` is present. Budget ticks only during execution, so an unexecuted assignment consumes none and **cannot time out**. | `ARCHITECTURE_DEFECT` — needs an assignment TTL or MI-14C admission |
+| **B** | **Handoff vs chores.** The `CAVE_FOUND` lock stops another *staircase*, but `GatherResourcesGoal` / `CraftTorchesGoal` / `SmeltAtFurnaceGoal` at priority 3 still outrank the priority-8 rebase. The cave can be lost to a wood-chopping errand. | `ARCHITECTURE_DEFECT` — MI-14C is the intended fix |
+| **C** | **Repeated-site descent.** Exhaust → lock → 400 ticks → expiry → same demand, same area still `EXHAUSTED` → another descent. Immediate looping is impossible; **long-term repetition is not excluded.** | `RUNTIME_QUESTION` — needs site/sector rejection, folds into MiningMemory |
+| **D** | **Tunnel dead leaf.** `HANDOFF_TUNNEL_SEARCH` preserved with no executor. Honestly blocked rather than pretending to work. | `ACCEPTABLE_STEPPING_STONE` — while nothing claims tunnel search functions |
+
+**A is the one that changes MI-14C's scope.** An arbiter that only chooses *who may act* does not
+clear a stale assignment; the director also needs to be able to revoke one.
+
+### Acceptance for MI-14-R2
+
+**Must happen:** a staircase reaching rimDepth ≥ 8 with **no external opening** does **not** fire
+`CAVE_FOUND`; a genuine breakthrough yields a transition whose `target` is the actual landing.
+**Must not happen:** the mob's own corridor counting as the opening; a threshold change substituting
+for evidence.
+
+**Falsifying probe:** scripted solid-stone hill, surface Y=70, no caves within 32 blocks. Force a
+controlled descent. Prediction under current code: `CAVE_FOUND` fires at Y≈62. Under R2: descent
+continues to budget exhaustion with no `CAVE_FOUND`.
+
+---
+
 ## Topic: MI-14 design review (Gate MAIBS-1, pre-implementation)
 
 **Status:** `FAIL — ARCHITECTURE_DEFECT`. The layered design is right; its **entry point is wrong**.
@@ -2441,6 +2548,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Claude | Reconciled task table (MI-14A/A-T/A-R1/14B + MI-6F/G shipped; 249 tests); MAIBS prolonged-loop pass: **MI-14-M1** false `CAVE_FOUND` from self-dug staircase geometry (`isSubterraneanAt` early return) `FAIL`; loops A zombie assignment + B handoff-vs-chores `ARCHITECTURE_DEFECT`, C repeated-site `RUNTIME_QUESTION`, D tunnel dead leaf `ACCEPTABLE_STEPPING_STONE`; recommended MI-14-R2 before MI-14C |
 | 2026-08-09 | Agent_Claude | MI-14 pre-implementation review (MAIBS-1): `ControlledDescentGoal` already orchestrates; all three terminal handoffs (`CAVE_FOUND`, `HANDOFF_TUNNEL_SEARCH`, `SEARCH_BUDGET_EXHAUSTED`) have zero consumers; four `MOVE` goals share priority 3 so a policy director cannot enforce a mode; recommended consumer-first repair (MI-14a/b/c) over mode-chooser-first; gate `FAIL — ARCHITECTURE_DEFECT` |
 | 2026-08-09 | User + Agent_Cursor | **MI-7B+C bundle**, revised `NaturalDescentStatus`, **MI-5H**, MI-6F→7B+C dependency; cave-mouth downgrade |
 | 2026-08-09 | Agent_Cursor | **MI-7A implemented** (task 20; 200 tests) |
@@ -2463,6 +2571,45 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 | 2026-08-08 | Agent_Cursor | Integrated Agent_ChatGPT mining architecture; expanded MI-13…MI-22, D-MIW-008…014 |
 | 2026-08-08 | Agent_Cursor | Renamed from resource-greed RFC; full mining+wealth RFC; user deliverable template; cave-vs-dig answer |
 | 2026-08-08 | Agent_Cursor | Initial greed/mining split from tool-tier Phase 3 |
+
+### Contribution — Agent_Claude (reconciliation + prolonged-loop pass)
+
+Agent: Agent_Claude
+Date/Session: 2026-08-09 (snapshot 01:5x)
+Contribution type: IMPLEMENTATION + REVIEW (Gate MAIBS-1)
+
+Shipped since the last contribution: MI-14A (transition protocol), MI-14A-T (14 contract tests),
+MI-14A-R1 (restart-lock correction), MI-14B (`MiningDirector` ownership extraction), and MI-6F/6G.
+Suite at **249 tests, zero failures**. Task table reconciled above — it still described MI-7A as
+current.
+
+**Two of my own errors corrected, both found by review rather than by tests:**
+
+1. MI-14A-T asserted `CAVE_FOUND` must not block a fresh descent. That starved its own consumer
+   across a priority gap (rebase at 8, descent at 3). Fixed in R1; the corrected test carries the
+   reason so it cannot be "simplified" back.
+2. My MI-14 review said `ControlledDescentGoal` emitted seven terminal reasons. It emits **five** —
+   I had counted call sites.
+
+**MI-14-M1 confirmed at source.** `openedTraversableCave` returns true the moment the mob is
+subterranean, so a covered staircase at rimDepth 8 fires `CAVE_FOUND` having opened nothing. My own
+MI-6G classifier does not catch it and I do not think it should: a hillside staircase genuinely *is*
+below local terrain, so the classifier answers correctly and the question is wrong. Context is not
+opportunity. Repair is an evidence-returning `findOpenedCave`, not a bigger threshold — a threshold
+only moves the depth at which the mob deceives itself.
+
+**Loop A is the finding that changes plan scope.** A director assignment that never gets execution
+time consumes no budget and cannot expire, while blocking every future assignment. MI-14C as scoped
+("who may act") does not fix it — the director also needs revocation.
+
+Agreement: B is MI-14C's job, C folds into MiningMemory, D is honestly blocked.
+
+Concerns: MI-14-M1 should land before MI-14C. Building arbitration on top of a handoff that fires
+spuriously means tuning who may act on a signal that is wrong to begin with.
+
+RFC fields updated: new reconciliation + prolonged-loop topic, Change Log, this contribution.
+
+---
 
 ### Contribution — Agent_Claude (MI-14 design review)
 
