@@ -8,14 +8,14 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
-| **Mode** | `PLANNING` |
-| **Status** | GAO-0 through GAO-4 `IMPLEMENTED / STATIC VERIFIED`; runtime `UNVERIFIED` |
+| **Mode** | `VALIDATION` — static implementation complete; runtime frontier open |
+| **Status** | GAO-0 through GAO-4 `IMPLEMENTED / STATIC VERIFIED` (499+ tests at last green build); runtime `UNVERIFIED` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-09 (PD-GAO-03 death semantics locked; GAO-2 OpinionMemory implemented) |
+| **Last update** | 2026-08-10 (post-GAO-4 continuation; RT-GAO frontier) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,10 +39,10 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** **GAO-4** — `DiscretionaryActivityDirector` (first visible-behavior phase).
-**Preflight contract is LOCKED** (abstention, intent lifecycle, voluntary yield, opinion-on consumer
-gates, mandatory invalidation, commitment/hysteresis, D-GAO-025 trace). **Implementation not
-authorized until user approves GAO-4 coding.** GAO-3 scoring remains inert. Runtime `UNVERIFIED`.
+**Nearest frontier:** **RT-GAO-1** — approved Minecraft runtime falsification of GAO-M1…M12,
+**GAO-PARITY** (`opinion.enabled` off), and **GAO-THRESHOLD** (PD-GAO-01 C wiring still **NOT
+FOUND** in `ExplorationReadiness` / `exploreIdleTicks` path). Next feature phase after runtime:
+**GAO-5** PLACE opinion (MI-14 Loop C / `MiningMemory` consumer per B-24).
 
 ---
 
@@ -1181,7 +1181,7 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 through GAO-3 `IMPLEMENTED / STATIC VERIFIED`; GAO-4 is nearest frontier
+**Status:** GAO-0 through GAO-4 `IMPLEMENTED / STATIC VERIFIED`; **RT-GAO-1** is nearest frontier
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
@@ -1191,8 +1191,10 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-1** | `AffectiveState` + observation | **IMPLEMENTED:** per-mob mood channels, 10-tick observation, pulse wiring, rate-based boredom, REST/stalled/social semantics, decay, freeze-on-unload, `opinion.enabled` | GAO-0, GAO-0b, GAO-0c |
 | **GAO-2** | `OpinionMemory` v1 (ACTIVITY only) | **IMPLEMENTED:** `ActivityOpinionMemory`, `OpinionMemory`, `OpinionLearningPolicy`, normalized-evidence wiring, PD-GAO-03 death reset | GAO-1 |
 | **GAO-3** | `IdleOpportunityPolicy` | **IMPLEMENTED:** EXPLORE + REST utility scoring, normalized components, ranked `ScoringResult`, no execution | GAO-2, existing goals |
-| **GAO-4** | `DiscretionaryActivityDirector` | **IMPLEMENTED:** intent lifecycle, abstention, voluntary yield, consumer gates, trace | GAO-3 |
-| **GAO-5** | PLACE / ENVIRONMENT opinions | World gains meaning for choice | GAO-4, spatial memory TBD |
+| **GAO-4** | `DiscretionaryActivityDirector` | **IMPLEMENTED:** intent lifecycle, abstention, voluntary yield, consumer gates, trace, explore adoption control plane | GAO-3 |
+| **GAO-4.1** | PD-GAO-01 C threshold wiring | **DEFERRED / NOT FOUND** — boredom does not yet modulate `cfg.exploreIdleTicks` | GAO-4, GAO-1 |
+| **RT-GAO-1** | Runtime validation matrix | GAO-M1…M12 + GAO-PARITY + save/reload; requires launch approval | GAO-4 |
+| **GAO-5** | PLACE / ENVIRONMENT opinions | World gains meaning for choice; MI-14 Loop C consumer | GAO-4, spatial memory TBD |
 | **GAO-6** | ENTITY bridge | SPM `feelingToward` integration | GAO-4 |
 | **GAO-7** | PersonalityModel | Trait-weighted experience scaling | GAO-2 |
 | **GAO-8** | Observable expression | Movement/scan biases | GAO-4, deferred UX |
@@ -1421,7 +1423,7 @@ in-memory learning plus runtime death reset only.
 | **GAO-TRACE** | Bounded per-mob trace covers candidates/scores → intent → claim → yield/handoff → executor admission/start → exact terminal cause |
 | **MAIBS-1** | Multi-minute discretionary sessions look human-plausible (explore → rest → socialize → return) |
 
-### MAIBS discretionary scenarios (`PROPOSED` — pre-implementation)
+### MAIBS discretionary scenarios (`STATIC VERIFIED` where noted; runtime `UNVERIFIED`)
 
 | ID | Setup | Must happen | Must not |
 | --- | --- | --- | --- |
@@ -1429,6 +1431,8 @@ in-memory learning plus runtime death reset only.
 | **GAO-M2** | `FollowLovedOneGoal` running 5 min | Activity = `SOCIAL_TRAVEL`; boredom flat or falls | Explore intent preempts follow |
 | **GAO-M3** | Safe night, campfire active, CONTENT | REST; boredom rises slowly | Instant expedition |
 | **GAO-M4** | 8 min straight `TrackedLocalWanderGoal` | Boredom → `DiscretionaryIntent(EXPLORE)` | Permanent wander loop |
+
+_Static note:_ director path `CONFIRMED` in unit tests; PD-GAO-01 C threshold modulation `UNVERIFIED`.
 | **GAO-M5** | Diamond NEED + cave handoff + high `Opinion(CAVE)` | Prefer explore handoff over tunnel when both legal | Clairvoyant ore scan |
 | **GAO-M6** | `DiscretionaryIntent(EXPLORE)` issued; combat target appears tick+1 | Intent invalidated; attack runs | Delayed explore after fight |
 | **GAO-M7** | Adopted REST intent reaches fire; `CampfireGoal` reaches 200-tick cap | Matching arrival-bound claim keeps REST active | Post-arrival mob immediately becomes bored/Explore |
@@ -1439,6 +1443,27 @@ in-memory learning plus runtime death reset only.
 | **GAO-M12** | REST selected, then entity unloads for days | Affect/opinion freeze; intent/claim are invalidated; current state is rescored on load | Ancient intent or stale campfire claim resurrects |
 
 Runtime probes require separate Minecraft launch approval.
+
+### RT-GAO-1 — runtime validation frontier (`OPEN`)
+
+**Status:** `OPEN` — static GAO-0…4 complete; no approved launch in this mission
+
+| Priority | Probe | Gate | Evidence class |
+| ---: | --- | --- | --- |
+| 1 | `opinion.enabled=false` — wander, explore readiness, mining, SPM social unchanged | **GAO-PARITY** | runtime log + observation |
+| 2 | `opinion.enabled=true` — bored mob adopts REST or EXPLORE; no follow/combat preemption | **GAO-M2**, **GAO-M6**, **GAO-HIERARCHY** | multi-minute session |
+| 3 | Campfire arrival → claim survives delivery stop → voluntary REST→EXPLORE handoff | **GAO-M7**, **GAO-REST-LIFECYCLE** | trace + observation |
+| 4 | Iron NEED active while `Opinion(MINING)` negative | **GAO-M1**, **GAO-COMPETENCE** | progression unchanged |
+| 5 | Config toggle / unload / reload | **GAO-M12**, PD-GAO-07 | freeze + invalidation |
+
+**Pre-launch static gaps (optional, not blocking RT):**
+
+| Gap | Status |
+| --- | --- |
+| PD-GAO-01 C — boredom modulates `exploreIdleTicks` | **NOT FOUND** — deferred **GAO-4.1** |
+| GAO-THRESHOLD gate | **PARTIAL** — ranking live; threshold leg open |
+| Episode RET-1b tombstones | **IMPLEMENTED** — `EpisodeRetentionTest` |
+| Cold-path context allocation (PERF 0B) | **IMPLEMENTED** — task-31 |
 
 ### MAIBS behavioral prediction — GAO-M4 (`CODE_CONFIRMED` mechanism, `UNVERIFIED` runtime)
 
@@ -1510,6 +1535,7 @@ Runtime probes require separate Minecraft launch approval.
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-10 | Agent_Cursor | **Post-GAO-4 continuation** — mode VALIDATION; RT-GAO-1 frontier; GAO-4.1 gap; GAO-5 planning topic |
 | 2026-08-09 | Agent_Cursor | **GAO-1 + PD-GAO-01…04 lock.** User locked product decisions; implemented `AffectiveState`, `AffectiveStateService`, `AffectiveRates`, `OpinionFeatureGate`, `opinion.enabled` config; wired 10-tick observation + `onAffectPulse`; freeze-on-unload (PD-GAO-07); scenario tests; full suite pass; no activity choice, OpinionMemory, or runtime launch |
 | 2026-08-09 | Agent_Cursor | **GAO-0c implementation.** Added `ActivityEpisode`, `EpisodeRoutingPipeline`, `MobExperienceContext`, `OpinionExperienceRegistry`, `RestSessionClaim`/`RestSessionCoordinator`, `ExperienceEmitters`, affect/learning sinks; wired mining terminals, expedition unlock, campfire/shelter REST claims; observer validates claims and classifies live REST; entity unload invalidates ephemeral state. Experience unit tests + full suite pass; runtime unverified |
 | 2026-08-09 | Agent_Cursor | **GAO-0b schema implementation.** Locked D-GAO-026/027 per RFC recommendation; added `experience` package (`ExperienceKind`, `ExperienceCause`, `OutcomeClass`, `ActivityKind`, `ExperienceEvent`, `ExperiencePipeline`); focused unit tests; full suite 410 tests, 0 failures. No emitters, episode state, affect, Goal, or scheduler changes. Runtime unverified; no launch, commit, or push |
@@ -2381,3 +2407,63 @@ and explore terminal ownership verified statically; runtime `UNVERIFIED`.
 `ExplorationReadiness` threshold modulation.
 
 **Frontier after:** runtime validation with `opinion.enabled=true`; optional GAO-5+ scope.
+
+---
+
+## Topic: GAO-5 — PLACE opinion (`PLANNING`)
+
+**Status:** `PLANNING` — dependency-ready after RT-GAO-1 or parallel design-only work
+
+**Why now (B-24):** MI-14 Loop C (`SEARCH_BUDGET_EXHAUSTED` at an exhausted site) was deferred to
+"MiningMemory". GAO-5 is that consumer: learned place opinions that bias *whether to return* vs
+*seek a new heading*, without clairvoyant ore knowledge.
+
+**Minimum viable GAO-5 (`PROPOSED`):**
+
+```text
+PlaceOpinionMemory (chunk or BlockPos anchor, bounded LRU)
+        ↑
+ExperienceEvent terminals: CAVE_FOUND, DEMAND_SATISFIED, SEARCH_BUDGET_EXHAUSTED, NO_PROGRESS
+        ↓
+Utility modifier on discretionary EXPLORE heading / MI re-descent admission (soft only)
+```
+
+**Must happen:** Repeat `NO_PROGRESS` at same anchor reduces return utility; `CAVE_FOUND` increases it.
+
+**Must not happen:** Place dislike vetoes mandatory `WorkDemandPolicy` or MI-14 assignment.
+
+**Depends on:** GAO-4 live; optional MI spatial anchor from `MiningTransition.at`; RET-1 bounded store.
+
+**Not authorized:** implementation in this RFC continuation.
+
+---
+
+## Contribution — Agent_Cursor (post-GAO-4 continuation)
+
+**Agent:** Agent_Cursor **Date/Session:** 2026-08-10 **Type:** `PROGRESSIVE_CONTINUATION`
+
+**Frontier before:** Executive summary still listed GAO-4 as unauthorized; phased table stale.
+
+**Evidence inspected (`CONFIRMED`):**
+
+- `progress.md` — GAO-0…4 static complete; 499 tests at last green build.
+- `ExploreAdoptionControlPlaneTest` — director EXPLORE gated on readiness adoption.
+- `MobExperienceContext` + `EpisodeRetentionTest` — RET-1b tombstone compaction shipped.
+- `ExplorationActivityGoal` — `cfg.exploreIdleTicks` passed unchanged (PD-GAO-01 C gap).
+- task-31-report — PERF 0B cold-path allocation for opinion registry.
+
+**Delivered:**
+
+1. Reconciled RFC identity → mode `VALIDATION`; frontier → **RT-GAO-1**.
+2. Added phased rows **GAO-4.1** (threshold wiring gap) and **RT-GAO-1**.
+3. Added **RT-GAO-1** validation topic with prioritized runtime probes.
+4. Marked GAO-M4 static vs threshold evidence split.
+5. Opened **GAO-5** planning topic (B-24 / MI Loop C consumer).
+
+**Strongest open objection:** PD-GAO-01 C is `LOCKED` but unwired — runtime GAO-M4 may pass via
+director-only path while **GAO-THRESHOLD** gate remains formally open.
+
+**Frontier after:** user approves **RT-GAO-1** launch **or** authorizes **GAO-4.1** threshold wiring
+before runtime.
+
+**Not authorized:** Minecraft launch, GAO-5 implementation, commits.
