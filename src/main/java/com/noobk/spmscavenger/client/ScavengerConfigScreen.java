@@ -39,6 +39,30 @@ public final class ScavengerConfigScreen {
                 .setSaveConsumer(v -> cfg.enabled = v)
                 .build());
 
+        // ---- Opinion ----
+        general.addEntry(eb.startTextDescription(Component.literal("Opinion")
+                .withStyle(ChatFormatting.GOLD)).build());
+
+        general.addEntry(eb.startBooleanToggle(
+                        Component.literal("Adaptive opinion and mood"), cfg.opinionEnabled)
+                .setDefaultValue(false)
+                .setTooltip(Component.literal("Off preserves legacy explore/rest/campfire"),
+                        Component.literal("behaviour — the same as before Opinion shipped."),
+                        Component.literal(" "),
+                        Component.literal("On lets mobs learn activity preferences, track")
+                                .withStyle(ChatFormatting.GRAY),
+                        Component.literal("short-term mood, and choose discretionary")
+                                .withStyle(ChatFormatting.GRAY),
+                        Component.literal("explore vs rest from experience.")
+                                .withStyle(ChatFormatting.GRAY),
+                        Component.literal(" "),
+                        Component.literal("Mandatory work, combat, cave handoffs, and")
+                                .withStyle(ChatFormatting.GRAY),
+                        Component.literal("commands still take priority.")
+                                .withStyle(ChatFormatting.GRAY))
+                .setSaveConsumer(v -> cfg.opinionEnabled = v)
+                .build());
+
         // ---- Torches ----
         general.addEntry(eb.startTextDescription(Component.literal("Torches")
                 .withStyle(ChatFormatting.GOLD)).build());
