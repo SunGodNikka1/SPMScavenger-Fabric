@@ -114,7 +114,11 @@ public class SpmScavenger implements ModInitializer {
         // contexts reachable through a static map for the rest of the JVM's life. Deliberately not
         // clearAll(), which is test-only and also resets sink wiring.
         ServerLifecycleEvents.SERVER_STOPPED.register(
-                server -> OpinionExperienceRegistry.shutdownServerState());
+                server -> {
+                    OpinionExperienceRegistry.shutdownServerState();
+                    FurnaceStations.shutdownServerState();
+                    SeekShelterGoal.shutdownServerState();
+                });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
                 OpinionExperienceRegistry.onDeath(mob.getUUID());

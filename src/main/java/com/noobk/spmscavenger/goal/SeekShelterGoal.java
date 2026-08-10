@@ -263,10 +263,26 @@ public class SeekShelterGoal extends Goal {
             return false;
         }
         Claim claim = CLAIMS.get(pos);
+        // Gate RET-1d - logical expiry was not physical expiry. An expired bed claim read as free
+        // but stayed in this static map, so every bed position ever considered was retained for the
+        // life of the server. Conditional removal so a concurrent re-claim is not discarded.
+        if (claim != null && mob.level().getGameTime() > claim.expiresAtTick()) {
+            CLAIMS.remove(pos, claim);
+            claim = null;
+        }
         if (claim == null) {
             return true;
         }
         return claim.mob().equals(mob.getUUID()) || mob.level().getGameTime() > claim.expiresAtTick();
+    }
+
+    /** Gate RET-1d - release every bed claim when the server stops. */
+    public static void shutdownServerState() {
+        CLAIMS.clear();
+    }
+
+    static int bedClaimCount() {
+        return CLAIMS.size();
     }
 
     private void claim(BlockPos pos) {

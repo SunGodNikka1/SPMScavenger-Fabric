@@ -7,6 +7,8 @@ import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.opinion.AffectiveStateService;
 import com.noobk.spmscavenger.opinion.DiscretionaryActivityDirector;
 import com.noobk.spmscavenger.opinion.DiscretionaryAvailability;
+import com.noobk.spmscavenger.ToolTier;
+import com.noobk.spmscavenger.ToolTierPolicy;
 import com.noobk.spmscavenger.ScavengerConfig;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.GameRules;
@@ -207,8 +209,13 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         }
         long now = level.getGameTime();
         NaturalDescentStatus status = exploring.naturalDescentStatus(level, now);
+        // RET-1c: the same capability the executor's blocker rejects on, asked before assigning.
+        boolean hasMiningCapability = ToolTierPolicy.tierOfPick(
+                        PlayerMobs.backpack(mob), mob.getMainHandItem(), mob.getOffhandItem())
+                != ToolTier.NONE;
         if (!MiningDirector.mayStartControlledDescent(
-                store, mob.getUUID(), status, readiness.hasDescentPressure(), now)) {
+                store, mob.getUUID(), status, readiness.hasDescentPressure(),
+                hasMiningCapability, now)) {
             return;
         }
         ExecutionBlocker admissionBlocker = SchedulerConflictPolicy.resolveBlocker(

@@ -129,9 +129,14 @@ public final class FurnaceStations {
     public static boolean tryClaimWalk(BlockPos pos, UUID mob, long gameTime) {
         BlockPos key = pos.immutable();
         WalkClaim existing = WALK_CLAIMS.get(key);
-        if (existing != null
-                && !existing.mob().equals(mob)
-                && gameTime <= existing.expiresAtTick()) {
+        if (existing != null && gameTime > existing.expiresAtTick()) {
+            // Gate RET-1d - logical expiry was not physical expiry. An expired claim counted as
+            // free but stayed in the map, so every furnace position ever walked to was retained for
+            // the life of the server. Remove conditionally so a concurrent re-claim is not lost.
+            WALK_CLAIMS.remove(key, existing);
+            existing = null;
+        }
+        if (existing != null && !existing.mob().equals(mob)) {
             return false;
         }
         WALK_CLAIMS.put(key, new WalkClaim(mob, gameTime + WALK_CLAIM_TICKS));
@@ -149,11 +154,25 @@ public final class FurnaceStations {
     }
 
     static boolean isWalkClaimable(BlockPos pos, UUID mob, long gameTime) {
-        WalkClaim claim = WALK_CLAIMS.get(pos.immutable());
+        BlockPos key = pos.immutable();
+        WalkClaim claim = WALK_CLAIMS.get(key);
         if (claim == null) {
             return true;
         }
-        return claim.mob().equals(mob) || gameTime > claim.expiresAtTick();
+        if (gameTime > claim.expiresAtTick()) {
+            WALK_CLAIMS.remove(key, claim);
+            return true;
+        }
+        return claim.mob().equals(mob);
+    }
+
+    /** Gate RET-1d - release every walk claim when the server stops. */
+    public static void shutdownServerState() {
+        WALK_CLAIMS.clear();
+    }
+
+    static int walkClaimCount() {
+        return WALK_CLAIMS.size();
     }
 
     /** Test-only: clear session walk claims between cases. */

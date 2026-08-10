@@ -75,9 +75,11 @@ class EpisodeBoundaryRepairTest {
                 MOB, claim.closed(RestCloseReason.TIMEOUT, closeTick), RestCloseReason.TIMEOUT, closeTick);
 
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(MOB);
-        ActivityEpisode episode = context.findEpisode(claim.claimId()).orElseThrow();
 
-        assertTrue(episode.isClosed());
+        // RET-1b: the terminal released the episode object; what survives is the tombstone and the
+        // durable learning it committed. Asserting on the retained object was reading the leak.
+        assertTrue(context.hasCompletedEpisode(claim.claimId()));
+        assertEquals(0, context.liveEpisodeCount());
         assertTrue(context.opinionMemory().preference(ActivityKind.REST) > 0.0f);
         assertEquals(SESSION_DURATION, context.opinionMemory().memoryOf(ActivityKind.REST).recentDuration());
     }
@@ -93,7 +95,10 @@ class EpisodeBoundaryRepairTest {
                 MOB, claim.closed(RestCloseReason.COMBAT, closeTick), RestCloseReason.COMBAT, closeTick);
 
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(MOB);
-        assertTrue(context.findEpisode(claim.claimId()).orElseThrow().isClosed());
+        assertTrue(context.hasCompletedEpisode(claim.claimId()),
+                "RET-1b: a terminal releases the episode object and keeps its identity "
+                        + "as a tombstone - completion is read from the context, not from a "
+                        + "retained closed object");
         assertEquals(beforeClose, context.opinionMemory().preference(ActivityKind.REST), 0.0001f);
     }
 
@@ -107,7 +112,10 @@ class EpisodeBoundaryRepairTest {
                 RestCloseReason.FIRE_INVALID, closeTick);
 
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(MOB);
-        assertTrue(context.findEpisode(claim.claimId()).orElseThrow().isClosed());
+        assertTrue(context.hasCompletedEpisode(claim.claimId()),
+                "RET-1b: a terminal releases the episode object and keeps its identity "
+                        + "as a tombstone - completion is read from the context, not from a "
+                        + "retained closed object");
         assertEquals(0.0f, context.opinionMemory().preference(ActivityKind.REST));
     }
 
@@ -131,7 +139,8 @@ class EpisodeBoundaryRepairTest {
         endExpedition(episodeId, WORLD_AGE, closeTick, ExpeditionEndAttribution.completed());
 
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(MOB);
-        assertTrue(context.findEpisode(episodeId).orElseThrow().isClosed());
+        assertTrue(context.hasCompletedEpisode(episodeId),
+                "RET-1b: completion recorded as a tombstone rather than a retained object");
         assertTrue(context.opinionMemory().preference(ActivityKind.OVERLAND_EXPLORATION) > 0.0f);
         assertEquals(SESSION_DURATION, context.opinionMemory()
                 .memoryOf(ActivityKind.OVERLAND_EXPLORATION).recentDuration());

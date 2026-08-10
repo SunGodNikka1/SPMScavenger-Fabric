@@ -44,14 +44,14 @@ class MiningDirectorTest {
     void mustHappen_exhaustedNaturalDescentUnderPressureAuthorisesAProject() {
         MiningProjectSavedData store = new MiningProjectSavedData();
         assertTrue(MiningDirector.mayStartControlledDescent(
-                store, MOB, NaturalDescentStatus.EXHAUSTED, true, 0L));
+                store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, 0L));
     }
 
     @Test
     void mustNotHappen_projectStartsWithoutDescentPressure() {
         MiningProjectSavedData store = new MiningProjectSavedData();
         assertFalse(MiningDirector.mayStartControlledDescent(
-                store, MOB, NaturalDescentStatus.EXHAUSTED, false, 0L));
+                store, MOB, NaturalDescentStatus.EXHAUSTED, false, true, 0L));
     }
 
     @Test
@@ -61,7 +61,7 @@ class MiningDirectorTest {
                 NaturalDescentStatus.SEARCHING,
                 NaturalDescentStatus.AVAILABLE,
                 NaturalDescentStatus.TEMPORARILY_BLOCKED }) {
-            assertFalse(MiningDirector.mayStartControlledDescent(store, MOB, status, true, 0L),
+            assertFalse(MiningDirector.mayStartControlledDescent(store, MOB, status, true, true, 0L),
                     status + " must not authorise digging - natural descent is still an option");
         }
     }
@@ -71,7 +71,7 @@ class MiningDirectorTest {
         MiningProjectSavedData store = new MiningProjectSavedData();
         store.putProject(MOB, descentProject());
         assertFalse(MiningDirector.mayStartControlledDescent(
-                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, 0L),
+                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, 0L),
                 "one assignment at a time");
     }
 
@@ -86,7 +86,7 @@ class MiningDirectorTest {
             MiningProjectSavedData store = new MiningProjectSavedData();
             store.recordTransition(MOB, transition(end));
             assertFalse(MiningDirector.mayStartControlledDescent(
-                            store, MOB, NaturalDescentStatus.EXHAUSTED, true, 0L),
+                            store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, 0L),
                     end + " must hold the descent lock until consumed or expired");
         }
     }
@@ -99,7 +99,7 @@ class MiningDirectorTest {
             MiningProjectSavedData store = new MiningProjectSavedData();
             store.recordTransition(MOB, transition(end));
             assertTrue(MiningDirector.mayStartControlledDescent(
-                            store, MOB, NaturalDescentStatus.EXHAUSTED, true, 0L),
+                            store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, 0L),
                     end + " is not a handoff and must not block the next attempt");
         }
     }
@@ -109,11 +109,11 @@ class MiningDirectorTest {
         MiningProjectSavedData store = new MiningProjectSavedData();
         store.recordTransition(MOB, transition(MiningProjectEnd.CAVE_FOUND));
         assertFalse(MiningDirector.mayStartControlledDescent(
-                store, MOB, NaturalDescentStatus.EXHAUSTED, true, 0L));
+                store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, 0L));
 
         store.consumeTransition(MOB);
         assertTrue(MiningDirector.mayStartControlledDescent(
-                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, 0L),
+                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, 0L),
                 "once the rebase has taken the cave, digging again is legitimate");
     }
 
@@ -124,10 +124,10 @@ class MiningDirectorTest {
         store.recordTransition(MOB, handoff);
         assertTrue(store.claimCaveContinuation(MOB, handoff, 0L, ExploringGoal.MAX_EXPEDITION_TICKS));
         assertFalse(MiningDirector.mayStartControlledDescent(
-                store, MOB, NaturalDescentStatus.EXHAUSTED, true, 10L));
+                store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, 10L));
         store.clearCommitment(MOB);
         assertTrue(MiningDirector.mayStartControlledDescent(
-                store, MOB, NaturalDescentStatus.EXHAUSTED, true, 11L));
+                store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, 11L));
     }
 
     @Test
@@ -149,7 +149,7 @@ class MiningDirectorTest {
         assertTrue(MiningDirector.assignedProject(
                 store, other, MiningProjectMode.CONTROLLED_DESCENT).isEmpty());
         assertTrue(MiningDirector.mayStartControlledDescent(
-                        store, other, NaturalDescentStatus.EXHAUSTED, true, 0L),
+                        store, other, NaturalDescentStatus.EXHAUSTED, true, true, 0L),
                 "another mob's project neither blocks nor authorises this one");
     }
 }

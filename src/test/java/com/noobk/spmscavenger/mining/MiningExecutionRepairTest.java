@@ -98,7 +98,7 @@ class MiningExecutionRepairTest {
         store.claimCaveContinuation(MOB, handoff, 50L, ExploringGoal.MAX_EXPEDITION_TICKS);
 
         assertFalse(MiningDirector.mayStartControlledDescent(
-                store, MOB, NaturalDescentStatus.EXHAUSTED, true, 60L));
+                store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, 60L));
     }
 
     @Test

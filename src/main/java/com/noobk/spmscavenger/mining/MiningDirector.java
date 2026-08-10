@@ -59,7 +59,21 @@ public final class MiningDirector {
      */
     public static boolean mayStartControlledDescent(
             MiningProjectSavedData store, UUID mobId, NaturalDescentStatus status,
-            boolean descentPressure, long now) {
+            boolean descentPressure, boolean hasMiningCapability, long now) {
+        // Gate RET-1c - never create a project for an executor whose mandatory capability is
+        // already known to be absent.
+        //
+        // Admission used to ask only "is there work to do", while the executor's blocker asked
+        // "can I dig". A mob with no pickaxe therefore produced: assign -> CAPABILITY_MISSING ->
+        // revoke -> retire -> assign, every observer pass, forever. Each cycle allocated a project,
+        // a lease and a transition, marked saved data dirty, wrote three log lines and emitted
+        // experience events - a churn loop that manufactures the retention RET-1a hunts for.
+        //
+        // The correct state for a mob that wants diamonds and owns no pickaxe is "prerequisite:
+        // obtain a pickaxe", not "impossible mining job, retried forever".
+        if (!hasMiningCapability) {
+            return false;
+        }
         if (store.projectOf(mobId).isPresent()) {
             return false;
         }

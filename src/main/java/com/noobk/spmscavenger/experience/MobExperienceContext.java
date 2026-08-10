@@ -182,6 +182,11 @@ public final class MobExperienceContext {
      * live state, and evicting one for being old would silently discard an activity the mob is still
      * performing — trading a memory bug for a behaviour bug.
      */
+    /**
+     * Bulk sweep. Defensive only: unload, tests, and recovery from a path that closed an episode
+     * without going through the pipeline. Normal lifetime is owned by
+     * {@link #compactEpisodeIfClosed(UUID)}.
+     */
     public int compactClosedEpisodes() {
         int removed = 0;
         Iterator<Map.Entry<UUID, ActivityEpisode>> entries = episodes.entrySet().iterator();
@@ -194,6 +199,26 @@ public final class MobExperienceContext {
             }
         }
         return removed;
+    }
+
+    /**
+     * O(1) compaction at the moment ownership ends.
+     *
+     * <p>The terminal event already knows the episode is over, so the code that closes it also
+     * releases it. Scanning the whole map on a timer would leave every completed episode resident
+     * until the next sweep — and a mob that stays loaded for hours performs hundreds of activities
+     * between unloads, which is exactly the retention this repairs.
+     *
+     * @return whether an episode was released
+     */
+    public boolean compactEpisodeIfClosed(UUID episodeId) {
+        ActivityEpisode episode = episodes.get(episodeId);
+        if (episode == null || !episode.isClosed()) {
+            return false;
+        }
+        episodes.remove(episodeId);
+        closedEpisodeIds.add(episodeId);
+        return true;
     }
 
     /** Live episodes only — the number this context is actually retaining. */

@@ -23,5 +23,10 @@ public final class EpisodeRoutingPipeline implements ExperiencePipeline {
             episode.resume();
         }
         episode.ingest(event, sinks, context);
+        // Gate RET-1b: terminal ownership owns memory lifetime. The event that ends an episode is
+        // the one that releases it, so nothing accumulates between sweeps.
+        if (episode.isClosed()) {
+            context.compactEpisodeIfClosed(event.episodeId());
+        }
     }
 }

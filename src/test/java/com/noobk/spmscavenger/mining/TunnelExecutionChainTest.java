@@ -66,7 +66,7 @@ class TunnelExecutionChainTest {
                 ExecutionIntentPolicy.derive(store, MOB, now),
                 "observable but not actionable until something claims it");
         assertFalse(MiningDirector.mayStartControlledDescent(
-                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, now),
+                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, now),
                 "M1: the unresolved handoff blocks a fresh staircase - so something MUST claim it, "
                         + "or the mob stops here forever");
 
@@ -231,7 +231,7 @@ class TunnelExecutionChainTest {
 
         assertTrue(store.projectOf(MOB).isPresent(), "RETRY persists");
         assertFalse(MiningDirector.mayStartControlledDescent(
-                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, now + 1),
+                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, now + 1),
                 "and while it is stored, no new work may be assigned - which is why something "
                         + "must retire it");
 
@@ -240,7 +240,7 @@ class TunnelExecutionChainTest {
 
         assertTrue(store.projectOf(MOB).isEmpty());
         assertTrue(MiningDirector.mayStartControlledDescent(
-                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, now + 2),
+                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, now + 2),
                 "mining resumes rather than being permanently dead after one stall");
     }
 }

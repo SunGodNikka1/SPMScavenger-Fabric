@@ -117,7 +117,7 @@ class CaveHandoffAuthorityClockTest {
         assertTrue(store.hasActiveCaveContinuation(MOB, lastLegalTick),
                 "so its authority must be too - the two boundaries are one definition now");
         assertFalse(MiningDirector.mayStartControlledDescent(
-                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, lastLegalTick),
+                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, lastLegalTick),
                 "and no fresh staircase may slip through that tick");
 
         long firstStaleTick = DISCOVERY + AUTHORITY + 1;
@@ -168,13 +168,13 @@ class CaveHandoffAuthorityClockTest {
 
         long afterAdmissionClosed = DISCOVERY + ADMISSION + 50;
         assertFalse(MiningDirector.mayStartControlledDescent(
-                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, afterAdmissionClosed),
+                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, afterAdmissionClosed),
                 "the transition is consumed and admission is stale, so the commitment is the only "
                         + "thing left stopping the mob digging a new hole beside the cave it found");
 
         long afterAuthorityLapsed = LATEST_CLAIM + AUTHORITY + 1;
         assertTrue(MiningDirector.mayStartControlledDescent(
-                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, afterAuthorityLapsed),
+                        store, MOB, NaturalDescentStatus.EXHAUSTED, true, true, afterAuthorityLapsed),
                 "once the walk is genuinely over, descent pressure may act again");
     }
 
