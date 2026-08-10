@@ -12,7 +12,7 @@
 
 ### Files
 - **NEW** `PlaceOpinionRouteRanker` — `destinationBias` / `routeBias`, `MAX_ROUTE_BIAS = 15`
-- **EDIT** `ExploringGoal` — route scoring adds place bias on final waypoint; `placeMemoryForRouteRanking()` via `find()` (no alloc)
+- **EDIT** `ExploringGoal` — route scoring adds place bias on final waypoint; `placeMemoryForRouteRanking()` uses `find()` (no `MobExperienceContext` alloc); may still allocate empty `PlaceOpinionMemory` when no context exists (ephemeral, not RET-1)
 - **EDIT** `ActivityUtilityScorer` — PLACE term removed from `scoreExplore`
 - **EDIT** `DiscretionaryScoringInput` — `placeAnchor` / `placeOpinionMemory` removed
 - **EDIT** `DiscretionaryActivityDirector.tick` — no `placeAnchor` parameter
@@ -40,6 +40,13 @@ Result: BUILD SUCCESSFUL — 556 tests, 0 failures
 | Anti-fixation dominates place | `mustHappen_antiFixationDominatesPlaceBias` |
 | No veto / capped worst bias | `mustNotHappen_extremeDislikeCannotVetoAllRoutes` |
 | Current chunk dislike ≠ lower EXPLORE utility | `mustNotHappen_currentChunkDislikeDoesNotLowerExploreUtility` |
+
+## Minor notes (non-blocking)
+
+| Item | Verdict |
+| --- | --- |
+| No-context planning `new PlaceOpinionMemory()` | 🟡 Ephemeral alloc on route plan when mob has no experience context; ranker could accept null/shared empty later |
+| Intermediate-path dislike | 🟡 Not modeled — final destination chunk only |
 
 ## UNVERIFIED
 
