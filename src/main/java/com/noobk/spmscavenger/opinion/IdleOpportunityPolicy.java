@@ -29,8 +29,7 @@ public final class IdleOpportunityPolicy {
             if (!input.availability().hasExecutor(activity)) {
                 continue;
             }
-            candidates.add(ActivityUtilityScorer.score(
-                    activity, input.affectiveState(), input.opinionMemory()));
+            candidates.add(ActivityUtilityScorer.score(activity, input));
         }
 
         if (candidates.isEmpty()) {

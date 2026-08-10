@@ -3,6 +3,8 @@ package com.noobk.spmscavenger.experience;
 import com.noobk.spmscavenger.mining.MiningProject;
 import com.noobk.spmscavenger.mining.MiningProjectEnd;
 import com.noobk.spmscavenger.mining.MiningProjectMode;
+import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
+import com.noobk.spmscavenger.opinion.PlaceOpinionService;
 import com.noobk.spmscavenger.progression.TaskLifecycle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Mob;
@@ -104,6 +106,8 @@ public final class ExperienceEmitters {
                 Optional.of(activityFor(project.mode())),
                 Optional.of(at),
                 Optional.empty()));
+        PlaceOpinionService.applyMiningTerminal(
+                OpinionExperienceRegistry.contextFor(mob.getUUID()), end, at);
     }
 
     public static void restSessionOpened(UUID mobId, RestSessionClaim claim, long gameTime) {

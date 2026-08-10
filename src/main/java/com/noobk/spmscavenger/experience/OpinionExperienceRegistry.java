@@ -76,6 +76,7 @@ public final class OpinionExperienceRegistry {
         MobExperienceContext context = CONTEXTS.get(mobId);
         if (context != null) {
             context.opinionMemory().onDeath();
+            context.placeOpinionMemory().clear();
         }
     }
 

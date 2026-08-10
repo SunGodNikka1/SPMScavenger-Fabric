@@ -5,6 +5,7 @@ import com.noobk.spmscavenger.activity.ActivityObservationService;
 import com.noobk.spmscavenger.experience.ActivityKind;
 import com.noobk.spmscavenger.experience.MobExperienceContext;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
+import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -261,13 +262,13 @@ class DiscretionaryActivityDirectorTest {
         seedOpinions(55f, 5f, 11f, 4f);
         neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
         DiscretionaryActivityDirector.tick(
-                MOB, 10L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true);
+                MOB, 10L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true, BlockPos.ZERO);
         UUID staleId = director.intent().get().intentId();
         assertTrue(director.intent().isPresent());
 
         OpinionFeatureGate.testOverride = false;
         DiscretionaryActivityDirector.tick(
-                MOB, 20L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true);
+                MOB, 20L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true, BlockPos.ZERO);
 
         assertTrue(director.intent().isEmpty());
         assertTrue(hasTerminalDetail("OPINION_DISABLED"));
@@ -275,7 +276,7 @@ class DiscretionaryActivityDirectorTest {
 
         OpinionFeatureGate.testOverride = true;
         DiscretionaryActivityDirector.tick(
-                MOB, 30L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true);
+                MOB, 30L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true, BlockPos.ZERO);
 
         assertTrue(director.intent().isPresent());
         assertFalse(staleId.equals(director.intent().get().intentId()));
@@ -367,7 +368,7 @@ class DiscretionaryActivityDirectorTest {
                 false,
                 combat,
                 observation,
-                new DiscretionaryScoringInput(
+                DiscretionaryScoringInput.withoutPlace(
                         context.affectiveState(),
                         context.opinionMemory(),
                         DiscretionaryAvailability.bothPresent(),

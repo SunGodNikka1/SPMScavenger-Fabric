@@ -54,7 +54,7 @@ class IdleOpportunityPolicyTest {
 
     @Test
     void mandatoryWorkSuppressesDiscretionaryScoring() {
-        DiscretionaryScoringInput input = new DiscretionaryScoringInput(
+        DiscretionaryScoringInput input = DiscretionaryScoringInput.withoutPlace(
                 neutralMood(),
                 opinions(55f, 5f, 11f, 4f),
                 DiscretionaryAvailability.bothPresent(),
@@ -66,7 +66,7 @@ class IdleOpportunityPolicyTest {
 
     @Test
     void missingExecutorExcludedBeforeScoring() {
-        DiscretionaryScoringInput input = new DiscretionaryScoringInput(
+        DiscretionaryScoringInput input = DiscretionaryScoringInput.withoutPlace(
                 neutralMood(),
                 opinions(55f, 5f, 11f, 4f),
                 new DiscretionaryAvailability(true, false),
@@ -80,7 +80,7 @@ class IdleOpportunityPolicyTest {
 
     @Test
     void opinionDisabledProducesNoScoringEffect() {
-        DiscretionaryScoringInput input = new DiscretionaryScoringInput(
+        DiscretionaryScoringInput input = DiscretionaryScoringInput.withoutPlace(
                 neutralMood(),
                 opinions(55f, 5f, 11f, 4f),
                 DiscretionaryAvailability.bothPresent(),
@@ -121,7 +121,7 @@ class IdleOpportunityPolicyTest {
     }
 
     private static ScoringResult score(AffectiveState mood, OpinionMemory opinions) {
-        return IdleOpportunityPolicy.score(new DiscretionaryScoringInput(
+        return IdleOpportunityPolicy.score(DiscretionaryScoringInput.withoutPlace(
                         mood,
                         opinions,
                         DiscretionaryAvailability.bothPresent(),

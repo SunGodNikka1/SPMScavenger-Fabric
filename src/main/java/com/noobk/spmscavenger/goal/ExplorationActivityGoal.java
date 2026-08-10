@@ -7,6 +7,7 @@ import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.opinion.AffectiveStateService;
 import com.noobk.spmscavenger.opinion.DiscretionaryActivityDirector;
 import com.noobk.spmscavenger.opinion.DiscretionaryAvailability;
+import com.noobk.spmscavenger.opinion.ExploreReadinessThresholds;
 import com.noobk.spmscavenger.ToolTier;
 import com.noobk.spmscavenger.ToolTierPolicy;
 import com.noobk.spmscavenger.ScavengerConfig;
@@ -120,15 +121,17 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         AffectiveStateService.observe(mob.getUUID(), observation, OBSERVE_INTERVAL);
         DiscretionaryAvailability availability = new DiscretionaryAvailability(cfg.exploring, cfg.campfire);
         long now = mob.level().getGameTime();
+        int idleTicks = ExploreReadinessThresholds.idleTicks(cfg, mob.getUUID());
         boolean exploreAdoptionReady = readiness.eligibleForNewExpedition(
-                now, cfg.exploreLocalTripsThreshold, cfg.exploreIdleTicks);
+                now, cfg.exploreLocalTripsThreshold, idleTicks);
         DiscretionaryActivityDirector.tick(
                 mob.getUUID(),
                 now,
                 observation,
                 availability,
                 mob.getTarget() != null,
-                exploreAdoptionReady);
+                exploreAdoptionReady,
+                mob.blockPosition());
 
         boolean mayCreateWork = permitsNewMiningWork(cfg.enabled, allowNewMiningWork);
         if (mayCreateWork) {

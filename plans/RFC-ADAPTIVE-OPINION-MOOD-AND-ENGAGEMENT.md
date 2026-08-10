@@ -9,13 +9,13 @@
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
 | **Mode** | `VALIDATION` — static implementation complete; runtime frontier open |
-| **Status** | GAO-0 through GAO-4 `IMPLEMENTED / STATIC VERIFIED` (499+ tests at last green build); runtime `UNVERIFIED` |
+| **Status** | GAO-0 through GAO-5 + GAO-4.1 `IMPLEMENTED / STATIC VERIFIED` (548 tests at last green build); runtime `UNVERIFIED` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-10 (post-GAO-4 continuation; RT-GAO frontier) |
+| **Last update** | 2026-08-10 (GAO-4.1 + GAO-5 + RT-GAO minimal static sanity) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,10 +39,10 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** **RT-GAO-1** — approved Minecraft runtime falsification of GAO-M1…M12,
-**GAO-PARITY** (`opinion.enabled` off), and **GAO-THRESHOLD** (PD-GAO-01 C wiring still **NOT
-FOUND** in `ExplorationReadiness` / `exploreIdleTicks` path). Next feature phase after runtime:
-**GAO-5** PLACE opinion (MI-14 Loop C / `MiningMemory` consumer per B-24).
+**Nearest frontier:** **RT-GAO-1** — full Minecraft runtime falsification of GAO-M1…M12 and
+**GAO-PARITY** (`opinion.enabled` off). Static **RT-GAO minimal** sanity (`RtGaoMinimalSanityTest`)
+passed; **GAO-THRESHOLD** static leg `CONFIRMED` via GAO-4.1 wiring; runtime threshold behavior
+`UNVERIFIED`. Next feature phase: **GAO-6** ENTITY bridge or expanded GAO-5 heading bias.
 
 ---
 
@@ -1192,9 +1192,9 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-2** | `OpinionMemory` v1 (ACTIVITY only) | **IMPLEMENTED:** `ActivityOpinionMemory`, `OpinionMemory`, `OpinionLearningPolicy`, normalized-evidence wiring, PD-GAO-03 death reset | GAO-1 |
 | **GAO-3** | `IdleOpportunityPolicy` | **IMPLEMENTED:** EXPLORE + REST utility scoring, normalized components, ranked `ScoringResult`, no execution | GAO-2, existing goals |
 | **GAO-4** | `DiscretionaryActivityDirector` | **IMPLEMENTED:** intent lifecycle, abstention, voluntary yield, consumer gates, trace, explore adoption control plane | GAO-3 |
-| **GAO-4.1** | PD-GAO-01 C threshold wiring | **DEFERRED / NOT FOUND** — boredom does not yet modulate `cfg.exploreIdleTicks` | GAO-4, GAO-1 |
-| **RT-GAO-1** | Runtime validation matrix | GAO-M1…M12 + GAO-PARITY + save/reload; requires launch approval | GAO-4 |
-| **GAO-5** | PLACE / ENVIRONMENT opinions | World gains meaning for choice; MI-14 Loop C consumer | GAO-4, spatial memory TBD |
+| **GAO-4.1** | PD-GAO-01 C threshold wiring | **IMPLEMENTED:** `ExploreIdleThresholdPolicy`, `ExploreReadinessThresholds`; wired in `ExplorationActivityGoal` + `ExploringGoal` | GAO-4, GAO-1 |
+| **RT-GAO-1** | Runtime validation matrix | **STATIC MINIMAL DONE** (`RtGaoMinimalSanityTest`); full GAO-M1…M12 probes require launch approval | GAO-4.1, GAO-5 |
+| **GAO-5** | PLACE / ENVIRONMENT opinions | **IMPLEMENTED (MVP):** `PlaceOpinionMemory`, `PlaceOpinionService`, EXPLORE utility term; mining terminals wired | GAO-4 |
 | **GAO-6** | ENTITY bridge | SPM `feelingToward` integration | GAO-4 |
 | **GAO-7** | PersonalityModel | Trait-weighted experience scaling | GAO-2 |
 | **GAO-8** | Observable expression | Movement/scan biases | GAO-4, deferred UX |
@@ -1460,8 +1460,8 @@ Runtime probes require separate Minecraft launch approval.
 
 | Gap | Status |
 | --- | --- |
-| PD-GAO-01 C — boredom modulates `exploreIdleTicks` | **NOT FOUND** — deferred **GAO-4.1** |
-| GAO-THRESHOLD gate | **PARTIAL** — ranking live; threshold leg open |
+| PD-GAO-01 C — boredom modulates `exploreIdleTicks` | **IMPLEMENTED** — GAO-4.1; max boredom @600 base → 375 ticks (`ExploreIdleThresholdPolicyTest`) |
+| GAO-THRESHOLD gate | **STATIC VERIFIED** — ranking + threshold wiring; runtime `UNVERIFIED` |
 | Episode RET-1b tombstones | **IMPLEMENTED** — `EpisodeRetentionTest` |
 | Cold-path context allocation (PERF 0B) | **IMPLEMENTED** — task-31 |
 
@@ -1535,6 +1535,7 @@ Runtime probes require separate Minecraft launch approval.
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-10 | Agent_Cursor | **GAO-4.1 + GAO-5 + RT-GAO minimal** — threshold wiring, PLACE opinion MVP, static sanity tests; 548 tests/clean build; runtime unverified |
 | 2026-08-10 | Agent_Cursor | **Post-GAO-4 continuation** — mode VALIDATION; RT-GAO-1 frontier; GAO-4.1 gap; GAO-5 planning topic |
 | 2026-08-09 | Agent_Cursor | **GAO-1 + PD-GAO-01…04 lock.** User locked product decisions; implemented `AffectiveState`, `AffectiveStateService`, `AffectiveRates`, `OpinionFeatureGate`, `opinion.enabled` config; wired 10-tick observation + `onAffectPulse`; freeze-on-unload (PD-GAO-07); scenario tests; full suite pass; no activity choice, OpinionMemory, or runtime launch |
 | 2026-08-09 | Agent_Cursor | **GAO-0c implementation.** Added `ActivityEpisode`, `EpisodeRoutingPipeline`, `MobExperienceContext`, `OpinionExperienceRegistry`, `RestSessionClaim`/`RestSessionCoordinator`, `ExperienceEmitters`, affect/learning sinks; wired mining terminals, expedition unlock, campfire/shelter REST claims; observer validates claims and classifies live REST; entity unload invalidates ephemeral state. Experience unit tests + full suite pass; runtime unverified |
@@ -2403,16 +2404,16 @@ GAO-4 static frontier closed — next evidence is runtime validation.
 **Experience substrate static frontier closed** — episode open/close boundaries, start-time ownership,
 and explore terminal ownership verified statically; runtime `UNVERIFIED`.
 
-**Not delivered:** runtime launch, disk persistence, PLACE/ENTITY opinions, PersonalityModel,
-`ExplorationReadiness` threshold modulation.
+**Not delivered:** runtime launch, disk persistence, ENTITY opinions, PersonalityModel,
+heading-specific GAO-5 route bias.
 
-**Frontier after:** runtime validation with `opinion.enabled=true`; optional GAO-5+ scope.
+**Frontier after:** **RT-GAO-1** full runtime matrix; optional GAO-6 ENTITY bridge.
 
 ---
 
 ## Topic: GAO-5 — PLACE opinion (`PLANNING`)
 
-**Status:** `PLANNING` — dependency-ready after RT-GAO-1 or parallel design-only work
+**Status:** `IMPLEMENTED / STATIC VERIFIED` — MVP shipped 2026-08-10; runtime `UNVERIFIED`
 
 **Why now (B-24):** MI-14 Loop C (`SEARCH_BUDGET_EXHAUSTED` at an exhausted site) was deferred to
 "MiningMemory". GAO-5 is that consumer: learned place opinions that bias *whether to return* vs
@@ -2432,9 +2433,18 @@ Utility modifier on discretionary EXPLORE heading / MI re-descent admission (sof
 
 **Must not happen:** Place dislike vetoes mandatory `WorkDemandPolicy` or MI-14 assignment.
 
-**Depends on:** GAO-4 live; optional MI spatial anchor from `MiningTransition.at`; RET-1 bounded store.
+**Delivered (static `CONFIRMED`):**
 
-**Not authorized:** implementation in this RFC continuation.
+- `PlaceOpinionMemory` — chunk-keyed LRU (max 32), preference −100…+100
+- `PlaceOpinionService` — mining terminal deltas (`CAVE_FOUND` +18, `NO_PROGRESS` −14, …)
+- `ExperienceEmitters.miningTerminal` → place learning hook
+- `DiscretionaryScoringInput.placeAnchor` + `ActivityUtilityScorer` `PLACE_PREFERENCE` term
+- Death clears place memory via `OpinionExperienceRegistry.onDeath`
+- Tests: `PlaceOpinionMemoryTest`, `PlaceOpinionServiceTest`, `PlaceOpinionScoringTest`
+
+**Deferred:** heading-specific explore route bias; MI re-descent admission modifier; disk persistence.
+
+**Depends on:** GAO-4 live; optional MI spatial anchor from `MiningTransition.at`; RET-1 bounded store.
 
 ---
 

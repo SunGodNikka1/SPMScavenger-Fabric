@@ -70,11 +70,15 @@ safety pause; player-order prevention/revocation; pre-start pause NBT v4; 400-ti
 C3-F1…F7; 321 tests/clean build; MAIBS static PASS; runtime unverified). Post-GREEN review also
 repaired a same-observer CommandedAction revoke→reassign loop. No Tunnel Search work performed.
 
-GA-OPINION: GAO-0 through GAO-4 `IMPLEMENTED / STATIC VERIFIED` — scoring, director, intent
-lifecycle, voluntary yield, consumer gates; GAO-4 repair (handoff identity, opinion-disable
-invalidation, REST claim authority, current-utility switch margin, REST close attribution,
-episode boundary repair); 499 tests/clean build pass; runtime unverified.
-Experience substrate static frontier closed; GAO-4 Director static frontier closed.
+GA-OPINION: GAO-0 through GAO-5 + GAO-4.1 `IMPLEMENTED / STATIC VERIFIED` — scoring, director,
+intent lifecycle, voluntary yield, consumer gates, boredom threshold wiring (GAO-4.1), PLACE
+opinion MVP (GAO-5); RT-GAO minimal static sanity (`RtGaoMinimalSanityTest`); 548 tests/clean
+build pass; runtime unverified.
+Experience substrate static frontier closed; GAO-4 Director static frontier closed; GAO-THRESHOLD
+static leg closed (runtime unverified).
+
+GA-OPINION RFC frontier (2026-08-10): **RT-GAO-1** full runtime falsification — task-34-report;
+static minimal done; launch not authorized.
 
 No commits. No Minecraft launches (separate approval required).
 

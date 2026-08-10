@@ -87,7 +87,7 @@ class ExploreAdoptionControlPlaneTest {
                 false,
                 ActivityObservationService.summarize(
                         EnumSet.of(ActivityClass.IDLE_CANDIDATE, ActivityClass.PASSIVE_COSMETIC)),
-                new DiscretionaryScoringInput(
+                DiscretionaryScoringInput.withoutPlace(
                         context.affectiveState(),
                         context.opinionMemory(),
                         DiscretionaryAvailability.bothPresent(),

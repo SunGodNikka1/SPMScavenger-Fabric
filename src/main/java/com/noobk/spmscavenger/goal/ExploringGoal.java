@@ -18,6 +18,7 @@ import com.noobk.spmscavenger.experience.ExpeditionEndAttribution;
 import com.noobk.spmscavenger.experience.ExperienceEmitters;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.opinion.DiscretionaryAuthority;
+import com.noobk.spmscavenger.opinion.ExploreReadinessThresholds;
 import com.noobk.spmscavenger.opinion.IntentLifecycle;
 import com.noobk.spmscavenger.mining.NaturalDescentExhaustionPolicy;
 import com.noobk.spmscavenger.mining.NaturalDescentSearchState;
@@ -175,7 +176,9 @@ public final class ExploringGoal extends Goal {
 
         if (expedition == null) {
             if (!readiness.eligibleForNewExpedition(
-                    now, cfg.exploreLocalTripsThreshold, cfg.exploreIdleTicks)) {
+                    now,
+                    cfg.exploreLocalTripsThreshold,
+                    ExploreReadinessThresholds.idleTicks(cfg, mob.getUUID()))) {
                 return false;
             }
             if (isDiscretionaryExplorePath()

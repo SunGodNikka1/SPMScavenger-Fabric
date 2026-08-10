@@ -21,6 +21,7 @@ public final class ActivityUtilityWeights {
     public static final float EXPLORE_STRESS_FIT = 25f;
     public static final float EXPLORE_NOVELTY_FIT = 18f;
     public static final float EXPLORE_COST = 8f;
+    public static final float PLACE_PREFERENCE = 22f;
 
     public static final float REST_STRESS_FIT = 30f;
     public static final float REST_BOREDOM_FIT = 20f;

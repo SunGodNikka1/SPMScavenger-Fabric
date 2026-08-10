@@ -4,7 +4,9 @@ import com.noobk.spmscavenger.activity.ActivityObservationService;
 import com.noobk.spmscavenger.experience.MobExperienceContext;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 import com.noobk.spmscavenger.experience.RestCloseReason;
+import net.minecraft.core.BlockPos;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -20,7 +22,8 @@ public final class DiscretionaryActivityDirector {
             ActivityObservationService.Observation observation,
             DiscretionaryAvailability availability,
             boolean combatTarget,
-            boolean exploreAdoptionReady) {
+            boolean exploreAdoptionReady,
+            BlockPos placeAnchor) {
         if (!OpinionFeatureGate.isEnabled()) {
             MobExperienceContext existing = OpinionExperienceRegistry.find(mobId);
             if (existing == null) {
@@ -32,7 +35,7 @@ public final class DiscretionaryActivityDirector {
                     existing.isFrozen(),
                     combatTarget,
                     observation,
-                    new DiscretionaryScoringInput(
+                    DiscretionaryScoringInput.withoutPlace(
                             existing.affectiveState(),
                             existing.opinionMemory(),
                             availability,
@@ -47,9 +50,11 @@ public final class DiscretionaryActivityDirector {
         DiscretionaryScoringInput scoringInput = new DiscretionaryScoringInput(
                 context.affectiveState(),
                 context.opinionMemory(),
+                context.placeOpinionMemory(),
                 availability,
                 eligible,
-                opinionEnabled);
+                opinionEnabled,
+                Optional.ofNullable(placeAnchor));
         context.discretionaryDirector().tick(new DirectorTickInput(
                 gameTime,
                 opinionEnabled,

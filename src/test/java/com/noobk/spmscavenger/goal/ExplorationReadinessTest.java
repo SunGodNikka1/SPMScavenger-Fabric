@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.goal;
 
+import com.noobk.spmscavenger.opinion.ExploreIdleThresholdPolicy;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -55,6 +56,16 @@ class ExplorationReadinessTest {
                 "pressure survives consume; the observer owns its lifecycle");
         // The safety property that makes that acceptable: cooldown alone still blocks re-entry.
         assertFalse(readiness.eligibleForNewExpedition(100, 2, 600), "cooldown must still gate a new expedition");
+    }
+
+    @Test
+    void gao41LowerIdleThresholdUnlocksExpeditionSooner() {
+        ExplorationReadiness readiness = new ExplorationReadiness();
+        long now = 10_000L;
+        readiness.recordIdleTicks(375);
+
+        assertFalse(readiness.eligibleForNewExpedition(now, 0, 600));
+        assertTrue(readiness.eligibleForNewExpedition(now, 0, 375));
     }
 
     @Test

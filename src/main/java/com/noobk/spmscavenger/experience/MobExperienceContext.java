@@ -5,6 +5,7 @@ import com.noobk.spmscavenger.opinion.DiscretionaryDirectorState;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.opinion.OpinionMemory;
 import com.noobk.spmscavenger.opinion.OpinionMemoryService;
+import com.noobk.spmscavenger.opinion.PlaceOpinionMemory;
 
 import java.util.Collections;
 import java.util.EnumMap;
@@ -25,6 +26,7 @@ public final class MobExperienceContext {
     private final UUID mobId;
     private final AffectiveState affectiveState = new AffectiveState();
     private final OpinionMemory opinionMemory = new OpinionMemory();
+    private final PlaceOpinionMemory placeOpinionMemory = new PlaceOpinionMemory();
     private final DiscretionaryDirectorState discretionaryDirector = new DiscretionaryDirectorState();
     private final OpinionExperienceSinks sinks;
     private final EpisodeRoutingPipeline pipeline;
@@ -98,6 +100,10 @@ public final class MobExperienceContext {
 
     public OpinionMemory opinionMemory() {
         return opinionMemory;
+    }
+
+    public PlaceOpinionMemory placeOpinionMemory() {
+        return placeOpinionMemory;
     }
 
     public DiscretionaryDirectorState discretionaryDirector() {
