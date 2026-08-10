@@ -91,4 +91,31 @@ public final class ActivityOpinionMemory {
         this.repetition = clamp(repetition);
         this.recentFailures = Math.max(0, recentFailures);
     }
+
+    public Snapshot captureSnapshot() {
+        return new Snapshot(
+                preference,
+                repetition,
+                recentReward,
+                recentFailures,
+                lastPerformed,
+                recentDuration);
+    }
+
+    public void restoreFromSnapshot(Snapshot snapshot) {
+        preference = snapshot.preference();
+        repetition = snapshot.repetition();
+        recentReward = snapshot.recentReward();
+        recentFailures = snapshot.recentFailures();
+        lastPerformed = snapshot.lastPerformed();
+        recentDuration = snapshot.recentDuration();
+    }
+
+    public record Snapshot(
+            float preference,
+            float repetition,
+            float recentReward,
+            int recentFailures,
+            long lastPerformed,
+            long recentDuration) {}
 }

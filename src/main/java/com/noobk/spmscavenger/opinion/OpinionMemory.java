@@ -73,4 +73,21 @@ public final class OpinionMemory {
     void seedActivity(ActivityKind kind, float preference, float repetition, int recentFailures) {
         memoryOf(kind).seedForTest(preference, repetition, recentFailures);
     }
+
+    public Map<ActivityKind, ActivityOpinionMemory.Snapshot> captureSnapshot() {
+        Map<ActivityKind, ActivityOpinionMemory.Snapshot> copy = new EnumMap<>(ActivityKind.class);
+        for (Map.Entry<ActivityKind, ActivityOpinionMemory> entry : activities.entrySet()) {
+            copy.put(entry.getKey(), entry.getValue().captureSnapshot());
+        }
+        return copy;
+    }
+
+    public void restoreFromSnapshot(Map<ActivityKind, ActivityOpinionMemory.Snapshot> snapshot) {
+        activities.clear();
+        for (Map.Entry<ActivityKind, ActivityOpinionMemory.Snapshot> entry : snapshot.entrySet()) {
+            ActivityOpinionMemory memory = new ActivityOpinionMemory();
+            memory.restoreFromSnapshot(entry.getValue());
+            activities.put(entry.getKey(), memory);
+        }
+    }
 }

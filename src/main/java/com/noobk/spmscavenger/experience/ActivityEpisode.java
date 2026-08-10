@@ -78,6 +78,14 @@ public final class ActivityEpisode {
         suspended = false;
     }
 
+    /**
+     * RET-GAO-1 — close without terminal learning when the owning context is parked on unload.
+     */
+    void abandonForUnload() {
+        suspended = false;
+        closed = true;
+    }
+
     public void ingest(ExperienceEvent event, OpinionExperienceSinks sinks, MobExperienceContext context) {
         if (!episodeId.equals(event.episodeId())) {
             throw new IllegalArgumentException("episode mismatch");

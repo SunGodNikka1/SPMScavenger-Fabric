@@ -268,4 +268,50 @@ public final class MobExperienceContext {
         // Suspension is not an ending, so this only reclaims episodes that had already finished.
         compactClosedEpisodes();
     }
+
+    /**
+     * RET-GAO-1 — discard ephemeral execution state before parking a snapshot on chunk unload.
+     *
+     * <p>Suspended episodes that will never resume must not keep a heavyweight context alive in the
+     * frozen store. Learning already committed to {@link OpinionMemory} survives via snapshot.
+     */
+    void prepareForUnloadPark() {
+        invalidateEphemeral();
+        for (ActivityEpisode episode : episodes.values()) {
+            if (!episode.isClosed()) {
+                episode.abandonForUnload();
+            }
+        }
+        compactClosedEpisodes();
+        episodes.clear();
+        closedEpisodeIds.clear();
+        executionFailureTotals.clear();
+        discretionaryDirector.clearForUnload();
+    }
+
+    MobExperienceSnapshot captureSnapshot(long parkedAtGameTime) {
+        return new MobExperienceSnapshot(
+                mobId,
+                affectiveState.engagement(),
+                affectiveState.boredom(),
+                affectiveState.satisfaction(),
+                affectiveState.stress(),
+                affectiveState.novelty(),
+                affectiveState.ticksSinceMeaningfulProgress(),
+                opinionMemory.captureSnapshot(),
+                placeOpinionMemory.captureSnapshot(),
+                parkedAtGameTime);
+    }
+
+    void restoreFromSnapshot(MobExperienceSnapshot snapshot) {
+        affectiveState.restoreSnapshot(
+                snapshot.engagement(),
+                snapshot.boredom(),
+                snapshot.satisfaction(),
+                snapshot.stress(),
+                snapshot.novelty(),
+                snapshot.ticksSinceMeaningfulProgress());
+        opinionMemory.restoreFromSnapshot(snapshot.activityOpinions());
+        placeOpinionMemory.restoreFromSnapshot(snapshot.placePreferences());
+    }
 }

@@ -152,4 +152,20 @@ public final class AffectiveState {
         this.stress = clamp(stress);
         this.novelty = clamp(novelty);
     }
+
+    public void restoreSnapshot(
+            float engagement,
+            float boredom,
+            float satisfaction,
+            float stress,
+            float novelty,
+            int ticksSinceMeaningfulProgress) {
+        this.engagement = clamp(engagement);
+        this.boredom = clamp(boredom);
+        this.satisfaction = clamp(satisfaction);
+        this.stress = clamp(stress);
+        this.novelty = clamp(novelty);
+        this.ticksSinceMeaningfulProgress = Math.max(0, ticksSinceMeaningfulProgress);
+        this.frozen = false;
+    }
 }

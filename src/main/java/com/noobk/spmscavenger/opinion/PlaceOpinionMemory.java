@@ -43,6 +43,23 @@ public final class PlaceOpinionMemory {
         return byChunk.size();
     }
 
+    public Map<Long, Float> captureSnapshot() {
+        Map<Long, Float> copy = new LinkedHashMap<>(byChunk.size());
+        for (Map.Entry<Long, PlaceOpinionEntry> entry : byChunk.entrySet()) {
+            copy.put(entry.getKey(), entry.getValue().preference());
+        }
+        return copy;
+    }
+
+    public void restoreFromSnapshot(Map<Long, Float> snapshot) {
+        byChunk.clear();
+        for (Map.Entry<Long, Float> entry : snapshot.entrySet()) {
+            PlaceOpinionEntry place = new PlaceOpinionEntry();
+            place.restorePreference(entry.getValue());
+            byChunk.put(entry.getKey(), place);
+        }
+    }
+
     static final class PlaceOpinionEntry {
         private float preference;
 
@@ -54,6 +71,10 @@ public final class PlaceOpinionMemory {
             preference = Math.max(
                     PREFERENCE_MIN,
                     Math.min(PREFERENCE_MAX, preference + delta));
+        }
+
+        void restorePreference(float value) {
+            preference = Math.max(PREFERENCE_MIN, Math.min(PREFERENCE_MAX, value));
         }
     }
 }

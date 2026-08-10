@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | **RT-MI-TS1** | Open — runtime falsification; launch not authorized | `task-33-brief.md` |
 | **RT-GAO-1** | Open — full GAO runtime matrix; static minimal done | `task-34-report.md`, `task-34-maibs-report.md` |
-| **RET-GAO-1** | **BLOCKED** — `OpinionExperienceRegistry.CONTEXTS` session-unbounded; fix before GAO-5B | MAIBS task-34 |
+| **RET-GAO-1** | **DONE** (static) — bounded live + frozen snapshot store; runtime `UNVERIFIED` | `task-35-report.md` |
 
 ## Task ledger
 
@@ -37,7 +37,8 @@ Task 29: complete (MI-14C2 repair package)
 Task 30: complete (MI-14C3-R1 protected interruption lease)
 Task 31: complete (PERF slices 0A–2)
 Task 32: complete (PERF slice 4A; RFC closed)
-Task 34: complete with concerns — RET-1 BLOCKED on `OpinionExperienceRegistry.CONTEXTS`; GAO-5 current-place inversion documented (548 tests)
+Task 34: complete with concerns — GAO-5 current-place inversion documented (548 tests)
+Task 35: complete — RET-GAO-1 bounded live/frozen registry; 553 tests; GAO-5B unblocked (static)
 
 Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 
@@ -48,8 +49,8 @@ Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 **Mining intelligence (MI):** MI-1 through MI-14C3-R1 static complete; tunnel executor shipped;
 **RT-MI-TS1** is the MI runtime frontier (`task-33-brief`).
 
-**GA-OPINION:** GAO-0 through GAO-5 + GAO-4.1 static verified (548 tests); **RET-1 FAIL** on outer
-experience registry; GAO-5 current-place utility inverts avoidance semantics until GAO-5B.
+**GA-OPINION:** GAO-0 through GAO-5 + GAO-4.1 static verified (553 tests); **RET-1 PASS** (static)
+on experience registry; GAO-5 current-place utility inverts avoidance semantics until GAO-5B.
 
 **PERF:** RFC closed (task 32); craft-table phased scan shipped.
 

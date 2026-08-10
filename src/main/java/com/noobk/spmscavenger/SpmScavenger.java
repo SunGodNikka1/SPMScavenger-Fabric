@@ -99,7 +99,7 @@ public class SpmScavenger implements ModInitializer {
 
         ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
-                OpinionExperienceRegistry.resume(mob.getUUID());
+                OpinionExperienceRegistry.resumeOnLoad(mob.getUUID());
                 install(mob);
             }
         });
@@ -107,7 +107,7 @@ public class SpmScavenger implements ModInitializer {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
                 RestSessionCoordinator.invalidateOnUnload(
                         mob.getUUID(), world.getGameTime());
-                OpinionExperienceRegistry.freeze(mob.getUUID());
+                OpinionExperienceRegistry.parkOnUnload(mob.getUUID(), world.getGameTime());
             }
         });
         // Gate RET-1 - release per-world experience state when the server stops. Without this a

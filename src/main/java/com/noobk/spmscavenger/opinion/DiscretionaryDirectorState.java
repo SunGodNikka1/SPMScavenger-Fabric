@@ -444,4 +444,8 @@ public final class DiscretionaryDirectorState {
     public void onFreeze() {
         invalidateAll(IntentLifecycle.INVALIDATED, InvalidationCause.UNLOAD_FREEZE, 0L);
     }
+
+    public void clearForUnload() {
+        clearForTest();
+    }
 }
