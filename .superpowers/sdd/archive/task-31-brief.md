@@ -56,4 +56,4 @@ cd "D:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric"
 .\gradlew.bat clean build
 ```
 
-Report: `.superpowers/sdd/task-31-report.md`
+Report: `.superpowers/sdd/archive/task-31-report.md`

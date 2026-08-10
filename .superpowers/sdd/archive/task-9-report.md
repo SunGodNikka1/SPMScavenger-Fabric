@@ -10,7 +10,7 @@
 - `src/main/java/com/noobk/spmscavenger/GatherIntentPolicy.java`
 - `src/main/java/com/noobk/spmscavenger/goal/GatherResourcesGoal.java`
 - `src/test/java/com/noobk/spmscavenger/GatherIntentPolicyTest.java`
-- `.superpowers/sdd/task-9-brief.md`, this report, and `progress.md`
+- `.superpowers/sdd/archive/task-9-brief.md`, this report, and `progress.md`
 - `plans/RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md`
 - `docs/porting/DECISIONS.md`, `docs/porting/TEST_MATRIX.md`
 

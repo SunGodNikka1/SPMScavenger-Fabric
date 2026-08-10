@@ -1,6 +1,6 @@
 # Task 34 Report — RT-GAO minimal + GAO-4.1 + GAO-5
 
-**Status:** `DONE_WITH_CONCERNS`
+**Status:** `DONE_WITH_CONCERNS` — **RET-1 BLOCKED** on outer `OpinionExperienceRegistry.CONTEXTS`
 
 **Scope:** User roadmap `RT-GAO minimal sanity check → GAO-4.1 → GAO-5`
 
@@ -40,9 +40,12 @@ New tests: `ExploreIdleThresholdPolicyTest`, `RtGaoMinimalSanityTest`, `PlaceOpi
 | --- | --- | --- |
 | GAO-PARITY in live world | `UNVERIFIED` | `opinion.enabled=false` runtime session |
 | GAO-M4 bored expedition unlock | `UNVERIFIED` | multi-minute observation with opinion on |
-| GAO-5 place bias observable in explore heading | `UNVERIFIED` | only discretionary utility term shipped; no route/heading bias |
+| GAO-5 place bias in explore heading | **NOT IMPLEMENTED** | GAO-5B heading consumer |
+| GAO-5 current-place EXPLORE penalty | **`CODE_CONFIRMED` inversion** | negative chunk pref lowers EXPLORE while mob still on site |
+| GAO-4.1 threshold in normal idle ramp | **Non-binding** | readiness ~30s; boredom intent ~3–4 min |
 | GAO-THRESHOLD runtime | `UNVERIFIED` | static math only |
 | Save/reload place memory | `UNVERIFIED` | not persisted (by design for MVP) |
+| **RET-1 outer `CONTEXTS` map** | **`FAIL`** | session-unbounded; `remove()` has zero production callers; freeze ≠ eviction |
 
 ## Self-review
 
@@ -53,6 +56,13 @@ New tests: `ExploreIdleThresholdPolicyTest`, `RtGaoMinimalSanityTest`, `PlaceOpi
 
 ## Frontier
 
-**RT-GAO-1** full runtime matrix (GAO-M1…M12) — requires explicit Minecraft launch approval.
+**Priority 1:** Fix/audit `OpinionExperienceRegistry` lifetime (RET-1 outer owner) — production eviction
+on unload/death or bounded frozen-context retention.
 
-**MAIBS:** `CONDITIONAL — ACCEPTABLE_STEPPING_STONE` — see `task-34-maibs-report.md`.
+**Priority 2:** GAO-5B — heading / expedition consumer so negative place memory biases *where to go*,
+not EXPLORE utility at the current anchor.
+
+**RT-GAO-1** full runtime matrix — requires explicit Minecraft launch approval.
+
+**MAIBS:** `CONDITIONAL — BEHAVIORALLY PLAUSIBLE, RET-1 BLOCKED` — see `task-34-maibs-report.md`
+(revised 2026-08-10 peer review).

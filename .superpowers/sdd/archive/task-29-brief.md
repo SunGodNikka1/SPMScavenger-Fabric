@@ -7,7 +7,7 @@
 ## Prerequisite
 
 - MI-14C2 unit implementation (task-27)
-- MAIBS C2 static gate **FAIL** (`.superpowers/sdd/task-27-maibs-report.md`)
+- MAIBS C2 static gate **FAIL** (`.superpowers/sdd/archive/task-27-maibs-report.md`)
 
 ## Purpose
 
@@ -85,7 +85,7 @@ Synthetic unknown `Goal` with `MOVE` running + assigned descent → not eternal 
 
 ## Report
 
-`.superpowers/sdd/task-29-report.md`
+`.superpowers/sdd/archive/task-29-report.md`
 
 ## Defer
 

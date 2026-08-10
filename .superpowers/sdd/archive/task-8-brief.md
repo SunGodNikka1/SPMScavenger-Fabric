@@ -58,5 +58,5 @@
 - Add focused unit tests first and observe the intended RED failure; then implement and rerun.
 - Run `gradlew.bat clean build`, inspect XML test totals and final JAR contents, and record the
   SHA-256. Runtime behavior remains `UNVERIFIED` until a separately approved Minecraft launch.
-- Record exact results in `.superpowers/sdd/task-8-report.md`; update both RFCs, progress,
+- Record exact results in `.superpowers/sdd/archive/task-8-report.md`; update both RFCs, progress,
   decisions, test matrix, README/config docs, and no unrelated files.

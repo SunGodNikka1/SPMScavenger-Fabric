@@ -1,92 +1,56 @@
-# RFC implementation progress
+# Subagent-driven development progress
 
-FS-1 through FS-5: complete (existing furnace policy, station, persistence, and goal work)
-FS-6: complete (Phase 2 initializer repaired; pack/reference static gate passes)
-FS-7: complete (deterministic horizontal fuel-face negotiation; U-F10 + rollback)
-FS-9: complete (user-selected configurable `ironStockTarget=0` interim default)
+## Active frontiers
 
-TT-2b + FS-8: complete (consumer-owned iron-tool recipes, typed material demand, minimal IRON config activation; runtime unverified)
+| Item | Status | Artifact |
+| --- | --- | --- |
+| **RT-MI-TS1** | Open — runtime falsification; launch not authorized | `task-33-brief.md` |
+| **RT-GAO-1** | Open — full GAO runtime matrix; static minimal done | `task-34-report.md`, `task-34-maibs-report.md` |
+| **RET-GAO-1** | **BLOCKED** — `OpinionExperienceRegistry.CONTEXTS` session-unbounded; fix before GAO-5B | MAIBS task-34 |
 
-MI-1: complete with concerns (immutable GatherIntentPolicy integrated; 128 tests/build pass; runtime unverified)
+## Task ledger
 
-MI-3 + MI-23: complete with concerns (generic staged NEED allocation; 131 tests/build pass; runtime unverified)
+Task 6: complete (FS-6 Phase 2 furnace datapack repair)
+Task 7: complete (horizontal furnace fuel-face negotiation)
+Task 8: complete (TT-2b + FS-8 consumer iron tools)
+Task 9: complete (MI-1 gather intent consolidation)
+Task 10: complete (MI-3 / MI-23 resource need layers)
+Task 11: complete (MI-13a perception legitimacy)
+Task 12: complete (MI-24 / MI-25 wealth curves — policy)
+Task 13: complete (MI-4R candidate-aware wealth repair)
+Task 14: complete (MI-13 + MI-2 discovery / target priority)
+Task 15: complete (MI-4S D-MIW-028 scale repair)
+Task 16: complete (MI-5 explore downward bias)
+Task 17: complete (MI-6 cave opportunistic ore)
+Task 18: complete (MI-6A/6B/6C/6D cave landings + rim)
+Task 19: complete (looted diamond pick equipment slots)
+Task 20: complete (MI-7A MiningProject session state)
+Task 21: complete (MI-6F CaveOpportunity wiring)
+Task 22: complete (MI-7B+C budget + descent exhaustion)
+Task 23: complete (MI-5H DescentHeadingPolicy)
+Task 24: complete (MI-7D StairStep plan + safety)
+Task 25: blocked → superseded by task 26 (MI-7E MAIBS FAIL)
+Task 26: complete (MI-7R controlled descent semantic repair)
+Task 27: complete (MI-14C2 execution intent & arbitration)
+Task 28: complete (MI-14C3 progress lease — superseded by task 30 for R1)
+Task 29: complete (MI-14C2 repair package)
+Task 30: complete (MI-14C3-R1 protected interruption lease)
+Task 31: complete (PERF slices 0A–2)
+Task 32: complete (PERF slice 4A; RFC closed)
+Task 34: complete with concerns — RET-1 BLOCKED on `OpinionExperienceRegistry.CONTEXTS`; GAO-5 current-place inversion documented (548 tests)
 
-MI-13a: complete with concerns (ore exposure in pass-one candidate; 138 tests; runtime unverified)
+Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 
-MI-24 + MI-25 policy: complete with concerns (marginal curves + opportunity bonus; gather wire deferred MI-4; runtime unverified)
+## Program rollup
 
-MI-4R: complete with concerns (candidate-aware wealth admission, plausible diamond depth,
-tag-aware log stock; 148 tests/build pass; runtime/performance unverified)
+**Furnace / tools (FS, TT):** FS-1…FS-9 and TT-2b complete; runtime largely unverified.
 
-MI-13 + MI-2: complete with concerns (DiscoveryMode classification, GatherTargetPolicy blocking>wealth
-priority sort, harvest-reveal for NEWLY_EXPOSED; 155 tests/build pass; runtime unverified)
+**Mining intelligence (MI):** MI-1 through MI-14C3-R1 static complete; tunnel executor shipped;
+**RT-MI-TS1** is the MI runtime frontier (`task-33-brief`).
 
-MI-4S: complete with concerns (D-MIW-028 Option A desire×proximity; saturated scan gate explicit;
-158 tests pass; runtime unverified)
+**GA-OPINION:** GAO-0 through GAO-5 + GAO-4.1 static verified (548 tests); **RET-1 FAIL** on outer
+experience registry; GAO-5 current-place utility inverts avoidance semantics until GAO-5B.
 
-MI-5: complete with concerns (D-MIW-031 progression vs local gather; descent pressure unlocks
-explore + lower landing bias; 165 tests pass; runtime cave seek unverified)
+**PERF:** RFC closed (task 32); craft-table phased scan shipped.
 
-MI-6: complete with concerns (CaveContextPolicy; cave ore gather priority; explore under-surface
-landing bias; 169 tests; runtime unverified; no MiningMemory)
-
-MI-6A + MI-6D + MI-6B + MI-6C: complete with concerns (3D cave landings, DESCENT_IN_CAVE,
-local rim, per-candidate opportunity; 178 tests; runtime unverified; 6E/6F/6G deferred)
-
-Task 19: complete with concerns (looted diamond pick ownership across backpack/main/off hand;
-181 tests/build pass; runtime loot/equipment behavior unverified)
-
-MI-7A: complete with concerns (MiningProject session types + SavedData; 200 tests; no goal wire;
-runtime unverified; MI-7B/C next)
-
-MI-6F: complete with concerns (CaveOpportunity wired to explore landing arbitration; 213 tests;
-runtime branch anti-thrash unverified)
-
-MI-7B+C: complete with concerns (MiningBudgetUsage + NaturalDescentExhaustionPolicy + search state
-on ExploringGoal; 213 tests; MI-7E gate unwired; runtime unverified)
-
-MI-5H: complete with concerns (DescentHeadingPolicy + descent expedition routes; 218 tests;
-runtime heading unverified)
-
-MI-7D: complete with concerns (StairStepPlan/Planner/Safety; 218 tests; runtime unverified)
-
-MI-7E: BLOCKED — MAIBS-1 FAIL (R1–R4 architecture defects); MI-7R semantic repair required before MI-14
-
-MI-7R: complete with concerns (R1–R4 repaired; StairStepSafety + ControlledDescentCaveHandoff + ControlledDescentGoal wire; 225 tests; MAIBS static PASS_WITH_CONCERNS; runtime unverified)
-
-MI-14C1-R1: complete with concerns (temporary-blocker episode clock via blockedSince +
-currentBlocker; executorStartedAt NEVER_STARTED sentinel; 4 regression tests; full suite pass;
-runtime unverified; verified commit a6e9793)
-
-MI-14C2: repair complete (R1 commitment + R2 scheduler-wide contention + C1-R2 safe stop;
-MAIBS C2 re-pass PASS_WITH_RUNTIME_UNVERIFIED; 302 tests; task-29-report)
-
-MI-14C3: historical task-28 code passed C3-A…E (310 tests) but failed integrated MAIBS because the
-2400 project budget shadowed its old >2400 progress timeout and protected holders were invisible.
-This state is superseded by MI-14C3-R1 below.
-
-MI-14C3-R1: complete with concerns (task-30; required-flag scheduler resolver; condition-bound
-safety pause; player-order prevention/revocation; pre-start pause NBT v4; 400-tick progress lease;
-C3-F1…F7; 321 tests/clean build; MAIBS static PASS; runtime unverified). Post-GREEN review also
-repaired a same-observer CommandedAction revoke→reassign loop. No Tunnel Search work performed.
-
-GA-OPINION: GAO-0 through GAO-5 + GAO-4.1 `IMPLEMENTED / STATIC VERIFIED` — scoring, director,
-intent lifecycle, voluntary yield, consumer gates, boredom threshold wiring (GAO-4.1), PLACE
-opinion MVP (GAO-5); RT-GAO minimal static sanity (`RtGaoMinimalSanityTest`); 548 tests/clean
-build pass; runtime unverified.
-Experience substrate static frontier closed; GAO-4 Director static frontier closed; GAO-THRESHOLD
-static leg closed (runtime unverified).
-
-GA-OPINION RFC frontier (2026-08-10): **RT-GAO-1** full runtime falsification — task-34-report;
-static minimal done; launch not authorized.
-
-No commits. No Minecraft launches (separate approval required).
-
-PERF RFC **closed** (2026-08-10): Spark `Projects/sparkprofile_ai_enriched.json` analyzed;
-craft-table `PhasedScanClock` fix shipped; PERF-3 deferred. Slice 4A fixtures in
-`test-datapacks/phase4-perf/`. No commits. No further Minecraft launches executed.
-
-MI RFC frontier (2026-08-10): **RT-MI-TS1** runtime falsification — task-33-brief; tunnel executor
-static-complete; launch not authorized.
-
-No commits. No Minecraft launches (separate approval required).
+No commits unless user requests. No Minecraft launches unless separately approved.

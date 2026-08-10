@@ -108,7 +108,7 @@ Revoke with `MiningProjectEnd.NO_PROGRESS` when **all**:
 
 ## Report
 
-`.superpowers/sdd/task-28-report.md`
+`.superpowers/sdd/archive/task-28-report.md`
 
 ## Defer
 

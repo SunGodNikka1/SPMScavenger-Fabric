@@ -42,4 +42,4 @@ goal execution remain owned by the host/addon's current executor; do not add ano
 - Must not: wealth-enabled surface diamond, saturated-stock permanent scans, buried/protected/tool-
   invalid bypass, or per-block inventory/profile recomputation.
 - Add RED tests before implementation; run focused tests and `gradlew.bat clean build`.
-- Record evidence in `.superpowers/sdd/task-13-report.md`, progress, RFC, decisions, and test matrix.
+- Record evidence in `.superpowers/sdd/archive/task-13-report.md`, progress, RFC, decisions, and test matrix.

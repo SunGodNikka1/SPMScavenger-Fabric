@@ -45,5 +45,5 @@
 - **Must not happen:** surface diamond intent, gathering while a craft step is immediately ready,
   new stock targets, per-block full policy recomputation, or wealth behavior.
 - Add focused tests first and record RED, then implement and run `gradlew.bat clean build`.
-- Record exact results and runtime gaps in `.superpowers/sdd/task-9-report.md`; update the RFC and
+- Record exact results and runtime gaps in `.superpowers/sdd/archive/task-9-report.md`; update the RFC and
   `.superpowers/sdd/progress.md`. Runtime remains `UNVERIFIED` without separate launch approval.

@@ -70,7 +70,7 @@ If any fail: **PROFILE INVALID FOR PERF-3 DECISION**
 ## Verification
 
 - Fill `docs/porting/PERFORMANCE_LOG.md` rows with artifact paths.
-- Report: `.superpowers/sdd/task-32-report.md`
+- Report: `.superpowers/sdd/archive/task-32-report.md`
 - Status: `DONE` only if BASE 1/10/50/100 + EXPLORE sanity gate + targeted profiles complete; else `BLOCKED` or `DONE_WITH_CONCERNS`.
 
 ## Launch command (after approval)
@@ -82,4 +82,4 @@ cd "D:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric"
 
 Copy `test-datapacks/phase4-perf` → instance `datapacks/`. Install SPM + Spark in `run/mods/`.
 
-Report: `.superpowers/sdd/task-32-report.md`
+Report: `.superpowers/sdd/archive/task-32-report.md`

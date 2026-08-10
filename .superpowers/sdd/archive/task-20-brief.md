@@ -50,4 +50,4 @@
 
 ## Report
 
-`.superpowers/sdd/task-20-report.md`
+`.superpowers/sdd/archive/task-20-report.md`

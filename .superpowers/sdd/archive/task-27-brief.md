@@ -99,7 +99,7 @@ All participating goals → NEUTRAL (no exclusive authority).
 
 ## Report
 
-`.superpowers/sdd/task-27-report.md`
+`.superpowers/sdd/archive/task-27-report.md`
 
 ## Defer
 

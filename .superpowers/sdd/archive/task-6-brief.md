@@ -31,4 +31,4 @@
 
 - **Must happen:** the initializer writes `initialized=1b` using target-path-before-operation grammar, and every internal function reference resolves.
 - **Must not happen:** the malformed `set value 1b initialized` form remains, or the datapack is treated as runtime proof.
-- Record exact static-check results in `.superpowers/sdd/task-6-report.md` and update FS-6 in the existing RFC.
+- Record exact static-check results in `.superpowers/sdd/archive/task-6-report.md` and update FS-6 in the existing RFC.

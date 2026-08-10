@@ -8,8 +8,8 @@ was authorized.
 
 ## Files created or changed
 
-- `.superpowers/sdd/task-30-brief.md`
-- `.superpowers/sdd/task-30-report.md`
+- `.superpowers/sdd/archive/task-30-brief.md`
+- `.superpowers/sdd/archive/task-30-report.md`
 - `.superpowers/sdd/progress.md`
 - `plans/RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md`
 - `docs/porting/DECISIONS.md`

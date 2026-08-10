@@ -817,7 +817,7 @@ does not. Controlled descent's total project clock also ends at 2400 ticks using
 `>2400`, so an active stall cannot reach the intended `NO_PROGRESS` branch first. Furthermore,
 protected MOVE holders are deliberately excluded from CONTENTION without being represented as a
 different blocker. This decision is therefore **not accepted behaviorally** until timeout ordering
-and protected-interrupt ownership are repaired. See `.superpowers/sdd/task-28-report.md`.
+and protected-interrupt ownership are repaired. See `.superpowers/sdd/archive/task-28-report.md`.
 
 ## 2026-08-09 — MI-14C3-R1 separates scheduler arbitration from lease availability
 
@@ -844,4 +844,4 @@ Must happen: long observable safety interruption resumes with the exact remainin
 and an admissibly stuck descent reaches `NO_PROGRESS` before the total cap. Must not happen:
 LOOK-only eating resolves to `NONE`, a player command creates a revoke/reassign loop, or blocker
 changes duplicate pause time. C3-F1…F7 and the full 321-test clean build are `CONFIRMED`; Minecraft
-runtime behavior remains `UNVERIFIED`. Evidence: `.superpowers/sdd/task-30-report.md`.
+runtime behavior remains `UNVERIFIED`. Evidence: `.superpowers/sdd/archive/task-30-report.md`.

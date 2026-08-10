@@ -170,7 +170,8 @@ That hash changes whenever source or packaged resources change.
 - [`plans/RFC-FURNACE-SMELTING.md`](plans/RFC-FURNACE-SMELTING.md) — furnace ownership, transactions, and recovery.
 - [`docs/porting/TEST_MATRIX.md`](docs/porting/TEST_MATRIX.md) — must-happen/must-not-happen checks.
 - [`docs/porting/DECISIONS.md`](docs/porting/DECISIONS.md) — implementation decisions and failure history.
-- [`.superpowers/sdd/progress.md`](.superpowers/sdd/progress.md) — completed implementation-task ledger.
+- [`.superpowers/sdd/progress.md`](.superpowers/sdd/progress.md) — task ledger and active frontiers.
+- [`.superpowers/sdd/archive/`](.superpowers/sdd/archive/) — completed task briefs/reports (tasks 6–32).
 
 ## Verification status and known gaps
 

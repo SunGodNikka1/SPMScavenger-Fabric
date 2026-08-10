@@ -228,7 +228,7 @@ animation, save/reload, and multi-mob behavior remain `UNVERIFIED`.
 | Persistence | v4 round-trip preserves progress/pre-start pauses; v2/v3 migration invents neither | Reload resets or invents progress | C3 persistence/migration tests `CONFIRMED` |
 
 Build evidence: `gradlew.bat clean build` passed 321 tests with no failures/errors. Runtime
-falsification requires separate launch approval; see `.superpowers/sdd/task-30-report.md`.
+falsification requires separate launch approval; see `.superpowers/sdd/archive/task-30-report.md`.
 
 **MAIBS-1 static integration result: PASS — BEHAVIORALLY_PLAUSIBLE.** R1 makes the progress timeout
 reachable before the 2400-tick total budget, maps protected owners explicitly, and checks the full

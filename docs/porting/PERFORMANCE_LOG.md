@@ -1,7 +1,7 @@
 # SPM Scavenger performance log
 
 Canonical artifact for **PERF Slice 4** (Gate P4A). Slices 0A–2 static evidence:
-`.superpowers/sdd/task-31-report.md`.
+`.superpowers/sdd/archive/task-31-report.md`.
 
 **RFC:** `plans/RFC-PERFORMANCE-AND-PERCEPTION.md`  
 **Datapack:** `test-datapacks/phase4-perf/` (junction via `scripts/setup-perf-run.ps1`)  

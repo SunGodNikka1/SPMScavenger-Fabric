@@ -40,4 +40,4 @@
 
 ## Report
 
-`.superpowers/sdd/task-21-report.md`
+`.superpowers/sdd/archive/task-21-report.md`

@@ -45,4 +45,4 @@
 
 ## Report
 
-`.superpowers/sdd/task-22-report.md`
+`.superpowers/sdd/archive/task-22-report.md`

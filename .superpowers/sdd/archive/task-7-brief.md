@@ -34,4 +34,4 @@
 - **Must happen:** an EAST-only fake furnace receives input and fuel; explicit `ironStockTarget=6` still permits iron demand.
 - **Must not happen:** rejected faces are mutated, failed negotiation loses/duplicates stacks, vanilla all-side behavior regresses, or default config starts a new iron batch without a consumer.
 - Run focused tests, then `gradlew.bat clean build`.
-- Record exact results in `.superpowers/sdd/task-7-report.md`; update RFC decisions/tasks/gates and directly relevant test/config documentation.
+- Record exact results in `.superpowers/sdd/archive/task-7-report.md`; update RFC decisions/tasks/gates and directly relevant test/config documentation.

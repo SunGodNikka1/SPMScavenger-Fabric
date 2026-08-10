@@ -9,7 +9,7 @@ MI-4, and Minecraft was not launched.
 
 - `src/main/java/com/noobk/spmscavenger/ResourceWealthPolicy.java`
 - `src/test/java/com/noobk/spmscavenger/ResourceWealthPolicyTest.java`
-- `.superpowers/sdd/task-10-brief.md`, this report, and `progress.md`
+- `.superpowers/sdd/archive/task-10-brief.md`, this report, and `progress.md`
 - RFC and directly relevant decision/test documents
 
 ## Summary

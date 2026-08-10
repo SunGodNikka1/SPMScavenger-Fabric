@@ -629,7 +629,7 @@ replacing `GoalSelector` and **without** allowing mining to override combat/surv
 #### MAIBS C2 static pass (Gate MAIBS-1, post-repair task-29)
 
 **Verdict:** **`PASS_WITH_RUNTIME_UNVERIFIED`** — M1–M3 repaired; full report in
-`.superpowers/sdd/task-29-report.md`. Prior FAIL documented in `task-27-maibs-report.md`.
+`.superpowers/sdd/archive/task-29-report.md`. Prior FAIL documented in `task-27-maibs-report.md`.
 
 | ID | Repair | Static re-pass |
 | --- | --- | --- |
@@ -854,7 +854,7 @@ MiningExecutionLease.progressPausedTicks
 | **C3-E** | CONTENTION starved after start | Progress clock paused while `CONTENTION` blocker active | Revoke while waiting for C2 yield |
 
 **Static/unit result:** C3-A…E **PASS** in `MiningExecutionC3Test`; persistence and v2→v3
-migration regressions pass. Full evidence: `.superpowers/sdd/task-28-report.md`. Runtime rows remain
+migration regressions pass. Full evidence: `.superpowers/sdd/archive/task-28-report.md`. Runtime rows remain
 `UNVERIFIED` because no Minecraft launch was authorized.
 
 #### Full MAIBS integration audit — `FAIL` (Agent_Codex, explicit skill invocation)
@@ -875,7 +875,7 @@ persistent stay tether; started work can consume C3 time while physically preemp
 Three probes recorded: protected/stay handling `NOT FOUND` in `controlledDescentBlocker`;
 `PLAYER_ORDER` use `NOT FOUND` outside its enum; stay-anchor assignment prevention `NOT FOUND` in
 the director/flagless observer (it exists only in `ExploringGoal`). Full trace and options:
-`.superpowers/sdd/task-28-report.md`.
+`.superpowers/sdd/archive/task-28-report.md`.
 
 **Repair gate:** make progress expiry reachable before total-budget termination and explicitly map
 protected MOVE ownership to prevent, pause, or revoke assignment. Do not proceed to the Loop-D
@@ -998,7 +998,7 @@ loops. C3-F1…F7 pass in `MiningExecutionC3R1Test`; 321-test clean build passes
 cross-layer defects are closed in code: protected holders cannot become `NONE`, LOOK-only eating is
 visible, and the 400-tick local-stall timeout can fire while the 2400-tick total budget still has
 room. Runtime animation/timing and real GoalSelector ordering remain `UNVERIFIED` pending separately
-approved Minecraft launch. Evidence: `.superpowers/sdd/task-30-report.md`.
+approved Minecraft launch. Evidence: `.superpowers/sdd/archive/task-30-report.md`.
 
 #### Non-goals (`LOCKED`)
 
@@ -3537,7 +3537,7 @@ Tunnel Search remains a separate, unimplemented product scope.
 exclusive selection was rejected because MI-2 owns prioritization. RED failed on the missing class;
 GREEN passed 4 focused tests and a clean build passed 128 tests. Artifact SHA-256:
 `904C10BA1FA345A9CC0636CB726E300416FD6545BD1E85A43D3E66E73A895184`.
-Full evidence: `.superpowers/sdd/task-9-report.md`.
+Full evidence: `.superpowers/sdd/archive/task-9-report.md`.
 
 **Frontier after:** MI-1 is `IMPLEMENTED` with runtime `UNVERIFIED`; MI-3/MI-23 are now the nearest
 dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-ore legitimacy repair.
@@ -3922,7 +3922,7 @@ Deferred, Decision Registry, Gates, User approval, Change Log, this contribution
 **Action:** Added generic staged NEED allocation. Current stock is allocated once to immediate,
 replacement, project, then reserve; independent shortfall calculations were rejected because they
 double-count stock. Focused tests passed 3/3; clean build passed 131 tests. Evidence:
-`.superpowers/sdd/task-10-report.md`.
+`.superpowers/sdd/archive/task-10-report.md`.
 
 **Frontier after:** MI-3/MI-23 are implemented at pure-policy level. MI-24 is not yet
 implementation-ready: its iron/diamond/coal/cobble profile values are explicitly illustrative
@@ -3993,7 +3993,7 @@ user approval. No Java; no launch.
 wiring, then found zero-cost global opportunity, Y-gate bypass for wealth diamond, and oak-only log
 accounting. Negative evidence: `NOT FOUND` candidate-distance `evaluateWealth` call in
 `GatherResourcesGoal`; `NOT FOUND` wealth-enabled surface-diamond regression; `NOT FOUND`
-`.superpowers/sdd/task-13-brief.md` and `task-13-report.md`.
+`.superpowers/sdd/archive/task-13-brief.md` and `task-13-report.md`.
 
 **Alternatives:** Candidate-scored wealth is recommended over hard saturation cutoffs because it
 preserves D-MIW-018 opportunity semantics without creating permanent scans or a new stock target.
@@ -4173,7 +4173,7 @@ new MI-6 MAIBS topic, Phased plan, Tasks, Gates, User approval, Change Log, this
 
 **Action:** Rewrote `CaveContextPolicy` (rim, modes, opportunity); added `CaveLandingResolver`;
 wired `ExploringGoal` + `GatherResourcesGoal` / `GatherTargetPolicy`. Unit suite **178** tests
-`BUILD SUCCESSFUL`. Artifacts: `.superpowers/sdd/task-18-brief.md`, `task-18-report.md`.
+`BUILD SUCCESSFUL`. Artifacts: `.superpowers/sdd/archive/task-18-brief.md`, `task-18-report.md`.
 No Minecraft launch; no commit.
 
 **Frontier after:** Code repair for MAIBS defects 1/2/5; runtime probe open; MI-6F next when wanted;
@@ -4273,7 +4273,7 @@ producer or with `TUNNEL_HANDOFF_PENDING` as exclusive intent (Loop D deadlock).
 
 **Action:** Locked MI-14C2 contract in RFC Topic MI-14C2; added **D-MIW-037** (intent vs blocker
 separation; CONTENTION as scheduler observation) and **D-MIW-038** (non-exclusive
-`TUNNEL_HANDOFF_PENDING`); wrote `.superpowers/sdd/task-27-brief.md` with C2-A…G falsification.
+`TUNNEL_HANDOFF_PENDING`); wrote `.superpowers/sdd/archive/task-27-brief.md` with C2-A…G falsification.
 No Java.
 
 **Frontier after:** **MI-14C2 `READY`**. Requires `Begin implementation for MI-14C2`.
@@ -4298,7 +4298,7 @@ task-27-brief, this contribution.
    runtime probes listed as `UNVERIFIED`.
 3. Locked **MI-14C3** contract: D-MIW-039 (start vs progress lease separation), observable progress
    signals, pause during `TEMPORARY`/`CONTENTION`, `NO_PROGRESS` revoke, C3-A…E falsification.
-4. Wrote `.superpowers/sdd/task-28-brief.md`.
+4. Wrote `.superpowers/sdd/archive/task-28-brief.md`.
 
 **Frontier after:** **MI-14C3 `READY`**. Requires `Begin implementation for MI-14C3`. Then
 `TunnelSearchGoal` executor (Loop D consumer).
@@ -4438,7 +4438,7 @@ launch was authorized.
 falsification or a separate Loop-D/Tunnel Search product decision. No Tunnel Search work occurred.
 
 **RFC fields updated:** identity, MI-14C3/R1 topic, D-MIW-040, tasks, gates, user approval, change
-log, and this contribution. Evidence: `.superpowers/sdd/task-30-report.md`.
+log, and this contribution. Evidence: `.superpowers/sdd/archive/task-30-report.md`.
 
 ---
 

@@ -119,4 +119,4 @@ Update the existing RFC topic, decision D-MIW-040, task row, gates, scenario evi
 `.superpowers/sdd/progress.md`, and relevant test/maintainer documentation only where this repair
 changes them. Write the final evidence to:
 
-`.superpowers/sdd/task-30-report.md`
+`.superpowers/sdd/archive/task-30-report.md`
