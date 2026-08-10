@@ -101,13 +101,17 @@ public class SmeltAtFurnaceGoal extends Goal {
         }
         plan = planned.get();
 
-        BlockPos candidate = locateFurnace(server, cfg, true);
-        if (candidate != null) {
-            furnacePos = candidate;
+        FurnaceLookup.Resolution lookup = locateFurnace(server, cfg, true);
+        if (lookup.result().outcome() == FurnaceLookup.Outcome.FOUND) {
+            furnacePos = lookup.result().position();
             return FurnaceStations.tryClaimWalk(furnacePos, mob.getUUID(), server.getGameTime());
         }
-        if (cfg.placeFurnaces
-                && (ScavengerCrafting.count(backpack, Items.FURNACE) > 0
+        if (lookup.result().outcome() == FurnaceLookup.Outcome.DEFERRED) {
+            return false;
+        }
+        if (lookup.result().authorizesFurnacePlacement(
+                cfg.placeFurnaces,
+                ScavengerCrafting.count(backpack, Items.FURNACE) > 0
                         || ScavengerCrafting.canMakeFurnace(backpack))) {
             return true;
         }
@@ -172,7 +176,13 @@ public class SmeltAtFurnaceGoal extends Goal {
         }
 
         if (furnacePos == null) {
-            furnacePos = locateFurnace(server, cfg, true);
+            FurnaceLookup.Resolution lookup = locateFurnace(server, cfg, true);
+            if (lookup.result().outcome() == FurnaceLookup.Outcome.FOUND) {
+                furnacePos = lookup.result().position();
+                FurnaceStations.tryClaimWalk(furnacePos, mob.getUUID(), server.getGameTime());
+            } else if (lookup.result().outcome() == FurnaceLookup.Outcome.DEFERRED) {
+                return;
+            }
         }
         if (furnacePos == null) {
             if (!ensureFurnaceItem(server, backpack, cfg)) {
@@ -416,32 +426,23 @@ public class SmeltAtFurnaceGoal extends Goal {
     }
 
     /**
-     * PERF-1 — phased world search with per-mob cache and failed-search cooldown.
-     *
-     * @param requireScanPhase when {@code true}, a full cube scan runs only on this goal's phased
-     *                         slot; cached candidates revalidate every call.
+     * PERF-1 — phased world search with explicit deferred vs absent-recent semantics.
      */
-    private BlockPos locateFurnace(ServerLevel server, ScavengerConfig cfg, boolean requireScanPhase) {
+    private FurnaceLookup.Resolution locateFurnace(
+            ServerLevel server, ScavengerConfig cfg, boolean requireScanPhase) {
         long now = server.getGameTime();
-        if (now < searchFailedUntilTick) {
-            return null;
-        }
-        if (cachedFurnace != null
-                && FurnaceStations.isUsableAt(server, cachedFurnace, mob.getUUID(), cfg)) {
-            return cachedFurnace.immutable();
-        }
-        cachedFurnace = null;
-        if (requireScanPhase && !scanClock.claim(now)) {
-            return null;
-        }
-        BlockPos found = FurnaceStations.findUsable(
-                server, mob.blockPosition(), mob.getUUID(), cfg);
-        if (found != null) {
-            cachedFurnace = found.immutable();
-            return cachedFurnace;
-        }
-        searchFailedUntilTick = now + FAILED_SEARCH_COOLDOWN_TICKS;
-        scanClock.resetAfter(now);
-        return null;
+        FurnaceLookup.Resolution resolution = FurnaceLookup.resolve(
+                now,
+                searchFailedUntilTick,
+                cachedFurnace,
+                requireScanPhase,
+                scanClock,
+                pos -> FurnaceStations.isUsableAt(server, pos, mob.getUUID(), cfg),
+                () -> FurnaceStations.findUsable(
+                        server, mob.blockPosition(), mob.getUUID(), cfg),
+                FAILED_SEARCH_COOLDOWN_TICKS);
+        cachedFurnace = resolution.cachedFurnace();
+        searchFailedUntilTick = resolution.searchFailedUntilTick();
+        return resolution;
     }
 }

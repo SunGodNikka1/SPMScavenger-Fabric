@@ -86,7 +86,8 @@ public class GatherResourcesGoal extends Goal {
     private BlockPos target;
     private int breakTicks;
     private int breakTotal;
-    private int scanCooldown;
+
+    private final PhasedScanClock scanClock;
 
     /** D-MIW-TS2 - restricts {@link #findTarget} to a physically justified boundary. */
     private java.util.function.Predicate<BlockPos> scanScope;
@@ -118,6 +119,7 @@ public class GatherResourcesGoal extends Goal {
     private DiscoveryPolicy.HarvestReveal lastHarvest;
 
     private static final int SCAN_INTERVAL = 60;
+    private static final int SCAN_PHASE_SALT = 61;
     /** Match craft/smelt goals — partial tree paths need longer than ~7s. */
     private static final int MAX_APPROACH_TICKS = 200;
     /** How long to ignore a whole tree/ore after failing to reach it. */
@@ -150,6 +152,7 @@ public class GatherResourcesGoal extends Goal {
     public GatherResourcesGoal(Mob mob, double speed) {
         this.mob = mob;
         this.speed = speed;
+        this.scanClock = new PhasedScanClock(mob.getId(), SCAN_INTERVAL, SCAN_PHASE_SALT);
         setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
@@ -187,13 +190,13 @@ public class GatherResourcesGoal extends Goal {
         if (!wantsMore(cfg)) {
             return false;
         }
-        if (scanCooldown > 0) {
-            scanCooldown--;
+        long now = mob.level().getGameTime();
+        if (!scanClock.claim(now)) {
             return false;
         }
         GatherTarget selected = findTarget(cfg);
         if (selected == null) {
-            scanCooldown = SCAN_INTERVAL;
+            scanClock.resetAfter(now);
             return false;
         }
         target = selected.blockPos();

@@ -69,12 +69,13 @@ invalidate stale intents (`OPINION_DISABLED`) without allocating new contexts.
 - `PhasedScanClock` on `SmeltAtFurnaceGoal` (`canUse` search path).
 - Failed-search cooldown after `findUsable` returns null.
 - Per-mob cached candidate; invalidate when not `isUsableAt`; **always** `tryClaimWalk` at use time.
+- Explicit lookup outcomes: `FOUND`, `DEFERRED`, `ABSENT_RECENT` — placement only after `ABSENT_RECENT`.
 - No dimension furnace index in v1.
 
-### PERF-2 — Gather staggering (`Slice 2`)
+### PERF-2 — Gather staggering (`Slice 2`) — `IMPLEMENTED`
 
-- Migrate `scanCooldown` → `PhasedScanClock`.
-- Retain two-pass candidate optimization and independent failure/backoff.
+- `scanCooldown` replaced with `PhasedScanClock` (interval 60, salt 61).
+- Cooperative admission, two-pass candidates, backoff, and discovery semantics unchanged.
 
 ### PERF-3 — Exploration planner budget (`Slice 3`)
 
@@ -107,9 +108,11 @@ invalidate stale intents (`OPINION_DISABLED`) without allocating new contexts.
 | `exploring=false` → SPM stroll retained | `TrackedLocalWanderGoal` installed |
 | Observer/validate/unload with no prior context → `contextCount` unchanged | Unload creates new context |
 | Smelt search respects phased clock + failed cooldown | 16,807-position scan every `canUse` poll |
+| Deferred furnace scan does not authorize placement | `DEFERRED` treated as confirmed absence |
+| Gather phased scan | Cooperative/mine paths bypass global scan clock |
 
 ## Change log
 
 | Date | Change |
 |------|--------|
-| 2026-08-09 | RFC locked; Slice 0A+0B+1 implementation started |
+| 2026-08-09 | Slice 2 gather phased scan; PERF-1 `FurnaceLookup` state parity fix |

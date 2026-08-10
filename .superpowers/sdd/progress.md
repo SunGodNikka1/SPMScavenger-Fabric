@@ -78,7 +78,7 @@ Experience substrate static frontier closed; GAO-4 Director static frontier clos
 
 No commits. No Minecraft launches (separate approval required).
 
-PERF RFC locked (`plans/RFC-PERFORMANCE-AND-PERCEPTION.md`). Slice 0A+0B+1 implemented:
-install policy (enabled=false → cleanup observer only; combat chase gated; exploring=false keeps SPM
-stroll), non-allocating `find`/`hasLiveRestClaim`, furnace phased scan + cache + failed cooldown;
-522 tests/clean build PASS; Spark/runtime UNVERIFIED.
+PERF RFC locked (`plans/RFC-PERFORMANCE-AND-PERCEPTION.md`). Slice 0A+0B+1+2 implemented:
+install policy, non-allocating registry reads, furnace phased scan with explicit FOUND/DEFERRED/
+ABSENT_RECENT states, gather PhasedScanClock migration; 527 tests/clean build PASS; Spark/runtime
+UNVERIFIED.
