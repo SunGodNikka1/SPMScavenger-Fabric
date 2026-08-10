@@ -322,6 +322,16 @@ public final class ScavengerConfigScreen {
                 .setSaveConsumer(v -> cfg.exploreSpeed = v)
                 .build());
 
+        general.addEntry(eb.startDoubleField(Component.literal("Fighting chase speed"), cfg.combatChaseSpeed)
+                .setDefaultValue(1.35)
+                .setMin(1.0).setMax(1.5)
+                .setTooltip(Component.literal("SPM Fighting approach speed (melee and ranged"),
+                        Component.literal("closing). Does not change in-range strafe or"),
+                        Component.literal("shot cadence. Applies on mob load.")
+                                .withStyle(ChatFormatting.GRAY))
+                .setSaveConsumer(v -> cfg.combatChaseSpeed = v)
+                .build());
+
         general.addEntry(eb.startDoubleField(
                         Component.literal("Minimum stage distance"), cfg.exploreMinStageDistance)
                 .setDefaultValue(24.0)

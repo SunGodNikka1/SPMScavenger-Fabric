@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger;
 
+import com.noobk.spmscavenger.compat.SpmCombatChaseSpeed;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.goal.AnticsGoal;
@@ -128,7 +129,11 @@ public class SpmScavenger implements ModInitializer {
 
     private static void install(Mob mob) {
         GoalSelector selector = ((MobGoalSelectorAccessor) mob).spmscavenger$getGoalSelector();
-        if (selector == null || alreadyInstalled(selector)) {
+        if (selector == null) {
+            return;
+        }
+        SpmCombatChaseSpeed.apply(mob, selector);
+        if (alreadyInstalled(selector)) {
             return;
         }
         if (mob instanceof PathfinderMob pathfinderMob) {

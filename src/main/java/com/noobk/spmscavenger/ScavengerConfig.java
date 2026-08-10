@@ -183,6 +183,11 @@ public final class ScavengerConfig {
     public double localWanderSpeed = 0.8;
     /** Movement multiplier while following an expedition route. */
     public double exploreSpeed = 0.95;
+    /**
+     * Pathfinder multiplier for SPM {@code WeaponAwareAttackGoal} approach/chase (melee and ranged
+     * closing distance). Replaces SPM's stock 1.0 on entity load via reflection.
+     */
+    public double combatChaseSpeed = 1.35;
     /** Minimum intended horizontal displacement per expedition stage. */
     public double exploreMinStageDistance = 24.0;
     /** Maximum intended horizontal displacement per expedition stage. */
