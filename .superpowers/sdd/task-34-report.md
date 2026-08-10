@@ -54,3 +54,5 @@ New tests: `ExploreIdleThresholdPolicyTest`, `RtGaoMinimalSanityTest`, `PlaceOpi
 ## Frontier
 
 **RT-GAO-1** full runtime matrix (GAO-M1…M12) — requires explicit Minecraft launch approval.
+
+**MAIBS:** `CONDITIONAL — ACCEPTABLE_STEPPING_STONE` — see `task-34-maibs-report.md`.

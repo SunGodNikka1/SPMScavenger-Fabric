@@ -1481,6 +1481,34 @@ Runtime probes require separate Minecraft launch approval.
 
 **Weirdness watch:** SPM `WaterAvoidingRandomStrollGoal` (pri 8) and addon `TrackedLocalWanderGoal` (pri 9) may alternate; both count as idle — boredom should not reset on handoff between them.
 
+### MAIBS post-implementation — GAO-4.1 + GAO-5 (`task-34-maibs-report.md`)
+
+**Date:** 2026-08-10 **Type:** semantic-drift review (post task-34)
+
+**Gate result:** `CONDITIONAL — ACCEPTABLE_STEPPING_STONE` (runtime `UNVERIFIED`)
+
+| Finding | Classification |
+| --- | --- |
+| GAO-4.1 wired correctly; max boredom @600 base → 375 idle ticks (~11s earlier unlock vs 600) | `CODE_CONFIRMED` |
+| Dominant explore gate remains boredom utility ramp (~3–4 min), not idle threshold | `CODE_CONFIRMED` |
+| `exploreAdoptionReady` true at ~30s idle while director intent waits for boredom | `CODE_CONFIRMED` |
+| GAO-5 place bias affects EXPLORE vs REST at **current** chunk only; no heading/route consumer | `CODE_CONFIRMED` (3× NOT FOUND) |
+| Failed mine site does not steer next expedition waypoint | `ACCEPTABLE_STEPPING_STONE` |
+| Mandatory mining not hooked to place memory | `INFERRED` |
+
+**Updated GAO-M4 minute table (threshold leg now wired):**
+
+| Minute | Predicted observable |
+| ---: | --- |
+| 0–0.5 | Local wander; `exploreAdoptionReady` may flip true at ~30s idle (600 ticks) |
+| 0.5–3 | Wander continues; director likely abstains or picks REST — boredom still low |
+| 3–4 | Boredom ~50+; EXPLORE utility wins → `DiscretionaryIntent(EXPLORE)`; GAO-4.1 threshold already ≤488 |
+| 5 | `ExploringGoal` adopts if plan succeeds |
+| 6–8 | Directed travel; novelty/engagement rise |
+| 9+ | Cooldown / return wander |
+
+**Must-not-happen (still):** Permanent wander with opinion on and rising boredom — falsify with RT-GAO-1 probe 2.
+
 ---
 
 ## Topic: Rejected alternatives
@@ -2443,6 +2471,8 @@ Utility modifier on discretionary EXPLORE heading / MI re-descent admission (sof
 - Tests: `PlaceOpinionMemoryTest`, `PlaceOpinionServiceTest`, `PlaceOpinionScoringTest`
 
 **Deferred:** heading-specific explore route bias; MI re-descent admission modifier; disk persistence.
+
+**MAIBS (`CODE_CONFIRMED`, runtime `UNVERIFIED`):** Place learning affects discretionary EXPLORE utility at idle anchor only; expedition heading and mining admission unchanged. See `task-34-maibs-report.md` W2–W3.
 
 **Depends on:** GAO-4 live; optional MI spatial anchor from `MiningTransition.at`; RET-1 bounded store.
 
