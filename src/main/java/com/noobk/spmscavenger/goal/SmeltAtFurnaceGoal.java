@@ -48,11 +48,14 @@ public class SmeltAtFurnaceGoal extends Goal {
     private boolean craftingFurnace;
 
     private final PhasedScanClock scanClock;
+    private final PhasedScanClock tableScanClock;
     private BlockPos cachedFurnace;
     private long searchFailedUntilTick;
 
     private static final int SCAN_INTERVAL = 80;
     private static final int SCAN_PHASE_SALT = 53;
+    private static final int TABLE_SCAN_INTERVAL = 40;
+    private static final int TABLE_SCAN_PHASE_SALT = 72;
     private static final int FAILED_SEARCH_COOLDOWN_TICKS = 100;
     private static final int CRAFT_TICKS = 20;
     private static final int MAX_APPROACH_TICKS = 200;
@@ -63,6 +66,7 @@ public class SmeltAtFurnaceGoal extends Goal {
         this.mob = mob;
         this.speed = speed;
         this.scanClock = new PhasedScanClock(mob.getId(), SCAN_INTERVAL, SCAN_PHASE_SALT);
+        this.tableScanClock = new PhasedScanClock(mob.getId(), TABLE_SCAN_INTERVAL, TABLE_SCAN_PHASE_SALT);
         setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
@@ -319,7 +323,12 @@ public class SmeltAtFurnaceGoal extends Goal {
      * stranded in the open when {@code placeCraftingTables} is on.
      */
     private boolean ensureAtCraftingTable(ServerLevel level, Container backpack, ScavengerConfig cfg) {
-        if (tablePos == null || !level.getBlockState(tablePos).is(Blocks.CRAFTING_TABLE)) {
+        long now = level.getGameTime();
+        if (tablePos != null && !level.getBlockState(tablePos).is(Blocks.CRAFTING_TABLE)) {
+            tablePos = null;
+            tableScanClock.resetAfter(now);
+        }
+        if (tablePos == null && tableScanClock.claim(now)) {
             tablePos = findTable(level);
         }
         if (tablePos == null) {
@@ -334,7 +343,6 @@ public class SmeltAtFurnaceGoal extends Goal {
     }
 
     private boolean tryPlaceCraftingTable(ServerLevel level, Container backpack, ScavengerConfig cfg) {
-        tablePos = findTable(level);
         if (tablePos != null) {
             return true;
         }

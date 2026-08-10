@@ -61,10 +61,15 @@ public class CraftTorchesGoal extends Goal {
     /** Longer than other goals — village tables and mob-placed benches can be a fair walk away. */
     private static final int MAX_APPROACH_TICKS = 200;
     private static final double TABLE_REACH_SQR = 6.0;
+    private static final int TABLE_SCAN_INTERVAL = 40;
+    private static final int TABLE_SCAN_PHASE_SALT = 71;
+
+    private final PhasedScanClock tableScanClock;
 
     public CraftTorchesGoal(Mob mob, double speed) {
         this.mob = mob;
         this.speed = speed;
+        this.tableScanClock = new PhasedScanClock(mob.getId(), TABLE_SCAN_INTERVAL, TABLE_SCAN_PHASE_SALT);
         setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
@@ -169,7 +174,12 @@ public class CraftTorchesGoal extends Goal {
     /** True once the mob is standing at a usable table. Otherwise it is walking to or making one. */
     private boolean atTable() {
         Level level = mob.level();
-        if (tablePos == null || !level.getBlockState(tablePos).is(Blocks.CRAFTING_TABLE)) {
+        long now = level.getGameTime();
+        if (tablePos != null && !level.getBlockState(tablePos).is(Blocks.CRAFTING_TABLE)) {
+            tablePos = null;
+            tableScanClock.resetAfter(now);
+        }
+        if (tablePos == null && tableScanClock.claim(now)) {
             tablePos = findTable(level);
         }
         if (tablePos == null) {
@@ -221,13 +231,7 @@ public class CraftTorchesGoal extends Goal {
      * it never replaces anything that is already there.
      */
     private void placeTable(Level level) {
-        // Re-scan before spending planks or pulling a table from the pack — another mob (or the
-        // player) may have placed one since the last tick, or the first scan was from too close.
-        BlockPos existing = findTable(level);
-        if (existing != null) {
-            tablePos = existing;
-            return;
-        }
+        // Placement runs only after a phased scan found nothing; do not rescan every tick here.
         ScavengerConfig cfg = ScavengerConfig.get();
         if (!cfg.placeCraftingTables) {
             stop();

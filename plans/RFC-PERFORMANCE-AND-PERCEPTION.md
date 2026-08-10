@@ -1,6 +1,6 @@
 # RFC — Performance and bounded perception
 
-**Status:** `LOCKED` (2026-08-09)  
+**Status:** `CLOSED` (2026-08-10) — Slices 0A–2 shipped; Slice 4 representative Spark analyzed (`Projects/sparkprofile_ai_enriched.json`); craft-table scan phased; PERF-3 / PERF-5B **deferred**  
 **Scope:** `Projects/SPMScavenger-1.21.1-Fabric`  
 **North star:** SPM remains the entity/behavior substrate; Scavenger remains multiple independent executors; expensive perception and planning become **bounded shared infrastructure** — not one mega-goal.
 
@@ -77,21 +77,27 @@ invalidate stale intents (`OPINION_DISABLED`) without allocating new contexts.
 - `scanCooldown` replaced with `PhasedScanClock` (interval 60, salt 61).
 - Cooperative admission, two-pass candidates, backoff, and discovery semantics unchanged.
 
-### PERF-3 — Exploration planner budget (`Slice 3`)
+### PERF-3 — Exploration planner budget (`Slice 3`) — `DEFERRED`
 
 - Persistent `PlanningSession` survives `canUse() == false`.
 - **≤2–3 `createPath()` probes per planner slice** (`canUse` poll), not per server tick.
 - Session cap remains 20 total probes.
 - Parity test: unlimited budget vs sliced budget → same landing under deterministic inputs.
 - While planning incomplete: **MOVE remains available to local wandering** (`TrackedLocalWanderGoal` when exploration installed; SPM stroll when not).
+- **Not implemented.** Reopen only if P4A-EXPLORE Spark + sanity gate shows `planCurrentStage` / `createPath` dominance over gather/furnace after Slices 1–2.
 
-### PERF-6 — Performance gate (`Slice 4`) — `IN PROGRESS` (4A checkpoint)
+### PERF-6 — Performance gate (`Slice 4`) — `CLOSED`
 
-- Workload-split scenarios: `P4A-BASE` (1/10/50/100), `P4A-GATHER` stress/sparse, `P4A-SMELT`, `P4A-EXPLORE` (PERF-3), `RT-PERF-F1` — protocol in `test-datapacks/phase4-perf/`
-- **Fixture validity:** no `playermob stay` on perf mobs; explore sanity gate required before PERF-3 decision
-- Spark evidence: `docs/porting/PERFORMANCE_LOG.md` (template only; **UNVERIFIED**)
-- Task SDD: `task-31-report` (Slices 0A–2), `task-32-report` (4A blocked on runtime)
-- **PERF-3 not authorized** until P4A-EXPLORE Spark + sanity gate pass
+- Representative session: `Projects/sparkprofile_ai_enriched.json` (Fabulously Optimized, 14 PlayerMobs, 121s server thread, **not** controlled P4A fixture)
+- **Dominant Scavenger hotspot:** `CraftTorchesGoal.findTable` (~4.2s inclusive) — fixed with `PhasedScanClock` (interval 40)
+- **PERF-3 deferred:** `ExploringGoal.planCurrentStage` ~1.0s inclusive; not dominant vs craft-table scans; no `PlanningSession` in this pass
+- **Overall:** `spmscavenger` 0.21% server self-time in full modpack session
+
+- Workload-split scenarios + `profile/p4a_representative/run` (P4A-BASE @ 10) — `test-datapacks/phase4-perf/`
+- **Fixture validity:** no `playermob stay`; explore sanity gate documented for any future PERF-3 decision
+- Spark evidence: `docs/porting/PERFORMANCE_LOG.md` row `P4A-REP-10` — **`UNVERIFIED`** until in-world capture
+- Task SDD: `task-31-report` (Slices 0A–2), `task-32-report` (representative close)
+- **PERF-3 not authorized** — deferred with RFC close
 
 ## Implementation order
 
@@ -119,3 +125,4 @@ invalidate stale intents (`OPINION_DISABLED`) without allocating new contexts.
 |------|--------|
 | 2026-08-09 | Slice 2 gather phased scan; PERF-1 `FurnaceLookup` state parity fix |
 | 2026-08-09 | Slice 4A datapack: workload-split profiles; removed stay orders; EXPLORE sanity gate |
+| 2026-08-10 | Spark `sparkprofile_ai_enriched.json`: craft-table phased scan; PERF RFC closed; PERF-3 deferred |

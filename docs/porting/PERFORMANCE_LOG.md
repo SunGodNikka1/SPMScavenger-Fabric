@@ -4,8 +4,9 @@ Canonical artifact for **PERF Slice 4** (Gate P4A). Slices 0A–2 static evidenc
 `.superpowers/sdd/task-31-report.md`.
 
 **RFC:** `plans/RFC-PERFORMANCE-AND-PERCEPTION.md`  
-**Datapack:** `test-datapacks/phase4-perf/` (workload-split fixtures; **no `playermob stay`**)  
-**Status:** `UNVERIFIED` — no Spark runs recorded yet.
+**Datapack:** `test-datapacks/phase4-perf/` (junction via `scripts/setup-perf-run.ps1`)  
+**Instance:** `D:\Minecraft\Instances\Fabulously Optimized`  
+**Status:** `CONFIRMED` — representative Spark analyzed (`Projects/sparkprofile_ai_enriched.json`); **not** a controlled P4A fixture
 
 ## Environment template (fill per session)
 
@@ -37,7 +38,7 @@ Canonical artifact for **PERF Slice 4** (Gate P4A). Slices 0A–2 static evidenc
 
 | ID | Profile | Mobs | Warm-up | Profiler s | MSPT med | MSPT p95 | TPS min | Top hotspot (%) | Spark path | Notes |
 |----|---------|------|---------|------------|----------|----------|---------|-----------------|------------|-------|
-| P4A-BASE-1 | BASE | 1 | 60s | 120 | | | | | | |
+| P4A-REP-LIVE | MODPACK live | 14 | 121s | 121 | 6.96 | 29.67 | 20.0 | CraftTorchesGoal.findTable (4196ms incl.) | `Projects/sparkprofile_ai_enriched.json` | Fabulously Optimized overworld; not isolated fixture |
 | P4A-BASE-10 | BASE | 10 | 60s | 120 | | | | | | |
 | P4A-BASE-50 | BASE | 50 | 60s | 120 | | | | | | |
 | P4A-BASE-100 | BASE | 100 | 60s | 120 | | | | | | |
@@ -104,11 +105,13 @@ Fill after warm-up, **before** interpreting explore Spark export:
 
 | Dominant evidence (profile-specific) | Decision |
 |--------------------------------------|----------|
-| | PERF-3 PlanningSession / defer / PERF-5B / no Scavenger rewrite |
+| `CraftTorchesGoal.findTable` ~4.2s inclusive | **FIXED** — `PhasedScanClock` on craft/smelt table search |
+| `ExploringGoal.planCurrentStage` ~1.0s inclusive | **PERF-3 DEFERRED** |
+| `spmscavenger` 0.21% server self-time | No Scavenger-wide rewrite |
 
-**PERF-3 authorized?** yes / no / defer — reason:
+**PERF-3 authorized?** **no** — defer.
 
-**Explore sanity gate:** PASS / INVALID —
+**PERF RFC:** **CLOSED** (2026-08-10).
 
 ## Historical reference
 

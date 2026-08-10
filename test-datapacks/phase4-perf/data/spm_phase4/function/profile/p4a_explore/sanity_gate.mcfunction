@@ -1,7 +1,0 @@
-tellraw @s [{"text":"[SPM Phase4 EXPLORE] ","color":"gold","bold":true},{"text":"PERF-3 sanity gate — complete BEFORE interpreting Spark","color":"yellow"}]
-tellraw @s [{"text":"Config: exploring=true, gatherResources=false, smeltEnabled=false, opinionEnabled=false","color":"gray"}]
-tellraw @s [{"text":"Warm-up: ≥90s (exploreIdleTicks=600 = 30s idle before first expedition eligibility)","color":"gray"}]
-tellraw @s [{"text":"✓ At least one mob creates an expedition (logs / visible outbound travel)","color":"white"}]
-tellraw @s [{"text":"✓ Spark shows ExploringGoal.planCurrentStage > 0%","color":"white"}]
-tellraw @s [{"text":"✓ createPath activity from expedition planner observed","color":"white"}]
-tellraw @s [{"text":"If any check fails: PROFILE INVALID FOR PERF-3 DECISION","color":"red","bold":true}]

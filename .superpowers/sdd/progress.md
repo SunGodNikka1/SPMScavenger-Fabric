@@ -78,8 +78,6 @@ Experience substrate static frontier closed; GAO-4 Director static frontier clos
 
 No commits. No Minecraft launches (separate approval required).
 
-PERF RFC locked (`plans/RFC-PERFORMANCE-AND-PERCEPTION.md`). Slice 0A+0B+1+2: task-31-report
-(`DONE_WITH_CONCERNS`, 527 tests). Slice 4A protocol: task-32-brief/report (`BLOCKED` runtime),
-`docs/porting/PERFORMANCE_LOG.md`, `test-datapacks/phase4-perf/` (workload-split; no stay orders;
-EXPLORE sanity gate). PERF-3 not authorized without P4A-EXPLORE Spark + sanity gate. No commits.
-No Minecraft launches executed.
+PERF RFC **closed** (2026-08-10): Spark `Projects/sparkprofile_ai_enriched.json` analyzed;
+craft-table `PhasedScanClock` fix shipped; PERF-3 deferred. Slice 4A fixtures in
+`test-datapacks/phase4-perf/`. No commits. No further Minecraft launches executed.
