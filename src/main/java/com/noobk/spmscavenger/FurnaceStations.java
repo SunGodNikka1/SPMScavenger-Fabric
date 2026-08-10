@@ -126,6 +126,35 @@ public final class FurnaceStations {
         return best;
     }
 
+    /**
+     * PERF-1 — revalidates a cached furnace candidate without scanning the world cube.
+     */
+    public static boolean isUsableAt(Level level, BlockPos pos, UUID mob, ScavengerConfig cfg) {
+        if (!cfg.smeltEnabled || pos == null) {
+            return false;
+        }
+        if (!isFurnaceState(level.getBlockState(pos))) {
+            return false;
+        }
+        if (!isWalkClaimable(pos, mob, level.getGameTime())) {
+            return false;
+        }
+        BlockEntity be = level.getBlockEntity(pos);
+        if (!(be instanceof AbstractFurnaceBlockEntity furnace)) {
+            return false;
+        }
+        FurnaceJobSavedData data = level instanceof ServerLevel server
+                ? FurnaceJobSavedData.get(server)
+                : null;
+        boolean empty = isContainerEmpty(furnace);
+        boolean owned = data != null && data.isScavengerOwned(pos);
+        java.util.Optional<FurnaceJobSavedData.FurnaceJobTicket> ticket =
+                data != null ? data.ticketAt(pos) : java.util.Optional.empty();
+        boolean hasTicket = ticket.isPresent();
+        UUID ticketOwner = ticket.map(t -> t.claimantMob()).orElse(null);
+        return mayUse(owned, empty, hasTicket, ticketOwner, mob, cfg.useCommunalFurnaces);
+    }
+
     public static boolean tryClaimWalk(BlockPos pos, UUID mob, long gameTime) {
         BlockPos key = pos.immutable();
         WalkClaim existing = WALK_CLAIMS.get(key);

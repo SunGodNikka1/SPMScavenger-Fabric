@@ -1,5 +1,7 @@
 package com.noobk.spmscavenger.experience;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,6 +27,25 @@ public final class OpinionExperienceRegistry {
         sinks = OpinionExperienceSinks.noOp();
     }
 
+    /**
+     * PERF-5A — non-allocating lookup. Read/check paths must use this (or {@link #hasLiveRestClaim})
+     * instead of {@link #contextFor(UUID)}.
+     */
+    @Nullable
+    public static MobExperienceContext find(UUID mobId) {
+        return CONTEXTS.get(mobId);
+    }
+
+    /** PERF-5A — whether a live REST claim exists without creating a context. */
+    public static boolean hasLiveRestClaim(UUID mobId) {
+        MobExperienceContext context = CONTEXTS.get(mobId);
+        return context != null && context.hasLiveRestClaim();
+    }
+
+    /**
+     * Allocates and returns the per-mob experience context. Use only on experience-producing paths
+     * (episode emission, discretionary rest open, opinion learning).
+     */
     public static MobExperienceContext contextFor(UUID mobId) {
         return CONTEXTS.computeIfAbsent(mobId, id -> new MobExperienceContext(id, sinks));
     }

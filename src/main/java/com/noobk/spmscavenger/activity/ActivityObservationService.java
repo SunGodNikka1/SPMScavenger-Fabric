@@ -49,7 +49,7 @@ public final class ActivityObservationService {
         if (mob.isSleeping()) {
             return true;
         }
-        return OpinionExperienceRegistry.contextFor(mob.getUUID()).hasLiveRestClaim();
+        return OpinionExperienceRegistry.hasLiveRestClaim(mob.getUUID());
     }
 
     /** Deterministic test seam; production uses {@link #observe} and therefore one selector pass. */

@@ -47,6 +47,13 @@ public class SmeltAtFurnaceGoal extends Goal {
     private int waitTicks;
     private boolean craftingFurnace;
 
+    private final PhasedScanClock scanClock;
+    private BlockPos cachedFurnace;
+    private long searchFailedUntilTick;
+
+    private static final int SCAN_INTERVAL = 80;
+    private static final int SCAN_PHASE_SALT = 53;
+    private static final int FAILED_SEARCH_COOLDOWN_TICKS = 100;
     private static final int CRAFT_TICKS = 20;
     private static final int MAX_APPROACH_TICKS = 200;
     private static final double REACH_SQR = 6.0;
@@ -55,6 +62,7 @@ public class SmeltAtFurnaceGoal extends Goal {
     public SmeltAtFurnaceGoal(Mob mob, double speed) {
         this.mob = mob;
         this.speed = speed;
+        this.scanClock = new PhasedScanClock(mob.getId(), SCAN_INTERVAL, SCAN_PHASE_SALT);
         setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
@@ -93,8 +101,9 @@ public class SmeltAtFurnaceGoal extends Goal {
         }
         plan = planned.get();
 
-        furnacePos = FurnaceStations.findUsable(server, mob.blockPosition(), mob.getUUID(), cfg);
-        if (furnacePos != null) {
+        BlockPos candidate = locateFurnace(server, cfg, true);
+        if (candidate != null) {
+            furnacePos = candidate;
             return FurnaceStations.tryClaimWalk(furnacePos, mob.getUUID(), server.getGameTime());
         }
         if (cfg.placeFurnaces
@@ -134,6 +143,8 @@ public class SmeltAtFurnaceGoal extends Goal {
         approachTicks = 0;
         waitTicks = 0;
         craftingFurnace = false;
+        cachedFurnace = null;
+        searchFailedUntilTick = 0L;
     }
 
     @Override
@@ -161,7 +172,7 @@ public class SmeltAtFurnaceGoal extends Goal {
         }
 
         if (furnacePos == null) {
-            furnacePos = FurnaceStations.findUsable(server, mob.blockPosition(), mob.getUUID(), cfg);
+            furnacePos = locateFurnace(server, cfg, true);
         }
         if (furnacePos == null) {
             if (!ensureFurnaceItem(server, backpack, cfg)) {
@@ -402,5 +413,35 @@ public class SmeltAtFurnaceGoal extends Goal {
             }
         }
         return best;
+    }
+
+    /**
+     * PERF-1 — phased world search with per-mob cache and failed-search cooldown.
+     *
+     * @param requireScanPhase when {@code true}, a full cube scan runs only on this goal's phased
+     *                         slot; cached candidates revalidate every call.
+     */
+    private BlockPos locateFurnace(ServerLevel server, ScavengerConfig cfg, boolean requireScanPhase) {
+        long now = server.getGameTime();
+        if (now < searchFailedUntilTick) {
+            return null;
+        }
+        if (cachedFurnace != null
+                && FurnaceStations.isUsableAt(server, cachedFurnace, mob.getUUID(), cfg)) {
+            return cachedFurnace.immutable();
+        }
+        cachedFurnace = null;
+        if (requireScanPhase && !scanClock.claim(now)) {
+            return null;
+        }
+        BlockPos found = FurnaceStations.findUsable(
+                server, mob.blockPosition(), mob.getUUID(), cfg);
+        if (found != null) {
+            cachedFurnace = found.immutable();
+            return cachedFurnace;
+        }
+        searchFailedUntilTick = now + FAILED_SEARCH_COOLDOWN_TICKS;
+        scanClock.resetAfter(now);
+        return null;
     }
 }

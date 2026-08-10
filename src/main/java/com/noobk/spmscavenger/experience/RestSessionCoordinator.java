@@ -69,7 +69,13 @@ public final class RestSessionCoordinator {
     }
 
     public static void validate(Mob mob, ActivityObservationService.Observation observation, long gameTime) {
-        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob.getUUID());
+        if (mob == null) {
+            return;
+        }
+        MobExperienceContext context = OpinionExperienceRegistry.find(mob.getUUID());
+        if (context == null) {
+            return;
+        }
         Optional<RestSessionClaim> current = context.restClaim().filter(RestSessionClaim::isLive);
         if (current.isEmpty()) {
             return;
@@ -84,7 +90,10 @@ public final class RestSessionCoordinator {
     }
 
     public static void invalidateOnUnload(UUID mobId, long gameTime) {
-        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
+        MobExperienceContext context = OpinionExperienceRegistry.find(mobId);
+        if (context == null) {
+            return;
+        }
         context.restClaim().filter(RestSessionClaim::isLive).ifPresent(claim ->
                 close(context, claim, RestCloseReason.CHUNK_UNLOAD, gameTime));
         context.invalidateEphemeral();

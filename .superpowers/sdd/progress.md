@@ -77,3 +77,8 @@ episode boundary repair); 499 tests/clean build pass; runtime unverified.
 Experience substrate static frontier closed; GAO-4 Director static frontier closed.
 
 No commits. No Minecraft launches (separate approval required).
+
+PERF RFC locked (`plans/RFC-PERFORMANCE-AND-PERCEPTION.md`). Slice 0A+0B+1 implemented:
+install policy (enabled=false → cleanup observer only; combat chase gated; exploring=false keeps SPM
+stroll), non-allocating `find`/`hasLiveRestClaim`, furnace phased scan + cache + failed cooldown;
+522 tests/clean build PASS; Spark/runtime UNVERIFIED.

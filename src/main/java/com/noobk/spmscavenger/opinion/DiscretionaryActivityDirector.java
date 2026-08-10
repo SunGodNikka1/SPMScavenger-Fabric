@@ -21,10 +21,29 @@ public final class DiscretionaryActivityDirector {
             DiscretionaryAvailability availability,
             boolean combatTarget,
             boolean exploreAdoptionReady) {
+        if (!OpinionFeatureGate.isEnabled()) {
+            MobExperienceContext existing = OpinionExperienceRegistry.find(mobId);
+            if (existing == null) {
+                return;
+            }
+            existing.discretionaryDirector().tick(new DirectorTickInput(
+                    gameTime,
+                    false,
+                    existing.isFrozen(),
+                    combatTarget,
+                    observation,
+                    new DiscretionaryScoringInput(
+                            existing.affectiveState(),
+                            existing.opinionMemory(),
+                            availability,
+                            false,
+                            false),
+                    exploreAdoptionReady));
+            return;
+        }
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
-        boolean opinionEnabled = OpinionFeatureGate.isEnabled();
-        boolean eligible = opinionEnabled
-                && DiscretionaryEligibility.isDiscretionaryEligible(observation, combatTarget);
+        boolean opinionEnabled = true;
+        boolean eligible = DiscretionaryEligibility.isDiscretionaryEligible(observation, combatTarget);
         DiscretionaryScoringInput scoringInput = new DiscretionaryScoringInput(
                 context.affectiveState(),
                 context.opinionMemory(),

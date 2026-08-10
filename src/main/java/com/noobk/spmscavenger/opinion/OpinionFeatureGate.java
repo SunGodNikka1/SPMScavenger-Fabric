@@ -23,4 +23,13 @@ public final class OpinionFeatureGate {
             return false;
         }
     }
+
+    /** Test-only override for {@link #isEnabled()}. */
+    public static void setTestOverride(Boolean enabled) {
+        testOverride = enabled;
+    }
+
+    public static void clearTestOverride() {
+        testOverride = null;
+    }
 }

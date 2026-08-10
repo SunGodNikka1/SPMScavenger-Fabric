@@ -132,9 +132,16 @@ public class SpmScavenger implements ModInitializer {
         if (selector == null) {
             return;
         }
-        SpmCombatChaseSpeed.apply(mob, selector);
         if (alreadyInstalled(selector)) {
             return;
+        }
+        ScavengerConfig cfg = ScavengerConfig.get();
+        if (SpmScavengerInstallPolicy.installsLeaseCleanupObserver(cfg)) {
+            installLeaseCleanupOnly(mob, selector);
+            return;
+        }
+        if (SpmScavengerInstallPolicy.appliesCombatChaseSpeed(cfg)) {
+            SpmCombatChaseSpeed.apply(mob, selector);
         }
         if (mob instanceof PathfinderMob pathfinderMob) {
             // MOVE only: vanilla/SPM FloatGoal may still own JUMP. FireBucketGoal wins because the
@@ -153,6 +160,15 @@ public class SpmScavenger implements ModInitializer {
         installExploration(mob, selector);
     }
 
+    private static void installLeaseCleanupOnly(Mob mob, GoalSelector selector) {
+        if (!(mob instanceof PathfinderMob pathfinderMob)) {
+            return;
+        }
+        ExplorationReadiness readiness = new ExplorationReadiness();
+        selector.addGoal(9, new ExplorationActivityGoal(
+                pathfinderMob, selector, readiness, false));
+    }
+
     private static void installExploration(Mob mob, GoalSelector selector) {
         if (!(mob instanceof PathfinderMob pathfinderMob)) {
             return;
@@ -160,46 +176,47 @@ public class SpmScavenger implements ModInitializer {
         ScavengerConfig cfg = ScavengerConfig.get();
         ExplorationReadiness readiness = new ExplorationReadiness();
 
-        // GAO-0-B1: persisted mining authority still needs lease settlement when the global switch
-        // is already disabled at ENTITY_LOAD time. This flagless cleanup observer owns no executor,
-        // replaces no host stroll, and is permanently barred from pressure/handoff/assignment.
-        if (!cfg.enabled) {
+        if (!SpmScavengerInstallPolicy.installsMiningExecutors(cfg)) {
             selector.addGoal(9, new ExplorationActivityGoal(
                     pathfinderMob, selector, readiness, false));
             return;
         }
 
-        Goal originalStroll = null;
-        for (WrappedGoal wrapped : selector.getAvailableGoals()) {
-            Goal goal = wrapped.getGoal();
-            if (goal.getClass() == WaterAvoidingRandomStrollGoal.class) {
-                originalStroll = goal;
-                break;
+        if (SpmScavengerInstallPolicy.replacesHostStroll(cfg)) {
+            Goal originalStroll = null;
+            for (WrappedGoal wrapped : selector.getAvailableGoals()) {
+                Goal goal = wrapped.getGoal();
+                if (goal.getClass() == WaterAvoidingRandomStrollGoal.class) {
+                    originalStroll = goal;
+                    break;
+                }
             }
-        }
-        if (originalStroll == null) {
-            // Preserve the compatibility fail-closed behavior while keeping persisted lease cleanup
-            // alive. An unknown host stroll shape must not accidentally authorize mining work.
-            selector.addGoal(9, new ExplorationActivityGoal(
-                    pathfinderMob, selector, readiness, false));
-            if (!warnedStrollShape) {
-                warnedStrollShape = true;
-                LOGGER.warn("[spmscavenger] PlayerMob idle stroll shape changed; exploration left "
-                        + "disabled rather than replacing an unknown goal.");
+            if (originalStroll == null) {
+                // Preserve the compatibility fail-closed behavior while keeping persisted lease cleanup
+                // alive. An unknown host stroll shape must not accidentally authorize mining work.
+                selector.addGoal(9, new ExplorationActivityGoal(
+                        pathfinderMob, selector, readiness, false));
+                if (!warnedStrollShape) {
+                    warnedStrollShape = true;
+                    LOGGER.warn("[spmscavenger] PlayerMob idle stroll shape changed; exploration left "
+                            + "disabled rather than replacing an unknown goal.");
+                }
+                return;
             }
-            return;
+            selector.removeGoal(originalStroll);
         }
 
-        selector.removeGoal(originalStroll);
         selector.addGoal(3, new ControlledDescentGoal(pathfinderMob, 0.9, readiness));
         // Same priority as the other deliberate-excavation executor: mode selection belongs to
         // MiningDirector, and arbitration to the intent matrix, not to Minecraft's priority
         // numbers. Two mining goals racing on priority would reintroduce exactly the scheduler
         // coupling the control plane exists to remove.
         selector.addGoal(3, new TunnelSearchGoal(pathfinderMob, 0.9));
-        selector.addGoal(8, new ExploringGoal(pathfinderMob, readiness));
-        selector.addGoal(9, new TrackedLocalWanderGoal(
-                pathfinderMob, Math.max(0.5, Math.min(1.2, cfg.localWanderSpeed)), readiness));
+        if (SpmScavengerInstallPolicy.installsOverlandExploration(cfg)) {
+            selector.addGoal(8, new ExploringGoal(pathfinderMob, readiness));
+            selector.addGoal(9, new TrackedLocalWanderGoal(
+                    pathfinderMob, Math.max(0.5, Math.min(1.2, cfg.localWanderSpeed)), readiness));
+        }
         // Flagless observer; staggered internally and treats every unknown goal as meaningful work.
         selector.addGoal(9, new ExplorationActivityGoal(pathfinderMob, selector, readiness));
     }
