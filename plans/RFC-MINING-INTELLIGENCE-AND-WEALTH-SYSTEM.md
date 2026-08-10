@@ -9,14 +9,14 @@
 | **Target progression** | **Vanilla Minecraft 1.21.1 mining + resource wealth** (overworld ore tiers through diamond/deepslate; not Nether/endgame mining in gen-1) |
 | **Scope** | Autonomous *where* to mine, *how much* to stockpile (wealth), prerequisite planning hooks, capability gaps, integration methods, phased plan, validation — **design until implementation authorized** |
 | **Mode** | `PROGRESSIVE_CONTINUATION` (User — Continue the RFC) |
-| **Status** | MI-14C3-R1 `IMPLEMENTED` (task-30; 321 tests); MAIBS static re-pass `PASS — BEHAVIORALLY_PLAUSIBLE`; runtime `UNVERIFIED` |
+| **Status** | **MI-TS `IMPLEMENTED`** (tunnel executor + chain tests; 387+ unit at ship); MI-14C3-R1 `IMPLEMENTED`; MAIBS multi-mode static `PASS_WITH_RUNTIME_UNVERIFIED`; **frontier: RT-MI-TS1 runtime falsification** |
 | **User constraint** | No Minecraft launch, commit, or push unless separately asked; implementation only after explicit Begin authorization |
 | **Baseline version** | `1.9.2` |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-FURNACE-SMELTING.md`; `RFC-ADAPTIVE-OPINION-MOOD-AND-ENGAGEMENT.md` (discretionary layer — deferred); stubs `progression/ProgressGoal.java`, `TaskLifecycle.java` |
 | **Former name** | `RFC-MINING-INTELLIGENCE-AND-RESOURCE-GREED.md` — merged into this file (2026-08-08); “resource greed” → **wealth system** |
 | **Owners** | User (product) |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Cursor 2` · `Agent_Codex` · `Agent_Claude` |
-| **Last update** | 2026-08-09 ~03:15 PDT |
+| **Last update** | 2026-08-10 ~22:45 PDT |
 | **Gate** | MRFC-1 |
 
 ### Naming
@@ -55,11 +55,12 @@ PlayerMobs should progress through **vanilla mining** using **deterministic clas
 
 **Mining architecture (`CONSENSUS`, D-MIW-001):** `MiningDirector` / `MiningProject` / `MiningMemory` are policy + session state; `GatherResourcesGoal` owns physical dig; no clairvoyant ore map.
 
-**Continuation result (`CONSENSUS`, user 2026-08-09):** MI-7A done. **Next package:**
-**MI-6F live wiring** → **MI-7B+C** (budget accounting + `NaturalDescentStatus` — one semantic unit)
-→ **MI-5H** (`DescentHeadingPolicy` — macro heading, not landing micro-sort) → **MI-7D** → **MI-7E**.
-`CaveContextSnapshot` ≠ `CaveOpportunity`. Primary open descent defect is **heading chosen by
-novelty before terrain** (MI-5H), not MI-7 session types alone.
+**Continuation result (`CONSENSUS`, reconciled 2026-08-10):** Gen-1 mining stack through **controlled
+descent → execution control plane (MI-14C) → tunnel search executor (MI-TS)** is **`CODE_CONFIRMED`**
+with `TunnelExecutionChainTest` chain coverage. **Nearest frontier:** one approved runtime session
+(**RT-MI-TS1**) falsifying the full multi-strategy loop — not more static scaffolding. Deferred:
+**Project Resumption Semantics**, branch-mine geometry (Option B), Loop D product decision,
+`CraftTorchesGoal` mid-descent `YIELD` trade-off.
 
 ---
 
@@ -103,9 +104,10 @@ novelty before terrain** (MI-5H), not MI-7 session types alone.
 | [MI-5 behavioural prediction](#topic-mi-5-behavioural-prediction-gate-maibs-1) | `FAIL` heading blindness | **MI-5H `READY`** — `DescentHeadingPolicy` |
 | [MI-6 behavioural prediction](#topic-mi-6-behavioural-prediction-gate-maibs-1) | 6A/D/B/C `IMPLEMENTED`; runtime `UNVERIFIED` | **MI-6F wire before MI-7B+C** |
 | [MI-7 controlled excavation descent](#topic-mi-7-controlled-excavation-descent-gate-maibs-1) | MI-7R `IMPLEMENTED` | MI-14C control plane active |
-| [MI-14C execution control](#topic-mi-14c--execution-control-plane-proposed-user--agent_claude) | C3-R1 implemented; static MAIBS pass | **Next: approved runtime falsification or Loop-D product decision** |
-| [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order (revised) | **Next: C2 repair → MAIBS re-pass → C3** |
-| [Validation](#topic-validation) | `PARTIAL` | Policy units green; gather wealth + runtime open |
+| [MI-14C execution control](#topic-mi-14c--execution-control-plane-proposed-user--agent_claude) | C3-R1 `IMPLEMENTED`; static MAIBS pass | Runtime `UNVERIFIED` |
+| [TUNNEL_SEARCH executor](#topic-tunnel_search-executor--pre-implementation-maibs-pass-gate-maibs-1) | MI-TS `IMPLEMENTED`; chain MAIBS `PASS_WITH_RUNTIME_UNVERIFIED` | **Next: RT-MI-TS1 runtime falsification** |
+| [Phased plan](#topic-phased-implementation-plan) | `CONSENSUS` order (revised) | Gen-1 mining loop static-complete; runtime next |
+| [Validation](#topic-validation) | `PARTIAL` | Unit/chain green; **RT-MI-TS1** datapack spec ready (task-33) |
 | [Deferred](#topic-deferred-and-unverified) | — | Nether, branch mines, portfolio gen-1 |
 
 ---
@@ -1260,21 +1262,20 @@ staircase cutting through the diamond band exposes ore it then declines to gathe
 (descent is short, terminates, and the ore stays `VISIBLE`), but it is the same inversion and is
 recorded as an open question rather than silently inherited or silently fixed.
 
-### Open product decision — corridor geometry (`OPEN`)
+### Corridor geometry — gen-1 straight corridor (`LOCKED`, D-MIW-041)
 
 Vein-hit probability, blocks mined per diamond, and how *human* the result looks are one trade-off
 with no evidence-only answer:
 
-| Option | Shape | Trade |
-| --- | --- | --- |
-| **A** straight corridor | 1x2, single heading | Cheapest, lowest yield per session, reads as purposeful |
-| **B** branch mine | 1x2 spine with ribs every 3 blocks | Standard player technique, best coverage per block, most blocks mined |
-| **C** opportunistic | straight until exposure, then vein-follow via existing gather | Smallest new code; coverage depends entirely on luck |
+| Option | Shape | Trade | Gen-1 |
+| --- | --- | --- | --- |
+| **A** straight corridor | 1x2, single heading | Cheapest, lowest yield per session, reads as purposeful | **`LOCKED`** |
+| **B** branch mine | 1x2 spine with ribs every 3 blocks | Standard player technique, best coverage per block, most blocks mined | Deferred — extends A under same budget |
+| **C** opportunistic | straight until exposure, then vein-follow via existing gather | Smallest new code; coverage depends entirely on luck | Rejected — gather already owns vein-follow after exposure handoff |
 
-**Recommendation: A now, B behind the same budget once A is observed running.** A is the smallest
-closed loop (cut → expose → existing gather consumes), reuses `MiningBudget` unchanged, and does not
-commit to a geometry before any tunnel has ever been watched in a running game. B is a superset and
-can extend A without redesign.
+**D-MIW-041 (`LOCKED`, Agent_Cursor continuation 2026-08-10):** ship and observe **Option A** first.
+RT-MI-TS1 must watch a 1x2 straight corridor before branch geometry is scheduled. B remains a
+superset extension, not a redesign.
 
 ### Acceptance (must / must-not), before any code
 
@@ -1446,10 +1447,20 @@ memory. Build the capability, then change the retirement rule — not the revers
 
 ### Frontier
 
-**Runtime milestone.** One deliberate session, not continuous testing: descent → diamond band →
-tunnel handoff → horizontal digging → visible ore exposure → gather takeover → vein follow → same
-tunnel resumes → cave breakthrough → cave handoff. Runtime is no longer testing unfinished
-scaffolding; it is testing the first genuinely multi-strategy autonomous mining loop.
+**Runtime milestone — RT-MI-TS1 (`READY`, task-33-brief).** One deliberate session, not continuous
+testing: descent → diamond band → tunnel handoff → horizontal 1x2 digging → visible ore exposure →
+gather takeover → vein follow → same tunnel resumes → cave breakthrough → cave handoff. Runtime is
+no longer testing unfinished scaffolding; it is testing the first genuinely multi-strategy autonomous
+mining loop.
+
+| ID | Must happen | Must not |
+| --- | --- | --- |
+| RT-MI-TS1a | `HANDOFF_TUNNEL_SEARCH` consumed; mob digs east/west at Y≤16 | Mob stops at band with pending transition |
+| RT-MI-TS1b | Side-wall diamond exposed by cut gathered by existing gather | Hidden-ore scan / second gather path |
+| RT-MI-TS1c | After gather, same tunnel project + heading resume | False `NO_PROGRESS` revoke; second staircase |
+| RT-MI-TS1d | Natural cave breakthrough → `CAVE_FOUND` handoff | Tunnel drills through open cave |
+
+**Datapack:** `test-datapacks/phase3-mining-tunnel/` (namespace `spm_phase3`; spec in task-33-brief).
 
 **Requires explicit launch approval** (`AGENTS.md` gate 6) — not implied by any planning or
 implementation trigger.
@@ -3326,7 +3337,15 @@ boundary. Focused tests and `gradlew.bat clean build` pass (148/148); runtime re
 | RT-MW-6 | Exposed vein, break one block | Follows adjacent ore only |
 | RT-MW-7 | Pick breaks mid-tunnel | Replacement demand + resume |
 
-Datapack: `test-datapacks/phase-mining-wealth/`.
+Datapack: `test-datapacks/phase-mining-wealth/` (wealth rows; not started).
+
+### Multi-strategy mining loop (`READY`, MI-TS)
+
+| Stage | Setup | Must happen | Must not |
+| --- | --- | --- | --- |
+| **RT-MI-TS1** | `phase3-mining-tunnel` preset: deepslate band, embedded side diamond, terminal cave pocket | Full chain per [TUNNEL_SEARCH frontier](#frontier) | Clairvoyant ore target; permanent mining block after one `NO_PROGRESS` |
+
+Evidence log: `docs/porting/MINING_RUNTIME_LOG.md` (create on first approved launch).
 
 ---
 
@@ -3393,6 +3412,11 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 | D-MIW-038 | Non-exclusive handoffs | **`CONSENSUS`** | `TUNNEL_HANDOFF_PENDING` arbitration `NEUTRAL` until executor exists; do not consume transition |
 | D-MIW-039 | Start vs progress lease | **`CONSENSUS`** | `lastExecutionProgressAt` + observable dig events only; pause during `TEMPORARY`/`CONTENTION`; revoke `NO_PROGRESS` |
 | D-MIW-040 | Protected arbitration vs lease availability | **`IMPLEMENTED`** | Required-flag scheduler resolver; condition-bound safety pause; command prevent/revoke; NBT v4 pre-start pause; 400-tick progress window |
+| D-MIW-041 | Tunnel corridor geometry gen-1 | **`LOCKED` Option A** | 1x2 straight corridor; branch mine deferred; opportunistic C rejected (gather owns vein-follow) |
+| D-MIW-TS1 | Tunnel creates exposure, not ore targets | **`CONSENSUS`** | No clairvoyant scan; existing gather consumes |
+| D-MIW-TS2 | Exposure opportunity handoff | **`LOCKED`** | One probe per cut; consume-on-use; cooperative lease pause |
+| D-MIW-TS3 | Horizontal corridor safety | **`LOCKED`** | Reuse `StairStepSafety` primitives; not `validatePlan` |
+| D-MIW-TS4 | Tunnel breakthrough | **`LOCKED`** | `CAVE_FOUND` via connected-opening evidence |
 
 ---
 
@@ -3406,6 +3430,7 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] Negative: `wealthRawIron`, `MiningDirector` `NOT FOUND` in `src/main`
 - [x] `ResourceWealthPolicy` / `GatherCandidatePolicy` / `GatherIntentPolicy` present (`CODE_CONFIRMED`)
 - [ ] Runtime mining/wealth behaviour (launch not authorized)
+- [ ] **RT-MI-TS1** multi-strategy loop (task-33; launch not authorized)
 
 ### Architecture Gate
 
@@ -3439,9 +3464,12 @@ Datapack: `test-datapacks/phase-mining-wealth/`.
 - [x] **MI-6A + MI-6D + MI-6B + MI-6C** (task 18; 178 tests) — code repair; runtime `UNVERIFIED`
 - [x] **Accept MI-7 redesign** — Controlled Excavation Descent MI-7A…E; D-MIW-033/034 (user 2026-08-09)
 - [x] **MI-14C3 integration repair** — task-30; protected/LOOK conflicts and budget reachability repaired; static MAIBS pass; runtime unverified
-- [ ] **Begin implementation for MI-6F or MI-7B+C** (6F first per dependency)
-- [ ] U-MIW matrix / runtime datapack (MI-9/MI-10)
-- [ ] **MI-7E** controlled staircase (blocked until MI-7A–D + MI-6 runtime probe)
+- [x] **MI-6F** cave handoff wiring (task 26+)
+- [x] **MI-7B+C / MI-5H / MI-7D / MI-7R** descent stack
+- [x] **MI-TS** tunnel search executor + `TunnelExecutionChainTest` (387+ tests at ship)
+- [ ] **RT-MI-TS1** runtime falsification — task-33-brief; requires launch approval
+- [ ] U-MIW matrix / wealth runtime datapack (`phase-mining-wealth/`)
+- [ ] **Project Resumption Semantics** (deferred product decision)
 
 ### Runtime Gate
 
@@ -3518,6 +3546,7 @@ dependency-ready slice. MI-13 remains downstream and owns the pass-one buried-or
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-10 | User + Agent_Cursor | **RFC reconciliation** — headline status → MI-TS `IMPLEMENTED`; frontier → **RT-MI-TS1**; **D-MIW-041** locks gen-1 straight 1x2 corridor; validation + task-33-brief for `phase3-mining-tunnel` datapack |
 | 2026-08-09 | User + Agent_Claude | **Multi-mode MAIBS: FAIL then PASS_WITH_RUNTIME_UNVERIFIED** (387 tests). Five control-flow breaks found and repaired: **M1** `claimTunnelSearch` had no caller (mob stops at the band forever); **M2** tunnel yielded only on `ACQUIRING`, circular at equal priority so the probe could never run; **M3** cooperative admission sat behind the `wantsMore` gate it exists to bypass (described as fixed, shipped unfixed); **M4** tunnel copied the pre-C2-R1 lifecycle and could resurrect a revoked project; **M5** a `NO_PROGRESS` revocation persisted as RETRY and permanently blocked all future assignment - Loop A through the persistence rule, found only by the chain test. Plus two behavioural repairs: break timing was **inverted** in both executors (`20/(hardness*tool)`; obsidian faster than stone) - now `MiningBreakTiming` owns the physics; and the tunnel's 48-block distance cap was never fed by `withProgress`. New deferred topic **Project Resumption Semantics**. Next: runtime milestone, requires explicit launch approval |
 | 2026-08-09 | User + Agent_Claude | **D-MIW-TS2/TS3/TS4 `LOCKED`** before Tunnel Search code. **TS2 Exposure Opportunity Handoff**: `ALLOW` is necessary but not sufficient — verified that equal priority-3 cannot preempt, that `GatherResourcesGoal`'s 60-tick `SCAN_INTERVAL` is checked *after* the arbitration guard (so a one-tick yield is unreliable), and that `wantsMore`/`GatherIntentPolicy` is global rather than tunnel-scoped (so a yield could fund an unrelated excursion that `COOPERATIVE_WORK` would wrongly pause the lease for). Tunnel records cells it physically opened; gather gets one exposure-local probe bypassing the cooldown. Two additions from source: the probe must be **consumed whether or not it succeeds** (else the cooldown is defeated), and `wantsMore` gates *before* the guard, so the tunnel's trigger demand and gather's intent must be proven to agree or the loop is silently open. **TS3**: reuse `StairStepSafety.validateBreakHazards`/`validateBreak`, not `validatePlan` (staircase-specific geometry). **TS4**: breakthrough emits `CAVE_FOUND` under the existing connected-opening evidence rules. `HarvestReveal` → `ExcavationReveal` deferred out of Gen-1 |
 | 2026-08-09 | Agent_Claude | Review branch closed; **TUNNEL_SEARCH pre-implementation MAIBS pass** (Gate MAIBS-1). **D-MIW-TS1**: the executor creates *exposure*, it does not find ore — scanning would be clairvoyance (ore in rock is `UNDISCOVERED` by the mod's own contract) and would duplicate `GatherCandidatePolicy`/`GatherResourcesGoal` (SPM-2). **TS-M1**: the arbitration row is a real decision — inheriting `GATHER_RESOURCES -> YIELD` from `CONTROLLED_DESCENT` makes the mob tunnel past ore it just exposed; recommended `ALLOW`. Severity checked not assumed: exposed ore stays `VISIBLE`, so the loss is the 40-tick vein-follow window and scan range, not the ore. Same inversion noted as an open question for shipped `CONTROLLED_DESCENT`. Corridor geometry `OPEN` — recommend straight corridor first, branch mine as a superset later |
@@ -4437,3 +4466,36 @@ repairs (C1-R1 episode clock, C2-R1 commitment). The RFC was behind the code, ag
 **Frontier after:** **MI-14C2-R2 `READY`** (two-clock split for continuation authority). Then
 `TUNNEL_SEARCH` executor, then multi-mode director selection. Runtime remains `UNVERIFIED`
 throughout — no lease, arbitration decision or commitment has been observed in a running game.
+
+---
+
+### Contribution — User + Agent_Cursor (RFC continuation, MI-TS frontier)
+
+**Agent:** User (trigger) + `Agent_Cursor`
+**Date/Session:** 2026-08-10
+**Contribution type:** `RECONCILIATION / FRONTIER`
+
+**Frontier before:** RFC identity still read **MI-14C3-R1 @ 321 tests** as the headline status,
+while the TUNNEL_SEARCH topic already recorded **387 tests**, `TunnelSearchGoal`, M1–M5 repairs,
+and `PASS_WITH_RUNTIME_UNVERIFIED`. Topic index and implementation gate still listed MI-6F / MI-7B+C
+as next work. Corridor geometry remained `OPEN` despite a locked implementation order using
+horizontal 1x2 steps.
+
+**Action:** Reconciled identity, executive summary, topic index, implementation gate, and decision
+registry against shipped code (`TunnelSearchGoal.java`, `TunnelExecutionChainTest.java`,
+`ExposureOpportunity*.java`, `HorizontalStepPlanner`, `MiningBreakTiming`). Locked **D-MIW-041**
+(gen-1 straight corridor). Promoted runtime milestone to **RT-MI-TS1** with explicit must/must-not
+rows and datapack path `test-datapacks/phase3-mining-tunnel/`. Authored **task-33-brief** for the
+runtime datapack + observation protocol. `compileJava` **CONFIRMED**; full `gradlew test` count
+**UNVERIFIED** (Gradle test executor failure in agent environment).
+
+**Frontier after:** **RT-MI-TS1 runtime falsification** is the sole dependency-ready frontier.
+Requires explicit Minecraft launch approval. No further static executor work unless RT-MI-TS1 finds
+a defect. Open product questions: **Project Resumption Semantics**, **CraftTorchesGoal mid-descent
+YIELD**, Loop D.
+
+**RFC fields updated:** identity, executive summary, topic index, TUNNEL_SEARCH frontier, validation
+table, decision registry (D-MIW-041, D-MIW-TS1…TS4), implementation gate, change log, this
+contribution.
+
+---

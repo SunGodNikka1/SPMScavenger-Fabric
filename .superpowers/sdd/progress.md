@@ -81,3 +81,8 @@ No commits. No Minecraft launches (separate approval required).
 PERF RFC **closed** (2026-08-10): Spark `Projects/sparkprofile_ai_enriched.json` analyzed;
 craft-table `PhasedScanClock` fix shipped; PERF-3 deferred. Slice 4A fixtures in
 `test-datapacks/phase4-perf/`. No commits. No further Minecraft launches executed.
+
+MI RFC frontier (2026-08-10): **RT-MI-TS1** runtime falsification — task-33-brief; tunnel executor
+static-complete; launch not authorized.
+
+No commits. No Minecraft launches (separate approval required).
