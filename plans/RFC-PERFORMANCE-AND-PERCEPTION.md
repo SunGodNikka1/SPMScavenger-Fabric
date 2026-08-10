@@ -87,11 +87,11 @@ invalidate stale intents (`OPINION_DISABLED`) without allocating new contexts.
 
 ### PERF-6 — Performance gate (`Slice 4`) — `IN PROGRESS` (4A checkpoint)
 
-- Scenarios: 1 / 10 / 50 / 100 PlayerMobs — protocol in `test-datapacks/phase4-perf/`
+- Workload-split scenarios: `P4A-BASE` (1/10/50/100), `P4A-GATHER` stress/sparse, `P4A-SMELT`, `P4A-EXPLORE` (PERF-3), `RT-PERF-F1` — protocol in `test-datapacks/phase4-perf/`
+- **Fixture validity:** no `playermob stay` on perf mobs; explore sanity gate required before PERF-3 decision
 - Spark evidence: `docs/porting/PERFORMANCE_LOG.md` (template only; **UNVERIFIED**)
-- RT-PERF-F1 furnace duplicate race scenario included
 - Task SDD: `task-31-report` (Slices 0A–2), `task-32-report` (4A blocked on runtime)
-- **PERF-3 not authorized** until Spark decision rubric filled
+- **PERF-3 not authorized** until P4A-EXPLORE Spark + sanity gate pass
 
 ## Implementation order
 
@@ -118,3 +118,4 @@ invalidate stale intents (`OPINION_DISABLED`) without allocating new contexts.
 | Date | Change |
 |------|--------|
 | 2026-08-09 | Slice 2 gather phased scan; PERF-1 `FurnaceLookup` state parity fix |
+| 2026-08-09 | Slice 4A datapack: workload-split profiles; removed stay orders; EXPLORE sanity gate |

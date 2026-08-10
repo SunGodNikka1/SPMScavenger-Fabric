@@ -1,4 +1,5 @@
 kill @e[type=playermob:player_mob,tag=spm_p4_perf]
 execute if entity @e[type=marker,tag=spm_p4_anchor,limit=1] at @e[type=marker,tag=spm_p4_anchor,limit=1] run function spm_phase4:spawn/_grid_100
 execute unless entity @e[type=marker,tag=spm_p4_anchor,limit=1] as @p at @s run function spm_phase4:spawn/_grid_100
-tellraw @s [{"text":"[SPM Phase4] ","color":"gold"},{"text":"Spawned 100 PlayerMobs. Warm up 60s before Spark.","color":"green"}]
+function spm_phase4:spawn/_finalize
+tellraw @s [{"text":"[SPM Phase4] ","color":"gold"},{"text":"Spawned 100 PlayerMobs (no stay order). Warm up 60s before Spark.","color":"green"}]
