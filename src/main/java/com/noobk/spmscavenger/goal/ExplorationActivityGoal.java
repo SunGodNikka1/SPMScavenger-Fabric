@@ -117,12 +117,16 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         RestSessionCoordinator.validate(mob, observation, mob.level().getGameTime());
         AffectiveStateService.observe(mob.getUUID(), observation, OBSERVE_INTERVAL);
         DiscretionaryAvailability availability = new DiscretionaryAvailability(cfg.exploring, cfg.campfire);
+        long now = mob.level().getGameTime();
+        boolean exploreAdoptionReady = readiness.eligibleForNewExpedition(
+                now, cfg.exploreLocalTripsThreshold, cfg.exploreIdleTicks);
         DiscretionaryActivityDirector.tick(
                 mob.getUUID(),
-                mob.level().getGameTime(),
+                now,
                 observation,
                 availability,
-                mob.getTarget() != null);
+                mob.getTarget() != null,
+                exploreAdoptionReady);
 
         boolean mayCreateWork = permitsNewMiningWork(cfg.enabled, allowNewMiningWork);
         if (mayCreateWork) {

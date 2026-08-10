@@ -174,7 +174,8 @@ public final class ExploringGoal extends Goal {
         }
 
         if (expedition == null) {
-            if (!readiness.eligible(now, cfg.exploreLocalTripsThreshold, cfg.exploreIdleTicks)) {
+            if (!readiness.eligibleForNewExpedition(
+                    now, cfg.exploreLocalTripsThreshold, cfg.exploreIdleTicks)) {
                 return false;
             }
             if (isDiscretionaryExplorePath()

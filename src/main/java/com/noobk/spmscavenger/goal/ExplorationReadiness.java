@@ -41,7 +41,13 @@ public final class ExplorationReadiness {
         return descentPressure;
     }
 
-    boolean eligible(long now, int localTripThreshold, int idleTickThreshold) {
+  /**
+   * Whether {@link ExploringGoal} may start a new discretionary expedition (GAO-4 / PD-GAO-09).
+   *
+   * <p>The director must use the same predicate before issuing an {@code EXPLORE} intent so pending
+   * authority cannot outrun executor adoption.
+   */
+    public boolean eligibleForNewExpedition(long now, int localTripThreshold, int idleTickThreshold) {
         return now >= cooldownUntilTick
                 && (descentPressure
                 || successfulLocalTrips >= Math.max(1, localTripThreshold)

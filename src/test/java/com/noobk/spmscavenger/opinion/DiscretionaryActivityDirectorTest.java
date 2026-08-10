@@ -261,13 +261,13 @@ class DiscretionaryActivityDirectorTest {
         seedOpinions(55f, 5f, 11f, 4f);
         neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
         DiscretionaryActivityDirector.tick(
-                MOB, 10L, idleObservation(), DiscretionaryAvailability.bothPresent(), false);
+                MOB, 10L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true);
         UUID staleId = director.intent().get().intentId();
         assertTrue(director.intent().isPresent());
 
         OpinionFeatureGate.testOverride = false;
         DiscretionaryActivityDirector.tick(
-                MOB, 20L, idleObservation(), DiscretionaryAvailability.bothPresent(), false);
+                MOB, 20L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true);
 
         assertTrue(director.intent().isEmpty());
         assertTrue(hasTerminalDetail("OPINION_DISABLED"));
@@ -275,7 +275,7 @@ class DiscretionaryActivityDirectorTest {
 
         OpinionFeatureGate.testOverride = true;
         DiscretionaryActivityDirector.tick(
-                MOB, 30L, idleObservation(), DiscretionaryAvailability.bothPresent(), false);
+                MOB, 30L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true);
 
         assertTrue(director.intent().isPresent());
         assertFalse(staleId.equals(director.intent().get().intentId()));
@@ -343,7 +343,7 @@ class DiscretionaryActivityDirectorTest {
     }
 
     private DirectorTickInput tick(long gameTime, ActivityObservationService.Observation observation, boolean eligible) {
-        return tick(gameTime, observation, eligible, false);
+        return tick(gameTime, observation, eligible, false, true);
     }
 
     private DirectorTickInput tick(
@@ -351,6 +351,15 @@ class DiscretionaryActivityDirectorTest {
             ActivityObservationService.Observation observation,
             boolean eligible,
             boolean combat) {
+        return tick(gameTime, observation, eligible, combat, true);
+    }
+
+    private DirectorTickInput tick(
+            long gameTime,
+            ActivityObservationService.Observation observation,
+            boolean eligible,
+            boolean combat,
+            boolean exploreAdoptionReady) {
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(MOB);
         return new DirectorTickInput(
                 gameTime,
@@ -363,7 +372,8 @@ class DiscretionaryActivityDirectorTest {
                         context.opinionMemory(),
                         DiscretionaryAvailability.bothPresent(),
                         eligible,
-                        true));
+                        true),
+                exploreAdoptionReady);
     }
 
     private static ActivityObservationService.Observation idleObservation() {

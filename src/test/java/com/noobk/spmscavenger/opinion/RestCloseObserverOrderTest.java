@@ -53,7 +53,7 @@ class RestCloseObserverOrderTest {
         assertTrue(terminalDetailContains("INVALIDATED:rest-claim-closed:COMBAT"));
 
         DiscretionaryActivityDirector.tick(
-                MOB, 210L, idleObservation(), DiscretionaryAvailability.bothPresent(), true);
+                MOB, 210L, idleObservation(), DiscretionaryAvailability.bothPresent(), true, true);
         assertFalse(hasRunningRest());
         assertEquals(0.0f, restPreference());
     }
@@ -71,7 +71,7 @@ class RestCloseObserverOrderTest {
         ActivityObservationService.Observation mining = ActivityObservationService.summarize(
                 List.of(ActivityClass.PROJECT_EXECUTION));
         DiscretionaryActivityDirector.tick(
-                MOB, 210L, mining, DiscretionaryAvailability.bothPresent(), false);
+                MOB, 210L, mining, DiscretionaryAvailability.bothPresent(), false, false);
         assertFalse(hasRunningRest());
     }
 
@@ -88,7 +88,7 @@ class RestCloseObserverOrderTest {
         ActivityObservationService.Observation commanded = ActivityObservationService.summarize(
                 List.of(ActivityClass.MANDATORY_COMMAND));
         DiscretionaryActivityDirector.tick(
-                MOB, 210L, commanded, DiscretionaryAvailability.bothPresent(), false);
+                MOB, 210L, commanded, DiscretionaryAvailability.bothPresent(), false, false);
         assertFalse(hasRunningRest());
     }
 

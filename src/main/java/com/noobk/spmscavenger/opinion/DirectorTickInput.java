@@ -11,4 +11,5 @@ public record DirectorTickInput(
         boolean frozen,
         boolean combatTarget,
         ActivityObservationService.Observation observation,
-        DiscretionaryScoringInput scoringInput) {}
+        DiscretionaryScoringInput scoringInput,
+        boolean exploreAdoptionReady) {}

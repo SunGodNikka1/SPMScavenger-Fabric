@@ -80,7 +80,7 @@ public final class DiscretionaryDirectorState {
 
         expirePendingIfNeeded(input.gameTime());
 
-        Optional<ScoringResult> scoring = IdleOpportunityPolicy.score(input.scoringInput());
+        Optional<ScoringResult> scoring = scoreWithExploreAdoptionGate(input);
         if (scoring.isEmpty()) {
             return;
         }
@@ -118,6 +118,12 @@ public final class DiscretionaryDirectorState {
         }
 
         updateYieldRequests(winner, top.total(), scoring.get(), input.gameTime());
+    }
+
+    public boolean hasRunningActionableIntent(DiscretionaryActivity activity) {
+        return runningIntent != null
+                && runningIntent.isActive()
+                && runningIntent.activity() == activity;
     }
 
     public boolean hasActionableIntent(DiscretionaryActivity activity) {
@@ -333,6 +339,17 @@ public final class DiscretionaryDirectorState {
             terminalize(pendingIntent, IntentLifecycle.EXPIRED, InvalidationCause.NONE, gameTime, "EXPIRED pending TTL");
             pendingIntent = null;
         }
+    }
+
+    private static Optional<ScoringResult> scoreWithExploreAdoptionGate(DirectorTickInput input) {
+        Optional<ScoringResult> scoring = IdleOpportunityPolicy.score(input.scoringInput());
+        if (scoring.isEmpty() || input.exploreAdoptionReady()) {
+            return scoring;
+        }
+        var filtered = scoring.get().ranked().stream()
+                .filter(breakdown -> breakdown.activity() != DiscretionaryActivity.EXPLORE)
+                .toList();
+        return filtered.isEmpty() ? Optional.empty() : Optional.of(ScoringResult.of(filtered));
     }
 
     private void invalidateAll(IntentLifecycle terminal, InvalidationCause cause, long gameTime) {

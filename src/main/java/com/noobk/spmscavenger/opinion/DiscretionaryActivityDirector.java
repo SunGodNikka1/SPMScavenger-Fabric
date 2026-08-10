@@ -19,7 +19,8 @@ public final class DiscretionaryActivityDirector {
             long gameTime,
             ActivityObservationService.Observation observation,
             DiscretionaryAvailability availability,
-            boolean combatTarget) {
+            boolean combatTarget,
+            boolean exploreAdoptionReady) {
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
         boolean opinionEnabled = OpinionFeatureGate.isEnabled();
         boolean eligible = opinionEnabled
@@ -36,7 +37,8 @@ public final class DiscretionaryActivityDirector {
                 context.isFrozen(),
                 combatTarget,
                 observation,
-                scoringInput));
+                scoringInput,
+                exploreAdoptionReady));
     }
 
     public static DiscretionaryDirectorState stateFor(UUID mobId) {

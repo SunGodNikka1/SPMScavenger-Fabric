@@ -50,8 +50,9 @@ public final class DiscretionaryAuthority {
             return false;
         }
         DiscretionaryDirectorState state = stateFor(mobId);
-        return state.hasActionableIntent(DiscretionaryActivity.EXPLORE)
-                || state.hasActionableIntent(DiscretionaryActivity.REST);
+        // RFC Rule 5 — wander yields for adopted discretionary authority, not pending intent.
+        return state.hasRunningActionableIntent(DiscretionaryActivity.EXPLORE)
+                || state.hasRunningActionableIntent(DiscretionaryActivity.REST);
     }
 
     public static boolean shouldPreserveRestIntentOnCampfireStop(UUID mobId) {
