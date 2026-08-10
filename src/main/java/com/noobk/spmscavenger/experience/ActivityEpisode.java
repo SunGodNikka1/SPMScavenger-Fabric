@@ -96,7 +96,7 @@ public final class ActivityEpisode {
             }
         }
 
-        if (EpisodeNormalizationPolicy.isTerminal(event.kind())) {
+        if (EpisodeBoundaryPolicy.isTerminal(event)) {
             commitTerminal(event, sinks, context);
         }
     }

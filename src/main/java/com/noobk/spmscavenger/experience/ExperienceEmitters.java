@@ -20,6 +20,9 @@ public final class ExperienceEmitters {
     }
 
     public static void expeditionUnlocked(Mob mob, UUID episodeId, long gameTime) {
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob.getUUID());
+        context.ensureEpisode(
+                episodeId, gameTime, Optional.of(ActivityKind.OVERLAND_EXPLORATION));
         pipeline(mob).accept(new ExperienceEvent(
                 ExperienceKind.EXPEDITION_UNLOCKED,
                 gameTime,
@@ -36,8 +39,34 @@ public final class ExperienceEmitters {
                 Optional.empty()));
     }
 
+    public static void expeditionTerminal(
+            Mob mob,
+            UUID episodeId,
+            long startedGameTime,
+            long gameTime,
+            ExpeditionEndAttribution.Semantics semantics) {
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob.getUUID());
+        context.ensureEpisode(
+                episodeId, startedGameTime, Optional.of(ActivityKind.OVERLAND_EXPLORATION));
+        pipeline(mob).accept(new ExperienceEvent(
+                ExperienceKind.EXPEDITION_END,
+                gameTime,
+                episodeId,
+                semantics.outcome(),
+                semantics.cause(),
+                0.0f,
+                0.0f,
+                semantics.satisfactionDelta(),
+                0.0f,
+                0.0f,
+                Optional.of(ActivityKind.OVERLAND_EXPLORATION),
+                Optional.of(mob.blockPosition()),
+                Optional.empty()));
+    }
+
     public static void miningProgress(
             Mob mob, MiningProject project, ExperienceKind kind, ExperienceCause cause, long gameTime) {
+        ensureMiningEpisode(mob, project);
         ActivityKind activity = activityFor(project.mode());
         pipeline(mob).accept(new ExperienceEvent(
                 kind,
@@ -57,6 +86,7 @@ public final class ExperienceEmitters {
 
     public static void miningTerminal(
             Mob mob, MiningProject project, MiningProjectEnd end, BlockPos at, long gameTime) {
+        ensureMiningEpisode(mob, project);
         OutcomeClass outcome = outcomeFor(end);
         ExperienceCause cause = causeFor(end);
         float stress = end == MiningProjectEnd.NO_PROGRESS || end == MiningProjectEnd.HAZARD ? 0.25f : 0.0f;
@@ -77,6 +107,8 @@ public final class ExperienceEmitters {
     }
 
     public static void restSessionOpened(UUID mobId, RestSessionClaim claim, long gameTime) {
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
+        context.ensureEpisode(claim.claimId(), gameTime, Optional.of(ActivityKind.REST));
         pipeline(mobId).accept(new ExperienceEvent(
                 ExperienceKind.REST_SESSION,
                 gameTime,
@@ -96,6 +128,8 @@ public final class ExperienceEmitters {
     public static void restSessionClosed(
             UUID mobId, RestSessionClaim claim, RestCloseReason reason, long gameTime) {
         RestCloseAttribution.Semantics semantics = RestCloseAttribution.forReason(reason);
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
+        context.ensureEpisode(claim.claimId(), claim.arrivedAt(), Optional.of(ActivityKind.REST));
         pipeline(mobId).accept(new ExperienceEvent(
                 ExperienceKind.REST_SESSION,
                 gameTime,
@@ -110,6 +144,13 @@ public final class ExperienceEmitters {
                 Optional.of(ActivityKind.REST),
                 Optional.of(claim.anchor()),
                 Optional.empty()));
+    }
+
+    private static void ensureMiningEpisode(Mob mob, MiningProject project) {
+        OpinionExperienceRegistry.contextFor(mob.getUUID()).ensureEpisode(
+                episodeFor(project, mob.getUUID()),
+                project.startedGameTime(),
+                Optional.of(activityFor(project.mode())));
     }
 
     private static EpisodeRoutingPipeline pipeline(Mob mob) {

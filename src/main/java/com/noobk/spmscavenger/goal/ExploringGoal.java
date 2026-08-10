@@ -14,6 +14,7 @@ import com.noobk.spmscavenger.mining.MiningGoalKind;
 import com.noobk.spmscavenger.mining.MiningTransition;
 import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.SpmScavenger;
+import com.noobk.spmscavenger.experience.ExpeditionEndAttribution;
 import com.noobk.spmscavenger.experience.ExperienceEmitters;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.opinion.DiscretionaryAuthority;
@@ -1113,6 +1114,7 @@ public final class ExploringGoal extends Goal {
             return;
         }
         boolean discretionaryTerminal = isDiscretionaryExplorePath() && !expedition.caveHandoffContinuation;
+        emitExpeditionTerminal(expedition, now, ExpeditionEndAttribution.completed());
         if (mob.level() instanceof ServerLevel level) {
             clearCaveContinuationCommitment(level);
         }
@@ -1136,9 +1138,28 @@ public final class ExploringGoal extends Goal {
     private void emitExpeditionUnlocked(ExpeditionState state, long now) {
         ExperienceEmitters.expeditionUnlocked(
                 mob,
-                RestSessionCoordinator.episodeIdForProject(
-                        mob.getUUID(), state.startedTick, "EXPEDITION"),
+                expeditionEpisodeId(state),
                 now);
+    }
+
+    private void emitExpeditionTerminal(
+            ExpeditionState state, long now, ExpeditionEndAttribution.Semantics semantics) {
+        ExperienceEmitters.expeditionTerminal(
+                mob, expeditionEpisodeId(state), state.startedTick, now, semantics);
+    }
+
+    private UUID expeditionEpisodeId(ExpeditionState state) {
+        return RestSessionCoordinator.episodeIdForProject(
+                mob.getUUID(), state.startedTick, "EXPEDITION");
+    }
+
+    private static ExpeditionEndAttribution.Semantics semanticsFor(EndReason reason) {
+        return switch (reason) {
+            case PATH_FAILURE -> ExpeditionEndAttribution.pathFailure();
+            case SIMULATION_FRONTIER -> ExpeditionEndAttribution.simulationFrontier();
+            case STALE -> ExpeditionEndAttribution.staleAbandon();
+            case STAY_ANCHOR, STAY_ANCHOR_STATE_UNAVAILABLE -> ExpeditionEndAttribution.authorityInterrupt();
+        };
     }
 
     private void clearCaveContinuationCommitment(ServerLevel level) {
@@ -1153,6 +1174,7 @@ public final class ExploringGoal extends Goal {
                 && isDiscretionaryExplorePath()
                 && !expedition.caveHandoffContinuation;
         if (expedition != null) {
+            emitExpeditionTerminal(expedition, now, semanticsFor(reason));
             if (mob.level() instanceof ServerLevel level) {
                 clearCaveContinuationCommitment(level);
             }

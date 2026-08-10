@@ -2,6 +2,7 @@ package com.noobk.spmscavenger.opinion;
 
 import com.noobk.spmscavenger.activity.ActivityClass;
 import com.noobk.spmscavenger.activity.ActivityObservationService;
+import com.noobk.spmscavenger.experience.ActivityEpisode;
 import com.noobk.spmscavenger.experience.ActivityKind;
 import com.noobk.spmscavenger.experience.ExperienceEmitters;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
@@ -89,6 +90,15 @@ class RestCloseObserverOrderTest {
         DiscretionaryActivityDirector.tick(
                 MOB, 210L, commanded, DiscretionaryAvailability.bothPresent(), false);
         assertFalse(hasRunningRest());
+    }
+
+    @Test
+    void restOpenAloneIsFalseGreenGuardForTimeoutSuccess() {
+        RestSessionClaim claim = liveClaim();
+        ExperienceEmitters.restSessionOpened(MOB, claim, 10_000L);
+
+        assertEquals(0.0f, restPreference());
+        assertFalse(episodeClosed(claim.claimId()));
     }
 
     @Test
@@ -184,6 +194,13 @@ class RestCloseObserverOrderTest {
 
     private static float restPreference() {
         return OpinionExperienceRegistry.contextFor(MOB).opinionMemory().preference(ActivityKind.REST);
+    }
+
+    private boolean episodeClosed(UUID claimId) {
+        return OpinionExperienceRegistry.contextFor(MOB)
+                .findEpisode(claimId)
+                .map(ActivityEpisode::isClosed)
+                .orElse(false);
     }
 
     private static ActivityObservationService.Observation idleObservation() {

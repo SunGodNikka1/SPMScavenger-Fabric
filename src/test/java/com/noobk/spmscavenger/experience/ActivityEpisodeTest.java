@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ActivityEpisodeTest {
@@ -77,7 +78,7 @@ class ActivityEpisodeTest {
 
         assertEquals(1, pulses.size());
         assertTrue(learning.isEmpty());
-        assertTrue(episode.isClosed());
+        assertFalse(episode.isClosed());
     }
 
     @Test

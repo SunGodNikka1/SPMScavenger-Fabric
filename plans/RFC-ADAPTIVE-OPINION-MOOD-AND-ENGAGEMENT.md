@@ -2362,9 +2362,20 @@ policy; combat/mandatory/player-order/unload/environment closes no longer termin
 collapse to `VOLUNTARY_ABANDON` + `REST_SESSION_CLOSE`. Observer-order tests in
 `RestCloseObserverOrderTest`.
 
+**Experience episode boundary repair (2026-08-09, static `CONFIRMED`):** `EpisodeBoundaryPolicy`
+(cause-aware: `REST_SESSION_OPEN` ≠ terminal, `REST_SESSION_CLOSE` = terminal); `ensureEpisode` with
+real `openedAtGameTime` (REST `arrivedAt`, mining `startedGameTime`, explore `startedTick`);
+`EXPEDITION_END` + `ExpeditionEndAttribution` wired from `ExploringGoal` complete/abandon. Falsification
+in `EpisodeBoundaryRepairTest` (open-alone false-green guard, 600-tick duration at world-age 1M).
+
+**Evidence (`CONFIRMED`):** `.\gradlew.bat clean build` — BUILD SUCCESSFUL; 499 tests, 0 failures.
+
 **MAIBS (`CODE_CONFIRMED`, runtime `UNVERIFIED`):** GAO-4-M1…M12 static scenarios pass; voluntary
 REST→EXPLORE full handoff chain proven in director tests; consumer gates compile against locked paths.
 GAO-4 static frontier closed — next evidence is runtime validation.
+
+**Experience substrate static frontier closed** — episode open/close boundaries, start-time ownership,
+and explore terminal ownership verified statically; runtime `UNVERIFIED`.
 
 **Not delivered:** runtime launch, disk persistence, PLACE/ENTITY opinions, PersonalityModel,
 `ExplorationReadiness` threshold modulation.

@@ -60,7 +60,8 @@ class EpisodeRoutingPipelineTest {
 
         assertEquals(1, pulses.size());
         assertSame(EPISODE, pulses.get(0).episodeId());
-        ActivityEpisode episode = OpinionExperienceRegistry.contextFor(MOB).episodeFor(EPISODE);
+        ActivityEpisode episode = OpinionExperienceRegistry.contextFor(MOB).findEpisode(EPISODE).orElseThrow();
         assertEquals(ActivityKind.CONTROLLED_DESCENT, episode.activity().orElseThrow());
+        assertEquals(5L, episode.openedAtGameTime());
     }
 }

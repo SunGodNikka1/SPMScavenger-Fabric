@@ -100,7 +100,7 @@ class ExperienceEventTest {
     void activityKindIsDistinctFromSchedulerTaxonomy() {
         // Compile-time separation: subjective activity identity lives in experience package only.
         assertEquals(8, ActivityKind.values().length);
-        assertEquals(12, ExperienceKind.values().length);
+        assertEquals(13, ExperienceKind.values().length);
     }
 
     private static ExperienceEvent sample(ExperienceKind kind, OutcomeClass outcome) {

@@ -33,8 +33,8 @@ public final class EpisodeNormalizationPolicy {
 
     public static boolean isTerminal(ExperienceKind kind) {
         return switch (kind) {
-            case PROJECT_END, VEIN_SESSION_END, EXPEDITION_UNLOCKED, CAVE_HANDOFF_ACCEPTED,
-                    REST_SESSION, SOCIAL_EXPEDITION, SOCIAL_INTERACTION -> true;
+            case PROJECT_END, VEIN_SESSION_END, EXPEDITION_END, CAVE_HANDOFF_ACCEPTED,
+                    SOCIAL_EXPEDITION, SOCIAL_INTERACTION -> true;
             default -> false;
         };
     }

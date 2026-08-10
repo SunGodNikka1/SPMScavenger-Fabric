@@ -118,8 +118,25 @@ public final class MobExperienceContext {
         return episode;
     }
 
+    public ActivityEpisode ensureEpisode(
+            UUID episodeId, long openedAtGameTime, Optional<ActivityKind> activity) {
+        return episodes.compute(episodeId, (id, existing) -> {
+            if (existing != null) {
+                return existing;
+            }
+            return new ActivityEpisode(id, activity, Math.max(0L, openedAtGameTime));
+        });
+    }
+
+    public Optional<ActivityEpisode> findEpisode(UUID episodeId) {
+        return Optional.ofNullable(episodes.get(episodeId));
+    }
+
+    /** @deprecated prefer {@link #ensureEpisode(UUID, long, Optional)} with a real start tick */
+    @Deprecated
     public ActivityEpisode episodeFor(UUID episodeId) {
-        return episodes.computeIfAbsent(episodeId, id -> new ActivityEpisode(id, Optional.empty(), 0L));
+        return episodes.computeIfAbsent(
+                episodeId, id -> new ActivityEpisode(id, Optional.empty(), 0L));
     }
 
     public int registerExecutionFailure(ActivityKind kind) {

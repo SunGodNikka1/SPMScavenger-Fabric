@@ -17,7 +17,8 @@ public final class EpisodeRoutingPipeline implements ExperiencePipeline {
 
     @Override
     public void accept(ExperienceEvent event) {
-        ActivityEpisode episode = context.episodeFor(event.episodeId());
+        ActivityEpisode episode = context.ensureEpisode(
+                event.episodeId(), event.gameTime(), event.activity());
         if (episode.isSuspended() && event.outcome() == OutcomeClass.PROTECTED_INTERRUPT) {
             episode.resume();
         }

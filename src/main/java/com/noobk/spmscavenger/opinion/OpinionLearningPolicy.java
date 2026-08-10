@@ -2,6 +2,7 @@ package com.noobk.spmscavenger.opinion;
 
 import com.noobk.spmscavenger.experience.ActivityKind;
 import com.noobk.spmscavenger.experience.EpisodeLearningEvidence;
+import com.noobk.spmscavenger.experience.EpisodeBoundaryPolicy;
 import com.noobk.spmscavenger.experience.EpisodeNormalizationPolicy;
 import com.noobk.spmscavenger.experience.ExperienceCause;
 import com.noobk.spmscavenger.experience.OutcomeClass;
@@ -44,7 +45,7 @@ public final class OpinionLearningPolicy {
             return;
         }
         float weight = evidence.repetitionWeight();
-        if (weight == 0f && !EpisodeNormalizationPolicy.isTerminal(evidence.terminalKind())) {
+        if (weight == 0f && !EpisodeBoundaryPolicy.closesEpisode(evidence.terminalKind(), evidence.cause())) {
             return;
         }
 
@@ -59,7 +60,7 @@ public final class OpinionLearningPolicy {
             return;
         }
 
-        if (EpisodeNormalizationPolicy.isTerminal(evidence.terminalKind())) {
+        if (EpisodeBoundaryPolicy.closesEpisode(evidence.terminalKind(), evidence.cause())) {
             memory.setRecentDuration(episodeDurationTicks);
             memory.addRepetition(sessionRepetition(episodeDurationTicks));
             if (weight > 0f) {

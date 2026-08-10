@@ -72,7 +72,8 @@ repaired a same-observer CommandedAction revoke→reassign loop. No Tunnel Searc
 
 GA-OPINION: GAO-0 through GAO-4 `IMPLEMENTED / STATIC VERIFIED` — scoring, director, intent
 lifecycle, voluntary yield, consumer gates; GAO-4 repair (handoff identity, opinion-disable
-invalidation, REST claim authority, current-utility switch margin, REST close attribution);
-485 tests/clean build pass; runtime unverified. GAO-4 static frontier closed.
+invalidation, REST claim authority, current-utility switch margin, REST close attribution,
+episode boundary repair); 499 tests/clean build pass; runtime unverified.
+Experience substrate static frontier closed; GAO-4 Director static frontier closed.
 
 No commits. No Minecraft launches (separate approval required).
