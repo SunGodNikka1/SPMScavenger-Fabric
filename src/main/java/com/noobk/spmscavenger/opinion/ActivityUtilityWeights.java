@@ -21,6 +21,11 @@ public final class ActivityUtilityWeights {
     public static final float EXPLORE_STRESS_FIT = 25f;
     public static final float EXPLORE_NOVELTY_FIT = 18f;
     public static final float EXPLORE_COST = 8f;
+    /** GAO-5B — route bias magnitude; see {@link PlaceOpinionRouteRanker}. */
+    public static final int PLACE_ROUTE_BIAS = PlaceOpinionRouteRanker.MAX_ROUTE_BIAS;
+
+    /** @deprecated GAO-5B removed current-position place utility; use {@link PlaceOpinionRouteRanker}. */
+    @Deprecated
     public static final float PLACE_PREFERENCE = 22f;
 
     public static final float REST_STRESS_FIT = 30f;

@@ -19,7 +19,7 @@
 | Bound | Value | Eviction |
 | --- | --- | --- |
 | Max frozen snapshots | 128 | LRU eldest |
-| Frozen TTL | 24_000 ticks (~20 min) | `evictExpiredFrozen` on park + explicit API |
+| Frozen TTL | 24_000 ticks (~20 min) | Eligible for removal after age; swept when `evictExpiredFrozen` runs (on each `parkOnUnload` or explicit call) — **not** a background timer |
 | Live contexts | Loaded mobs only | `parkOnUnload` removes live entry |
 
 ### Stepping-stone honesty

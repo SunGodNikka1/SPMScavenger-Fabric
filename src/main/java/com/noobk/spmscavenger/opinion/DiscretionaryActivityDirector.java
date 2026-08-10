@@ -3,10 +3,7 @@ package com.noobk.spmscavenger.opinion;
 import com.noobk.spmscavenger.activity.ActivityObservationService;
 import com.noobk.spmscavenger.experience.MobExperienceContext;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
-import com.noobk.spmscavenger.experience.RestCloseReason;
-import net.minecraft.core.BlockPos;
 
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -22,8 +19,7 @@ public final class DiscretionaryActivityDirector {
             ActivityObservationService.Observation observation,
             DiscretionaryAvailability availability,
             boolean combatTarget,
-            boolean exploreAdoptionReady,
-            BlockPos placeAnchor) {
+            boolean exploreAdoptionReady) {
         if (!OpinionFeatureGate.isEnabled()) {
             MobExperienceContext existing = OpinionExperienceRegistry.find(mobId);
             if (existing == null) {
@@ -35,7 +31,7 @@ public final class DiscretionaryActivityDirector {
                     existing.isFrozen(),
                     combatTarget,
                     observation,
-                    DiscretionaryScoringInput.withoutPlace(
+                    new DiscretionaryScoringInput(
                             existing.affectiveState(),
                             existing.opinionMemory(),
                             availability,
@@ -45,19 +41,16 @@ public final class DiscretionaryActivityDirector {
             return;
         }
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
-        boolean opinionEnabled = true;
         boolean eligible = DiscretionaryEligibility.isDiscretionaryEligible(observation, combatTarget);
         DiscretionaryScoringInput scoringInput = new DiscretionaryScoringInput(
                 context.affectiveState(),
                 context.opinionMemory(),
-                context.placeOpinionMemory(),
                 availability,
                 eligible,
-                opinionEnabled,
-                Optional.ofNullable(placeAnchor));
+                true);
         context.discretionaryDirector().tick(new DirectorTickInput(
                 gameTime,
-                opinionEnabled,
+                true,
                 context.isFrozen(),
                 combatTarget,
                 observation,

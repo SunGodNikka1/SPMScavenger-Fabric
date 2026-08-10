@@ -62,8 +62,7 @@ class OpinionExperienceRegistryAllocationTest {
                 observation,
                 new DiscretionaryAvailability(true, true),
                 false,
-                false,
-                net.minecraft.core.BlockPos.ZERO);
+                false);
 
         assertEquals(0, OpinionExperienceRegistry.contextCount());
     }

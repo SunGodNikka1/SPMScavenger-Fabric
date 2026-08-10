@@ -16,10 +16,14 @@ import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.SpmScavenger;
 import com.noobk.spmscavenger.experience.ExpeditionEndAttribution;
 import com.noobk.spmscavenger.experience.ExperienceEmitters;
+import com.noobk.spmscavenger.experience.MobExperienceContext;
+import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.opinion.DiscretionaryAuthority;
 import com.noobk.spmscavenger.opinion.ExploreReadinessThresholds;
 import com.noobk.spmscavenger.opinion.IntentLifecycle;
+import com.noobk.spmscavenger.opinion.PlaceOpinionMemory;
+import com.noobk.spmscavenger.opinion.PlaceOpinionRouteRanker;
 import com.noobk.spmscavenger.mining.NaturalDescentExhaustionPolicy;
 import com.noobk.spmscavenger.mining.NaturalDescentSearchState;
 import com.noobk.spmscavenger.mining.NaturalDescentStatus;
@@ -535,6 +539,7 @@ public final class ExploringGoal extends Goal {
         // One cache for this whole call: the eight candidate routes overlap heavily, so a chunk
         // is inspected at most once no matter how many routes cross it. Discarded on return.
         ChunkInterest interest = forced ? null : new ChunkInterest(level);
+        PlaceOpinionMemory placeMemory = placeMemoryForRouteRanking();
 
         RouteCandidate best = null;
         if (!forced && readiness.hasDescentPressure()) {
@@ -598,6 +603,9 @@ public final class ExploringGoal extends Goal {
                     accumulatedInterest += interest.at(waypoint.x, waypoint.z);
                 }
                 score += ExplorationInterest.routeScore(accumulatedInterest);
+                IntendedWaypoint destination = waypoints.get(waypoints.size() - 1);
+                score += PlaceOpinionRouteRanker.routeBias(
+                        placeMemory, destination.x, destination.z);
             }
             RouteCandidate candidate = new RouteCandidate(headingX, headingZ, sector, waypoints, score);
             if (best == null || candidate.score > best.score) {
@@ -620,6 +628,11 @@ public final class ExploringGoal extends Goal {
         return new ExpeditionState(
                 intent, mob.getX(), mob.getZ(), best.headingX, best.headingZ,
                 best.headingSector, List.copyOf(best.waypoints), now);
+    }
+
+    private PlaceOpinionMemory placeMemoryForRouteRanking() {
+        MobExperienceContext context = OpinionExperienceRegistry.find(mob.getUUID());
+        return context == null ? new PlaceOpinionMemory() : context.placeOpinionMemory();
     }
 
     /**

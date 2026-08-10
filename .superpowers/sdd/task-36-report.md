@@ -1,0 +1,51 @@
+# Task 36 Report — GAO-5B (place opinion destination ranking)
+
+**Status:** `DONE` (static/unit); runtime `UNVERIFIED`
+
+## Delivered
+
+### Core change
+| GAO-5A (removed) | GAO-5B (added) |
+| --- | --- |
+| Current chunk → EXPLORE utility | Final destination chunk → route candidate score |
+| Disliked site lowers EXPLORE | Disliked destination lowers that route's rank |
+
+### Files
+- **NEW** `PlaceOpinionRouteRanker` — `destinationBias` / `routeBias`, `MAX_ROUTE_BIAS = 15`
+- **EDIT** `ExploringGoal` — route scoring adds place bias on final waypoint; `placeMemoryForRouteRanking()` via `find()` (no alloc)
+- **EDIT** `ActivityUtilityScorer` — PLACE term removed from `scoreExplore`
+- **EDIT** `DiscretionaryScoringInput` — `placeAnchor` / `placeOpinionMemory` removed
+- **EDIT** `DiscretionaryActivityDirector.tick` — no `placeAnchor` parameter
+- **EDIT** `ExplorationActivityGoal` — director tick without `blockPosition()`
+- **NEW** `PlaceOpinionRouteRankerTest` (6 tests); **DELETED** `PlaceOpinionScoringTest`
+
+### Deferred (documented)
+- `DescentHeadingPolicy` — same `destinationBias` primitive for equally-valid descent headings; not wired (mandatory descent path untouched).
+
+## Verification (`CONFIRMED`)
+
+```text
+Working directory: Projects/SPMScavenger-1.21.1-Fabric
+Command: .\gradlew.bat clean build
+Result: BUILD SUCCESSFUL — 556 tests, 0 failures
+```
+
+## Acceptance mapping
+
+| Must happen / not happen | Evidence |
+| --- | --- |
+| Negative destination loses to neutral at equal base | `PlaceOpinionRouteRankerTest.mustHappen_negativeDestinationLosesToNeutralWhenBaseScoresEqual` |
+| Opinion-off parity | `mustHappen_opinionOffReturnsZeroBias` |
+| Neutral preference → 0 bias | `mustHappen_neutralPreferenceIsZeroBias` |
+| Anti-fixation dominates place | `mustHappen_antiFixationDominatesPlaceBias` |
+| No veto / capped worst bias | `mustNotHappen_extremeDislikeCannotVetoAllRoutes` |
+| Current chunk dislike ≠ lower EXPLORE utility | `mustNotHappen_currentChunkDislikeDoesNotLowerExploreUtility` |
+
+## UNVERIFIED
+
+- Mob with `NO_PROGRESS` memory actually walks away from disliked chunk on next expedition (RT-GAO-1).
+- Descent expedition heading bias when multiple valid headings exist.
+
+## Frontier
+
+**RT-GAO-1** — Minecraft falsification (launch approval required).

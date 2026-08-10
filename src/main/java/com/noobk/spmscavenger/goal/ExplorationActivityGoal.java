@@ -130,8 +130,7 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
                 observation,
                 availability,
                 mob.getTarget() != null,
-                exploreAdoptionReady,
-                mob.blockPosition());
+                exploreAdoptionReady);
 
         boolean mayCreateWork = permitsNewMiningWork(cfg.enabled, allowNewMiningWork);
         if (mayCreateWork) {

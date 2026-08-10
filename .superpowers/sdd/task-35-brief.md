@@ -26,7 +26,7 @@ No production eviction path; `remove(UUID)` unwired.
 ## Design
 
 1. **Live map** — only loaded entities with heavyweight context.
-2. **`FrozenContextStore`** — bounded LRU (128) + TTL (24_000 ticks) of `MobExperienceSnapshot`.
+2. **`FrozenContextStore`** — bounded LRU (128) + TTL eligibility (24_000 ticks) of `MobExperienceSnapshot`; stale entries swept on park or explicit call, not on a schedule.
 3. **`parkOnUnload`** — REST invalidate → `prepareForUnloadPark` → snapshot → remove live.
 4. **`resumeOnLoad`** — rehydrate snapshot to live on `ENTITY_LOAD`.
 5. **Death** — partial reset on live or frozen snapshot (PD-GAO-03); no blind `remove()` on unload.

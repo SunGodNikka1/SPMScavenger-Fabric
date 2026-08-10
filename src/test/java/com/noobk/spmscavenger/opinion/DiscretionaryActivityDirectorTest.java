@@ -262,13 +262,13 @@ class DiscretionaryActivityDirectorTest {
         seedOpinions(55f, 5f, 11f, 4f);
         neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
         DiscretionaryActivityDirector.tick(
-                MOB, 10L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true, BlockPos.ZERO);
+                MOB, 10L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true);
         UUID staleId = director.intent().get().intentId();
         assertTrue(director.intent().isPresent());
 
         OpinionFeatureGate.testOverride = false;
         DiscretionaryActivityDirector.tick(
-                MOB, 20L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true, BlockPos.ZERO);
+                MOB, 20L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true);
 
         assertTrue(director.intent().isEmpty());
         assertTrue(hasTerminalDetail("OPINION_DISABLED"));
@@ -276,7 +276,7 @@ class DiscretionaryActivityDirectorTest {
 
         OpinionFeatureGate.testOverride = true;
         DiscretionaryActivityDirector.tick(
-                MOB, 30L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true, BlockPos.ZERO);
+                MOB, 30L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true);
 
         assertTrue(director.intent().isPresent());
         assertFalse(staleId.equals(director.intent().get().intentId()));
@@ -368,7 +368,7 @@ class DiscretionaryActivityDirectorTest {
                 false,
                 combat,
                 observation,
-                DiscretionaryScoringInput.withoutPlace(
+                new DiscretionaryScoringInput(
                         context.affectiveState(),
                         context.opinionMemory(),
                         DiscretionaryAvailability.bothPresent(),
