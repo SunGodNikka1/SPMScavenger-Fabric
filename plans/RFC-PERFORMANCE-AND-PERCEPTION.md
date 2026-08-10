@@ -85,11 +85,13 @@ invalidate stale intents (`OPINION_DISABLED`) without allocating new contexts.
 - Parity test: unlimited budget vs sliced budget → same landing under deterministic inputs.
 - While planning incomplete: **MOVE remains available to local wandering** (`TrackedLocalWanderGoal` when exploration installed; SPM stroll when not).
 
-### PERF-6 — Performance gate (`Slice 4`)
+### PERF-6 — Performance gate (`Slice 4`) — `IN PROGRESS` (4A checkpoint)
 
-- Scenarios: 1 / 10 / 50 / 100 PlayerMobs.
-- Spark evidence, scan synchrony check, path-probe counters.
-- Artifact: `docs/porting/PERFORMANCE_LOG.md`.
+- Scenarios: 1 / 10 / 50 / 100 PlayerMobs — protocol in `test-datapacks/phase4-perf/`
+- Spark evidence: `docs/porting/PERFORMANCE_LOG.md` (template only; **UNVERIFIED**)
+- RT-PERF-F1 furnace duplicate race scenario included
+- Task SDD: `task-31-report` (Slices 0A–2), `task-32-report` (4A blocked on runtime)
+- **PERF-3 not authorized** until Spark decision rubric filled
 
 ## Implementation order
 
