@@ -41,6 +41,25 @@ public final class ActivityEpisode {
         return suspended;
     }
 
+    /**
+     * Gate RET-1 — a detached stand-in for an episode that already completed and was compacted.
+     *
+     * <p>Returned instead of rebuilding a live episode, so a late or duplicate event is swallowed by
+     * the same {@code closed} guard that used to protect it while the full object was retained.
+     */
+    static ActivityEpisode alreadyClosed(
+            UUID episodeId, Optional<ActivityKind> activity, long openedAtGameTime) {
+        ActivityEpisode episode =
+                new ActivityEpisode(episodeId, activity, Math.max(0L, openedAtGameTime));
+        episode.closed = true;
+        return episode;
+    }
+
+    /** Test-only: reach the terminal state without constructing a full event chain. */
+    void forceCloseForTest() {
+        closed = true;
+    }
+
     public boolean isClosed() {
         return closed;
     }

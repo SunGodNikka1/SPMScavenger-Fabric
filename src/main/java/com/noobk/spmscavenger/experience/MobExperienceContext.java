@@ -6,7 +6,11 @@ import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.opinion.OpinionMemory;
 import com.noobk.spmscavenger.opinion.OpinionMemoryService;
 
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Set;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -24,7 +28,40 @@ public final class MobExperienceContext {
     private final DiscretionaryDirectorState discretionaryDirector = new DiscretionaryDirectorState();
     private final OpinionExperienceSinks sinks;
     private final EpisodeRoutingPipeline pipeline;
+    /**
+     * Gate RET-1 — <b>live</b> episodes only. A closed episode is compacted out of this map and
+     * its id moves to {@link #closedEpisodeIds}.
+     *
+     * <p>Before this, nothing ever removed an episode: {@code openEpisode} minted a fresh
+     * {@code UUID.randomUUID()} per activity, {@code closed = true} was a tombstone flag rather than
+     * an end of life, and one immortal mob doing ordinary activities grew this map forever.
+     */
     private final Map<UUID, ActivityEpisode> episodes = new HashMap<>();
+
+    /**
+     * Bounded tombstones for episodes that have already completed.
+     *
+     * <p>Deleting a closed episode outright would be a <em>new correctness defect</em>: the
+     * {@code closed} flag is what makes a late or duplicate terminal event a no-op. Without a
+     * record, {@code ensureEpisode} would happily rebuild the episode and relearn from the same
+     * event. So the heavyweight object goes and the identity stays, capped by insertion order.
+     */
+    private final Set<UUID> closedEpisodeIds = Collections.newSetFromMap(
+            new LinkedHashMap<>(16, 0.75f, false) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<UUID, Boolean> eldest) {
+                    return size() > MAX_CLOSED_EPISODE_TOMBSTONES;
+                }
+            });
+
+    /**
+     * How many completed episode identities to remember.
+     *
+     * <p>Bounds late-event rejection, not learning — durable learning already lives in
+     * {@link OpinionMemory}. Sized well past any plausible in-flight event delay; an event arriving
+     * after this many further episodes have completed is indistinguishable from a new activity.
+     */
+    private static final int MAX_CLOSED_EPISODE_TOMBSTONES = 256;
     private final Map<ActivityKind, Integer> executionFailureTotals = new EnumMap<>(ActivityKind.class);
     private Optional<RestSessionClaim> restClaim = Optional.empty();
     private boolean frozen;
@@ -118,14 +155,58 @@ public final class MobExperienceContext {
         return episode;
     }
 
+    /**
+     * The live episode for this id, creating one only if it has never completed.
+     *
+     * <p>Gate RET-1: a tombstoned id returns a detached, already-closed episode. It swallows the
+     * late event exactly as the retained object used to, without re-entering the map — so
+     * compaction cannot resurrect learning that already happened.
+     */
     public ActivityEpisode ensureEpisode(
             UUID episodeId, long openedAtGameTime, Optional<ActivityKind> activity) {
+        if (closedEpisodeIds.contains(episodeId)) {
+            return ActivityEpisode.alreadyClosed(episodeId, activity, openedAtGameTime);
+        }
         return episodes.compute(episodeId, (id, existing) -> {
             if (existing != null) {
                 return existing;
             }
             return new ActivityEpisode(id, activity, Math.max(0L, openedAtGameTime));
         });
+    }
+
+    /**
+     * Drops episodes that have completed, keeping their identities as tombstones.
+     *
+     * <p>Deliberately <b>not</b> an LRU over the whole map. A suspended or long-running episode is
+     * live state, and evicting one for being old would silently discard an activity the mob is still
+     * performing — trading a memory bug for a behaviour bug.
+     */
+    public int compactClosedEpisodes() {
+        int removed = 0;
+        Iterator<Map.Entry<UUID, ActivityEpisode>> entries = episodes.entrySet().iterator();
+        while (entries.hasNext()) {
+            Map.Entry<UUID, ActivityEpisode> entry = entries.next();
+            if (entry.getValue().isClosed()) {
+                closedEpisodeIds.add(entry.getKey());
+                entries.remove();
+                removed++;
+            }
+        }
+        return removed;
+    }
+
+    /** Live episodes only — the number this context is actually retaining. */
+    public int liveEpisodeCount() {
+        return episodes.size();
+    }
+
+    public int closedEpisodeTombstoneCount() {
+        return closedEpisodeIds.size();
+    }
+
+    public boolean hasCompletedEpisode(UUID episodeId) {
+        return closedEpisodeIds.contains(episodeId);
     }
 
     public Optional<ActivityEpisode> findEpisode(UUID episodeId) {
@@ -135,6 +216,9 @@ public final class MobExperienceContext {
     /** @deprecated prefer {@link #ensureEpisode(UUID, long, Optional)} with a real start tick */
     @Deprecated
     public ActivityEpisode episodeFor(UUID episodeId) {
+        if (closedEpisodeIds.contains(episodeId)) {
+            return ActivityEpisode.alreadyClosed(episodeId, Optional.empty(), 0L);
+        }
         return episodes.computeIfAbsent(
                 episodeId, id -> new ActivityEpisode(id, Optional.empty(), 0L));
     }
@@ -150,5 +234,7 @@ public final class MobExperienceContext {
                 episode.suspend();
             }
         }
+        // Suspension is not an ending, so this only reclaims episodes that had already finished.
+        compactClosedEpisodes();
     }
 }

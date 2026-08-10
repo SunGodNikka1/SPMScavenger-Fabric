@@ -20,6 +20,7 @@ import com.noobk.spmscavenger.mixin.MobGoalSelectorAccessor;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.GoalSelector;
@@ -108,6 +109,12 @@ public class SpmScavenger implements ModInitializer {
                 OpinionExperienceRegistry.freeze(mob.getUUID());
             }
         });
+        // Gate RET-1 - release per-world experience state when the server stops. Without this a
+        // singleplayer session that opens world A, leaves, and opens world B keeps world A's
+        // contexts reachable through a static map for the rest of the JVM's life. Deliberately not
+        // clearAll(), which is test-only and also resets sink wiring.
+        ServerLifecycleEvents.SERVER_STOPPED.register(
+                server -> OpinionExperienceRegistry.shutdownServerState());
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
                 OpinionExperienceRegistry.onDeath(mob.getUUID());

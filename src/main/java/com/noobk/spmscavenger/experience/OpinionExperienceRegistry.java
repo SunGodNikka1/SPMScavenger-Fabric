@@ -58,6 +58,32 @@ public final class OpinionExperienceRegistry {
         }
     }
 
+    /**
+     * Gate RET-1 — production server-stop cleanup.
+     *
+     * <p>Deliberately separate from {@link #clearAll()}, which is test-only and also resets sink
+     * configuration. This releases per-world state without touching injection wiring.
+     *
+     * <p>Matters in singleplayer without ever quitting the game: open world A, leave, open world B,
+     * and world A's contexts are still reachable through this static map.
+     */
+    public static void shutdownServerState() {
+        CONTEXTS.clear();
+    }
+
+    /** Reclaims completed episodes across every retained context. Returns episodes released. */
+    public static int compactClosedEpisodes() {
+        int removed = 0;
+        for (MobExperienceContext context : CONTEXTS.values()) {
+            removed += context.compactClosedEpisodes();
+        }
+        return removed;
+    }
+
+    public static int contextCount() {
+        return CONTEXTS.size();
+    }
+
     public static void remove(UUID mobId) {
         CONTEXTS.remove(mobId);
     }
