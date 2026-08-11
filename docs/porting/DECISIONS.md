@@ -68,13 +68,15 @@
   instead of leaving it fully bright through solid terrain. Adjacent focused lines at one anchor
   reuse one raycast. This is `ADAPTED` terrain parity: it does not claim exact GPU depth parity for
   translucent surfaces or entity-on-entity occlusion, and its final visual/performance result is
-  `UNVERIFIED` until the rebuilt artifact is tested and measured.
+  `CODE_CONFIRMED`; solid-terrain presentation and raycast cost remain separately unverified unless
+  tested/measured in their own scenarios.
 - **Log evidence:** the supplied session log records Iris 1.8.8, Photon 1.3b, Sodium, and the shader
   disable transition (lines 52–76 and 295–297). Searches found **NOT FOUND** for a Scavenger
   error/exception, a `PlayerMobRendererReadoutMixin` apply failure, and an objective-readout render
   exception. This rules out a logged startup/injection failure; the screenshot is the runtime
-  evidence for duplicate rasterization/projection symptoms. Exact final visual correctness remains
-  `UNVERIFIED` pending retest of the rebuilt artifact.
+  evidence for duplicate rasterization/projection symptoms. The user subsequently confirmed the
+  rebuilt 1.9.3 visual repair in game: label brightness, single-copy rendering, and attachment above
+  the PlayerMob are `RUNTIME_CONFIRMED`. Exact translucent/entity occlusion remains `UNVERIFIED`.
 - **Alternative — patch Photon:** rejected because it modifies a third-party shader pack and would
   not generalize to other packs. **Alternative — draw world text from a late render hook:** rejected
   for this repair because Fabric `LAST` runs before Iris's RETURN-time final composite, while a
@@ -99,8 +101,9 @@
   inspection confirms the Mixin, policy, config, and intermediary `Font.drawInBatch` target are
   packaged. The 1.9.3 clean build passes 605 tests with zero failures/errors/skips; final artifact
   `build/libs/spmscavenger-1.9.3.jar` has SHA-256
-  `B2F9C72AC8FF1843E4039E089845AF29D82F73792201C63711AD393A27CAAA75`. Minecraft visual behavior
-  remains `UNVERIFIED`.
+  `B2F9C72AC8FF1843E4039E089845AF29D82F73792201C63711AD393A27CAAA75`. The user confirmed the final
+  Photon visual repair in game; Codex did not launch Minecraft. Occlusion edge cases and render-cost
+  performance remain `UNVERIFIED`.
 
 ## 2026-08-08 — consumer-driven iron tools (TT-2b + FS-8) · 1.9.2+
 

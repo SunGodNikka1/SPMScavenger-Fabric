@@ -620,3 +620,81 @@ None. The high-level compatible/universal ladder already exists, while every new
 equipment and persistence lesson lacks the required runtime evidence for promotion. Project-specific
 evidence and risks were appended here and the current artifact chronology was clarified in
 `DECISIONS.md`. No gate was weakened, and no commit, push or Minecraft launch occurred.
+
+---
+
+## 2026-08-10 — Photon objective-readout brightness, duplication, and billboard attachment
+
+**Gate PREFL-1.** Incremental reflection only. This covers the SPM decision-label shader repair in
+Scavenger 1.9.3; it does not audit unrelated AI, progression, or parity work.
+
+### Scope and evidence
+
+| Field | Result |
+| --- | --- |
+| Reported defect | With Iris 1.8.8 + Photon 1.3b, SPM objective labels were directionally dark; intermediate overlays duplicated and then detached labels to the left |
+| Final implementation | Shader-only bounded HUD redraw using `projection × position/view × billboard`, empty-string host suppression, and explicit solid-terrain visibility adaptation |
+| Static evidence | `ShaderReadoutOverlay.java`, `SpmScavengerClient.java`, `PlayerMobRendererReadoutMixin.java`, focused tests, remapped-JAR inspection |
+| Build evidence | Prior `clean build`: 605 tests, zero failures/errors/skips; audited `spmscavenger-1.9.3.jar`, SHA-256 `B2F9C72AC8FF1843E4039E089845AF29D82F73792201C63711AD393A27CAAA75`. The artifact was no longer present in `build/libs` during reflection verification; rebuild to reproduce it |
+| Runtime evidence | User: “Fixed.” Final Photon brightness, single-copy presentation, and attachment are `RUNTIME_CONFIRMED`; Codex did not launch Minecraft |
+| Still unverified | Exact translucent/entity occlusion parity and frame-time/raycast cost |
+
+### Reconstruction and errors
+
+| Stage | Actual result | Evidence/confidence |
+| --- | --- | --- |
+| Packed-light repair | Full-bright alone did not escape Photon’s final composite; label remained view-dependent | User screenshot/session, `RUNTIME_CONFIRMED FAILURE` |
+| Forced background attempt | Made the presentation black and violated host/user backdrop ownership | User report, `RUNTIME_CONFIRMED FAILURE`; reverted |
+| First HUD replacement | Alpha-zero did not reliably suppress the shader pass, producing dark + bright duplicates | User screenshot, `RUNTIME_CONFIRMED FAILURE` |
+| First projection | Combined the font-local billboard matrix with projection but omitted Minecraft’s separately installed camera/view matrix; text projected far left | Target bytecode/source plus screenshot, `CONFIRMED` |
+| Final repair | Captured projection and position/view at world-render start, excluded Iris shadow pass, composed the complete chain, suppressed original text emission, and bounded per-frame state | Code/tests/JAR `CONFIRMED`; final visual `RUNTIME_CONFIRMED` |
+
+The self-inflicted errors were treating packed light as final shader brightness, changing backdrop
+semantics before proving the cause, assuming alpha zero meant no rasterization, and treating a
+legal font draw matrix as a complete MVP. The user’s screenshots falsified each weak assumption.
+
+### Proven patterns and limits
+
+1. **Complete transform ownership before world-to-HUD projection** — `RENDERING_PATTERN`, `PROVEN`.
+   Trace local/billboard, camera/view, and projection ownership in the exact target renderer. A
+   partial draw matrix can be valid for the host pipeline yet insufficient for independent screen
+   projection.
+2. **Suppress replaced geometry at emission** — `SHADER_PATTERN`, `PROVEN` for this text path.
+   Zero alpha is not a portable shader-pack suppression contract. Intercept narrowly and emit no
+   glyphs while preserving all unrelated host rendering.
+3. **HUD replacement requires an explicit depth contract** — `RENDERING_PATTERN`,
+   `STRONGLY_SUPPORTED`. The selected solid-block raycast is an adapted approximation, not proof of
+   GPU-depth parity. Bound/deduplicate it and measure before making performance claims.
+4. **Visual regression matrix must test attachment and duplication, not brightness alone** —
+   `VALIDATION_PATTERN`, `PROVEN`. Rotate/move the camera, vary distance and darkness, and assert one
+   entity-attached result with shader on/off.
+
+### Lesson-to-instruction mapping
+
+| Lesson | Existing instruction | Relationship | Promotion |
+| --- | --- | --- | --- |
+| Full world-to-HUD transform chain | Gate 5.2 already requires transform ownership | `STRENGTHENS_EXISTING` | Added a focused billboard/HUD subsection to `rendering-and-shaders.md` |
+| Geometry suppression, not alpha-zero | Gate 5.5 backend fallback validation | `NEW_CAPABILITY` | Added a narrow Gate 5.5 requirement; not generalized beyond replaced render output |
+| HUD loses depth ownership | Gate 5.5 compatibility/fallback matrix | `CLARIFIES_EXISTING` | Requires an explicit restored/adapted occlusion contract |
+| Exact raycast scheme and faint `0x20` alpha | No universal rule | `PROJECT_SPECIFIC` | Kept in project decisions/tests; runtime/performance scope remains limited |
+
+### Alternatives and rejected shortcuts
+
+| Alternative | Outcome |
+| --- | --- |
+| Pixel offsets or empirical scale multipliers | Rejected: camera/FOV/GUI-scale dependent and does not repair transform ownership |
+| Patch Photon | Rejected: third-party mutation and shader-pack-specific maintenance |
+| Always use the HUD path | Rejected: needlessly changes vanilla/Sodium behavior |
+| Claim exact occlusion parity from one successful visual retest | Rejected under AV-1: translucent surfaces, entities, and cost were not isolated |
+
+### Handoff
+
+- **Reproducible artifact record:** the prior audited output was
+  `build/libs/spmscavenger-1.9.3.jar`, hash above; it was absent from `build/libs` when this
+  reflection was finalized and must be rebuilt before installation/handoff.
+- **Runtime-confirmed:** Photon readability, no duplicate label, correct PlayerMob attachment.
+- **Unverified:** translucent/entity occlusion, absent-Iris bootstrap, shadow-pass edge cases, and
+  frame-time/heap behavior at many visible PlayerMobs.
+- **Shared guidance updated:** rendering/shader reference and Gate 5.5 only; no unrelated rules or
+  wrappers were rewritten.
+- **Constraints:** no Minecraft launch, commit, push, or PR was performed by Codex.
