@@ -6,7 +6,7 @@ Scavenger gives PlayerMobs purposeful work outside Dungeon Train: they gather re
 upgrade tools, use furnaces, place torches, seek shelter, explore, recover from environmental traps,
 and perform small player-like social behaviors.
 
-> Current mod version: **1.9.2**  
+> Current mod version: **1.9.3**
 > Minecraft: **1.21.1** · Fabric Loader: **0.16.14+** · Java: **21**
 
 ## Requirements
@@ -27,7 +27,7 @@ or redistribute Social Player Mobs.
 
 1. Install Minecraft 1.21.1, Fabric Loader, and Fabric API.
 2. Install Social Player Mobs.
-3. Copy `spmscavenger-1.9.2.jar` into the instance's `mods` directory.
+3. Copy `spmscavenger-1.9.3.jar` into the instance's `mods` directory.
 4. Optionally install Cloth Config and Mod Menu.
 5. Keep the vanilla `mobGriefing` rule enabled if mobs should gather or place blocks:
 
@@ -131,8 +131,10 @@ breaking and placement even when the corresponding addon setting is enabled.
 - One accessor mixin exposes vanilla `Mob.goalSelector`; SPM code is not copied or bundled.
 - One optional client compatibility mixin makes SPM 0.86.x's Creative decision glyphs full-bright
   while preserving SPM/Minecraft's user-controlled backdrop. With an active Iris shader pack, the
-  already-formatted lines are redrawn in a bounded post-shader HUD pass so packs such as Photon
-  cannot directionally darken them. Iris is detected reflectively and remains optional. The Mixin
+  already-formatted lines are redrawn in a bounded post-shader pass using Minecraft's complete
+  projection/view/billboard transform so packs such as Photon cannot directionally darken them.
+  Solid-terrain occlusion restores SPM's faint see-through presentation instead of leaving the HUD
+  copy fully bright through blocks. Iris is detected reflectively and remains optional. The Mixin
   is `@Pseudo`/non-required and becomes a no-op if SPM is absent or its renderer signature changes;
   Scavenger does not replace or redistribute the host renderer.
 - One optional common-side readout bridge replaces the fallback `Craft torches` label with the
@@ -160,7 +162,7 @@ On Linux or macOS:
 The installable artifact is written to:
 
 ```text
-build/libs/spmscavenger-1.9.2.jar
+build/libs/spmscavenger-1.9.3.jar
 ```
 
 The latest verified clean build completed with **597 tests, zero failures, zero errors, and zero
@@ -189,7 +191,7 @@ automatically mean the behavior has been observed in Minecraft.
 
 - **Build/unit/package:** confirmed for the current source tree.
 - **Selected earlier gameplay:** bed use and basic gathering were observed in prior sessions.
-- **Current combined 1.9.2 behavior:** runtime verification remains incomplete for the full
+- **Current combined 1.9.3 behavior:** runtime verification remains incomplete for the full
   gather → smelt → iron/diamond upgrade loop, long expeditions, companions, save/reload recovery,
   dedicated servers, and large-mob performance.
 - **Mining intelligence:** MI-1 gather intent and MI-3/MI-23 NEED allocation exist. Marginal wealth,

@@ -3,6 +3,9 @@ package com.noobk.spmscavenger.client;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -20,8 +23,13 @@ public final class ShaderReadoutOverlay {
 
     /** Hard cap for adversarial/full-stack readouts; production eviction occurs every frame. */
     static final int MAX_CAPTURED_LINES = 512;
+    static final int OCCLUDED_ALPHA = 0x20;
+    private static final double OCCLUSION_EPSILON_SQR = 0.01D;
     private static final List<CapturedLine> LINES = new ArrayList<>();
     private static Matrix4f frameProjection;
+    private static Matrix4f framePosition;
+    private static Vector3f lastOcclusionAnchor;
+    private static boolean lastOcclusionResult;
 
     private ShaderReadoutOverlay() {
     }
@@ -33,9 +41,11 @@ public final class ShaderReadoutOverlay {
      * {@code RenderSystem.getProjectionMatrix()} later from an entity callback is not equivalent:
      * Iris may temporarily expose a different pipeline matrix there.
      */
-    public static void beginFrame(Matrix4f projectionMatrix) {
+    public static void beginFrame(Matrix4f projectionMatrix, Matrix4f positionMatrix) {
         LINES.clear();
         frameProjection = projectionMatrix == null ? null : new Matrix4f(projectionMatrix);
+        framePosition = positionMatrix == null ? null : new Matrix4f(positionMatrix);
+        lastOcclusionAnchor = null;
     }
 
     public static IrisShaderState.Snapshot shaderState() {
@@ -43,15 +53,23 @@ public final class ShaderReadoutOverlay {
     }
 
     /** Capture only the solid pass; the see-through pass carries the same line and transform. */
-    public static void capture(String text, float x, float y, int color, Matrix4f modelMatrix) {
+    public static void capture(
+            String text,
+            float x,
+            float y,
+            int color,
+            int backgroundColor,
+            Matrix4f modelMatrix) {
         if (LINES.size() >= MAX_CAPTURED_LINES || text == null || text.isEmpty()) return;
 
         Minecraft minecraft = Minecraft.getInstance();
         Window window = minecraft.getWindow();
         Matrix4f projectionMatrix = frameProjection;
-        if (projectionMatrix == null) return;
+        Matrix4f positionMatrix = framePosition;
+        if (projectionMatrix == null || positionMatrix == null) return;
         Projection projection = project(
                 modelMatrix,
+                positionMatrix,
                 projectionMatrix,
                 window.getWidth(),
                 window.getHeight(),
@@ -59,7 +77,12 @@ public final class ShaderReadoutOverlay {
                 x,
                 y);
         if (projection != null) {
-            LINES.add(new CapturedLine(text, color, projection));
+            LINES.add(new CapturedLine(
+                    text,
+                    color,
+                    backgroundColor,
+                    projection,
+                    terrainOccludes(minecraft, modelMatrix)));
         }
     }
 
@@ -75,19 +98,36 @@ public final class ShaderReadoutOverlay {
                 graphics.pose().pushPose();
                 graphics.pose().translate(p.x(), p.y(), 0.0F);
                 graphics.pose().scale(p.scale(), p.scale(), 1.0F);
-                graphics.drawString(minecraft.font, line.text(), 0, 0, line.color(), true);
+                if (line.backgroundColor() != 0) {
+                    graphics.fill(
+                            -1,
+                            -1,
+                            minecraft.font.width(line.text()) + 1,
+                            minecraft.font.lineHeight,
+                            line.backgroundColor());
+                }
+                graphics.drawString(
+                        minecraft.font,
+                        line.text(),
+                        0,
+                        0,
+                        colorForOcclusion(line.color(), line.occluded()),
+                        false);
                 graphics.pose().popPose();
             }
         } finally {
             // Also evict after consumption so a frame with no subsequent world render cannot ghost.
             LINES.clear();
             frameProjection = null;
+            framePosition = null;
+            lastOcclusionAnchor = null;
         }
     }
 
     /** Pure projection seam used by regression tests. */
     static Projection project(
             Matrix4f modelMatrix,
+            Matrix4f positionMatrix,
             Matrix4f projectionMatrix,
             int framebufferWidth,
             int framebufferHeight,
@@ -96,7 +136,10 @@ public final class ShaderReadoutOverlay {
             float y) {
         if (framebufferWidth <= 0 || framebufferHeight <= 0 || guiScale <= 0.0) return null;
 
-        Matrix4f mvp = new Matrix4f(projectionMatrix).mul(modelMatrix);
+        // LevelRenderer applies positionMatrix to RenderSystem's model-view stack before it creates
+        // the identity PoseStack used by EntityRenderDispatcher. The Font matrix therefore contains
+        // only the camera-relative entity/billboard transform. Reproduce the complete vanilla chain.
+        Matrix4f mvp = new Matrix4f(projectionMatrix).mul(positionMatrix).mul(modelMatrix);
         int[] viewport = {0, 0, framebufferWidth, framebufferHeight};
         Vector3f origin = mvp.project(x, y, 0.0F, viewport, new Vector3f());
         Vector3f xUnit = mvp.project(x + 1.0F, y, 0.0F, viewport, new Vector3f());
@@ -105,16 +148,49 @@ public final class ShaderReadoutOverlay {
             return null;
         }
 
-        float scale = Math.abs(xUnit.x() - origin.x()) / (float) guiScale;
+        float scale = (float) Math.hypot(xUnit.x() - origin.x(), xUnit.y() - origin.y())
+                / (float) guiScale;
         return new Projection(
                 origin.x() / (float) guiScale,
                 (framebufferHeight - origin.y()) / (float) guiScale,
                 scale);
     }
 
+    static int colorForOcclusion(int color, boolean occluded) {
+        return occluded ? (color & 0x00FFFFFF) | (OCCLUDED_ALPHA << 24) : color;
+    }
+
+    private static boolean terrainOccludes(Minecraft minecraft, Matrix4f modelMatrix) {
+        if (minecraft.level == null || minecraft.getCameraEntity() == null) return false;
+
+        Vec3 camera = minecraft.gameRenderer.getMainCamera().getPosition();
+        Vector3f relativeAnchor = modelMatrix.getTranslation(new Vector3f());
+        if (lastOcclusionAnchor != null
+                && relativeAnchor.distanceSquared(lastOcclusionAnchor) < 1.0E-6F) {
+            return lastOcclusionResult;
+        }
+        Vec3 anchor = camera.add(relativeAnchor.x(), relativeAnchor.y(), relativeAnchor.z());
+        HitResult hit = minecraft.level.clip(new ClipContext(
+                camera,
+                anchor,
+                ClipContext.Block.VISUAL,
+                ClipContext.Fluid.NONE,
+                minecraft.getCameraEntity()));
+        lastOcclusionAnchor = new Vector3f(relativeAnchor);
+        lastOcclusionResult = hit.getType() != HitResult.Type.MISS
+                && hit.getLocation().distanceToSqr(camera) + OCCLUSION_EPSILON_SQR
+                < anchor.distanceToSqr(camera);
+        return lastOcclusionResult;
+    }
+
     record Projection(float x, float y, float scale) {
     }
 
-    private record CapturedLine(String text, int color, Projection projection) {
+    private record CapturedLine(
+            String text,
+            int color,
+            int backgroundColor,
+            Projection projection,
+            boolean occluded) {
     }
 }

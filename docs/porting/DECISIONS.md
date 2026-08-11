@@ -49,15 +49,26 @@
   While Iris reports an active pack, Scavenger captures only SPM's already-formatted solid lines,
   suppresses their two shader-affected world passes, and redraws them through Fabric's post-world
   HUD callback. The shader-off path remains the original host renderer plus the narrow light fix.
-- **Duplicate-label repair after runtime falsification:** the first overlay build set the two host
-  glyph colours to alpha zero and sampled `RenderSystem.getProjectionMatrix()` from inside the
-  entity draw. The user's 2026-08-10 screenshot showed both failure modes at once: Photon's world
-  pipeline still rasterized a dark `Idle` over the mob, and the bright HUD copy appeared enlarged
-  at the left edge. The selected repair sends an empty string to both shader-affected host calls
-  after capturing the normal pass, and snapshots Fabric `WorldRenderContext.projectionMatrix()` at
-  world-render start. The latter is copied and combined with SPM's entity billboard matrix, so an
-  Iris-temporary projection cannot displace the post-HUD copy. Nested Iris shadow renders are
-  explicitly excluded from replacing that main-camera snapshot.
+- **First overlay failure:** the initial build set the two host glyph colours to alpha zero and
+  sampled `RenderSystem.getProjectionMatrix()` from inside the entity draw. The first 2026-08-10
+  screenshot showed both a dark world `Idle` and an enlarged bright copy at the left edge. Replacing
+  the host text with an empty string removed the dark duplicate, but the next runtime screenshot
+  falsified the projection repair: bright readouts still appeared far left of their PlayerMobs.
+- **Confirmed transform defect and selected repair:** target 1.21.1 `LevelRenderer.renderLevel`
+  multiplies its camera/view `positionMatrix` into RenderSystem before creating the identity entity
+  `PoseStack`; SPM's `Font.drawInBatch` matrix therefore starts at the camera-relative entity
+  billboard and does not contain that view transform. Fabric's `WorldRenderContextImpl` exposes the
+  two matrices separately. The exact projection chain is now
+  `projectionMatrix × positionMatrix × SPM billboard matrix`; both frame matrices are copied from
+  `WorldRenderEvents.START`, and nested Iris shadow renders cannot replace the main-camera snapshot.
+  This is a target-bytecode-derived transform, not a pixel offset or empirical scale multiplier.
+- **Explicit terrain occlusion:** a HUD pass has no world depth ownership. The replacement therefore
+  reconstructs the billboard's world anchor from its camera-relative matrix, raycasts with
+  `ClipContext.Block.VISUAL`, and changes an occluded line to SPM's original `0x20` see-through alpha
+  instead of leaving it fully bright through solid terrain. Adjacent focused lines at one anchor
+  reuse one raycast. This is `ADAPTED` terrain parity: it does not claim exact GPU depth parity for
+  translucent surfaces or entity-on-entity occlusion, and its final visual/performance result is
+  `UNVERIFIED` until the rebuilt artifact is tested and measured.
 - **Log evidence:** the supplied session log records Iris 1.8.8, Photon 1.3b, Sodium, and the shader
   disable transition (lines 52–76 and 295–297). Searches found **NOT FOUND** for a Scavenger
   error/exception, a `PlayerMobRendererReadoutMixin` apply failure, and an objective-readout render
@@ -65,10 +76,14 @@
   evidence for duplicate rasterization/projection symptoms. Exact final visual correctness remains
   `UNVERIFIED` pending retest of the rebuilt artifact.
 - **Alternative — patch Photon:** rejected because it modifies a third-party shader pack and would
-  not generalize to other packs. **Alternative — always use the HUD overlay:** rejected because it
-  needlessly changes vanilla/Sodium rendering and makes an optional compatibility path authoritative.
+  not generalize to other packs. **Alternative — draw world text from a late render hook:** rejected
+  for this repair because Fabric `LAST` runs before Iris's RETURN-time final composite, while a
+  post-Iris RETURN injection would depend on optional-Mixin ordering and unproven final-depth-target
+  ownership. **Alternative — always use the HUD overlay:** rejected because it needlessly changes
+  vanilla/Sodium rendering and makes an optional compatibility path authoritative.
 - **Lifetime:** the per-frame capture list has a 512-line hard cap and production eviction at both
-  world-render start and HUD-pass completion. No entity, UUID, or cross-frame objective state is
+  world-render start and HUD-pass completion. The projection/view matrices and one-anchor occlusion
+  reuse entry are also cleared at those sites. No entity, UUID, or cross-frame objective state is
   retained.
 - **Compatibility trade-off:** `require=0` prevents a future SPM renderer change from crashing the
   client, but can turn the repair into a silent no-op. The exact supported host is SPM 0.86.x; a
@@ -77,11 +92,15 @@
   an unlit cave after installing the rebuilt JAR with Photon enabled.
 - **Must not happen:** the host JAR/source, objective contents, Creative/range/focus gates, AI,
   navigation, dedicated-server classloading, or user-controlled background alpha changes; no dark
-  world-pass duplicate or detached left-edge HUD copy may remain.
+  world-pass duplicate, detached left-edge HUD copy, or fully bright label through solid terrain may
+  remain.
 - **Evidence:** focused contrast tests cover full-bright glyphs, lighter solid secondary text, and
   exact host background/translucent-pass preservation; remapped JAR
   inspection confirms the Mixin, policy, config, and intermediary `Font.drawInBatch` target are
-  packaged. The full 603-test clean build passes. Minecraft visual behavior remains `UNVERIFIED`.
+  packaged. The 1.9.3 clean build passes 605 tests with zero failures/errors/skips; final artifact
+  `build/libs/spmscavenger-1.9.3.jar` has SHA-256
+  `B2F9C72AC8FF1843E4039E089845AF29D82F73792201C63711AD393A27CAAA75`. Minecraft visual behavior
+  remains `UNVERIFIED`.
 
 ## 2026-08-08 — consumer-driven iron tools (TT-2b + FS-8) · 1.9.2+
 

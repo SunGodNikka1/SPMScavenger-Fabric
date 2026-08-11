@@ -7,6 +7,7 @@ import net.minecraft.client.gui.Font;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArgs;
 import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
@@ -22,6 +23,9 @@ import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 @Mixin(targets = "games.brennan.playermob.client.PlayerMobRenderer")
 public abstract class PlayerMobRendererReadoutMixin {
 
+    @Unique
+    private int spmscavenger$readoutBackground;
+
     @ModifyArgs(
             method = "renderObjectiveReadout",
             at = @At(
@@ -35,9 +39,16 @@ public abstract class PlayerMobRendererReadoutMixin {
         boolean seeThrough = mode == Font.DisplayMode.SEE_THROUGH;
         IrisShaderState.Snapshot shader = ShaderReadoutOverlay.shaderState();
         if (shader.shaderPackInUse()) {
-            if (!seeThrough && !shader.shadowPass()) {
+            if (seeThrough) {
+                spmscavenger$readoutBackground = args.get(8);
+            } else if (!shader.shadowPass()) {
                 ShaderReadoutOverlay.capture(
-                        args.get(0), args.get(1), args.get(2), args.get(3), (Matrix4f) args.get(5));
+                        args.get(0),
+                        args.get(1),
+                        args.get(2),
+                        args.get(3),
+                        spmscavenger$readoutBackground,
+                        (Matrix4f) args.get(5));
             }
             // Photon directionally lights world text. Suppress both host passes only while its
             // pipeline is active; alpha-zero glyphs can still be rasterized by shader packs, so
