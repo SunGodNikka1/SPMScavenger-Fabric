@@ -129,6 +129,9 @@ breaking and placement even when the corresponding addon setting is enabled.
 
 - Goals are attached only to confirmed Social Player Mobs on Fabric's server entity-load event.
 - One accessor mixin exposes vanilla `Mob.goalSelector`; SPM code is not copied or bundled.
+- One optional client compatibility mixin makes SPM 0.86.x's Creative decision readout full-bright
+  with a stronger backdrop. It is `@Pseudo`/non-required and becomes a no-op if SPM is absent or
+  the renderer signature changes; Scavenger does not replace or redistribute the host renderer.
 - Existing SPM combat, fleeing, food, looting, social, order, and fire-escape goals retain higher
   priority.
 - The addon reuses the PlayerMob backpack through vanilla inventory interfaces.
@@ -154,11 +157,11 @@ The installable artifact is written to:
 build/libs/spmscavenger-1.9.2.jar
 ```
 
-The latest verified clean build completed with **181 tests, zero failures, zero errors, and zero
+The latest verified clean build completed with **597 tests, zero failures, zero errors, and zero
 skips**. Its SHA-256 was:
 
 ```text
-7B4CB209035CF11959F3C5E115D11F9A6A434D8061906F91358A35B2D8330F32
+20F02F925BD7042FC2656146CFD85732BAD46B5EBB65880BFC43702DEB8D4F06
 ```
 
 That hash changes whenever source or packaged resources change.

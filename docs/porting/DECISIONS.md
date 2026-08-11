@@ -1,5 +1,26 @@
 # SPM Scavenger decisions
 
+## 2026-08-10 — optional decision-readout contrast compatibility · 1.9.2+
+
+- **Problem:** SPM's renderer passes the PlayerMob's world light into otherwise-white objective
+  glyphs. In caves the Creative decision label therefore appears dark and fails as an AI diagnostic.
+- **Selected:** a Scavenger-owned, client-only `@Pseudo` Mixin adjusts only SPM 0.86.x's two
+  `Font.drawInBatch` calls: full-bright glyph lighting, `#E6E6E6` secondary text, and a minimum 50%
+  see-through plate. It preserves stronger background alpha.
+- **Alternative:** modify/fork SPM's renderer directly. Rejected because Scavenger can repair this
+  narrow presentation seam without redistributing or maintaining host source.
+- **Alternative:** draw a second Scavenger label. Rejected because duplicate billboards can disagree
+  with SPM's authoritative objective text and overlap nameplates.
+- **Compatibility trade-off:** `require=0` prevents a future SPM renderer change from crashing the
+  client, but can turn the repair into a silent no-op. The exact supported host is SPM 0.86.x; a
+  runtime screenshot remains the verification probe after upgrades.
+- **Must happen:** decision text remains readable in an unlit cave after installing the rebuilt JAR.
+- **Must not happen:** the host JAR/source, objective contents, Creative/range/focus gates, AI,
+  navigation, or dedicated-server classloading change.
+- **Evidence:** four focused contrast tests and the full 597-test clean build pass; remapped JAR
+  inspection confirms the Mixin, policy, config, and intermediary `Font.drawInBatch` target are
+  packaged. Minecraft visual behavior remains `UNVERIFIED`.
+
 ## 2026-08-08 — consumer-driven iron tools (TT-2b + FS-8) · 1.9.2+
 
 Canonical RFCs: `plans/RFC-TOOL-TIER-UPGRADES.md` and `plans/RFC-FURNACE-SMELTING.md`.

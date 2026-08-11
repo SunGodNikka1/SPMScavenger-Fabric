@@ -6,7 +6,9 @@
   "mixins": [
     "MobGoalSelectorAccessor"
   ],
-  "client": [],
+  "client": [
+    "PlayerMobRendererReadoutMixin"
+  ],
   "server": [],
   "injectors": {
     "defaultRequire": 1

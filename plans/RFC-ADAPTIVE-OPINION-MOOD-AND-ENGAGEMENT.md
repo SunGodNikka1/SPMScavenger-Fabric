@@ -8,14 +8,14 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
-| **Mode** | `VALIDATION` — GAO-8A implemented; final clean-build/static evidence recorded |
-| **Status** | GAO-0 through GAO-8A (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1** (593 tests); runtime visual cadence remains unverified |
+| **Mode** | `PLANNING` — GAO-9 environment-affinity frontier is decision-ready |
+| **Status** | GAO-0 through GAO-8A (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1** (593 tests); GAO-9 is proposed, not implemented |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-10 (Task 40: GAO-8A passive physical expression static accept) |
+| **Last update** | 2026-08-10 (GAO-9 environment/project taxonomy closure review) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,9 +39,12 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** GAO-8A is **CLOSED / STATIC ACCEPT** after Task 40. A later GAO-8B may add
-read-only debug/UI expression, or a narrow runtime question may tune visual cadence, but neither is
-implicitly authorized. Runtime is not the default gate under PD-GAO-12.
+**Nearest frontier:** decide and, if authorized, implement **Task 41 / GAO-9 — Overland
+Environment Affinity**. The closure audit found that the original typed taxonomy still named
+ENVIRONMENT and PROJECT even though only ACTIVITY, PLACE, and ENTITY have implementations. The
+recommended closure is an end-to-end, scan-free ENVIRONMENT slice and explicit rejection of
+per-instance PROJECT memory. A later GAO-8B may add read-only debug/UI expression; runtime remains
+non-default under PD-GAO-12.
 
 ---
 
@@ -152,6 +155,169 @@ Experiences apply deltas (example — mining):
 - Returns with loot → +accomplishment
 
 Two mobs with same starting personality can diverge through history.
+
+### Opinion target closure: Environment and project — GAO-9
+
+**Status:** `PROPOSED / DECISION-READY` — Task 41 is not authorized
+
+### Gap and evidence
+
+The original D-GAO-010 taxonomy named five target families. The implemented system currently has
+ACTIVITY, PLACE, and ENTITY memory, but no ENVIRONMENT or PROJECT target.
+
+`CODE_CONFIRMED` evidence:
+
+- `ExperienceEvent` carries activity, place, and entity context; `EpisodeLearningEvidence` carries
+  activity only.
+- `ExploringGoal.createExpedition` already constructs at most eight routes inside its entity-ticking
+  chunk guard and applies `PlaceOpinionRouteRanker` to each final waypoint.
+- `BiomeTags` in the pinned 1.21.1 mapped source exposes `IS_FOREST`, `IS_OCEAN`, `IS_NETHER`, and
+  `IS_END`; `Biome.coldEnoughToSnow(BlockPos)` is the target-native positional snow predicate.
+- `ExpeditionEndAttribution` distinguishes complete, simulation frontier, path failure, authority
+  interruption, and stale abandonment. Existing policy learns positively from completion and
+  refuses preference learning from frontier/authority/path failures or an unspecified stale close.
+
+Required negative probes:
+
+1. `EnvironmentOpinionMemory` / `ProjectOpinionMemory` — **NOT FOUND**.
+2. `EnvironmentKind` / `EnvironmentProfile` in raw or normalized evidence — **NOT FOUND**.
+3. Biome/environment classification or environment bias in expedition scoring — **NOT FOUND**;
+   only PLACE destination bias exists.
+
+### PROJECT target decision
+
+Individual `MiningProject` and expedition identities are finite causal instances, not durable
+preference subjects. Their stable semantic types are already represented by `ActivityKind`
+(`CONTROLLED_DESCENT`, `TUNNEL_SEARCH`, `CAVE_EXPLORATION`, `OVERLAND_EXPLORATION`), while
+`ActivityEpisode` and the decision trace own per-instance history.
+
+| Option | Benefit | Strongest objection / failure mode | Verdict |
+| --- | --- | --- | --- |
+| Per-project UUID opinion map | Can remember one named attempt | Freshly minted IDs create low-reuse entries, duplicate episode state, and risk Gate RET-1 growth | **REJECT** |
+| Stable project-type opinion via `ActivityKind` | Already bounded, learned, persisted, and consumed | Cannot say “project instance 12 was bad” long-term; that belongs in episode/trace evidence | **RECOMMEND** |
+| Bounded project-location memory | Can distinguish a troublesome site | This is already PLACE memory keyed by chunk | **REUSE EXISTING** |
+
+**D-GAO-035 (proposed):** remove PROJECT as an independent `OpinionMemory` family. Stable project
+preference is ACTIVITY; spatial project evaluation is PLACE; per-instance causality is EPISODE /
+TRACE. Reopen only if a persistent named project gains a stable identity and a real consumer that
+cannot be represented by those three owners.
+
+### ENVIRONMENT candidate designs
+
+| Option | Design | Benefit | Strongest objection / failure mode | Gate |
+| --- | --- | --- | --- | --- |
+| **A — recommended** | Small project-owned multi-label `EnvironmentProfile`; classify only existing event positions and already-valid route destinations | General preference, bounded enum storage, modded-biome tag compatibility, no second scan | Untagged modded biomes remain neutral; correlated labels can over-credit one success | Decision-ready |
+| B | Memory keyed by exact biome registry key | Naturally data-driven and distinguishes every modded biome | High-cardinality, over-specific learning; upgrades/renames fragment memory; weak generalization | Reject for gen-1 |
+| C | Reuse PLACE only | No schema or route-classification work | A forest preference cannot transfer to another forest; leaves original ENVIRONMENT capability absent | Keep as fallback if environment learning proves noisy |
+
+Option A gen-1 labels are deliberately limited to contexts with target-native evidence and an
+immediate consumer: `FOREST`, `OCEAN`, `SNOWY`, `NETHER`, and `END`. A profile may hold multiple
+labels. `DEEP_UNDERGROUND`, `CAVE`, and `NIGHT` remain deferred:
+
+- `DEEP_UNDERGROUND` needs a target-derived depth contract, not a copied numeric Y threshold.
+- `CAVE` needs topology/exposure evidence and a corresponding cave/tunnel choice consumer; a roof
+  or indoor room must not become a cave merely because sky is hidden.
+- `NIGHT` is transient and identical for all simultaneous route candidates, so it cannot influence
+  destination choice without a separate time/activity consumer.
+
+**D-GAO-036 (proposed):** environment context is an immutable multi-label value captured at the
+existing experience/route seams. It is never a world reference, scanner, Goal, objective, or
+capability gate. Classification uses biome tags and the actual surface position for the final
+waypoint; unknown/untagged contexts are neutral.
+
+### Learning and consumption contract
+
+```text
+existing expedition terminal
+        ↓
+EnvironmentProfile at actual terminal position
+        ↓
+ExperienceEvent → ActivityEpisode → EpisodeLearningEvidence
+        ↓
+EnvironmentOpinionMemory (enum-bounded)
+        ↓
+future expedition construction
+        ↓
+classify each already-valid final waypoint once
+        ↓
+soft route tie-breaker only
+```
+
+This extends D-GAO-012's single evidence pipeline. Task 41 must not add another direct memory write
+like the older PLACE/ENTITY emitter bridges, and it must not add a terrain scan. A per-planning-call
+cache may deduplicate destination classification just as `ChunkInterest` deduplicates chunk work.
+
+**D-GAO-037 (proposed):** environment learning uses the existing normalized episode weight and
+eligibility, but only when the terminal cause is environment-relevant. Gen-1 allows
+`EXPEDITION_COMPLETE` positive learning. `SIMULATION_FRONTIER`, `AUTHORITY_CANCEL`, path/no-progress,
+tool failure, combat/protected interruption, and stale/unspecified closure produce **zero**
+environment learning. One personality-scaled evidence delta is divided across the profile's labels,
+so adding a correlated label does not manufacture more total learning. Negative affinity waits for
+an explicit, attributable environment terminal; it must not be inferred from generic execution
+failure.
+
+**D-GAO-038 (proposed):** environment opinion ranks among routes that already passed simulation,
+history, and construction gates. It never makes an unticking, unsafe, or unreachable route valid,
+cannot by itself erase a recent-destination penalty, and never affects mandatory descent/cave
+handoff. Combine multiple
+labels by their mean rather than their sum. Initial route bias is capped at **±10**: lower than the
+existing PLACE ±15 because ENVIRONMENT is broader and less specific, below the `-20` visited-region
+penalty by itself, and far below the `-100` recent-destination anti-fixation term. This is a
+target-specific starting budget, not a universal balance value; switch only if deterministic route
+distribution evidence shows it is inert or dominates novelty/history.
+
+### Performance, compatibility, and retention
+
+- Classification is O(1) at an emitted terminal and O(route candidates) during cooldown-gated
+  expedition creation (currently at most eight), never per tick.
+- Candidate biome/height lookup occurs only after `chunkGuardTicking`; it must not load, generate,
+  or force-tick chunks.
+- Memory is bounded by the finite enum, belongs to the existing `MobExperienceContext`, and uses the
+  existing freeze/death/snapshot lifecycle. No new UUID registry is permitted.
+- Modded biomes participate through vanilla biome tags. Missing tags mean neutral, not disliked.
+- No client-only types, packets, Goal flags, navigation calls, block scans, or scheduler scans are
+  introduced.
+
+### Behavioral Prediction (MAIBS-1)
+
+| Layer | Result |
+| --- | --- |
+| Intended behavior | A mob gradually favors familiar environment families when several valid expedition destinations compete |
+| Implemented mechanism target | Completed expeditions update bounded environment memory; future already-valid candidates receive a soft destination score |
+| Predicted behavior | First expedition is unchanged; after success in a forest, later comparable forest routes win slightly more often, while novelty/history still prevent immediate repetition |
+| Failure/weirdness | Tagged borders can flip labels; modded untagged biomes stay neutral; correlated FOREST+SNOWY evidence can overfit; all candidates may share one label and therefore remain unchanged |
+| Confidence | Route/event seams and mapped APIs `CODE_CONFIRMED`; resulting long-duration route distribution `GAME_MECHANICS_INFERRED`; runtime `UNVERIFIED` |
+
+Several-minute loop: ordinary readiness unlocks EXPLORE → existing route generation validates
+ticking candidates → environment is only a tie-breaker → vanilla navigation executes → combat/work
+may interrupt and resume unchanged → only successful terminal evidence updates affinity → a later
+expedition may rank differently. No new activity is created.
+
+Adversarial scenarios required:
+
+| Scenario | Must happen | Must not happen |
+| --- | --- | --- |
+| Forest success, later mixed candidates | Comparable tagged forest destination receives a bounded positive bias | Environment bias alone cancels the recent-destination penalty or bypasses the ticking guard |
+| Simulation frontier / command / path failure | Environment memory remains byte-for-byte unchanged | The unseen biome is learned as disliked |
+| Forest + snowy profile | One event is normalized once; label aggregation is averaged/clamped | Two labels double the episode's learning magnitude or route dominance |
+| Modded biome without vanilla tags | Candidate remains neutral and usable | Unknown biome is rejected or classified by name guessing |
+| Opinion disabled | Route score and snapshots retain pre-GAO-9 parity | Biome lookup changes selection or creates memory |
+| Multiple mobs | Each uses its bounded context independently | Shared mutable affinity or route reservation appears |
+
+### Task 41 — GAO-9 Overland Environment Affinity (`READY / NOT AUTHORIZED`)
+
+| Field | Contract |
+| --- | --- |
+| Objective | Close the usable ENVIRONMENT taxonomy gap end-to-end without adding world scans or scheduler authority |
+| Scope | `EnvironmentKind/Profile/Classifier`, event/evidence schema, enum-bounded memory and snapshot lifecycle, conservative learning policy, expedition destination ranker, tests, RFC evidence |
+| Must happen | A completed forest expedition changes future comparable forest destination ranking through the single normalized pipeline |
+| Must not happen | Generic failure teaches dislike; environment selects an invalid route; Opinion-off behavior changes; per-project/per-biome unbounded maps appear |
+| Required tests | schema preservation; tag/profile classification; multi-label normalization; cause eligibility; neutral/disabled parity; snapshot/death/unload; route ordering below anti-fixation; no-load/ticking order; PROJECT negative architecture scan |
+| Static gates | D-GAO-012, GAO-COMPETENCE, GAO-HIERARCHY, GAO-ATTRIBUTION, GAO-PARITY, RET-1, AV-1, MAIBS-1 |
+| Runtime | Not a default gate under PD-GAO-12; long-duration distribution remains `UNVERIFIED` unless a later `RUNTIME_QUESTION` is filed |
+
+**Decision needed:** accept/amend D-GAO-035…038 and authorize Task 41. Implementation is not
+authorized by `Continue the RFC` alone.
 
 ### AffectiveState (short-term)
 
@@ -1315,7 +1481,7 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 through GAO-8A + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; later GAO-8B UI/runtime tuning unplanned
+**Status:** GAO-0 through GAO-8A + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-9 decision-ready; later GAO-8B UI/runtime tuning unplanned
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
@@ -1334,6 +1500,7 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-6** | ENTITY bridge | **CLOSED:** `SpmEntityOpinionBridge`, `EntityOpinionMemory`, GAO-6R `SocialExperienceEpisodes` | GAO-4, RET-GAO-1 |
 | **GAO-7** | PersonalityModel | **CLOSED / STATIC ACCEPT:** immutable six-trait model; SPM-host anchors + deterministic UUID latent traits; bounded subjective learning at the single normalized seam; snapshot lifecycle; 581-test clean build | GAO-2, GAO-6 |
 | **GAO-8A** | Passive physical expression | **CLOSED / STATIC ACCEPT:** bounded scheduler-owned LOOK expression; Task 40; 593 tests | GAO-0, GAO-1, GAO-6, GAO-7 |
+| **GAO-9** | Overland environment affinity | **READY / NOT AUTHORIZED:** enum-bounded, pipeline-owned learning and soft destination ranking; PROJECT memory explicitly superseded | GAO-0c, GAO-2, GAO-5B, RET-GAO-1 |
 
 ### GAO-0b implementation task (`IMPLEMENTED / STATIC VERIFIED`)
 
@@ -1721,7 +1888,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 | D-GAO-007 | SPM owns social relationships | `PROPOSED` | `DispositionResolver` |
 | D-GAO-008 | Opinion disabled ⇒ SPM parity | `PROPOSED` | Debug + ship gate |
 | D-GAO-009 | Three-layer model (Personality/Opinion/Mood) | `PROPOSED` | Agent_ChatGPT |
-| D-GAO-010 | Typed OpinionMemory taxonomy | `PROPOSED` | ACTIVITY/PLACE/ENTITY/ENV/PROJECT |
+| D-GAO-010 | Typed OpinionMemory taxonomy | `CONTESTED` | ACTIVITY/PLACE/ENTITY implemented; D-GAO-035…038 propose explicit PROJECT supersession and bounded ENVIRONMENT closure |
 | D-GAO-011 | Reuse `MoveHolderClassifier` for GAO-0 observation | `IMPLEMENTED` | One classifier owns addon types and SPM suffix taxonomy; clean build 2026-08-09 |
 | D-GAO-012 | Existing terminals emit raw events into one pipeline; no parallel scanners/direct memory writes | `LOCKED` | Amended with D-GAO-022 separation; user peer review 2026-08-09 |
 | D-GAO-013 | Mood modulates readiness thresholds; never owns `descentPressure` | `PROPOSED` | MI-5 lesson |
@@ -1746,6 +1913,10 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 | D-GAO-032 | Expression eligibility is idle/rest/explore only; meaningful work suppresses injection and ENGAGED means preserving the executor's gaze | `IMPLEMENTED` | `PassiveExpressionPolicy`; engaged-expedition abstention regression test |
 | D-GAO-033 | GAO-8A curiosity is bounded non-semantic gaze variation; terrain/activity salience remains deferred until a real provider exists | `IMPLEMENTED` | Bounded angular envelope; static negative resource/terrain probes |
 | D-GAO-034 | GAO-8A does not mood-wire bunny hopping; flagless Antics gaze cannot bypass scheduled LOOK when Opinion is enabled, while Opinion-off retains legacy parity | `IMPLEMENTED` | `AnticsGoal.mayWriteMimicLook`; parity test |
+| D-GAO-035 | PROJECT is not an independent memory family: project type = ACTIVITY, site = PLACE, instance = EPISODE/TRACE | `PROPOSED / DECISION-READY` | Avoids duplicate ownership and minted-ID RET-1 risk |
+| D-GAO-036 | ENVIRONMENT is an immutable multi-label context captured only at existing event/valid-route seams | `PROPOSED / DECISION-READY` | Gen-1: FOREST, OCEAN, SNOWY, NETHER, END; no scanner |
+| D-GAO-037 | Environment learning requires an attributable environment terminal; gen-1 learns from expedition completion, not generic failure/frontier/authority/stale closure | `PROPOSED / DECISION-READY` | One delta divided across labels prevents false dislikes and multi-label amplification |
+| D-GAO-038 | Environment affinity is a ±10 soft tie-breaker among already-valid routes; mean multi-label score; never mandatory descent/handoff authority | `PROPOSED / DECISION-READY` | Below PLACE ±15, visited -20, and anti-fixation -100 |
 
 ---
 
@@ -1753,6 +1924,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-10 | Agent_Codex | **GAO-9 decision-ready closure review.** Found original ENVIRONMENT/PROJECT taxonomy gap; rejected per-project memory as ACTIVITY/PLACE/EPISODE duplication and RET-1 risk; verified target biome tags, snow predicate, expedition attribution, and the existing ticking-guarded route seam; compared three environment models; proposed D-GAO-035…038 and Task 41 with conservative success-only gen-1 learning, no second scan, bounded route bias, parity/performance/MAIBS gates. No Java edits, build, runtime launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **Task 40 GAO-8A implementation.** Added pure expression policy/profile/tone, ephemeral bounded-context publication, priority-8 LOOK-only passive goal, strict self-liked social gaze, Opinion-on Antics gaze guard, and 12 focused tests. Post-GREEN MAIBS found/repaired lost-social-target world-origin gaze, master-disable stale eligibility, and missing ENGAGED abstention. Focused tests, full suite, and clean build pass: 593 tests. Runtime visual cadence remains UNVERIFIED; no launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **GAO-8A RFC/MAIBS design.** Converted the user passive-expression boundary into Task 40; inspected SPM/addon LOOK flags and ObjectiveReadout; found the existing flagless Antics direct-gaze hazard; compared scheduler-owned LOOK vs direct observer writes vs host-goal replacement; proposed D-GAO-031…034 for user acceptance; added GAO-M14…M17 and three NOT FOUND probes. No Java edits, tests, build, runtime, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **Task 39 GAO-7 implementation.** Added immutable `PersonalityModel`, deterministic host-anchored factory, positive bounded `PersonalityLearningResponse`, read-only SPM disposition access, one learning-seam integration, bounded snapshot lifecycle, and invariants for neutral parity/no-create/no-invert/no-eligibility/objective-fact preservation. Focused tests, full suite, and clean build pass: 581 tests, zero failures/errors/skips. Static MAIBS PASS; runtime visual differentiation remains UNVERIFIED and non-blocking under PD-GAO-12. No Minecraft launch, commit, push, or PR |
@@ -3082,3 +3254,36 @@ remains `UNVERIFIED` and is not a default gate under PD-GAO-12.
 
 **Frontier after:** GAO-8 observable expression is the next optional product/design phase. No
 implementation authorization for GAO-8 is implied.
+
+---
+
+## Contribution — Agent_Codex (GAO-9 taxonomy closure)
+
+**Agent:** Agent_Codex
+
+**Date/Session:** 2026-08-10
+
+**Contribution type:** `RESEARCH / REVIEW / DESIGN / MAIBS_STATIC`
+
+**Frontier before:** GAO-8A was closed, but D-GAO-010 still claimed ENVIRONMENT and PROJECT target
+families that had no implementation or explicit disposition.
+
+**Evidence and challenge:** The raw/normalized event schema, memory owners, route generator,
+mapped 1.21.1 biome API, and expedition terminal attribution were inspected. Three negative probes
+confirmed there is no environment/project memory, evidence context, classifier, or route consumer.
+Per-project memory was challenged as an attractive but structurally wrong interpretation: stable
+type, place, and causal instance already have separate owners, while minted project IDs would add a
+low-reuse retention surface.
+
+**Recommendation:** Supersede independent PROJECT memory. Implement only an end-to-end overland
+ENVIRONMENT slice: finite multi-label profile, existing episode pipeline, conservative attributable
+learning, existing snapshot lifetime, and soft ranking of already-valid expedition destinations.
+Defer CAVE/DEEP_UNDERGROUND/NIGHT until each has a defensible classifier and consumer.
+
+**MAIBS result:** `BEHAVIORALLY_PLAUSIBLE / DESIGN ONLY`. The proposed slice changes no Goal,
+navigation, readiness, interruption, or mandatory-work authority. The main predicted failure is
+false environmental attribution; D-GAO-037 prevents it by refusing generic failures. Long-duration
+route distribution remains `UNVERIFIED`.
+
+**Frontier after:** accept/amend D-GAO-035…038 and authorize Task 41. No implementation, test,
+build, runtime launch, commit, push, or PR occurred.
