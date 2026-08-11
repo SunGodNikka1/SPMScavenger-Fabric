@@ -7,13 +7,13 @@
 | **Project root** | `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric` |
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Target progression** | **Vanilla Minecraft 1.21.1** survival (not a third-party tech mod) |
-| **Scope** | Design-only autonomous progression architecture — recursive prerequisite planning, capability gaps, integration methods, phased plan, validation matrix |
-| **Mode** | `PLANNING` |
-| **Status** | `RESEARCHING` — no implementation authorized by this RFC |
-| **User constraint** | **Do not implement a mod in this mission** — deliver design + tests specification only |
+| **Scope** | Autonomous progression architecture plus narrowly authorized repairs to existing survival executors |
+| **Mode** | `WORKING_FROM_PLAN` — Shelter Commitment Resume Repair (`SCR-1`) authorized |
+| **Status** | `RESEARCHING`; `SCR-1 IMPLEMENTED / STATIC VERIFIED / RUNTIME PENDING` as a prerequisite before Opinion Task 42B |
+| **User constraint** | The RFC was originally design-only; on 2026-08-11 the user explicitly authorized only `SCR-1`, its focused build/tests, and the occupied-bed/closed-door runtime test |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `progression/TaskLifecycle.java` |
 | **Owners** | User (product); architecture TBD |
-| **Last update** | 2026-08-08 |
+| **Last update** | 2026-08-11 |
 | **Gate** | MRFC-1 |
 
 ### Naming note
@@ -380,6 +380,107 @@ STICKS
 
 ---
 
+## Topic: Shelter commitment lifecycle — SCR-1
+
+**Status:** `IMPLEMENTED / STATIC VERIFIED / RUNTIME PENDING`
+
+### Defect and behavioral prediction
+
+`RUNTIME_CONFIRMED` symptom: at night a PlayerMob repeatedly opened and closed the same house door
+while trying to shelter. `CODE_CONFIRMED` cause: SPM's priority-1 `DoorOperationGoal` owns
+`MOVE + LOOK` and preempts Scavenger's priority-2 `SeekShelterGoal` (`MOVE`); the old
+`SeekShelterGoal.stop()` released its bed claim, erased `standPos`/`bedPos`, reset its 400-tick
+budget, and stopped navigation. A tidy PlayerMob then reached SPM's 20-tick fallback close without
+crossing, after which shelter selected the same interior again. Minecraft 1.21.1's compiled
+`GoalSelector` confirms that the higher-priority replacement calls the old holder's `stop()` before
+starting.
+
+| Layer | Result |
+| --- | --- |
+| Intended behavior | Door use temporarily suspends travel; the same valid shelter remains the objective |
+| Implemented mechanism before SCR-1 | Goal execution, navigation path, shelter destination, claim, and attempt budget all shared one disposable lifecycle |
+| Predicted repair behavior | Door operation kills only the old `Path`; commitment and bounded claim survive; after the door releases `MOVE`, a fresh path resumes toward the same destination |
+| Failure/weirdness to prevent | Door flapping, claim churn, budget reset, immortal interrupted shelter trips, stale resume after authority or world changes |
+| Confidence | `CODE_CONFIRMED`; repaired physical traversal remains `UNVERIFIED` until the approved runtime scenario |
+
+### Goal interaction
+
+| Goal/activity | Priority/flags | SCR-1 meaning | Commitment result |
+| --- | --- | --- | --- |
+| `DoorOperationGoal` / finite social reflex | 1, `MOVE + LOOK` | benign protected sub-action | suspend; retain destination/claim/budgets |
+| `PlayerMobDoorGoal` | 1, flagless | helper for the same door episode | suspend/no authority change |
+| combat, flee, fire/train recovery | 0–2, includes `MOVE` | mandatory safety/combat authority | cancel |
+| command / stay authority | 1–2, includes `MOVE` | player authority | cancel |
+| unknown active goal | unknown | fail-safe compatibility | cancel rather than assume benign |
+| `SeekShelterGoal` | 2, `MOVE` | executor | resume with a new path; never preserve the old `Path` |
+
+### Alternatives and decision
+
+| Option | Benefit | Failure mode | Decision |
+| --- | --- | --- | --- |
+| Teach `stop()` `if doorOperation then keep state` | smallest diff | SPM-class guess in a lifecycle callback; repeats for every future benign preemption | rejected |
+| Change priorities or remove `MOVE` from door operation | avoids this preemption | changes SPM-wide deliberate door behavior and can make movement fight the door animation | rejected |
+| **Commitment independent from Goal/navigation execution; reconcile through the existing scheduler observer** | general suspend/cancel split; one observer scan; fresh path on resume; bounded ownership | requires explicit commitment state and observer wiring | **LOCKED — user 2026-08-11** |
+
+`ShelterCommitment` owns destination, optional bed, claimant, start time, active approach ticks,
+path failures, resume attempts, arrival state, and suspension state. The 400 active-approach limit
+is preserved across suspensions; a 600-tick pre-arrival wall-clock/claim lifetime and bounded path
+failures prevent an immortal mission. Unload/death releases the bed claim. Destination validity,
+permission, ticking state, excessive displacement, dawn, config, combat/safety, and commands are
+rechecked before resumption.
+
+### Implementation evidence — 2026-08-11
+
+- `SeekShelterGoal.stop()` stops navigation and suspends only; explicit validity/authority paths
+  own cancellation.
+- The existing `ExplorationActivityGoal` observation result is passed to shelter reconciliation;
+  there is no second scheduler scan and `MoveHolderClassifier` remains the sole host taxonomy.
+- `DoorOperationGoal` is pinned as `SOCIAL_REFLEX`; player commands, stay anchors, combat/safety,
+  and unknown active goals cancel. Every resume requests a new path.
+- Bed claims survive suspension, canonicalize foot/head to one head-block key, and are cancelled on
+  entity unload/death. Budgets are never reset by `stop()`.
+- 13 focused shelter tests pass. Full `gradlew.bat clean build` passes 639 tests, zero failures,
+  errors, or skips. Packaged artifact: `build/libs/spmscavenger-1.9.4.jar`, SHA-256
+  `B15F6504C5A1BA8A2CFB432B8A60AD6240428B098369BA7193C0A7453227C14E`.
+- Post-GREEN MAIBS found and repaired a self-invalidation path: an arrived non-bed shelter now
+  classifies as `REST`, while an approach still classifies as `MANDATORY_SAFETY`.
+- Three relevant absence probes: no `GoalSelector#getAvailableGoals()` scan inside shelter; no
+  second class-name taxonomy; no navigation `Path` field retained by `ShelterCommitment`.
+- Runtime test kit exists at `test-datapacks/shelter-commitment/`; physical traversal is still
+  `UNVERIFIED`, so Task 42B remains blocked until SCR-1A/B pass in Minecraft.
+- The approved runtime launch could not start: this project's `run/mods` and `run/saves` are empty,
+  no installed SPM/Scavenger instance is present under `D:/Minecraft/Instances`, and the pinned SPM
+  source fixture fails configuration at `build.gradle.kts:153` because its Windows repository URI
+  is `file://D:\\.../repo`. No Minecraft process was launched. Repairing the read-only reference
+  build or supplying an SPM 0.86.0 runtime JAR/test world is required before SCR-1A/B can execute.
+
+### SCR-1 task and acceptance
+
+| Field | Contract |
+| --- | --- |
+| Owner | Agent_Codex |
+| Scope | `ShelterCommitment`, `SeekShelterGoal`, existing observer wiring, claim lifecycle, focused tests, runtime datapack, documentation |
+| Must happen | occupied bed + valid covered interior + closed wooden door: one shelter commitment survives door preemption, replans, crosses, and completes shelter; free-bed claim survives the same interruption and reaches sleep |
+| Must not happen | old `Path` survives; door interruption resets budgets/releases a valid claim; dawn/combat/command/broken destination resumes stale shelter; failed repaths retry forever; a second scheduler scan is added |
+| Static tests | suspend/resume budget preservation; claim ownership; cancel matrix; dawn/destination/failure bounds; observer integration contract; disabled/legacy parity |
+| Runtime | `test-datapacks/shelter-commitment/`; approved occupied-bed/closed-door and free-bed variants; logs/readout + visual evidence required |
+| Gate | pre-implementation `BEHAVIORALLY_PLAUSIBLE`; final MAIBS remains blocked until runtime traversal passes |
+
+### Predicted weird behaviors
+
+- A door operation can make the readout briefly show two door-related lines: `RUNTIME_QUESTION`,
+  presentation-only and outside SCR-1 unless it conceals the shelter outcome.
+- A physically unreachable interior can consume the bounded failure budget and be temporarily
+  rejected: `ACCEPTABLE_STEPPING_STONE`, preferable to an immortal mission.
+- Several mobs may share a generic covered room, but a free bed remains exclusive through its
+  bounded claim: intended; duplicate bed ownership is an `ARCHITECTURE_DEFECT`.
+
+**Pre-implementation MAIBS:** `PASS — BEHAVIORALLY_PLAUSIBLE` for the locked design. The old
+implementation remains `FAIL — ARCHITECTURE_DEFECT` until code and the approved runtime scenario
+prove the transition.
+
+---
+
 ## Topic: Missing AI behaviors
 
 | # | Behavior | Needed for | Feasibility | Integration method |
@@ -537,6 +638,7 @@ Per `docs/agent-workflows/RUNTIME_TEST_DATAPACK.md`:
 | Pack | Namespace | Purpose |
 | --- | --- | --- |
 | `test-datapacks/phase1-tool-tier/` | `spm_phase1` | Stone + coal path (`EXISTS`) |
+| `test-datapacks/shelter-commitment/` | `spm_shelter` | SCR-1 occupied-bed/closed-door and free-bed claim-resume runtime gate (`READY; RUNTIME PENDING`) |
 | `test-datapacks/phase2-furnace/` | `spm_phase2` | Charcoal + iron smelt (`PLANNED` — not in repo) |
 | `test-datapacks/phase-vp-iron/` | `spm_vp3` | Iron loop presets (`PROPOSED`) |
 | `test-datapacks/phase-vp-nether/` | `spm_vp4` | Portal + fortress fixtures (`PROPOSED`, cheat anchors) |
@@ -586,6 +688,7 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Codex | 2026-08-11 | Implemented `SCR-1`: persistent bounded shelter commitment, suspend/cancel taxonomy through the shared observer, fresh-path resume, stay/authority invalidation, canonical bed claims, unload/death cleanup, 13 focused tests, 639-test clean build, runtime datapack, and post-GREEN MAIBS. Runtime remains pending before Task 42B |
 | Agent_Cursor | 2026-08-08 | Initial RFC from SPM v0.86.0 source audit + scavenger codebase; user requested design-only (no mod) |
 
 ---

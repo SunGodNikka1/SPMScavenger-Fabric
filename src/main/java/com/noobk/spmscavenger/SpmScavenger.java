@@ -106,6 +106,8 @@ public class SpmScavenger implements ModInitializer {
         });
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, world) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
+                cancelShelterCommitment(mob);
+                SeekShelterGoal.onEntityUnload(mob.getUUID());
                 RestSessionCoordinator.invalidateOnUnload(
                         mob.getUUID(), world.getGameTime());
                 OpinionExperienceRegistry.parkOnUnload(mob.getUUID(), world.getGameTime());
@@ -123,6 +125,8 @@ public class SpmScavenger implements ModInitializer {
                 });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
+                cancelShelterCommitment(mob);
+                SeekShelterGoal.onDeath(mob.getUUID());
                 OpinionExperienceRegistry.onDeath(mob.getUUID());
             }
         });
@@ -149,7 +153,8 @@ public class SpmScavenger implements ModInitializer {
             // escape goal immediately yields whenever the mob catches fire.
             selector.addGoal(0, new EnvironmentalEscapeGoal(pathfinderMob));
         }
-        selector.addGoal(2, new SeekShelterGoal(mob, 1.0));
+        SeekShelterGoal shelterGoal = new SeekShelterGoal(mob, 1.0);
+        selector.addGoal(2, shelterGoal);
         selector.addGoal(4, new PlaceTorchGoal(mob, 1.0));
         selector.addGoal(7, new CampfireGoal(mob, 0.9));
         selector.addGoal(PassiveExpressionGoal.PRIORITY, new PassiveExpressionGoal(mob));
@@ -159,7 +164,7 @@ public class SpmScavenger implements ModInitializer {
         selector.addGoal(3, new GatherResourcesGoal(mob, 0.9));
         // Level with craft/gather so charcoal/iron jobs are not starved by idle stroll.
         selector.addGoal(3, new SmeltAtFurnaceGoal(mob, 1.0));
-        installExploration(mob, selector);
+        installExploration(mob, selector, shelterGoal);
     }
 
     private static void installLeaseCleanupOnly(Mob mob, GoalSelector selector) {
@@ -171,7 +176,8 @@ public class SpmScavenger implements ModInitializer {
                 pathfinderMob, selector, readiness, false));
     }
 
-    private static void installExploration(Mob mob, GoalSelector selector) {
+    private static void installExploration(
+            Mob mob, GoalSelector selector, SeekShelterGoal shelterGoal) {
         if (!(mob instanceof PathfinderMob pathfinderMob)) {
             return;
         }
@@ -180,7 +186,7 @@ public class SpmScavenger implements ModInitializer {
 
         if (!SpmScavengerInstallPolicy.installsMiningExecutors(cfg)) {
             selector.addGoal(9, new ExplorationActivityGoal(
-                    pathfinderMob, selector, readiness, false));
+                    pathfinderMob, selector, readiness, false, shelterGoal));
             return;
         }
 
@@ -197,7 +203,7 @@ public class SpmScavenger implements ModInitializer {
                 // Preserve the compatibility fail-closed behavior while keeping persisted lease cleanup
                 // alive. An unknown host stroll shape must not accidentally authorize mining work.
                 selector.addGoal(9, new ExplorationActivityGoal(
-                        pathfinderMob, selector, readiness, false));
+                        pathfinderMob, selector, readiness, false, shelterGoal));
                 if (!warnedStrollShape) {
                     warnedStrollShape = true;
                     LOGGER.warn("[spmscavenger] PlayerMob idle stroll shape changed; exploration left "
@@ -220,7 +226,8 @@ public class SpmScavenger implements ModInitializer {
                     pathfinderMob, Math.max(0.5, Math.min(1.2, cfg.localWanderSpeed)), readiness));
         }
         // Flagless observer; staggered internally and treats every unknown goal as meaningful work.
-        selector.addGoal(9, new ExplorationActivityGoal(pathfinderMob, selector, readiness));
+        selector.addGoal(9, new ExplorationActivityGoal(
+                pathfinderMob, selector, readiness, true, shelterGoal));
     }
 
     /**
@@ -247,5 +254,19 @@ public class SpmScavenger implements ModInitializer {
             }
         }
         return false;
+    }
+
+    /** Cancel the per-entity commitment before the static claim fallback is swept. */
+    private static void cancelShelterCommitment(Mob mob) {
+        GoalSelector selector = ((MobGoalSelectorAccessor) mob).spmscavenger$getGoalSelector();
+        if (selector == null) {
+            return;
+        }
+        for (WrappedGoal wrapped : selector.getAvailableGoals()) {
+            if (wrapped.getGoal() instanceof SeekShelterGoal shelterGoal) {
+                shelterGoal.cancelForOwnerRemoval();
+                return;
+            }
+        }
     }
 }

@@ -48,8 +48,8 @@ public final class MoveHolderClassifier {
             return ActivityClass.UNKNOWN_ACTIVE;
         }
         ActivityClass base = staticActivityClass(goal.getClass());
-        if (goal instanceof SeekShelterGoal) {
-            return mob != null && mob.isSleeping()
+        if (goal instanceof SeekShelterGoal shelterGoal) {
+            return shelterGoal.isRestingAtShelter()
                     ? ActivityClass.REST
                     : base;
         }

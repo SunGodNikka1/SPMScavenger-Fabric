@@ -49,6 +49,7 @@ class ActivityTaxonomyTest {
         assertClass(ActivityClass.MANDATORY_COMMAND, CommandedActionGoal.class);
         assertClass(ActivityClass.MANDATORY_COMBAT, WeaponAwareAttackGoal.class);
         assertClass(ActivityClass.PASSIVE_HELPER, PlayerMobDoorGoal.class);
+        assertClass(ActivityClass.SOCIAL_REFLEX, DoorOperationGoal.class);
         assertClass(ActivityClass.UNKNOWN_ACTIVE, CompletelyUnknownGoal.class);
     }
 
@@ -71,5 +72,6 @@ class ActivityTaxonomyTest {
     private static final class CommandedActionGoal extends StubGoal {}
     private static final class WeaponAwareAttackGoal extends StubGoal {}
     private static final class PlayerMobDoorGoal extends StubGoal {}
+    private static final class DoorOperationGoal extends StubGoal {}
     private static final class CompletelyUnknownGoal extends StubGoal {}
 }

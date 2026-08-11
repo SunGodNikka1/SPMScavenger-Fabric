@@ -892,7 +892,7 @@ mobs are also excluded from companion recruitment. The addon never clears or mut
 | `GatherResourcesGoal` | No | 140-tick approach cap, whole-tree backoff, bounded target/path probes | No equivalent persistent preemption cycle found |
 | `CraftTorchesGoal` | No | 200-tick table approach cap | Repeated inaccessible-table attempts remain possible, but do not retain a route across preemption; runtime frequency `UNVERIFIED` |
 | `PlaceTorchGoal` | No | 100-tick approach cap and post-placement cooldown | Repeated inaccessible-position attempts remain possible; no persistent cross-goal cycle found |
-| `SeekShelterGoal` | No; bed claim released | 400-tick cap and phased scan | No persistent cross-goal cycle found |
+| `SeekShelterGoal` | Bounded `ShelterCommitment`; navigation `Path` remains disposable | 400 active ticks, 600 wall ticks, three path failures, claim expiry | The prior claim-release/reset behavior formed a door-operation loop; repaired by explicit suspend vs cancel semantics (SCR-1, 2026-08-11) |
 | `CampfireGoal` | No | 200-tick cap and phased scan | No persistent cross-goal cycle found |
 | `EnvironmentalEscapeGoal` | Incident only, deliberately | bounded path attempts, block cap, ends after sustained safety | Continuous while physically trapped is safety ownership, not a competing-goal loop |
 | `TrackedLocalWanderGoal` | No | vanilla navigation lifecycle | No loop found |
@@ -1002,3 +1002,40 @@ and an admissibly stuck descent reaches `NO_PROGRESS` before the total cap. Must
 LOOK-only eating resolves to `NONE`, a player command creates a revoke/reassign loop, or blocker
 changes duplicate pause time. C3-F1…F7 and the full 321-test clean build are `CONFIRMED`; Minecraft
 runtime behavior remains `UNVERIFIED`. Evidence: `.superpowers/sdd/archive/task-30-report.md`.
+
+## 2026-08-11 — SCR-1 Shelter Commitment Resume Repair
+
+The earlier goal-loop audit was wrong about `SeekShelterGoal`. Runtime observation showed a
+PlayerMob repeatedly opening and closing one door at night. Source inspection confirmed that SPM's
+priority-1 `DoorOperationGoal` (`MOVE + LOOK`) stopped the priority-2 shelter executor, whose old
+`stop()` erased destination, bed claim, and its 400-tick budget. The next shelter scan selected the
+same interior and recreated the cycle.
+
+Two viable repairs were considered. A door-specific exception in `stop()` was smaller but coupled
+the addon to one SPM helper and would recur for future benign interruptions. Changing door flags or
+priorities altered host behavior globally. The selected repair separates a persistent, bounded
+`ShelterCommitment` from the disposable navigation path and reconciles interruption semantics from
+the existing `ActivityObservationService` scan.
+
+Finite door/social helpers suspend; commands, stay authority, combat/safety, unknown activity,
+dawn, config disable, invalid/unticking destination, excessive displacement, unload, death, and
+bounded failure expiry cancel. Resume creates a fresh path to the same destination. Active ticks,
+wall-clock lifetime, path failures, and resume history survive suspension. Free-bed ownership is
+retained during a short suspension, both physical halves use one canonical head-block claim key,
+and owner unload/death explicitly cancels the commitment before static-claim cleanup.
+
+**Must happen:** occupied-bed/closed-door travel resumes into the same covered interior; free-bed
+travel keeps ownership and reaches sleep. **Must not happen:** `stop()` releases the commitment,
+budgets reset, stale authority resumes after a hard invalidation, opposite bed halves admit two
+owners, or failed replans continue forever.
+
+Evidence: 13 focused shelter tests plus taxonomy coverage pass; the full clean build passes 639
+tests with zero failures/errors/skips. Artifact `build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`B15F6504C5A1BA8A2CFB432B8A60AD6240428B098369BA7193C0A7453227C14E`. Static MAIBS is
+`PASS — BEHAVIORALLY_PLAUSIBLE`; physical door traversal remains `UNVERIFIED` until the approved
+`test-datapacks/shelter-commitment/` scenarios are observed in Minecraft.
+
+Post-GREEN review also found that an arrived non-bed shelter was still dynamically classified as
+`MANDATORY_SAFETY`, causing `RestSessionCoordinator` to close its own shelter-recovery claim as
+mandatory work. The shared classifier now reports `REST` only after commitment arrival or actual
+sleep; approach remains safety. This is a classification correction, not discretionary selection.

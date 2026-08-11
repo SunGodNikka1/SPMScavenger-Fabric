@@ -8,14 +8,14 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
-| **Mode** | `WORKING_FROM_PLAN` — GAO-8B Task 42A causal trace complete; Task 42B remains blocked by PD-GAO-14 |
-| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1**; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT` (628 tests) |
+| **Mode** | `PROGRESSIVE_CONTINUATION` — PD-GAO-14 locked; GAO-8B Task 42B is dependency-ready but implementation is not yet authorized |
+| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1**; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT` (628 tests); Task 42B `READY / UNAUTHORIZED` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-11 (Task 42A whole-decision causal trace implementation and static MAIBS closure) |
+| **Last update** | 2026-08-11 (PD-GAO-14 gen-1 Opinion inspector product contract locked; Task 42B dependency-ready) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,9 +39,9 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** Task 42A has repaired GAO-8B-B1. Task 42B is now technically dependency-ready
-but remains blocked by the explicit GAO-8B entry/access choice in PD-GAO-14. Runtime remains
-non-default under PD-GAO-12 and requires a named `RUNTIME_QUESTION`.
+**Nearest frontier:** authorize and implement Task 42B under the locked PD-GAO-14 contract. No
+remaining design dependency blocks it. Runtime remains non-default under PD-GAO-12 and requires a
+named `RUNTIME_QUESTION` plus separate launch approval.
 
 ---
 
@@ -1219,8 +1219,8 @@ Status: `IMPLEMENTED / STATIC ACCEPT`.
 
 ## Topic: Observable expression — GAO-8B read-only inspection
 
-**Status:** `TASK 42A IMPLEMENTED / STATIC ACCEPT` — causal evidence is now structured and atomic;
-Task 42B remains blocked only by PD-GAO-14 entry/access
+**Status:** `TASK 42A IMPLEMENTED / STATIC ACCEPT`; `TASK 42B DEPENDENCY-READY / UNAUTHORIZED` —
+causal evidence is structured and atomic, and PD-GAO-14 now locks entry/access/refresh/authority
 
 ### Goal and boundary
 
@@ -1268,17 +1268,18 @@ make the player mentally reverse-engineer utility arithmetic.
 | Option | Benefit | Strongest objection / failure mode | Verdict |
 | --- | --- | --- | --- |
 | A — optional button/panel in SPM `PlayerMobScreen` | Most discoverable while viewing the mob; target already known | Version-locked `@Pseudo` UI Mixin, Creative-only host screen, fixed-layout collisions, silent loss after host rename | Keep as a later optional adapter only if SPM exposes a supported screen-extension API |
-| **B — addon-owned screen opened by a configurable inspect key while targeting a PlayerMob** | No host-screen/layout mutation; screen and packet contract are owned here; SPM-absent path can fail closed | Keybind discovery/conflicts; requires one bounded request/response pair; server must reject stale/spoofed targets | **RECOMMENDED** |
+| **B — addon-owned screen opened by a configurable inspect key while targeting a PlayerMob** | No host-screen/layout mutation; screen and packet contract are owned here; SPM-absent path can fail closed | Keybind discovery/conflicts; requires one bounded request/response pair; server must reject stale/spoofed targets | **SELECTED / LOCKED (PD-GAO-14)** |
 | C — operator command/chat dump | Lowest code and no custom screen | Poor readability, no real UI, long traces spam chat, awkward target selection | Diagnostic fallback, not the GAO-8B product |
 
-**D-GAO-039 (`PROPOSED`):** GAO-8B reads one immutable on-demand view from
+**D-GAO-039 (`LOCKED`):** GAO-8B reads one immutable on-demand view from
 `OpinionExperienceRegistry.find`; it never allocates state, invokes policy, scans goals/world, or
 streams background updates. A missing context renders `No Opinion state yet` rather than creating
 neutral memory. Refresh is explicit; stale-but-labelled data is safer than hidden periodic work.
 
-**D-GAO-040 (`PROPOSED`):** the recommended frontend is an addon-owned screen and bounded common
+**D-GAO-040 (`LOCKED`):** the frontend is an addon-owned screen and bounded common
 DTO. The server resolves the supplied entity id in the requesting player's level, validates a live
-PlayerMob, distance, and access policy, and copies only finite enum/channel/trace data. Client-only
+PlayerMob, distance, and Creative-or-operator access policy, and copies only finite
+enum/channel/trace data. Client-only
 screen types stay out of common packet/snapshot signatures. Responses carry a request id/entity id
 so a late response cannot populate a different or already-closed inspection.
 
@@ -1334,13 +1335,24 @@ running, or terminal. It is observability only and grants no scheduler authority
 
 | Option | Compatibility/safety | Product effect |
 | --- | --- | --- |
-| **Creative/operator only — recommended for gen-1** | Matches the diagnostic nature and SPM's Creative editor; avoids exposing internal relationship/place history in multiplayer | Survival players cannot inspect without permission |
+| **Creative/operator only — selected for gen-1** | Matches the diagnostic nature and SPM's Creative editor; avoids exposing internal relationship/place history in multiplayer | Survival non-operators cannot inspect |
 | Any nearby player | Most accessible | Turns debug state into gameplay information and needs a deliberate privacy/gameplay policy |
 | Server-configurable disabled / privileged / all | Most flexible | Adds configuration, synchronization, and test surface before the basic screen is proven |
 
-Recommendation: lock **Option B entry point + Creative/operator-only access** for Task 42. Revisit a
-server-configurable/all-player mode only after the readout has a player-facing design rather than a
-diagnostic dump.
+**LOCKED product contract (2026-08-11):**
+
+- A client-configurable **Inspect Opinion** key acts only while the crosshair targets a PlayerMob.
+- Access is allowed when the requesting player is **Creative OR a server operator**. The server is
+  authoritative; a client-side key or screen cannot grant access.
+- Scavenger owns the screen. No Mixin is added to SPM's Creative inventory screen.
+- Each open or explicit **Refresh** performs one bounded request. The server revalidates the live
+  target and permission, then returns one immutable bounded snapshot. There is no per-tick or
+  background synchronization.
+- The inspector is strictly read-only: no sliders, mood forcing, opinion edits, activity controls,
+  or other AI mutation paths.
+
+Revisit server-configurable/all-player access only after the readout has a deliberate player-facing
+design rather than a privileged diagnostic surface.
 
 ### Behavioral prediction and adversarial review (MAIBS-1)
 
@@ -1400,13 +1412,13 @@ failures/errors/skips. Final artifact: `build/libs/spmscavenger-1.9.4.jar`, SHA-
 Static MAIBS: `PASS — BEHAVIORALLY PLAUSIBLE`; physical behavior parity is `CODE_CONFIRMED`, while
 runtime/performance remain `UNVERIFIED` because no Minecraft launch or profiler run was authorized.
 
-### Task 42B — GAO-8B understandable Opinion inspector (`BLOCKED BY 42A + PD-GAO-14`)
+### Task 42B — GAO-8B understandable Opinion inspector (`DEPENDENCY-READY / UNAUTHORIZED`)
 
 | Field | Contract |
 | --- | --- |
-| Dependencies | GAO-0 through GAO-9 and RET-GAO-1 complete |
+| Dependencies | GAO-0 through GAO-9 and RET-GAO-1 complete; Task 42A static-accepted; D-GAO-039/040 and PD-GAO-14 locked |
 | Scope | Pure immutable `OpinionReadoutSnapshot`; plain-language explanation projection over Task 42A evidence; non-allocating factory; bounded request/response payload; addon-owned client screen/keybind; focused tests; documentation |
-| Constraints | Stock/optional SPM; no host-screen or objective-billboard mutation; no state allocation/write; no background stream; common APIs expose no client types; access/range validated server-side |
+| Constraints | Stock/optional SPM; configurable inspect key; crosshair-targeted PlayerMob; Creative OR operator access; no host-screen or objective-billboard mutation; no state allocation/write; manual refresh only; common APIs expose no client types; access/range/live target validated server-side; strictly read-only |
 | Must happen | A permitted player can answer what/why/alternative/handoff/outcome/learning from captured evidence, inspect raw values secondarily, and manually refresh |
 | Must not happen | Inspecting creates state, changes AI, leaks an unbounded payload, trusts spoofed ids, or crashes without SPM |
 | Tests | Snapshot exactness/non-allocation/immutability/bounds; permission/range/type/death rejection; payload round-trip and caps; late-response token; optional-SPM path; screen smoke/static layout; negative Goal/config/state-write scan |
@@ -1687,7 +1699,7 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 through GAO-9 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT`
+**Status:** GAO-0 through GAO-9 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT`; Task 42B `DEPENDENCY-READY / UNAUTHORIZED`
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
@@ -1706,7 +1718,7 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-6** | ENTITY bridge | **CLOSED:** `SpmEntityOpinionBridge`, `EntityOpinionMemory`, GAO-6R `SocialExperienceEpisodes` | GAO-4, RET-GAO-1 |
 | **GAO-7** | PersonalityModel | **CLOSED / STATIC ACCEPT:** immutable six-trait model; SPM-host anchors + deterministic UUID latent traits; bounded subjective learning at the single normalized seam; snapshot lifecycle; 581-test clean build | GAO-2, GAO-6 |
 | **GAO-8A** | Passive physical expression | **CLOSED / STATIC ACCEPT:** bounded scheduler-owned LOOK expression; Task 40; 593 tests | GAO-0, GAO-1, GAO-6, GAO-7 |
-| **GAO-8B** | Understandable Opinion inspection | **PARTIAL:** Task 42A structured causal trace is statically accepted; Task 42B addon-owned on-demand explanation UI remains blocked by PD-GAO-14 | GAO-0 through GAO-9, RET-GAO-1 |
+| **GAO-8B** | Understandable Opinion inspection | **PARTIAL / READY:** Task 42A structured causal trace is statically accepted; PD-GAO-14 is locked; Task 42B addon-owned on-demand explanation UI awaits implementation authorization | GAO-0 through GAO-9, RET-GAO-1, Task 42A, D-GAO-039/040, PD-GAO-14 |
 | **GAO-9** | Overland environment affinity | **CLOSED / STATIC ACCEPT:** finite multi-label context, completion-only normalized learning, enum-bounded snapshot memory, and ±10 valid-route ranking; PROJECT memory superseded; 618 tests | GAO-0c, GAO-2, GAO-5B, RET-GAO-1 |
 
 ### GAO-0b implementation task (`IMPLEMENTED / STATIC VERIFIED`)
@@ -1899,7 +1911,7 @@ companion coordination—not competing activity semantics.
 | **PD-GAO-11** | `LOCKED` | REST executor for discretionary choice | Campfire / SeekShelter / both | **Campfire + `RestSessionClaim` only** — `SeekShelterGoal` (p2 safety) is never the discretionary REST executor |
 | **PD-GAO-12** | `LOCKED` | When is runtime required vs static ACCEPT? | runtime default gate / static-first / hybrid | **Static-first:** `CODE + TESTS + MAIBS` → confident → **ACCEPT STATIC**; runtime only when uncertainty is Minecraft engine, SPM `GoalSelector`, mod interaction, or perf/heap — not utility arithmetic |
 | **PD-GAO-13** | `LOCKED` | What authority may observable mood/personality expression have? | passive LOOK/cosmetic output / activity-driving behavior | **Passive expression only:** head/look, harmless idle cadence, tiny cosmetic output, later debug/UI; never activity choice, MOVE authority, priority changes, or command/combat/progression override — user 2026-08-10 |
-| **PD-GAO-14** | `OPEN — RECOMMENDATION READY` | GAO-8B entry point and access | SPM-screen adapter / addon inspect key; privileged / all / configurable | **Recommend addon-owned inspect key + Creative/operator-only gen-1 access**; user decision required before Task 42 |
+| **PD-GAO-14** | `LOCKED` | GAO-8B entry point, access, refresh, and authority | SPM-screen adapter / addon inspect key; privileged / all / configurable | **Addon-owned screen opened by configurable Inspect Opinion key while crosshair-targeting a PlayerMob; server-authoritative Creative OR operator access; one immutable bounded snapshot per open/manual refresh; strictly read-only** — user 2026-08-11 |
 | **PD-GAO-15** | `LOCKED (PRODUCT DIRECTION)` | Is GAO-8B a raw telemetry viewer or causal explanation? | raw numeric dump / **plain-language causal explanation with progressive disclosure** | **Make the AI understandable:** what, why, rejected alternative/suppression, handoff, outcome, and learning; raw values secondary — user 2026-08-10 |
 
 #### PD-GAO-03 death semantics (`LOCKED` — GAO-2)
@@ -2128,8 +2140,8 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 | D-GAO-036 | ENVIRONMENT is an immutable multi-label context captured only at existing event/valid-route seams | `IMPLEMENTED` | `EnvironmentProfile/Classifier`; five enum labels; no scanner |
 | D-GAO-037 | Environment learning requires an attributable environment terminal; gen-1 learns from expedition completion, not generic failure/frontier/authority/stale closure | `IMPLEMENTED` | `EnvironmentOpinionService`; one personality-scaled delta divided across labels |
 | D-GAO-038 | Environment affinity is a ±10 soft tie-breaker among already-valid routes; mean multi-label score; never terrain-safety or mandatory descent/handoff authority | `IMPLEMENTED` | Below PLACE ±15, visited -20, anti-fixation -100; path/safety mutation negative scan |
-| D-GAO-039 | GAO-8B snapshots existing state on explicit request through non-allocating lookup; missing state stays missing; no policy/scan/background refresh | `PROPOSED` | Task 42 read-side purity/non-allocation gate |
-| D-GAO-040 | GAO-8B uses a bounded server-validated common DTO and addon-owned screen; no client type in common API and no host UI/billboard mutation | `PROPOSED` | Entry/access await PD-GAO-14 |
+| D-GAO-039 | GAO-8B snapshots existing state on explicit request through non-allocating lookup; missing state stays missing; no policy/scan/background refresh | `LOCKED` | Task 42 read-side purity/non-allocation gate; PD-GAO-14 manual refresh |
+| D-GAO-040 | GAO-8B uses a bounded server-validated common DTO and addon-owned screen; no client type in common API and no host UI/billboard mutation | `LOCKED` | PD-GAO-14 resolved entry/access/refresh/authority contract |
 | D-GAO-041 | Explanation evidence is captured at decision time in one structured record and carried through intent/handoff/terminal/learning receipt; never reconstructed from later state | `IMPLEMENTED / STATIC ACCEPT` | Task 42A; 628 tests + clean build |
 | D-GAO-042 | Trace retention is bounded by whole decisions with explicit current suppression disposition; no partial-chain eviction or authority side effect | `IMPLEMENTED / STATIC ACCEPT` | Task 42A; active-origin retention test + RET-1 static review |
 
@@ -2139,6 +2151,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-11 | Agent_Codex | **PD-GAO-14 locked.** Selected a configurable Inspect Opinion key targeting a PlayerMob, a Scavenger-owned screen, server-authoritative Creative-or-operator access, one immutable bounded snapshot per open/manual refresh, and a strictly read-only surface. Locked D-GAO-039/040 and advanced Task 42B to dependency-ready; implementation remains unauthorized. No Java edit, tests/build, runtime launch, commit, push, or PR |
 | 2026-08-11 | Agent_Codex | **Task 42A causal trace implemented.** Replaced the loose event ring with 24 whole structured decisions; added separate monotonic decision identity carried by intents; full candidate components, structured suppression/disposition/cause, lifecycle transitions, and actual terminal learning receipts; protected live origins during eviction. Focused tests, 628-test full suite, clean build, JAR inspection, RET-1/static MAIBS pass. Task 42B remains blocked by PD-GAO-14. No Minecraft launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **GAO-8B understandability review.** User defined the product as “make the AI understandable.” Static trace audit found GAO-8B-B1: score/select precede new intent identity, can inherit an incumbent id, discard most utility components into strings, and use an event rather than decision bound; existing tests do not prove complete causal correlation. Locked PD-GAO-15 direction; proposed D-GAO-041/042 and split Task 42A causal trace repair from Task 42B UI. No Java edit, test/build, runtime launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **GAO-8B continuation and Still Life compatibility evidence.** Inspected pinned SPM screen/menu/readout and current addon state owners; recorded four absent-surface probes; compared host-screen, addon-screen, and command frontends; proposed D-GAO-039/040 and Task 42 with an on-demand non-allocating snapshot and server validation. Recommended addon inspect key + privileged access in PD-GAO-14. Added verified Still Life 0.1.1 tag/resource compatibility and its runtime/performance limits. No Java edit, build, runtime launch, commit, push, or PR |
@@ -3666,3 +3679,40 @@ remain `UNVERIFIED`; no Minecraft launch occurred.
 
 **Frontier after:** Task 42A is `IMPLEMENTED / STATIC ACCEPT`. Task 42B is technically ready but
 remains blocked by PD-GAO-14 (entry/access policy); no UI/network work was started.
+
+---
+
+## Contribution — Agent_Codex (PD-GAO-14 gen-1 inspector product lock)
+
+**Agent:** Agent_Codex
+
+**Date/Session:** 2026-08-11
+
+**Contribution type:** `DESIGN / PRODUCT_DECISION / RFC`
+
+**Frontier before:** Task 42A had made the evidence trustworthy, but Task 42B could not proceed
+without an explicit entry, access, refresh, and authority policy.
+
+**Accepted decision:** lock the configurable **Inspect Opinion** key while crosshair-targeting a
+PlayerMob; a Scavenger-owned screen; server-authoritative access for Creative players **or** server
+operators; one immutable bounded response per open/manual refresh; and a strictly read-only UI.
+
+**Strongest objection:** operator access includes operators who are currently in Survival, while
+ordinary Survival players remain excluded. This is intentional privileged diagnostic access, not a
+gameplay mechanic. If the inspector later becomes player-facing gameplay, PD-GAO-14 must be reopened
+rather than silently widening access.
+
+**Alternatives retained:** an SPM-screen adapter remains a possible later optional integration only
+if SPM exposes a supported extension seam; a command dump remains a diagnostic fallback. Neither is
+the gen-1 product.
+
+**Acceptance:** must open only after a permitted requester targets a live PlayerMob and must return
+one bounded immutable snapshot that changes only on explicit refresh. It must not trust client
+permission/identity, synchronize every tick, create Opinion state, alter AI, or expose editing and
+control actions.
+
+**Evidence state:** `PRODUCT_DECISION_CONFIRMED`; implementation and runtime behavior remain
+`UNVERIFIED`. No source implementation, build, runtime launch, commit, push, or PR occurred.
+
+**Frontier after:** Task 42B is dependency-ready. Its next action is implementation authorization,
+not another design/research cycle.

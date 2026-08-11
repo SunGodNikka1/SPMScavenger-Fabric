@@ -30,6 +30,7 @@ import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 
 import java.util.EnumSet;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * A staggered, flagless observer that distinguishes real SPM work from harmless idling. Unknown
@@ -50,10 +51,12 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
     private final GoalSelector selector;
     private final ExplorationReadiness readiness;
     private final boolean allowNewMiningWork;
+    @Nullable
+    private final SeekShelterGoal shelterGoal;
 
     public ExplorationActivityGoal(
             PathfinderMob mob, GoalSelector selector, ExplorationReadiness readiness) {
-        this(mob, selector, readiness, true);
+        this(mob, selector, readiness, true, null);
     }
 
     public ExplorationActivityGoal(
@@ -61,11 +64,21 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
             GoalSelector selector,
             ExplorationReadiness readiness,
             boolean allowNewMiningWork) {
+        this(mob, selector, readiness, allowNewMiningWork, null);
+    }
+
+    public ExplorationActivityGoal(
+            PathfinderMob mob,
+            GoalSelector selector,
+            ExplorationReadiness readiness,
+            boolean allowNewMiningWork,
+            @Nullable SeekShelterGoal shelterGoal) {
         super(mob);
         this.mob = mob;
         this.selector = selector;
         this.readiness = readiness;
         this.allowNewMiningWork = allowNewMiningWork;
+        this.shelterGoal = shelterGoal;
         setFlags(EnumSet.noneOf(Flag.class));
     }
 
@@ -111,6 +124,9 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
                 : null;
         ActivityObservationService.Observation observation = ActivityObservationService.observe(
                 selector, mob, observationStore, mob.level().getGameTime());
+        if (shelterGoal != null) {
+            shelterGoal.observeScheduler(observation);
+        }
 
         if (observation.meaningfulWorkForExpedition()) {
             readiness.recordMeaningfulWork();

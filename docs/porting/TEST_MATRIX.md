@@ -307,3 +307,26 @@ required flag set. Runtime remains `UNVERIFIED`:
 Runtime probe must cover: long environmental escape, never-started recovery, persistent
 StayNear/player command, protected→combat→protected, an admissible >400-tick stall, and priority-3
 LOOK-only `EatFoodGoal` blocking then releasing a never-started MOVE+LOOK descent.
+
+## SCR-1 shelter commitment resume
+
+Runtime datapack: `test-datapacks/shelter-commitment/` (namespace `spm_shelter`). User authorization
+for these exact runtime scenarios was granted on 2026-08-11; visual/log evidence is still pending.
+
+| Scenario | Setup | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- | --- |
+| SCR-1A occupied bed | `spm_shelter:scenario/occupied_bed` | Same commitment pauses for deliberate door use, replans, crosses, and completes at the covered interior | Repeated open/close/reselect loop | Code/unit/build `CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-1B free bed | `spm_shelter:scenario/free_bed` | Bed claim survives the short door interruption and the mob sleeps | Opposite bed halves or a rescan steal the same bed | Canonical claim test `CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-1C dawn/authority | Change to day or introduce combat/command during interruption | Commitment cancels and the higher authority owns behavior | Old shelter resumes after invalidation | Static policy/call path `CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-1D invalid/failing route | Break destination or make repaths fail | Destination cancels/rejects after bounded failure | Immortal retry or reset budget | Unit/static `CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-1E unload/death | Unload or kill owner mid-commitment | Per-entity commitment and static claim release | Reload resurrects stale shelter authority | Event wiring/static claim tests `CONFIRMED`; runtime `UNVERIFIED` |
+
+Static gates: 13 focused shelter tests and the full 639-test suite pass with no failures, errors, or
+skips. `clean build` passed. Final JAR contains the commitment/policy classes and excludes the
+temporary datapack. Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`; runtime gate remains open.
+
+Runtime attempt evidence (2026-08-11): no test world or SPM runtime JAR exists in this project's
+`run/` directory, and `D:/Minecraft/Instances` is empty in the current workspace. Building the
+pinned SPM reference for a dedicated-server fixture failed during Gradle configuration at
+`build.gradle.kts:153` (`file://D:\\.../repo` is an invalid Windows file URI). The reference was not
+edited. No Minecraft process launched; SCR-1A/B remain `UNVERIFIED`.
