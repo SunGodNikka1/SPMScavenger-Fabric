@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.goal;
 
 import com.noobk.spmscavenger.ScavengerConfig;
+import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.player.Player;
@@ -137,10 +138,17 @@ public class AnticsGoal extends RandomLookAroundGoal {
         }
         if (player.isCrouching()) {
             mob.setShiftKeyDown(true);
-            mob.getLookControl().setLookAt(player, 30.0F, 30.0F);
+            if (mayWriteMimicLook(OpinionFeatureGate.isEnabled())) {
+                mob.getLookControl().setLookAt(player, 30.0F, 30.0F);
+            }
             crouchTicks = CROUCH_HOLD_TICKS;
             mimicCooldown = MIMIC_COOLDOWN_TICKS;
         }
+    }
+
+    /** Opinion-on gaze belongs to the scheduled GAO-8A LOOK owner, never this flagless decorator. */
+    static boolean mayWriteMimicLook(boolean opinionEnabled) {
+        return !opinionEnabled;
     }
 
     // ---- Bunny-hopping ----------------------------------------------------

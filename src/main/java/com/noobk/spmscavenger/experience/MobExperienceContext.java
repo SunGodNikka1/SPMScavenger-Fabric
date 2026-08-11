@@ -9,6 +9,7 @@ import com.noobk.spmscavenger.opinion.EntityOpinionMemory;
 import com.noobk.spmscavenger.opinion.PlaceOpinionMemory;
 import com.noobk.spmscavenger.opinion.PersonalityFactory;
 import com.noobk.spmscavenger.opinion.PersonalityModel;
+import com.noobk.spmscavenger.opinion.PassiveExpressionProfile;
 
 import java.util.Collections;
 import java.util.EnumMap;
@@ -71,6 +72,7 @@ public final class MobExperienceContext {
     private static final int MAX_CLOSED_EPISODE_TOMBSTONES = 256;
     private final Map<ActivityKind, Integer> executionFailureTotals = new EnumMap<>(ActivityKind.class);
     private Optional<RestSessionClaim> restClaim = Optional.empty();
+    private PassiveExpressionProfile passiveExpressionProfile = PassiveExpressionProfile.INACTIVE;
     private boolean frozen;
 
     public MobExperienceContext(UUID mobId, OpinionExperienceSinks delegate) {
@@ -127,6 +129,16 @@ public final class MobExperienceContext {
 
     public DiscretionaryDirectorState discretionaryDirector() {
         return discretionaryDirector;
+    }
+
+    public PassiveExpressionProfile passiveExpressionProfile() {
+        return passiveExpressionProfile;
+    }
+
+    public void publishPassiveExpression(PassiveExpressionProfile profile) {
+        passiveExpressionProfile = frozen
+                ? PassiveExpressionProfile.INACTIVE
+                : Objects.requireNonNull(profile, "profile");
     }
 
     public long episodeDuration(UUID episodeId, long closeTime) {
@@ -279,6 +291,7 @@ public final class MobExperienceContext {
 
     public void invalidateEphemeral() {
         restClaim = Optional.empty();
+        passiveExpressionProfile = PassiveExpressionProfile.INACTIVE;
         for (ActivityEpisode episode : episodes.values()) {
             if (!episode.isClosed()) {
                 episode.suspend();

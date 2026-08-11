@@ -4,6 +4,7 @@ import com.noobk.spmscavenger.compat.SpmCombatChaseSpeed;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.goal.AnticsGoal;
+import com.noobk.spmscavenger.goal.PassiveExpressionGoal;
 import com.noobk.spmscavenger.goal.CampfireGoal;
 import com.noobk.spmscavenger.goal.ControlledDescentGoal;
 import com.noobk.spmscavenger.goal.TunnelSearchGoal;
@@ -151,6 +152,7 @@ public class SpmScavenger implements ModInitializer {
         selector.addGoal(2, new SeekShelterGoal(mob, 1.0));
         selector.addGoal(4, new PlaceTorchGoal(mob, 1.0));
         selector.addGoal(7, new CampfireGoal(mob, 0.9));
+        selector.addGoal(PassiveExpressionGoal.PRIORITY, new PassiveExpressionGoal(mob));
         // Flagless, so it decorates whatever another goal is already driving.
         selector.addGoal(9, new AnticsGoal(mob));
         selector.addGoal(3, new CraftTorchesGoal(mob, 1.0));
@@ -236,6 +238,7 @@ public class SpmScavenger implements ModInitializer {
                     || goal instanceof SmeltAtFurnaceGoal
                     || goal instanceof CampfireGoal
                     || goal instanceof AnticsGoal
+                    || goal instanceof PassiveExpressionGoal
                     || goal instanceof ControlledDescentGoal
                     || goal instanceof ExploringGoal
                     || goal instanceof TrackedLocalWanderGoal

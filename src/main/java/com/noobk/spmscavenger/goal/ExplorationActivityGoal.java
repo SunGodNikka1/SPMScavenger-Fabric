@@ -8,6 +8,7 @@ import com.noobk.spmscavenger.opinion.AffectiveStateService;
 import com.noobk.spmscavenger.opinion.DiscretionaryActivityDirector;
 import com.noobk.spmscavenger.opinion.DiscretionaryAvailability;
 import com.noobk.spmscavenger.opinion.ExploreReadinessThresholds;
+import com.noobk.spmscavenger.opinion.PassiveExpressionService;
 import com.noobk.spmscavenger.ToolTier;
 import com.noobk.spmscavenger.ToolTierPolicy;
 import com.noobk.spmscavenger.ScavengerConfig;
@@ -119,6 +120,7 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
 
         RestSessionCoordinator.validate(mob, observation, mob.level().getGameTime());
         AffectiveStateService.observe(mob, observation, OBSERVE_INTERVAL);
+        PassiveExpressionService.observe(mob, observation);
         DiscretionaryAvailability availability = new DiscretionaryAvailability(cfg.exploring, cfg.campfire);
         long now = mob.level().getGameTime();
         int idleTicks = ExploreReadinessThresholds.idleTicks(cfg, mob.getUUID());

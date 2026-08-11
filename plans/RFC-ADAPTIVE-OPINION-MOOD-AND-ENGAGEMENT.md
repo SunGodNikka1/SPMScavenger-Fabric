@@ -8,14 +8,14 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
-| **Mode** | `VALIDATION` — GAO-7 implemented and statically accepted; GAO-8 is next product frontier |
-| **Status** | GAO-0 through GAO-7 (**CLOSED**) + GAO-4.1 + **RET-GAO-1** `IMPLEMENTED / STATIC ACCEPT` (581 tests); not a blanket runtime gate |
+| **Mode** | `VALIDATION` — GAO-8A implemented; final clean-build/static evidence recorded |
+| **Status** | GAO-0 through GAO-8A (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1** (593 tests); runtime visual cadence remains unverified |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-10 (Task 39: GAO-7 PersonalityModel static accept) |
+| **Last update** | 2026-08-10 (Task 40: GAO-8A passive physical expression static accept) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,10 +39,9 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** **GAO-8** observable expression product/design decision. GAO-7 is
-**CLOSED / STATIC ACCEPT** after Task 39. Runtime is **not** the default validation gate;
-escalate only for `RUNTIME_QUESTION`s (navigation, SPM goal contention, modpack perf). See
-**PD-GAO-12** and Topic: Validation.
+**Nearest frontier:** GAO-8A is **CLOSED / STATIC ACCEPT** after Task 40. A later GAO-8B may add
+read-only debug/UI expression, or a narrow runtime question may tune visual cadence, but neither is
+implicitly authorized. Runtime is not the default gate under PD-GAO-12.
 
 ---
 
@@ -892,20 +891,154 @@ chunk starts ticking again.
 
 ---
 
-## Topic: Observable expression (deferred UX)
+## Topic: Observable expression — GAO-8A passive physical expression
 
-**Status:** `DEFERRED` — not gen-1
+**Status:** `IMPLEMENTED / STATIC ACCEPT` — Task 40; runtime visual cadence `UNVERIFIED`
 
-Behavior communicates state without chat bubbles:
+### Goal and hard boundary
 
-| State | Observable bias (examples) |
+Expose affect/personality through harmless physical attention while keeping expression separate
+from activity choice and authority.
+
+| GAO-8A may | GAO-8A must not |
 | --- | --- |
-| VERY ENGAGED | Decisive movement; longer project stickiness |
-| RESTLESS | More look-around; faster opportunity rescans |
-| BORED | Seeks novelty; longer travel; activity switches |
-| STRESSED | Favors familiar/safe tasks or shelter |
+| Rotate head / choose a LOOK target | Start exploration, REST, following, gathering, or any other activity |
+| Change bounded cosmetic attention cadence/hold time | Cancel or delay mining, progression, commands, combat, eating, or safety/recovery |
+| Emit tiny idle-only pose effects after separate review | Claim `MOVE`, operate navigation, jump, break/place/use blocks, or change inventory |
+| Expose read-only expression state to later debug/UI | Change Goal priorities, modify SPM relationships, or write OpinionMemory |
 
-**Gen-0 expression without new goals (B-12):** Reuse `AnticsGoal` (mimicry, bunny-hop) as **output** of high sociability + RESTLESS — config-gated today; Opinion only biases eligibility (`mimicry` soft boost when player nearby and boredom high). No second greeting system (SPM-2).
+**User product contract (PD-GAO-13):** BORED shifts attention more often; CURIOUS uses broader
+non-semantic gaze variation; SOCIABLE prefers nearby PlayerMobs the mob already likes; STRESSED uses
+shorter vigilant holds; ENGAGED preserves steadier task attention. These are expressions, not
+decisions.
+
+### Evidence from the current host/addon
+
+`CODE_CONFIRMED`:
+
+- SPM registers `LookAtPlayerGoal` at priority 9 and `RandomLookAroundGoal` at 10; its command,
+  safety, combat, social, eating, loot, farming, and train goals also own `LOOK` where needed
+  (`PlayerMobEntity.registerGoals`, pinned source reference).
+- Addon work goals generally own `MOVE+LOOK`; `ExploringGoal` owns `MOVE` only
+  (`SpmScavenger.installExploration`; `ExploringGoal` constructor).
+- `ObjectiveReadout.isNoise` filters subclasses of `RandomLookAroundGoal`, providing a host-owned
+  way to keep a cosmetic expression out of the objective line.
+- `AnticsGoal` is flagless but calls `mob.getLookControl().setLookAt(player, ...)` during mimicry.
+  Its navigation-done/no-target checks do **not** prove another running goal is not using `LOOK`.
+
+Required negative evidence:
+
+1. Dedicated `PassiveExpression` / `ExpressionGoal` / `AttentionPolicy` owner — **NOT FOUND**.
+2. Terrain-salience / interesting-terrain provider — **NOT FOUND**.
+3. Mood/personality debug or synchronized UI output — **NOT FOUND**.
+
+Therefore GAO-8A must not claim true terrain-interest recognition or debug UI parity, and it must
+not reuse the current flagless `AnticsGoal` look write as its authority mechanism.
+
+### Candidate designs
+
+| Option | Design | Benefit | Strongest objection / failure mode | Gate |
+| --- | --- | --- | --- | --- |
+| **A — implemented** | Dedicated priority-8 `LOOK`-only `PassiveExpressionGoal`, subclassing `RandomLookAroundGoal` only for SPM noise/readout compatibility; bounded episodes; higher-priority LOOK owners preempt normally | Minecraft's scheduler owns gaze arbitration; coexists with priority-8 `ExploringGoal` because flags are disjoint; never owns MOVE | While active it intentionally replaces SPM's priority-9/10 cosmetic look goals; a bad continuation bound could make gaze look robotic | **IMPLEMENTED / STATIC ACCEPT** |
+| B | Keep the flagless observer and call `LookControl` directly | No new scheduled Goal | Repeats the proven `AnticsGoal` flaw: direct writes can overwrite eating, commands, combat, or task gaze; tick order becomes hidden arbitration | **REJECTED** |
+| C | Remove/replace SPM's vanilla look goals with opinion-aware variants | Complete control of gaze | Brittle host fork-by-addon; changes behavior when Opinion is off and increases update conflicts | **REJECTED** |
+
+**Switch condition:** choose a host-provided cosmetic attention API instead of Option A if a future
+SPM version exposes one with explicit scheduler ownership. No such API is present in v0.86.0.
+
+### Proposed GAO-8A architecture
+
+```text
+existing 10-tick ActivityObservationService scan
+        ↓ (no second selector scan)
+AffectiveState + PersonalityModel + activity observation
+        ↓
+PassiveExpressionPolicy (pure; no world/action authority)
+        ↓
+ephemeral PassiveExpressionSnapshot in existing bounded MobExperienceContext
+        ↓
+priority-8 PassiveExpressionGoal [LOOK only, bounded, interruptible]
+        ↓
+LookControl only
+```
+
+`PassiveExpressionSnapshot` is ephemeral: it is not persisted, not learned, and is invalidated on
+freeze/unload. The existing bounded `OpinionExperienceRegistry` remains the lifetime owner; GAO-8A
+must not add another UUID map.
+
+Eligibility is limited to `discretionaryIdleCandidate`, `resting`, or `exploring`. Any meaningful
+work classification suppresses a new expression episode. Live target/combat is an immediate veto;
+higher-priority `LOOK` goals remain the final physical veto through GoalSelector arbitration.
+
+| Signal | GAO-8A expression | Explicit non-claim |
+| --- | --- | --- |
+| BORED | Shorter bounded cooldown between idle gaze changes | Does not unlock Explore or force an activity switch |
+| CURIOUS personality/novelty | Wider random gaze envelope while idle/exploring | Does not detect caves, POIs, resources, or “interesting terrain” |
+| SOCIABLE | Prefer a nearby PlayerMob with self `feelingToward > neutral`; bounded radius/cadence | Does not follow, greet, reserve, or require reciprocal companionship |
+| STRESSED | Shorter attention holds / more frequent safe-idle vigilance | Does not acquire a target, flee, shelter, or override combat |
+| ENGAGED / active work | **No injected gaze**; task Goal retains its own stable LOOK | Does not invent a task target when the executor exposes none |
+
+The initial social radius may reuse SPM's 8-block `LookAtPlayerGoal` range (**Borrowed**): it fits
+the existing visual-attention envelope and bounds entity queries; the risk is that a liked mob just
+outside eight blocks receives no expression. Scan only when an expression episode is eligible and
+stagger by entity id—never per tick. Cadence/hold constants remain tuning candidates, but every
+episode must be finite and immediately interruptible.
+
+### Existing `AnticsGoal` interaction
+
+GAO-8A must not mood-wire bunny hopping: jumping can change collision, combat pursuit, fall timing,
+and navigation, so it is not passive expression. Crouch mimicry may remain, but when Opinion is
+enabled its direct `LookControl` write must not bypass the scheduled LOOK owner. Preserve the exact
+legacy path when `opinion.enabled=false` for GAO-PARITY. This is a narrow prerequisite inside Task
+40, not authorization for a broader Antics redesign.
+
+### Pre-implementation behavioral prediction (MAIBS-1)
+
+| Layer | Result |
+| --- | --- |
+| Intended behavior | Mood/personality becomes visible as harmless head attention |
+| Implemented mechanism (planned) | Bounded priority-8 LOOK-only episodes reading an ephemeral policy snapshot |
+| Predicted behavior | Idle/resting mobs occasionally look around differently; curious mobs may glance more broadly while exploring; liked nearby PlayerMobs receive gaze; work/combat gaze wins immediately |
+| Failure/weirdness | Repetitive head snapping; several mobs staring at the same friend; expression never runs because a host cosmetic LOOK goal is already active; stale snapshot produces up to one cadence of mismatched expression |
+| Confidence | Architecture `CODE_CONFIRMED`; exact visual cadence `UNVERIFIED` until runtime |
+
+**Acceptable stepping stones:** bounded repetition and occasional shared social gaze. **Architecture
+defects:** any navigation write, persistent LOOK capture, visible objective label, scheduler rescan,
+or one tick of expression surviving a higher-priority LOOK owner.
+
+**Falsifying runtime experiment:** spawn idle, exploring, eating, commanded, mining, and fighting
+PlayerMobs together; mood-seed each expression profile; observe head motion/objective readout for
+several minutes. A task gaze delayed or overwritten falsifies the design. This is a targeted
+`RUNTIME_QUESTION`, not automatically authorized.
+
+### Task 40 — GAO-8A passive physical expression (`COMPLETE / STATIC ACCEPT`)
+
+| Field | Contract |
+| --- | --- |
+| Owner | Agent_Codex |
+| Dependencies | GAO-0, GAO-1, GAO-6, GAO-7 complete |
+| Files/systems | New pure expression policy/snapshot + LOOK-only goal; existing observer cadence/context; narrow `AnticsGoal` non-interference seam; focused tests; RFC evidence |
+| Constraints | No MOVE/navigation/jump/world interaction; no second selector scan/map; no OpinionMemory mutation; no new activity/intent; no UI/network sync; Opinion-off parity |
+| Must happen | BORED/STRESSED alter bounded gaze cadence; CURIOUS alters non-semantic gaze breadth; SOCIABLE can select a nearby self-liked PlayerMob; higher-priority LOOK owner preempts; expression remains ObjectiveReadout noise |
+| Must not happen | Expression starts/cancels work, appears as an objective, overwrites combat/eat/command/task gaze, scans terrain/resources, or changes behavior with Opinion disabled |
+| Tests | Pure policy bounds/determinism; zero-signal/neutral behavior; activity eligibility; self-liked vs neutral/hostile social candidates; Goal flags/priority/finite continuation; objective-noise inheritance; Antics opinion-on guard + opinion-off parity; registry/unload invalidation |
+| Verification | Focused tests, full suite, clean build, `git diff --check`, post-implementation MAIBS; no Minecraft launch without separate approval |
+
+### Accepted implementation
+
+Implemented: passive expression is LOOK-only scheduler output; Option A; no true terrain salience in
+8A; ENGAGED uses non-interference; no bunny-hop mood wiring; no second observer scan.
+
+Why: it uses Minecraft's real flag arbitration, preserves SPM authority, and keeps expression from
+silently becoming another decision system.
+
+Implementer/reviewer: Agent_Codex. The user authorized GAO-8A after the hard product boundary and
+recommended Option A were recorded.
+
+Remaining objection: visual naturalness and precise cadence cannot be proven statically. This does
+not weaken the hierarchy gate, but may create a narrow post-build runtime tuning question.
+
+Status: `IMPLEMENTED / STATIC ACCEPT`.
 
 ---
 
@@ -1182,7 +1315,7 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 through GAO-6 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-7+ open
+**Status:** GAO-0 through GAO-8A + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; later GAO-8B UI/runtime tuning unplanned
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
@@ -1200,7 +1333,7 @@ mandatory artificial diversity between cooperative mobs.
 | **RT-GAO-1** | Targeted runtime falsification | **NARROWED** — not a default feature gate; file `RUNTIME_QUESTION` probes only | PD-GAO-12 |
 | **GAO-6** | ENTITY bridge | **CLOSED:** `SpmEntityOpinionBridge`, `EntityOpinionMemory`, GAO-6R `SocialExperienceEpisodes` | GAO-4, RET-GAO-1 |
 | **GAO-7** | PersonalityModel | **CLOSED / STATIC ACCEPT:** immutable six-trait model; SPM-host anchors + deterministic UUID latent traits; bounded subjective learning at the single normalized seam; snapshot lifecycle; 581-test clean build | GAO-2, GAO-6 |
-| **GAO-8** | Observable expression | Movement/scan biases | GAO-4, deferred UX |
+| **GAO-8A** | Passive physical expression | **CLOSED / STATIC ACCEPT:** bounded scheduler-owned LOOK expression; Task 40; 593 tests | GAO-0, GAO-1, GAO-6, GAO-7 |
 
 ### GAO-0b implementation task (`IMPLEMENTED / STATIC VERIFIED`)
 
@@ -1391,6 +1524,7 @@ companion coordination—not competing activity semantics.
 | **PD-GAO-10** | `LOCKED (direction)` | Switch/hold policy | rescore every tick / **commitment + switch margin** | **Adoption-anchored minimum commitment** + meaningful switch margin before incumbent yields; exact ticks tuned in implementation |
 | **PD-GAO-11** | `LOCKED` | REST executor for discretionary choice | Campfire / SeekShelter / both | **Campfire + `RestSessionClaim` only** — `SeekShelterGoal` (p2 safety) is never the discretionary REST executor |
 | **PD-GAO-12** | `LOCKED` | When is runtime required vs static ACCEPT? | runtime default gate / static-first / hybrid | **Static-first:** `CODE + TESTS + MAIBS` → confident → **ACCEPT STATIC**; runtime only when uncertainty is Minecraft engine, SPM `GoalSelector`, mod interaction, or perf/heap — not utility arithmetic |
+| **PD-GAO-13** | `LOCKED` | What authority may observable mood/personality expression have? | passive LOOK/cosmetic output / activity-driving behavior | **Passive expression only:** head/look, harmless idle cadence, tiny cosmetic output, later debug/UI; never activity choice, MOVE authority, priority changes, or command/combat/progression override — user 2026-08-10 |
 
 #### PD-GAO-03 death semantics (`LOCKED` — GAO-2)
 
@@ -1425,6 +1559,7 @@ in-memory learning plus runtime death reset only.
 | **GAO-REST-LIFECYCLE** | Campfire/shelter arrival opens bounded REST that survives delivery-goal stop and closes on invalidation |
 | **GAO-ATTRIBUTION** | Episode IDs and outcome classes prevent interrupt, command, frontier, and event-frequency mislearning |
 | **GAO-PERSONALITY** | Personality modifies only bounded subjective learning deltas at one normalized-evidence seam; neutral personality preserves GAO-2 exactly and no trait grants scheduler authority |
+| **GAO-EXPRESSION** | Passive expression owns LOOK only through GoalSelector, is finite/interruptible/noise-filtered, uses no navigation/world action, and cannot overwrite higher-priority authority |
 | **GAO-TRACE** | Bounded per-mob trace covers candidates/scores → intent → claim → yield/handoff → executor admission/start → exact terminal cause |
 | **MAIBS-1** | Multi-minute discretionary sessions look human-plausible (explore → rest → socialize → return) |
 | **AV-STATIC** | Utility math, parity paths, registry lifetime, and route-bias arithmetic provable from code + deterministic tests without launch |
@@ -1479,6 +1614,10 @@ _Static note:_ director path `CONFIRMED` in unit tests; PD-GAO-01 C threshold `S
 | **GAO-M11** | Unknown Goal remains running without progress for minutes | Slow restlessness rises while scheduler remains occupied and non-preemptible; owning lifecycle controls release | Frozen affect or Opinion preempting unknown authority |
 | **GAO-M12** | REST selected, then entity unloads for days | Affect/opinion freeze; intent/claim invalidated; snapshot park on unload; rescored on load | Ancient intent or stale campfire claim resurrects |
 | **GAO-M13** | Two mobs receive the same repeated successful exploration/social/mining evidence but have opposed relevant traits | Preference deltas diverge within the configured bound; later discretionary ranking may diverge | Immediate forced action, mandatory-work refusal, different repetition/duration, or a blocked outcome becoming learnable |
+| **GAO-M14** | BORED/CURIOUS idle mob; only host cosmetic look goals active | Bounded expression LOOK episode changes harmless gaze cadence/breadth | MOVE/navigation, new activity, terrain/resource scan, or objective label |
+| **GAO-M15** | Expression active; EatFood/command/combat/mining LOOK goal becomes eligible | Higher-priority owner preempts expression immediately and completes normally | Expression overwrites or delays task gaze |
+| **GAO-M16** | Three sociable mobs like the same nearby PlayerMob | Each may look briefly; starts/cadence are staggered and finite | Lockstep permanent staring, following, greeting, or resource contention |
+| **GAO-M17** | `opinion.enabled=false`, identical seed/config | Existing Antics + SPM look behavior remains on the legacy path | GAO-8 goal starts or mood/personality changes gaze |
 
 Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manual reload adds confidence only; not required to accept feature per PD-GAO-12.
 
@@ -1603,6 +1742,10 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 | D-GAO-028 | Personality interprets normalized experience; it never selects or commands an activity | `LOCKED` | User-confirmed GAO-7 boundary; preserves director and GoalSelector ownership |
 | D-GAO-029 | Hybrid immutable personality uses SPM friendliness/fight-flight anchors plus deterministic UUID latent traits | `IMPLEMENTED` | `PersonalityFactory`; neutral host fallback; profile retained in bounded park snapshot |
 | D-GAO-030 | Scale subjective preference/reward only, initially within `[0.75,1.25]`; objective repetition/duration and eligibility remain unchanged | `IMPLEMENTED` | Exact neutral parity plus no-create/no-invert/no-eligibility tests |
+| D-GAO-031 | GAO-8A expression uses a finite, interruptible priority-8 `LOOK`-only Goal; it never owns MOVE or writes navigation | `IMPLEMENTED` | `PassiveExpressionGoal`; Option A accepted by Task 40 authorization |
+| D-GAO-032 | Expression eligibility is idle/rest/explore only; meaningful work suppresses injection and ENGAGED means preserving the executor's gaze | `IMPLEMENTED` | `PassiveExpressionPolicy`; engaged-expedition abstention regression test |
+| D-GAO-033 | GAO-8A curiosity is bounded non-semantic gaze variation; terrain/activity salience remains deferred until a real provider exists | `IMPLEMENTED` | Bounded angular envelope; static negative resource/terrain probes |
+| D-GAO-034 | GAO-8A does not mood-wire bunny hopping; flagless Antics gaze cannot bypass scheduled LOOK when Opinion is enabled, while Opinion-off retains legacy parity | `IMPLEMENTED` | `AnticsGoal.mayWriteMimicLook`; parity test |
 
 ---
 
@@ -1610,6 +1753,8 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-10 | Agent_Codex | **Task 40 GAO-8A implementation.** Added pure expression policy/profile/tone, ephemeral bounded-context publication, priority-8 LOOK-only passive goal, strict self-liked social gaze, Opinion-on Antics gaze guard, and 12 focused tests. Post-GREEN MAIBS found/repaired lost-social-target world-origin gaze, master-disable stale eligibility, and missing ENGAGED abstention. Focused tests, full suite, and clean build pass: 593 tests. Runtime visual cadence remains UNVERIFIED; no launch, commit, push, or PR |
+| 2026-08-10 | Agent_Codex | **GAO-8A RFC/MAIBS design.** Converted the user passive-expression boundary into Task 40; inspected SPM/addon LOOK flags and ObjectiveReadout; found the existing flagless Antics direct-gaze hazard; compared scheduler-owned LOOK vs direct observer writes vs host-goal replacement; proposed D-GAO-031…034 for user acceptance; added GAO-M14…M17 and three NOT FOUND probes. No Java edits, tests, build, runtime, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **Task 39 GAO-7 implementation.** Added immutable `PersonalityModel`, deterministic host-anchored factory, positive bounded `PersonalityLearningResponse`, read-only SPM disposition access, one learning-seam integration, bounded snapshot lifecycle, and invariants for neutral parity/no-create/no-invert/no-eligibility/objective-fact preservation. Focused tests, full suite, and clean build pass: 581 tests, zero failures/errors/skips. Static MAIBS PASS; runtime visual differentiation remains UNVERIFIED and non-blocking under PD-GAO-12. No Minecraft launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **GAO-7 decision-ready contract.** Confirmed GAO-6R closure evidence; located the single context-aware learning seam and SPM's two public stable traits; rejected wholesale evidence scaling; compared hybrid, UUID-only, and stored-profile designs; added D-GAO-028…030, GAO-M13, Task 39, MAIBS prediction, parity/RET gates, and one implementation decision. No Java edits, tests, build, runtime, commit, or push |
 | 2026-08-10 | Agent_Cursor | **Tasks 35–36 + PD-GAO-12.** RET-GAO-1 bounded registry; GAO-5B destination ranking; static acceptance workflow; RT-GAO-1 narrowed; 556 tests; MAIBS post-impl reconciled |
