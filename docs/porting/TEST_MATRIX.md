@@ -344,12 +344,13 @@ outcomes remain `UNVERIFIED`.
 | SCR-2C over capacity | `spm_shelter:scenario/over_capacity` | Interior capacity fills before separated lower-tier fallback | Porch displaces available room capacity or all mobs converge | Policy static `CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2D unreachable leaders | Four highest-tier paths fail | At most four probes now; later scans skip recent failures and advance | Same four positions suppress fallback forever | Rejection-ledger unit/static `CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2E lifecycle | Suspend, dawn, unload, death, server stop, expiry | Matching commitment retains/refreshes then conditionally releases its reservation | Old commitment releases newer ownership or static map grows forever | Unit/static `CONFIRMED`; heap trend `UNVERIFIED` |
+| SCR-2R doorway depth | Closed-door house with deeper free room cells | After crossing, mob continues to the exact deeper reservation | Door-adjacent cell ranks as interior or two-block arrival tolerance completes at threshold | User reproduced old failure; policy/contract tests `CONFIRMED`; repaired runtime `UNVERIFIED` |
 
-Static gates: 21 focused `Shelter*Test` tests and the full 649-test suite pass with zero failures,
+Static gates after SCR-2R: 24 focused `Shelter*Test` tests and the full 652-test suite pass with zero failures,
 errors, or skips. Selection is capped at 28 semantic evaluations and four path probes per scan;
 failed-candidate state is per-goal and capped at 16, while the shared reservation registry is keyed
 by owner UUID with production expiry/cancel/unload/death/server-stop eviction. `clean build` passes;
 artifact `build/libs/spmscavenger-1.9.4.jar`, SHA-256
-`451A5891E338EADEC66D5546EB9498DA156C1BC1F3E86040ACD089C16C2A9CF7`, contains the SCR-2
+`4347449A866D88695E01E2A867C4467F1DB68A04C68B4DB034888740809C3552`, contains the SCR-2/R
 classes and excludes the test datapack. Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`; physical
 outcome remains open.

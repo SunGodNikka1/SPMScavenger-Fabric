@@ -15,9 +15,9 @@ class ShelterSelectionPolicyTest {
     @Test
     void semanticTierAlwaysBeatsDistanceAndQualityArithmetic() {
         ShelterSelectionPolicy.RankedCandidate farInterior = ranked(
-                25, ShelterSelectionPolicy.Tier.INTERIOR_ROOM, 3, 3, 0);
+                25, ShelterSelectionPolicy.Tier.INTERIOR_ROOM, 3, 3, 5, 0);
         ShelterSelectionPolicy.RankedCandidate nearPorch = ranked(
-                4, ShelterSelectionPolicy.Tier.PORCH_OVERHANG, 1, 5, 15);
+                4, ShelterSelectionPolicy.Tier.PORCH_OVERHANG, 1, 5, 1, 15);
 
         List<ShelterSelectionPolicy.RankedCandidate> ranked =
                 ShelterSelectionPolicy.rank(List.of(nearPorch, farInterior));
@@ -28,15 +28,37 @@ class ShelterSelectionPolicyTest {
     @Test
     void usableBedRanksAboveInteriorAndClassificationIsExhaustive() {
         assertEquals(ShelterSelectionPolicy.Tier.USABLE_BED,
-                ShelterSelectionPolicy.classify(true, new ShelterSelectionPolicy.Evidence(0, 0)));
+                ShelterSelectionPolicy.classify(true, new ShelterSelectionPolicy.Evidence(0, 0, 0)));
         assertEquals(ShelterSelectionPolicy.Tier.INTERIOR_ROOM,
-                ShelterSelectionPolicy.classify(false, new ShelterSelectionPolicy.Evidence(3, 3)));
+                ShelterSelectionPolicy.classify(false, new ShelterSelectionPolicy.Evidence(3, 3, 5)));
         assertEquals(ShelterSelectionPolicy.Tier.DEEPLY_COVERED,
-                ShelterSelectionPolicy.classify(false, new ShelterSelectionPolicy.Evidence(2, 4)));
+                ShelterSelectionPolicy.classify(false, new ShelterSelectionPolicy.Evidence(2, 4, 5)));
         assertEquals(ShelterSelectionPolicy.Tier.PORCH_OVERHANG,
-                ShelterSelectionPolicy.classify(false, new ShelterSelectionPolicy.Evidence(1, 1)));
+                ShelterSelectionPolicy.classify(false, new ShelterSelectionPolicy.Evidence(1, 1, 5)));
         assertEquals(ShelterSelectionPolicy.Tier.EXPOSED,
-                ShelterSelectionPolicy.classify(false, new ShelterSelectionPolicy.Evidence(0, 0)));
+                ShelterSelectionPolicy.classify(false, new ShelterSelectionPolicy.Evidence(0, 0, 5)));
+    }
+
+    @Test
+    void doorwayAdjacencyCannotMasqueradeAsInterior() {
+        assertEquals(ShelterSelectionPolicy.Tier.PORCH_OVERHANG,
+                ShelterSelectionPolicy.classify(
+                        false, new ShelterSelectionPolicy.Evidence(4, 5, 1)));
+    }
+
+    @Test
+    void deeperInteriorWinsWithinTierAndArrivalRequiresReservedBlock() {
+        ShelterSelectionPolicy.RankedCandidate threshold = ranked(
+                3, ShelterSelectionPolicy.Tier.INTERIOR_ROOM, 4, 5, 2, 15);
+        ShelterSelectionPolicy.RankedCandidate roomCenter = ranked(
+                6, ShelterSelectionPolicy.Tier.INTERIOR_ROOM, 4, 5, 4, 8);
+
+        assertEquals(roomCenter,
+                ShelterSelectionPolicy.rank(List.of(threshold, roomCenter)).getFirst());
+        assertFalse(ShelterSelectionPolicy.arrivedAtStandingSite(
+                new BlockPos(5, 64, 0), new BlockPos(7, 64, 0)));
+        assertTrue(ShelterSelectionPolicy.arrivedAtStandingSite(
+                new BlockPos(7, 64, 0), new BlockPos(7, 64, 0)));
     }
 
     @Test
@@ -97,11 +119,12 @@ class ShelterSelectionPolicyTest {
             ShelterSelectionPolicy.Tier tier,
             int boundaries,
             int roof,
+            int doorClearance,
             int light) {
         return new ShelterSelectionPolicy.RankedCandidate(
                 raw((int) distance, 64, 0, false, 0, light, distance),
                 tier,
-                new ShelterSelectionPolicy.Evidence(boundaries, roof));
+                new ShelterSelectionPolicy.Evidence(boundaries, roof, doorClearance));
     }
 
     private static ShelterSelectionPolicy.RawCandidate raw(

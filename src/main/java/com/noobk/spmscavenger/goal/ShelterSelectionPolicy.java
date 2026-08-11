@@ -22,6 +22,7 @@ final class ShelterSelectionPolicy {
     static final int MAX_SHORTLIST = MAX_GENERIC_CANDIDATES + MAX_BED_CANDIDATES;
     static final int MAX_PATH_PROBES = 4;
     static final int BOUNDARY_PROBE_DISTANCE = 5;
+    static final int DOOR_PROBE_DISTANCE = 4;
 
     enum Tier {
         EXPOSED,
@@ -48,13 +49,16 @@ final class ShelterSelectionPolicy {
         }
     }
 
-    record Evidence(int horizontalBoundaries, int roofCoverage) {
+    record Evidence(int horizontalBoundaries, int roofCoverage, int doorClearance) {
         Evidence {
             if (horizontalBoundaries < 0 || horizontalBoundaries > 4) {
                 throw new IllegalArgumentException("horizontalBoundaries must be 0..4");
             }
             if (roofCoverage < 0 || roofCoverage > 5) {
                 throw new IllegalArgumentException("roofCoverage must be 0..5");
+            }
+            if (doorClearance < 0 || doorClearance > DOOR_PROBE_DISTANCE + 1) {
+                throw new IllegalArgumentException("doorClearance must be 0..5");
             }
         }
     }
@@ -116,6 +120,8 @@ final class ShelterSelectionPolicy {
     private static final Comparator<RankedCandidate> SEMANTIC_ORDER = Comparator
             .comparingInt((RankedCandidate candidate) -> candidate.tier().ordinal()).reversed()
             .thenComparing(Comparator.comparingInt(
+                    ShelterSelectionPolicy::genericDoorClearance).reversed())
+            .thenComparing(Comparator.comparingInt(
                     (RankedCandidate candidate) -> candidate.evidence().horizontalBoundaries()).reversed())
             .thenComparing(Comparator.comparingInt(
                     (RankedCandidate candidate) -> candidate.evidence().roofCoverage()).reversed())
@@ -132,6 +138,9 @@ final class ShelterSelectionPolicy {
     static Tier classify(boolean usableBed, Evidence evidence) {
         if (usableBed) {
             return Tier.USABLE_BED;
+        }
+        if (evidence.doorClearance() <= 1) {
+            return evidence.roofCoverage() >= 1 ? Tier.PORCH_OVERHANG : Tier.EXPOSED;
         }
         if (evidence.horizontalBoundaries() >= 3 && evidence.roofCoverage() >= 3) {
             return Tier.INTERIOR_ROOM;
@@ -208,6 +217,14 @@ final class ShelterSelectionPolicy {
 
     static List<RankedCandidate> rank(Collection<RankedCandidate> candidates) {
         return candidates.stream().sorted(SEMANTIC_ORDER).toList();
+    }
+
+    static boolean arrivedAtStandingSite(BlockPos current, BlockPos destination) {
+        return current.equals(destination);
+    }
+
+    private static int genericDoorClearance(RankedCandidate candidate) {
+        return candidate.raw().bed() ? 0 : candidate.evidence().doorClearance();
     }
 
     private static RawCandidate cheaper(RawCandidate left, RawCandidate right) {

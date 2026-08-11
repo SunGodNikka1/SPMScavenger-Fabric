@@ -9,7 +9,7 @@
 | **Target progression** | **Vanilla Minecraft 1.21.1** survival (not a third-party tech mod) |
 | **Scope** | Autonomous progression architecture plus narrowly authorized repairs to existing survival executors |
 | **Mode** | `WORKING_FROM_PLAN` — Shelter Interior & Capacity Intelligence (`SCR-2`) authorized |
-| **Status** | `RESEARCHING`; `SCR-1 RUNTIME_CONFIRMED`; `SCR-2 IMPLEMENTED / STATIC VERIFIED / RUNTIME PENDING`; `SCR-3 DEFERRED` |
+| **Status** | `RESEARCHING`; `SCR-1 RUNTIME_CONFIRMED`; `SCR-2R IMPLEMENTED / STATIC VERIFIED / RUNTIME RECHECK PENDING`; `SCR-3 DEFERRED` |
 | **User constraint** | The RFC was originally design-only; the user has now separately authorized `SCR-1` and `SCR-2` implementation. Minecraft launches, commits, pushes, and `SCR-3` remain separately gated |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `progression/TaskLifecycle.java` |
 | **Owners** | User (product); architecture TBD |
@@ -594,10 +594,10 @@ most 16 failed positions for 80 ticks, sweeps once per shelter scan, and lets la
 reachable fallback candidates without making the path budget unbounded. It deliberately does not
 remember semantic shelter quality and is not SCR-3 home memory.
 
-Static evidence: 21 focused `Shelter*Test` tests pass; the full 649-test suite and `clean build`
+Static evidence after SCR-2R: 24 focused `Shelter*Test` tests pass; the full 652-test suite and `clean build`
 pass with zero failures, errors, or skips. Final remapped artifact:
 `build/libs/spmscavenger-1.9.4.jar`, SHA-256
-`451A5891E338EADEC66D5546EB9498DA156C1BC1F3E86040ACD089C16C2A9CF7`; it contains all SCR-2
+`4347449A866D88695E01E2A867C4467F1DB68A04C68B4DB034888740809C3552`; it contains all SCR-2
 classes and excludes the temporary datapack. Minecraft was not launched, so interior recognition
 and multi-mob physical distribution remain `UNVERIFIED`.
 
@@ -617,6 +617,45 @@ and multi-mob physical distribution remain `UNVERIFIED`.
 remained defective. **Action:** implemented and statically verified the bounded
 classifier/ranker/path/reservation pipeline. **Frontier after:** run SCR-2A/B/C with separate
 Minecraft-launch approval; keep SCR-3 blocked until those runtime geometry/capacity gates pass.
+
+### SCR-2R — Doorway Depth and Exact Arrival Repair
+
+**Status:** `IMPLEMENTED / STATIC VERIFIED / RUNTIME RECHECK PENDING`
+
+**Evidence:** `RUNTIME_CONFIRMED` by user after SCR-2: a PlayerMob opens the door, crosses into the
+house, stops immediately inside the doorway, then closes the door. Door closure itself is normal
+SPM door-operation behavior; treating the circulation cell as the completed shelter is not.
+
+#### Behavioral Prediction
+
+| Layer | Result |
+| --- | --- |
+| Intended behavior | Enter the usable room and settle away from its doorway when deeper capacity exists |
+| Implemented mechanism before SCR-2R | Door-adjacent and room-center cells can share the same `INTERIOR_ROOM` evidence, so distance favors the doorway; `ARRIVED_SQR = 4` also accepts completion up to two blocks from the selected cell |
+| Predicted repair | Bounded doorway-clearance evidence ranks deeper cells first, an immediately adjacent door cell cannot receive interior tier, and non-bed arrival requires the mob's actual block position to equal the reserved site |
+| Failure/weirdness | Tiny rooms may only offer a doorway-adjacent fallback; another entity occupying the reserved cell can cause bounded repath/abandon rather than false arrival |
+| Confidence | Cause `CODE + RUNTIME_CONFIRMED`; repaired physical outcome remains `UNVERIFIED` until the user reruns the house scenario |
+
+Coordinate trace: closed door `(4,64,0)`, threshold cell `(5,64,0)`, deeper room cells
+`(7..8,64,0)`. Before repair, both can have four bounded horizontal boundaries plus continuous
+roof; distance chooses `(5,64,0)`. Even if `(7,64,0)` wins, the old squared arrival threshold `4`
+can declare success from `(5,64,0)`. The repair must eliminate both routes to doorstep completion.
+
+Alternatives: tightening arrival alone prevents early completion but still deliberately selects
+the doorway cell; hard-excluding every position near a door can make small valid houses unusable.
+The selected design combines exact-cell arrival with bounded door-depth ranking and downgrades only
+cells immediately adjacent to a door. It adds no structure recognition, new Goal, or memory.
+
+**Must happen:** when deeper reachable interior capacity exists, the reserved destination and final
+mob block are deeper than the inside threshold. **Must not happen:** adjacency to a door is accepted
+as `INTERIOR_ROOM`, a mob one or two blocks from its reservation is marked arrived, or door-depth
+logic changes GoalSelector authority/SCR-1 commitment ownership.
+
+Implementation evidence: `Evidence` now includes bounded `doorClearance`; generic candidates one
+block from a door are capped at `PORCH_OVERHANG`, and same-tier ranking compares clearance before
+enclosure/light/distance. `SeekShelterGoal` no longer contains `ARRIVED_SQR`; non-bed arrival uses
+exact reserved-block equality. Twenty-four focused shelter tests, all 652 tests, and `clean build`
+pass. Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`; runtime remains `UNVERIFIED` for the repair.
 
 ---
 
@@ -827,7 +866,8 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 
 | Agent | Date | Change |
 | --- | --- | --- |
-| Agent_Codex | 2026-08-11 | Implemented `SCR-2`: bounded diverse shortlist, lexicographic interior tiers, four entity-ticking path probes, commitment-owned spacing reservations, physical occupancy admission, bounded failed-candidate backoff, 21 focused tests, 649-test suite, expanded runtime datapack, and post-implementation MAIBS; runtime remains pending |
+| Agent_Codex | 2026-08-11 | Runtime feedback falsified SCR-2 doorstep completion; implemented `SCR-2R` door-depth ranking, door-adjacent tier cap, exact reserved-cell arrival, regression tests, 652-test clean build, and updated MAIBS/docs; runtime recheck pending |
+| Agent_Codex | 2026-08-11 | Implemented `SCR-2`: bounded diverse shortlist, lexicographic interior tiers, four entity-ticking path probes, commitment-owned spacing reservations, physical occupancy admission, bounded failed-candidate backoff, expanded runtime datapack, and post-implementation MAIBS; later superseded in part by SCR-2R |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-1`: persistent bounded shelter commitment, suspend/cancel taxonomy through the shared observer, fresh-path resume, stay/authority invalidation, canonical bed claims, unload/death cleanup, 13 focused tests, 639-test clean build, runtime datapack, and post-GREEN MAIBS. Runtime remains pending before Task 42B |
 | Agent_Cursor | 2026-08-08 | Initial RFC from SPM v0.86.0 source audit + scavenger codebase; user requested design-only (no mod) |
 

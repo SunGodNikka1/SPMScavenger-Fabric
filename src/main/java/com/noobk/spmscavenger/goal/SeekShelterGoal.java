@@ -85,7 +85,6 @@ public class SeekShelterGoal extends Goal {
 
     private static final int SCAN_INTERVAL = 40;
     private static final int SCAN_PHASE_SALT = 11;
-    private static final double ARRIVED_SQR = 4.0;
     /** startSleeping teleports the mob onto the bed, so only allow it from touching distance. */
     private static final double BED_REACH_SQR = 6.0;
 
@@ -174,7 +173,8 @@ public class SeekShelterGoal extends Goal {
             return;
         }
         BlockPos standPos = commitment.destination();
-        if (bedPos == null && mob.blockPosition().distSqr(standPos) <= ARRIVED_SQR) {
+        if (bedPos == null
+                && ShelterSelectionPolicy.arrivedAtStandingSite(mob.blockPosition(), standPos)) {
             commitment.arrive();
             if (!commitment.restClaimOpened()) {
                 RestSessionCoordinator.openShelterRecovery(
@@ -601,7 +601,27 @@ public class SeekShelterGoal extends Goal {
                 roofCoverage++;
             }
         }
-        return new ShelterSelectionPolicy.Evidence(boundaries, roofCoverage);
+        return new ShelterSelectionPolicy.Evidence(boundaries, roofCoverage, doorClearance(level, pos));
+    }
+
+    /** Manhattan clearance from a doorway, bounded so semantic evaluation stays cheap. */
+    private static int doorClearance(Level level, BlockPos origin) {
+        for (int distance = 0; distance <= ShelterSelectionPolicy.DOOR_PROBE_DISTANCE; distance++) {
+            for (int dx = -distance; dx <= distance; dx++) {
+                int dzMagnitude = distance - Math.abs(dx);
+                if (doorAt(level, origin.offset(dx, 0, dzMagnitude))
+                        || (dzMagnitude != 0 && doorAt(level, origin.offset(dx, 0, -dzMagnitude)))) {
+                    return distance;
+                }
+            }
+        }
+        return ShelterSelectionPolicy.DOOR_PROBE_DISTANCE + 1;
+    }
+
+    private static boolean doorAt(Level level, BlockPos pos) {
+        return level.getBlockState(pos).getBlock() instanceof DoorBlock
+                || level.getBlockState(pos.above()).getBlock() instanceof DoorBlock
+                || level.getBlockState(pos.below()).getBlock() instanceof DoorBlock;
     }
 
     private static boolean boundaryWithin(Level level, BlockPos origin, Direction direction) {

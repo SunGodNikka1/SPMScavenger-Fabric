@@ -1071,9 +1071,33 @@ room capacity. **Must not happen:** numeric quality crosses tiers, more than fou
 per scan, stale commitments release newer reservations, or the same unreachable quartet suppresses
 fallback indefinitely.
 
-Evidence: 21 focused shelter tests, all 649 tests, and `clean build` pass. Remapped artifact
+Evidence after SCR-2R: 24 focused shelter tests, all 652 tests, and `clean build` pass. Remapped artifact
 `build/libs/spmscavenger-1.9.4.jar`, SHA-256
-`451A5891E338EADEC66D5546EB9498DA156C1BC1F3E86040ACD089C16C2A9CF7`, contains the new classes
+`4347449A866D88695E01E2A867C4467F1DB68A04C68B4DB034888740809C3552`, contains the new classes
 and excludes the runtime datapack. Static MAIBS is `PASS — BEHAVIORALLY_PLAUSIBLE`. Minecraft was
 not launched; SCR-2A/B/C physical classification, door traversal with the new targets, and
 multi-mob distribution are `UNVERIFIED`.
+
+### SCR-2R — doorway depth and exact arrival
+
+The first SCR-2 runtime observation falsified static acceptance: a mob crossed the door but settled
+on its inside threshold. Two code paths caused the same visible result. A threshold cell could have
+the same room-scale boundaries and roof continuity as a deeper cell, after which distance won; and
+the generic shelter arrival radius accepted a mob up to two blocks from the reserved destination.
+
+Tightening arrival alone was rejected because it would make the mob reach the wrong threshold more
+precisely. Hard-excluding every door-near cell was rejected because very small shelters may have no
+other usable capacity. The repair measures Manhattan door clearance only for shortlisted
+candidates, ranks deeper generic cells first within the same semantic tier, caps a door-adjacent
+cell at porch tier, and requires `mob.blockPosition()` to equal the reserved standing block before
+opening the rest session. Door operation and closure remain owned by SPM and unchanged.
+
+**Must happen:** a mob with reachable deeper room capacity continues moving after crossing the
+door and settles on its reservation. **Must not happen:** the block adjacent to a door becomes
+`INTERIOR_ROOM`, the old two-block tolerance marks arrival, or tiny houses lose porch fallback.
+Code/unit/clean-build evidence is recorded with the rebuilt artifact; runtime repair remains
+`UNVERIFIED` until the user repeats SCR-2A.
+
+Verification: 24 focused shelter tests and all 652 tests pass; `clean build` passes. Final remapped
+artifact `build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`4347449A866D88695E01E2A867C4467F1DB68A04C68B4DB034888740809C3552`.

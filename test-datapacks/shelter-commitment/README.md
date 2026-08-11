@@ -38,7 +38,7 @@ authority must cancel autonomous shelter.
 | SCR-1B | `/function spm_shelter:scenario/free_bed` | Mob retains its bed claim through the door operation, resumes, and sleeps in that same bed | Another scan/reselection or loss of the bed claim during the short interruption |
 | SCR-1C | Run either scenario, then `/time set day` while the door operation is active | Commitment cancels and shelter does not resume | Old destination resumes after dawn |
 | SCR-1D | Break the selected bed/interior floor while interrupted | Commitment cancels; a later scan may choose a newly valid destination | Navigation retries the destroyed destination forever |
-| SCR-2A | `/function spm_shelter:scenario/interior_one` | One mob enters a valid interior room even though a nearer exterior eave is covered | Porch/eave is treated as equivalent to or better than the room |
+| SCR-2A | `/function spm_shelter:scenario/interior_one` | One mob crosses the door and continues to its deeper reserved interior block even though a nearer exterior eave/inside threshold is covered | Porch/eave or the block immediately inside the door is accepted as completed shelter |
 | SCR-2B | `/function spm_shelter:scenario/capacity_four` | Four mobs choose separated interior standing areas | Mobs reserve the same or immediately adjacent cells and pile at the entrance |
 | SCR-2C | `/function spm_shelter:scenario/over_capacity` | Interior capacity fills first; surplus mobs choose separated lower-tier fallback or remain without a shelter commitment | Lower-tier candidates displace available interior slots; all mobs converge on one block |
 
