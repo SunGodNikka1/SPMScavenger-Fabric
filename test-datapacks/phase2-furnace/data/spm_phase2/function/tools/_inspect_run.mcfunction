@@ -1,1 +1,0 @@
-tellraw @a [{"text":"[SPM Phase2 inspect] ","color":"dark_aqua"},{"selector":"@s"},{"text":" mainhand=","color":"gray"},{"nbt":"SelectedItem.id","entity":"@s"},{"text":" inv0=","color":"gray"},{"nbt":"Inventory[0].id","entity":"@s"},{"text":"x","color":"gray"},{"nbt":"Inventory[0].count","entity":"@s"}]
