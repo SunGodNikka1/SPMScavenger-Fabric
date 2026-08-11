@@ -3,18 +3,26 @@ package com.noobk.spmscavenger.experience;
 import com.noobk.spmscavenger.mining.MiningProject;
 import com.noobk.spmscavenger.mining.MiningProjectEnd;
 import com.noobk.spmscavenger.mining.MiningProjectMode;
-import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
+import com.noobk.spmscavenger.opinion.ActivityOpinionMemory;
+import com.noobk.spmscavenger.opinion.DiscretionaryAuthority;
 import com.noobk.spmscavenger.opinion.EntityOpinionService;
-import com.noobk.spmscavenger.opinion.PlaceOpinionService;
 import com.noobk.spmscavenger.opinion.EnvironmentClassifier;
+import com.noobk.spmscavenger.opinion.EnvironmentKind;
 import com.noobk.spmscavenger.opinion.EnvironmentProfile;
+import com.noobk.spmscavenger.opinion.OpinionDecisionTrace;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
+import com.noobk.spmscavenger.opinion.OpinionLearningPolicy;
+import com.noobk.spmscavenger.opinion.PlaceOpinionService;
 import com.noobk.spmscavenger.progression.TaskLifecycle;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Mob;
 
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -53,6 +61,10 @@ public final class ExperienceEmitters {
             long gameTime,
             ExpeditionEndAttribution.Semantics semantics) {
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob);
+        UUID sourceIntentId = DiscretionaryAuthority.runningExploreIntentId(mob.getUUID());
+        LearningBefore learningBefore = sourceIntentId == null
+                ? null
+                : captureLearningBefore(context, ActivityKind.OVERLAND_EXPLORATION);
         context.ensureEpisode(
                 episodeId, startedGameTime, Optional.of(ActivityKind.OVERLAND_EXPLORATION));
         Optional<EnvironmentProfile> environment = Optional.empty();
@@ -76,6 +88,15 @@ public final class ExperienceEmitters {
                 Optional.of(mob.blockPosition()),
                 Optional.empty(),
                 environment));
+        recordLearningOutcome(
+                context,
+                sourceIntentId,
+                ActivityKind.OVERLAND_EXPLORATION,
+                ExperienceKind.EXPEDITION_END,
+                semantics.outcome(),
+                semantics.cause(),
+                gameTime,
+                learningBefore);
     }
 
     public static void miningProgress(
@@ -185,6 +206,10 @@ public final class ExperienceEmitters {
             UUID mobId, RestSessionClaim claim, RestCloseReason reason, long gameTime) {
         RestCloseAttribution.Semantics semantics = RestCloseAttribution.forReason(reason);
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
+        UUID sourceIntentId = claim.sourceIntentId().orElse(null);
+        LearningBefore learningBefore = sourceIntentId == null
+                ? null
+                : captureLearningBefore(context, ActivityKind.REST);
         context.ensureEpisode(claim.claimId(), claim.arrivedAt(), Optional.of(ActivityKind.REST));
         pipeline(mobId).accept(new ExperienceEvent(
                 ExperienceKind.REST_SESSION,
@@ -200,6 +225,15 @@ public final class ExperienceEmitters {
                 Optional.of(ActivityKind.REST),
                 Optional.of(claim.anchor()),
                 Optional.empty()));
+        recordLearningOutcome(
+                context,
+                sourceIntentId,
+                ActivityKind.REST,
+                ExperienceKind.REST_SESSION,
+                semantics.experienceOutcome(),
+                semantics.experienceCause(),
+                gameTime,
+                learningBefore);
     }
 
     private static void ensureMiningEpisode(Mob mob, MiningProject project) {
@@ -254,4 +288,96 @@ public final class ExperienceEmitters {
             default -> ExperienceCause.UNSPECIFIED;
         };
     }
+
+    private static LearningBefore captureLearningBefore(
+            MobExperienceContext context, ActivityKind activity) {
+        return new LearningBefore(
+                activitySnapshot(context.opinionMemory().captureSnapshot(), activity),
+                context.placeOpinionMemory().captureSnapshot(),
+                context.environmentOpinionMemory().captureSnapshot());
+    }
+
+    private static void recordLearningOutcome(
+            MobExperienceContext context,
+            UUID sourceIntentId,
+            ActivityKind activity,
+            ExperienceKind terminalKind,
+            OutcomeClass outcome,
+            ExperienceCause cause,
+            long gameTime,
+            LearningBefore before) {
+        if (sourceIntentId == null || before == null) {
+            return;
+        }
+        Map<ActivityKind, ActivityOpinionMemory.Snapshot> activities =
+                context.opinionMemory().captureSnapshot();
+        OpinionDecisionTrace.ActivityLearningDelta activityDelta = activityDelta(
+                before.activitySnapshot(), activitySnapshot(activities, activity));
+        Map<Long, Float> placeDeltas = deltas(
+                before.placePreferences(), context.placeOpinionMemory().captureSnapshot());
+        Map<EnvironmentKind, Float> environmentDeltas = deltas(
+                before.environmentPreferences(),
+                context.environmentOpinionMemory().captureSnapshot());
+        float learningWeight = ExperienceOutcomePolicy.preferenceSign(outcome, cause);
+        EpisodeLearningEvidence evidence = new EpisodeLearningEvidence(
+                sourceIntentId,
+                Optional.of(activity),
+                terminalKind,
+                outcome,
+                cause,
+                learningWeight,
+                gameTime);
+        boolean activityEligible = activityDelta.changedAnything()
+                || (learningWeight != 0f && OpinionLearningPolicy.accepts(evidence));
+        DiscretionaryAuthority.onLearningObserved(
+                context.mobId(),
+                sourceIntentId,
+                new OpinionDecisionTrace.LearningOutcome(
+                        gameTime,
+                        activity,
+                        terminalKind,
+                        outcome,
+                        cause,
+                        activityEligible,
+                        activityDelta,
+                        placeDeltas,
+                        environmentDeltas));
+    }
+
+    private static ActivityOpinionMemory.Snapshot activitySnapshot(
+            Map<ActivityKind, ActivityOpinionMemory.Snapshot> activities, ActivityKind activity) {
+        ActivityOpinionMemory.Snapshot snapshot = activities.get(activity);
+        return snapshot == null
+                ? new ActivityOpinionMemory.Snapshot(0f, 0f, 0f, 0, 0L, 0L)
+                : snapshot;
+    }
+
+    private static OpinionDecisionTrace.ActivityLearningDelta activityDelta(
+            ActivityOpinionMemory.Snapshot before, ActivityOpinionMemory.Snapshot after) {
+        return new OpinionDecisionTrace.ActivityLearningDelta(
+                after.preference() - before.preference(),
+                after.repetition() - before.repetition(),
+                after.recentReward() - before.recentReward(),
+                after.recentFailures() - before.recentFailures(),
+                after.lastPerformed() - before.lastPerformed(),
+                after.recentDuration() - before.recentDuration());
+    }
+
+    private static <K> Map<K, Float> deltas(Map<K, Float> before, Map<K, Float> after) {
+        Set<K> keys = new HashSet<>(before.keySet());
+        keys.addAll(after.keySet());
+        Map<K, Float> result = new LinkedHashMap<>();
+        for (K key : keys) {
+            float delta = after.getOrDefault(key, 0f) - before.getOrDefault(key, 0f);
+            if (delta != 0f) {
+                result.put(key, delta);
+            }
+        }
+        return Map.copyOf(result);
+    }
+
+    private record LearningBefore(
+            ActivityOpinionMemory.Snapshot activitySnapshot,
+            Map<Long, Float> placePreferences,
+            Map<EnvironmentKind, Float> environmentPreferences) {}
 }

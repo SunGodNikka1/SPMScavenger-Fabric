@@ -16,6 +16,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DiscretionaryActivityDirectorTest {
@@ -215,6 +216,24 @@ class DiscretionaryActivityDirectorTest {
 
         assertTrue(director.intent().isEmpty());
         assertFalse(hasTraceStage(OpinionDecisionTrace.Stage.INTENT));
+        OpinionDecisionTrace.Decision decision = director.trace().snapshot().getLast();
+        assertEquals(
+                OpinionDecisionTrace.DecisionDisposition.MANDATORY_AUTHORITY,
+                decision.disposition());
+        assertEquals(InvalidationCause.MANDATORY_AUTHORITY, decision.dispositionCause());
+    }
+
+    @Test
+    void combatSuppressionPreservesItsExactCauseWithoutAnExistingIntent() {
+        director.tick(tick(10L, idleObservation(), true, true));
+
+        OpinionDecisionTrace.Decision decision = director.trace().snapshot().getLast();
+        assertEquals(
+                OpinionDecisionTrace.DecisionDisposition.MANDATORY_AUTHORITY,
+                decision.disposition());
+        assertEquals(InvalidationCause.COMBAT_TARGET, decision.dispositionCause());
+        assertTrue(decision.candidates().isEmpty());
+        assertTrue(director.intent().isEmpty());
     }
 
   // GAO-4-M11
@@ -228,6 +247,9 @@ class DiscretionaryActivityDirectorTest {
 
         assertEquals(DiscretionaryActivity.EXPLORE, director.incumbentActivity().orElseThrow());
         assertFalse(director.restYieldRequested());
+        assertEquals(
+                OpinionDecisionTrace.DecisionDisposition.COMMITMENT_HOLD,
+                director.trace().snapshot().getLast().disposition());
     }
 
     @Test
@@ -255,6 +277,110 @@ class DiscretionaryActivityDirectorTest {
 
         assertTrue(traceContainsIntent(intentId, OpinionDecisionTrace.Stage.ADOPT));
         assertTrue(traceContainsIntent(intentId, OpinionDecisionTrace.Stage.EXECUTOR));
+    }
+
+    @Test
+    void oneDecisionCorrelatesFullScoresIntentExecutorAndTerminal() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
+
+        director.tick(tick(10L, idleObservation(), true));
+        DiscretionaryIntent intent = director.pendingIntent().orElseThrow();
+        OpinionDecisionTrace.Decision decision = decision(intent.decisionId());
+
+        assertEquals(intent.intentId(), decision.intentId());
+        assertEquals(2, decision.candidates().size());
+        assertTrue(decision.candidates().stream().allMatch(candidate -> candidate.breakdown() != null));
+        assertTrue(decision.transitions().stream().anyMatch(
+                transition -> transition.stage() == OpinionDecisionTrace.Stage.SELECT
+                        && transition.intentId() == null));
+        assertTrue(decision.transitions().stream().anyMatch(
+                transition -> transition.stage() == OpinionDecisionTrace.Stage.INTENT
+                        && intent.intentId().equals(transition.intentId())));
+
+        DiscretionaryAuthority.onExploreAdopted(MOB, 12L);
+        DiscretionaryAuthority.onExploreTerminal(MOB, IntentLifecycle.SUCCEEDED, 20L, "complete");
+
+        decision = decision(intent.decisionId());
+        assertTrue(decision.closed());
+        assertTrue(decision.transitions().stream().anyMatch(
+                transition -> transition.stage() == OpinionDecisionTrace.Stage.ADOPT));
+        assertTrue(decision.transitions().stream().anyMatch(
+                transition -> transition.stage() == OpinionDecisionTrace.Stage.EXECUTOR));
+        assertTrue(decision.transitions().stream().anyMatch(
+                transition -> transition.stage() == OpinionDecisionTrace.Stage.TERMINAL
+                        && transition.lifecycle() == IntentLifecycle.SUCCEEDED
+                        && transition.invalidationCause() == InvalidationCause.NONE));
+    }
+
+    @Test
+    void supersedingDecisionNeverInheritsPreviousIntentIdentity() {
+        seedOpinions(10f, 5f, 55f, 4f);
+        neutralMood().seedChannels(0f, 5f, 0f, 80f, 0f);
+        director.tick(tick(10L, idleObservation(), true));
+        DiscretionaryIntent oldIntent = director.pendingIntent().orElseThrow();
+
+        seedOpinions(55f, 5f, 10f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
+        director.tick(tick(20L, idleObservation(), true));
+        DiscretionaryIntent newIntent = director.pendingIntent().orElseThrow();
+
+        assertNotEquals(oldIntent.intentId(), newIntent.intentId());
+        assertNotEquals(oldIntent.decisionId(), newIntent.decisionId());
+        OpinionDecisionTrace.Decision newDecision = decision(newIntent.decisionId());
+        assertEquals(newIntent.intentId(), newDecision.intentId());
+        assertFalse(newDecision.transitions().stream()
+                .anyMatch(transition -> oldIntent.intentId().equals(transition.intentId())));
+        assertTrue(decision(oldIntent.decisionId()).transitions().stream()
+                .anyMatch(transition -> transition.stage() == OpinionDecisionTrace.Stage.TERMINAL
+                        && transition.invalidationCause() == InvalidationCause.SUPERSEDED));
+    }
+
+    @Test
+    void exploreAdoptionGateRecordsSuppressionWithoutDiscardingItsScore() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
+
+        director.tick(tick(10L, idleObservation(), true, false, false));
+
+        OpinionDecisionTrace.Decision decision = director.trace().snapshot().getLast();
+        OpinionDecisionTrace.Candidate explore = decision.candidates().stream()
+                .filter(candidate -> candidate.activity() == DiscretionaryActivity.EXPLORE)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(OpinionDecisionTrace.CandidateState.SUPPRESSED, explore.state());
+        assertEquals(
+                OpinionDecisionTrace.SuppressionReason.EXPLORE_ADOPTION_NOT_READY,
+                explore.suppressionReason());
+        assertTrue(explore.breakdown().total() > 0f);
+        assertEquals(DiscretionaryActivity.REST, decision.selectedActivity());
+    }
+
+    @Test
+    void noExecutorDecisionIsStructuredAndDoesNotIssueIntent() {
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(MOB);
+        DirectorTickInput input = new DirectorTickInput(
+                10L,
+                true,
+                false,
+                false,
+                idleObservation(),
+                new DiscretionaryScoringInput(
+                        context.affectiveState(),
+                        context.opinionMemory(),
+                        DiscretionaryAvailability.none(),
+                        true,
+                        true),
+                true);
+
+        director.tick(input);
+
+        OpinionDecisionTrace.Decision decision = director.trace().snapshot().getLast();
+        assertEquals(OpinionDecisionTrace.DecisionDisposition.NO_CANDIDATES, decision.disposition());
+        assertTrue(decision.candidates().stream().allMatch(candidate ->
+                candidate.suppressionReason()
+                        == OpinionDecisionTrace.SuppressionReason.EXECUTOR_UNAVAILABLE));
+        assertTrue(director.intent().isEmpty());
     }
 
     @Test
@@ -317,7 +443,7 @@ class DiscretionaryActivityDirectorTest {
 
     @Test
     void switchMarginBlocksSmallChallengerLead() {
-        seedOpinions(30f, 5f, 28f, 5f);
+        seedOpinions(38f, 5f, 28f, 5f);
         neutralMood().seedChannels(0f, 42f, 0f, 40f, 5f);
         director.seedIncumbent(DiscretionaryActivity.REST, 40f, 0L);
         long afterCommitment = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 5L;
@@ -326,6 +452,9 @@ class DiscretionaryActivityDirectorTest {
 
         assertFalse(director.restYieldRequested());
         assertTrue(director.pendingIntent().isEmpty());
+        assertEquals(
+                OpinionDecisionTrace.DecisionDisposition.SWITCH_MARGIN_HOLD,
+                director.trace().snapshot().getLast().disposition());
     }
 
     @Test
@@ -394,17 +523,29 @@ class DiscretionaryActivityDirectorTest {
     }
 
     private boolean hasTraceStage(OpinionDecisionTrace.Stage stage) {
-        return director.trace().snapshot().stream().anyMatch(e -> e.stage() == stage);
+        return director.trace().snapshot().stream()
+                .flatMap(decision -> decision.transitions().stream())
+                .anyMatch(transition -> transition.stage() == stage);
     }
 
     private boolean hasTerminalDetail(String fragment) {
         return director.trace().snapshot().stream()
-                .anyMatch(e -> e.stage() == OpinionDecisionTrace.Stage.TERMINAL
-                        && e.detail().contains(fragment));
+                .flatMap(decision -> decision.transitions().stream())
+                .anyMatch(transition -> transition.stage() == OpinionDecisionTrace.Stage.TERMINAL
+                        && (transition.lifecycle() + ":" + transition.detail()).contains(fragment));
     }
 
     private boolean traceContainsIntent(UUID intentId, OpinionDecisionTrace.Stage stage) {
         return director.trace().snapshot().stream()
-                .anyMatch(e -> intentId.equals(e.intentId()) && e.stage() == stage);
+                .flatMap(decision -> decision.transitions().stream())
+                .anyMatch(transition -> intentId.equals(transition.intentId())
+                        && transition.stage() == stage);
+    }
+
+    private OpinionDecisionTrace.Decision decision(long decisionId) {
+        return director.trace().snapshot().stream()
+                .filter(decision -> decision.decisionId() == decisionId)
+                .findFirst()
+                .orElseThrow();
     }
 }

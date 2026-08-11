@@ -8,14 +8,14 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
-| **Mode** | `PROGRESSIVE_CONTINUATION` — GAO-8B explainability design; causal-trace prerequisite under review |
-| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1** (618 tests); GAO-8B `PREREQUISITE DEFECT` |
+| **Mode** | `WORKING_FROM_PLAN` — GAO-8B Task 42A causal trace complete; Task 42B remains blocked by PD-GAO-14 |
+| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1**; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT` (628 tests) |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-10 (Task 41 GAO-9 implementation and static MAIBS closure) |
+| **Last update** | 2026-08-11 (Task 42A whole-decision causal trace implementation and static MAIBS closure) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,10 +39,9 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** repair/lock GAO-8B-B1 causal trace integrity before authorizing the visual
-inspector. A screen that reconstructs a plausible explanation from current values would violate
-D-GAO-025 even if it looked convincing. Runtime remains non-default under PD-GAO-12 and requires a
-named `RUNTIME_QUESTION`.
+**Nearest frontier:** Task 42A has repaired GAO-8B-B1. Task 42B is now technically dependency-ready
+but remains blocked by the explicit GAO-8B entry/access choice in PD-GAO-14. Runtime remains
+non-default under PD-GAO-12 and requires a named `RUNTIME_QUESTION`.
 
 ---
 
@@ -1220,8 +1219,8 @@ Status: `IMPLEMENTED / STATIC ACCEPT`.
 
 ## Topic: Observable expression — GAO-8B read-only inspection
 
-**Status:** `PREREQUISITE DEFECT / DESIGN REVIEW` — Task 42A must repair causal evidence before the
-Task 42B screen; PD-GAO-14 still owns entry/access
+**Status:** `TASK 42A IMPLEMENTED / STATIC ACCEPT` — causal evidence is now structured and atomic;
+Task 42B remains blocked only by PD-GAO-14 entry/access
 
 ### Goal and boundary
 
@@ -1309,13 +1308,13 @@ a GAO-8B UI would either expose gaps honestly or invent a causal story after the
 | Keep event ring, add a decision id and every score component, raise entry cap | Incremental | Entry eviction can still cut one decision in half; capacity means events, not decisions | Acceptable fallback only if decision records prove too invasive |
 | **Bounded decision records with structured candidates + transitions** | One causal owner; retains or evicts a whole decision; UI does not infer history | Requires a narrow trace-model migration and lifecycle tests before UI work | **RECOMMENDED** |
 
-**D-GAO-041 (`PROPOSED`):** explainability evidence is captured at the decision/transition that
+**D-GAO-041 (`IMPLEMENTED / STATIC ACCEPT`):** explainability evidence is captured at the decision/transition that
 created it, never recomputed from later affect or memory. Each bounded decision record owns a local
 monotonic `decisionId`, full immutable candidate breakdowns, selection/suppression reason, optional
 intent id, and later claim/yield/executor/terminal transitions with exact causes. The intent carries
 its originating decision id so later callbacks cannot attach to the wrong evaluation.
 
-**D-GAO-042 (`PROPOSED`):** retention is bounded by complete **decisions**, not raw events. Eviction
+**D-GAO-042 (`IMPLEMENTED / STATIC ACCEPT`):** retention is bounded by complete **decisions**, not raw events. Eviction
 removes one oldest complete record atomically; no per-intent/global lookup map or minted persistent
 identity is added. A separately stored current `DecisionDisposition` may state disabled, frozen,
 mandatory authority, no candidates, below threshold, commitment hold, switch-margin hold, pending,
@@ -1373,7 +1372,7 @@ Goal, flag, navigation, scan, inventory/world interaction, or authority path. Ru
 and request/response timing remain `UNVERIFIED` until implementation and a separately approved
 targeted launch.
 
-### Task 42A — GAO-8B causal trace repair (`PROPOSED PREREQUISITE`)
+### Task 42A — GAO-8B causal trace repair (`IMPLEMENTED / STATIC ACCEPT`)
 
 | Field | Contract |
 | --- | --- |
@@ -1383,6 +1382,23 @@ targeted launch.
 | Must not happen | Trace recomputes decisions, changes scorer/director results, retains live entities, grows per tick without bound, or grants activity authority |
 | Tests | Full component preservation; fresh/overlapping decision correlation; abstain/commitment/switch/no-candidate/mandatory reasons; complete-record eviction; intent lifecycle; neutral behavior parity |
 | Verification | Focused tests, full suite, clean build, RET-1/static MAIBS; no runtime required for pure trace semantics |
+
+Implementation evidence (2026-08-11): `OpinionDecisionTrace` now stores at most 24 whole
+decisions, protects live intent-origin records while completed evaluations are available for
+eviction, and removes one entire record at a time. `DiscretionaryIntent.decisionId` carries a local
+monotonic evaluation identity that exists before and remains distinct from `intentId`. Candidate
+records preserve the complete immutable `ActivityUtilityBreakdown`, executor/adoption suppressions,
+and exact decision disposition/cause. The originating record receives SELECT, INTENT, ADOPT,
+EXECUTOR, CLAIM, YIELD and terminal lifecycle/cause transitions. Explore/Rest terminal emitters also
+attach the actual bounded activity/place/environment before/after learning receipt before closing
+authority, so Task 42B need not infer learning from later memory. No scorer, threshold, intent,
+GoalSelector, navigation, or authority rule changed.
+
+Focused causal/retention tests, all 628 tests, and `gradlew.bat clean build` pass with zero
+failures/errors/skips. Final artifact: `build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`91321D9C8CD14BFA5581E52BF3D24269118182A877736831CC1BA4CB1C41CBEC`.
+Static MAIBS: `PASS — BEHAVIORALLY PLAUSIBLE`; physical behavior parity is `CODE_CONFIRMED`, while
+runtime/performance remain `UNVERIFIED` because no Minecraft launch or profiler run was authorized.
 
 ### Task 42B — GAO-8B understandable Opinion inspector (`BLOCKED BY 42A + PD-GAO-14`)
 
@@ -1671,7 +1687,7 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 through GAO-9 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-8B causal-trace prerequisite under review
+**Status:** GAO-0 through GAO-9 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT`
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
@@ -1690,7 +1706,7 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-6** | ENTITY bridge | **CLOSED:** `SpmEntityOpinionBridge`, `EntityOpinionMemory`, GAO-6R `SocialExperienceEpisodes` | GAO-4, RET-GAO-1 |
 | **GAO-7** | PersonalityModel | **CLOSED / STATIC ACCEPT:** immutable six-trait model; SPM-host anchors + deterministic UUID latent traits; bounded subjective learning at the single normalized seam; snapshot lifecycle; 581-test clean build | GAO-2, GAO-6 |
 | **GAO-8A** | Passive physical expression | **CLOSED / STATIC ACCEPT:** bounded scheduler-owned LOOK expression; Task 40; 593 tests | GAO-0, GAO-1, GAO-6, GAO-7 |
-| **GAO-8B** | Understandable Opinion inspection | **PREREQUISITE DEFECT:** Task 42A structured causal trace precedes Task 42B addon-owned on-demand explanation UI; PD-GAO-14 still open | GAO-0 through GAO-9, RET-GAO-1 |
+| **GAO-8B** | Understandable Opinion inspection | **PARTIAL:** Task 42A structured causal trace is statically accepted; Task 42B addon-owned on-demand explanation UI remains blocked by PD-GAO-14 | GAO-0 through GAO-9, RET-GAO-1 |
 | **GAO-9** | Overland environment affinity | **CLOSED / STATIC ACCEPT:** finite multi-label context, completion-only normalized learning, enum-bounded snapshot memory, and ±10 valid-route ranking; PROJECT memory superseded; 618 tests | GAO-0c, GAO-2, GAO-5B, RET-GAO-1 |
 
 ### GAO-0b implementation task (`IMPLEMENTED / STATIC VERIFIED`)
@@ -2114,8 +2130,8 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 | D-GAO-038 | Environment affinity is a ±10 soft tie-breaker among already-valid routes; mean multi-label score; never terrain-safety or mandatory descent/handoff authority | `IMPLEMENTED` | Below PLACE ±15, visited -20, anti-fixation -100; path/safety mutation negative scan |
 | D-GAO-039 | GAO-8B snapshots existing state on explicit request through non-allocating lookup; missing state stays missing; no policy/scan/background refresh | `PROPOSED` | Task 42 read-side purity/non-allocation gate |
 | D-GAO-040 | GAO-8B uses a bounded server-validated common DTO and addon-owned screen; no client type in common API and no host UI/billboard mutation | `PROPOSED` | Entry/access await PD-GAO-14 |
-| D-GAO-041 | Explanation evidence is captured at decision time in one structured record and carried through intent/handoff/terminal; never reconstructed from later state | `PROPOSED` | GAO-8B-B1 / Task 42A |
-| D-GAO-042 | Trace retention is bounded by whole decisions with explicit current suppression disposition; no partial-chain eviction or authority side effect | `PROPOSED` | GAO-8B-B1 / RET-1 |
+| D-GAO-041 | Explanation evidence is captured at decision time in one structured record and carried through intent/handoff/terminal/learning receipt; never reconstructed from later state | `IMPLEMENTED / STATIC ACCEPT` | Task 42A; 628 tests + clean build |
+| D-GAO-042 | Trace retention is bounded by whole decisions with explicit current suppression disposition; no partial-chain eviction or authority side effect | `IMPLEMENTED / STATIC ACCEPT` | Task 42A; active-origin retention test + RET-1 static review |
 
 ---
 
@@ -2123,6 +2139,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-11 | Agent_Codex | **Task 42A causal trace implemented.** Replaced the loose event ring with 24 whole structured decisions; added separate monotonic decision identity carried by intents; full candidate components, structured suppression/disposition/cause, lifecycle transitions, and actual terminal learning receipts; protected live origins during eviction. Focused tests, 628-test full suite, clean build, JAR inspection, RET-1/static MAIBS pass. Task 42B remains blocked by PD-GAO-14. No Minecraft launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **GAO-8B understandability review.** User defined the product as “make the AI understandable.” Static trace audit found GAO-8B-B1: score/select precede new intent identity, can inherit an incumbent id, discard most utility components into strings, and use an event rather than decision bound; existing tests do not prove complete causal correlation. Locked PD-GAO-15 direction; proposed D-GAO-041/042 and split Task 42A causal trace repair from Task 42B UI. No Java edit, test/build, runtime launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **GAO-8B continuation and Still Life compatibility evidence.** Inspected pinned SPM screen/menu/readout and current addon state owners; recorded four absent-surface probes; compared host-screen, addon-screen, and command frontends; proposed D-GAO-039/040 and Task 42 with an on-demand non-allocating snapshot and server validation. Recommended addon inspect key + privileged access in PD-GAO-14. Added verified Still Life 0.1.1 tag/resource compatibility and its runtime/performance limits. No Java edit, build, runtime launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **Task 41 GAO-9 implementation.** User accepted D-GAO-035…038 and explicitly locked semantic-affinity ≠ terrain-safety. Added five-label immutable classification, raw/normalized evidence context, completion-only divided learning, enum-bounded snapshot/death lifecycle, and ±10 mean affinity after existing ticking/route validity. RED focused suite, full suite, clean build, package inspection, and static MAIBS pass: 618 tests. Runtime route distribution/performance remain UNVERIFIED; no Minecraft launch, commit, push, or PR |
@@ -2970,7 +2987,7 @@ no intent gate; `ExploringGoal.canUse` readiness-independent discretionary start
 | `SWITCH_MARGIN` | `8f` | ~20% band on ±100 utility scale; blocks jitter (M11) |
 | `MIN_COMMITMENT_TICKS` | `600` | Matches `ExploringGoal.COOLDOWN_TICKS` expedition horizon |
 | `PENDING_INTENT_TTL_TICKS` | `200` | 20 × 10-tick observation passes (legacy B-19) |
-| `TRACE_CAPACITY` | `24` | D-GAO-025 bounded ring |
+| `TRACE_DECISION_CAPACITY` | `24` | D-GAO-041/042 bounded whole decisions; live origins protected from normal completed-record eviction |
 
 **Evidence (`CONFIRMED`):** `.\gradlew.bat clean build` — BUILD SUCCESSFUL; 485 tests, 0 failures.
 
@@ -3599,3 +3616,53 @@ GoalSelector, or physical behavior.
 
 **Frontier after:** peer-review/accept D-GAO-041/042 and authorize Task 42A. Task 42B must remain
 blocked until the trace can prove the explanations it will render.
+
+---
+
+## Contribution — Agent_Codex (Task 42A causal trace implementation)
+
+**Agent:** Agent_Codex
+
+**Date/Session:** 2026-08-11
+
+**Contribution type:** `IMPLEMENTATION / VALIDATION / MAIBS_STATIC`
+
+**Frontier before:** D-GAO-041/042 and Task 42A were user-accepted; the event ring could not safely
+support an authoritative inspector.
+
+**Implementation:** replaced per-event retention with bounded whole-decision records; introduced a
+local monotonic `decisionId` distinct from `intentId`; carried the origin id through
+`DiscretionaryIntent`; retained complete candidate breakdowns and structured executor/adoption
+suppression; added exact decision disposition/cause, lifecycle transitions, and synchronous actual
+learning receipts for discretionary Explore/Rest terminals. Existing scoring,
+thresholds, intent issuance, voluntary yield, GoalSelector, navigation, and physical executors were
+not changed.
+
+**Post-implementation objection and repair:** the first bounded implementation evicted the oldest
+whole record blindly. A normal 600-tick commitment can outlive 24 ten-tick evaluations, so that
+would remove a still-running intent's origin before its terminal. Eviction now prefers completed
+decisions and protects live origins while completed records exist; a regression test runs the
+origin through terminal and proves subsequent eviction removes the entire record.
+
+**Negative probes:** static searches found `NOT FOUND` for the removed `trace.record` event API,
+`Stage.SCORE`, `traceIntentId`, `recordScores`, old `OpinionDecisionTrace.Entry` consumers, and the
+old `TRACE_CAPACITY` name in main/test source.
+
+**Validation:** focused trace/director/rest tests pass; the full suite and
+`gradlew.bat clean build` pass 628 tests with zero failures/errors/skips. The remapped JAR contains
+the structured trace/decision/candidate/transition classes. Artifact SHA-256:
+`91321D9C8CD14BFA5581E52BF3D24269118182A877736831CC1BA4CB1C41CBEC`.
+
+**MAIBS semantic-drift review:** `PLANNED → IMPLEMENTED → PREDICTED RUNTIME` remains observation
+only. At T0/T+10/T+60/T+200/T+1200 the same director winner, pending/adopted authority, Goal flags,
+movement and executor transitions occur; only copied evidence differs. Credible weirdness: a long
+run retains only the latest 24 decisions (`ACCEPTABLE_STEPPING_STONE`), a currently active origin can
+displace older completed history (`ACCEPTABLE_STEPPING_STONE`), and allocation/tick cost at 100+
+mobs is `RUNTIME_QUESTION` pending profiling. Any activity-choice, path, timing, or Goal ownership
+change is an `ARCHITECTURE_DEFECT`; focused parity tests and static diff found none.
+
+**Gate:** `PASS — BEHAVIORALLY_PLAUSIBLE` for static semantics. Runtime behavior and performance
+remain `UNVERIFIED`; no Minecraft launch occurred.
+
+**Frontier after:** Task 42A is `IMPLEMENTED / STATIC ACCEPT`. Task 42B is technically ready but
+remains blocked by PD-GAO-14 (entry/access policy); no UI/network work was started.

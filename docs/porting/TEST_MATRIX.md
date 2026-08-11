@@ -1,5 +1,22 @@
 # SPM Scavenger test matrix
 
+## GAO-8B Task 42A causal trace — current 1.9.4 artifact
+
+| Check | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Identity | Every evaluation has a positive monotonic `decisionId`; a later intent has a separate UUID and carries the origin id | Fresh scores inherit a previous/null intent identity | `decisionIdExistsBeforeAndRemainsDistinctFromIntentId` + `supersedingDecisionNeverInheritsPreviousIntentIdentity` `CONFIRMED` |
+| Full cause | Every candidate preserves all ten utility components and explicit suppression | Inspector infers causality from only total/preference/repetition or current mood | `preservesEveryUtilityComponentWithoutParsingStrings` + adoption-gate test `CONFIRMED` |
+| Lifecycle | Origin record receives SELECT → INTENT → ADOPT → EXECUTOR/CLAIM → terminal lifecycle and exact cause | Handoff/terminal attaches to the newest or previous unrelated decision | `oneDecisionCorrelatesFullScoresIntentExecutorAndTerminal` + rest observer-order suite `CONFIRMED` |
+| Learning receipt | Explore/Rest terminal records exact outcome/cause and actual activity/place/environment deltas before authority closes | UI infers learning from later memory or treats a protected interrupt as dislike | `restLearningReceiptAttachesToTheOriginatingDecision` + `protectedRestInterruptionRecordsNoInventedLearning` `CONFIRMED`; Explore runtime terminal `UNVERIFIED` |
+| Abstain/hold/block | Below-threshold, commitment, switch margin, no executor, mandatory authority, combat, disabled and frozen paths remain explicit | No-intent decisions look like unexplained inactivity | focused `DiscretionaryActivityDirectorTest` dispositions `CONFIRMED` |
+| Atomic retention | Ring holds at most 24 decisions, preserves a live origin while completed records exist, then evicts its whole record after terminal | Entry-by-entry eviction leaves only scores or only terminal | `evictionProtectsLiveOriginThenRemovesItAtomicallyAfterTerminal` `CONFIRMED` |
+| Behavior parity | Scoring, thresholds, intent ownership, Goal flags/priorities, navigation and activity choice are unchanged | Observation changes physical PlayerMob behavior | diff/static MAIBS `CODE_CONFIRMED`; Minecraft runtime `UNVERIFIED` |
+| Lifetime/performance | Context unload/death/server-stop paths clear the trace; per-mob history remains bounded | Per-intent global map, retained entity/world, or unbounded history | production lifecycle call-path + hard cap `CODE_CONFIRMED`; heap/tick profile `UNVERIFIED` |
+
+Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`. The code changes only evidence capture and
+correlation; no physical feedback-loop stage changes. Full clean build: 628 tests, zero
+failures/errors/skips. No Minecraft runtime launch was authorized.
+
 ## Stay-near/exploration arbitration — current 1.9.4 artifact
 
 | Check | Must happen | Must not happen | Evidence |

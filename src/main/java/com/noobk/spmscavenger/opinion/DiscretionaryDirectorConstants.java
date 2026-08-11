@@ -25,8 +25,8 @@ public final class DiscretionaryDirectorConstants {
   /** Pending intent expires if no executor adopts within this window (20 × 10-tick observations). */
   public static final int PENDING_INTENT_TTL_TICKS = 200;
 
-  /** Bounded trace ring per mob (D-GAO-025). */
-  public static final int TRACE_CAPACITY = 24;
+  /** Bounded whole-decision history per mob (D-GAO-042). */
+  public static final int TRACE_DECISION_CAPACITY = 24;
 
   private DiscretionaryDirectorConstants() {}
 }

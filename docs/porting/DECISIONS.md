@@ -1,5 +1,31 @@
 # SPM Scavenger decisions
 
+## 2026-08-11 — GAO-8B causal decision trace · 1.9.4
+
+- **Selected:** a bounded ring of 24 whole decision records. Every evaluation receives a local
+  monotonic `decisionId` before any intent exists; `DiscretionaryIntent` carries that id separately
+  from its UUID `intentId` through adoption, executor start, claim, yield, and terminal callbacks.
+- **Evidence shape:** each candidate retains the complete immutable `ActivityUtilityBreakdown` plus
+  explicit eligibility/suppression. The decision retains its winner or abstention/hold disposition,
+  exact authority cause, optional intent id, and structured lifecycle transitions. Later readouts
+  must not recompute history from current mood or parse old score strings.
+- **Learning receipt:** discretionary Explore/Rest terminals capture bounded activity, place, and
+  environment memory before/after the synchronous learning pipeline and attach the actual deltas,
+  eligibility, outcome, and cause to the originating decision before authority closes.
+- **Retention:** completed evaluations are the normal eviction target so a long-running intent keeps
+  its causal origin. Eviction removes one whole decision. The trace is cleared through the existing
+  context unload/death/server-stop lifecycle; no global intent/decision map was added.
+- **Rejected:** parsing/recomputing from current state (historically false), and an enriched raw
+  event ring (still permits partial-decision eviction).
+- **Must happen:** one retained record correlates full candidate scores, selection, intent, handoff,
+  executor, and exact terminal; an adoption-gated Explore candidate remains visible as suppressed.
+- **Must not happen:** tracing changes utility, thresholds, scheduler ownership, Goals, navigation,
+  activity choice, or grows without a hard bound.
+- **Evidence:** focused trace/director/rest lifecycle tests and the full clean build pass 628 tests
+  with zero failures/errors/skips. `build/libs/spmscavenger-1.9.4.jar` SHA-256 is
+  `91321D9C8CD14BFA5581E52BF3D24269118182A877736831CC1BA4CB1C41CBEC`.
+  Static MAIBS passes; runtime and scale performance remain `UNVERIFIED`.
+
 ## 2026-08-10 — GAO-9 bounded overland environment affinity · 1.9.4
 
 - **Selected:** `FOREST`, `OCEAN`, `SNOWY`, `NETHER`, and `END` form one finite multi-label semantic

@@ -115,6 +115,48 @@ class RestCloseObserverOrderTest {
     }
 
     @Test
+    void restLearningReceiptAttachesToTheOriginatingDecision() {
+        seedRunningRest();
+        DiscretionaryIntent intent = director.runningIntent().orElseThrow();
+        RestSessionClaim claim = liveClaim(Optional.of(intent.intentId()));
+        ExperienceEmitters.restSessionOpened(MOB, claim, claim.arrivedAt());
+
+        closeLikeCoordinator(claim, RestCloseReason.TIMEOUT, 200L);
+
+        OpinionDecisionTrace.Decision decision = director.trace().snapshot().stream()
+                .filter(candidate -> candidate.decisionId() == intent.decisionId())
+                .findFirst()
+                .orElseThrow();
+        assertEquals(1, decision.learningOutcomes().size());
+        OpinionDecisionTrace.LearningOutcome learning = decision.learningOutcomes().getFirst();
+        assertEquals(ActivityKind.REST, learning.activity());
+        assertTrue(learning.activityLearningEligible());
+        assertTrue(learning.activityDelta().preference() > 0f);
+        assertTrue(learning.activityDelta().changedAnything());
+        assertTrue(learning.placePreferenceDeltas().isEmpty());
+        assertTrue(learning.environmentPreferenceDeltas().isEmpty());
+    }
+
+    @Test
+    void protectedRestInterruptionRecordsNoInventedLearning() {
+        seedRunningRest();
+        DiscretionaryIntent intent = director.runningIntent().orElseThrow();
+        RestSessionClaim claim = liveClaim(Optional.of(intent.intentId()));
+        ExperienceEmitters.restSessionOpened(MOB, claim, claim.arrivedAt());
+
+        closeLikeCoordinator(claim, RestCloseReason.COMBAT, 200L);
+
+        OpinionDecisionTrace.LearningOutcome learning = director.trace().snapshot().stream()
+                .filter(candidate -> candidate.decisionId() == intent.decisionId())
+                .findFirst()
+                .orElseThrow()
+                .learningOutcomes()
+                .getFirst();
+        assertFalse(learning.activityLearningEligible());
+        assertFalse(learning.changedAnything());
+    }
+
+    @Test
     void combatCloseDoesNotTeachRestDislike() {
         seedRunningRest();
         RestSessionClaim claim = liveClaim();
@@ -159,10 +201,14 @@ class RestCloseObserverOrderTest {
     }
 
     private static RestSessionClaim liveClaim() {
+        return liveClaim(Optional.empty());
+    }
+
+    private static RestSessionClaim liveClaim(Optional<UUID> sourceIntentId) {
         UUID claimId = UUID.randomUUID();
         return new RestSessionClaim(
                 claimId,
-                Optional.empty(),
+                sourceIntentId,
                 claimId,
                 RestSourceKind.DISCRETIONARY_REST,
                 new BlockPos(1, 64, 2),
@@ -188,8 +234,9 @@ class RestCloseObserverOrderTest {
 
     private boolean terminalDetailContains(String fragment) {
         return director.trace().snapshot().stream()
-                .anyMatch(entry -> entry.stage() == OpinionDecisionTrace.Stage.TERMINAL
-                        && entry.detail().contains(fragment));
+                .flatMap(decision -> decision.transitions().stream())
+                .anyMatch(transition -> transition.stage() == OpinionDecisionTrace.Stage.TERMINAL
+                        && (transition.lifecycle() + ":" + transition.detail()).contains(fragment));
     }
 
     private static float restPreference() {

@@ -10,6 +10,7 @@ import java.util.UUID;
 public final class DiscretionaryIntent {
 
     private final UUID intentId;
+    private final long decisionId;
     private final DiscretionaryActivity activity;
     private IntentLifecycle lifecycle;
     private final float selectedUtility;
@@ -22,6 +23,7 @@ public final class DiscretionaryIntent {
 
     public DiscretionaryIntent(
             UUID intentId,
+            long decisionId,
             DiscretionaryActivity activity,
             IntentLifecycle lifecycle,
             float selectedUtility,
@@ -29,6 +31,10 @@ public final class DiscretionaryIntent {
             long scoredAtTick,
             long issuedAtTick) {
         this.intentId = Objects.requireNonNull(intentId, "intentId");
+        if (decisionId <= 0L) {
+            throw new IllegalArgumentException("decisionId must be positive");
+        }
+        this.decisionId = decisionId;
         this.activity = Objects.requireNonNull(activity, "activity");
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.selectedUtility = selectedUtility;
@@ -39,12 +45,14 @@ public final class DiscretionaryIntent {
     }
 
     public static DiscretionaryIntent pending(
+            long decisionId,
             DiscretionaryActivity activity,
             float selectedUtility,
             float runnerUpUtility,
             long gameTime) {
         return new DiscretionaryIntent(
                 UUID.randomUUID(),
+                decisionId,
                 activity,
                 IntentLifecycle.PENDING,
                 selectedUtility,
@@ -55,6 +63,10 @@ public final class DiscretionaryIntent {
 
     public UUID intentId() {
         return intentId;
+    }
+
+    public long decisionId() {
+        return decisionId;
     }
 
     public DiscretionaryActivity activity() {

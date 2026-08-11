@@ -63,10 +63,24 @@ public final class DiscretionaryDirectorState {
         exploreYieldRequested = false;
 
         if (!input.opinionEnabled()) {
+            long decisionId = trace.beginDecision(input.gameTime(), java.util.List.of());
+            trace.conclude(
+                    decisionId,
+                    OpinionDecisionTrace.DecisionDisposition.OPINION_DISABLED,
+                    InvalidationCause.OPINION_DISABLED,
+                    null,
+                    true);
             invalidateAll(IntentLifecycle.INVALIDATED, InvalidationCause.OPINION_DISABLED, input.gameTime());
             return;
         }
         if (input.frozen()) {
+            long decisionId = trace.beginDecision(input.gameTime(), java.util.List.of());
+            trace.conclude(
+                    decisionId,
+                    OpinionDecisionTrace.DecisionDisposition.FROZEN,
+                    InvalidationCause.UNLOAD_FREEZE,
+                    null,
+                    true);
             invalidateAll(IntentLifecycle.INVALIDATED, InvalidationCause.UNLOAD_FREEZE, input.gameTime());
             return;
         }
@@ -74,50 +88,96 @@ public final class DiscretionaryDirectorState {
         InvalidationCause mandatory = DiscretionaryEligibility.invalidationForObservation(
                 input.observation(), input.combatTarget());
         if (mandatory != InvalidationCause.NONE) {
+            long decisionId = trace.beginDecision(input.gameTime(), java.util.List.of());
+            trace.conclude(
+                    decisionId,
+                    OpinionDecisionTrace.DecisionDisposition.MANDATORY_AUTHORITY,
+                    mandatory,
+                    null,
+                    true);
             invalidateAll(IntentLifecycle.INVALIDATED, mandatory, input.gameTime());
             return;
         }
 
         expirePendingIfNeeded(input.gameTime());
 
-        Optional<ScoringResult> scoring = scoreWithExploreAdoptionGate(input);
-        if (scoring.isEmpty()) {
+        ScoringEvaluation evaluation = evaluateCandidates(input);
+        long decisionId = trace.beginDecision(input.gameTime(), evaluation.candidates());
+        if (evaluation.scoring().isEmpty()) {
+            trace.conclude(
+                    decisionId,
+                    OpinionDecisionTrace.DecisionDisposition.NO_CANDIDATES,
+                    null,
+                    true);
             return;
         }
 
-        recordScores(scoring.get(), input.gameTime());
-        ActivityUtilityBreakdown top = scoring.get().top().orElseThrow();
-        float runnerUp = runnerUpUtility(scoring.get());
+        ScoringResult scoring = evaluation.scoring().orElseThrow();
+        ActivityUtilityBreakdown top = scoring.top().orElseThrow();
+        float runnerUp = runnerUpUtility(scoring);
 
         if (top.total() < DiscretionaryDirectorConstants.ACTIVATION_THRESHOLD) {
-            trace.record(
+            trace.transition(
+                    decisionId,
                     input.gameTime(),
                     OpinionDecisionTrace.Stage.ABSTAIN,
-                    traceIntentId(),
+                    null,
                     top.activity(),
+                    null,
+                    InvalidationCause.NONE,
                     "top=" + top.total());
+            trace.conclude(
+                    decisionId,
+                    OpinionDecisionTrace.DecisionDisposition.BELOW_ACTIVATION_THRESHOLD,
+                    top.activity(),
+                    true);
             clearPending(IntentLifecycle.ABSTAINED, InvalidationCause.NONE, input.gameTime(), "abstain");
             return;
         }
 
-        trace.record(
+        trace.transition(
+                decisionId,
                 input.gameTime(),
                 OpinionDecisionTrace.Stage.SELECT,
-                traceIntentId(),
+                null,
                 top.activity(),
+                null,
+                InvalidationCause.NONE,
                 "top=" + top.total() + " runnerUp=" + runnerUp);
 
         DiscretionaryActivity winner = top.activity();
-        if (!canSwitchTo(winner, top.total(), scoring.get(), input.gameTime())) {
-            updateYieldRequests(winner, top.total(), scoring.get(), input.gameTime());
+        SwitchBlocker switchBlocker = switchBlocker(winner, top.total(), scoring, input.gameTime());
+        if (switchBlocker != SwitchBlocker.NONE) {
+            trace.conclude(
+                    decisionId,
+                    switchBlocker == SwitchBlocker.COMMITMENT
+                            ? OpinionDecisionTrace.DecisionDisposition.COMMITMENT_HOLD
+                            : OpinionDecisionTrace.DecisionDisposition.SWITCH_MARGIN_HOLD,
+                    winner,
+                    true);
             return;
         }
 
         if (needsPendingIssue(winner, input.gameTime())) {
-            issuePending(winner, top.total(), runnerUp, input.gameTime());
+            issuePending(decisionId, winner, top.total(), runnerUp, input.gameTime());
+            trace.conclude(
+                    decisionId,
+                    OpinionDecisionTrace.DecisionDisposition.INTENT_ISSUED,
+                    winner,
+                    false);
+        } else {
+            DiscretionaryIntent existing = activeIntentFor(winner);
+            if (existing != null) {
+                trace.attachIntent(decisionId, existing.intentId());
+            }
+            trace.conclude(
+                    decisionId,
+                    OpinionDecisionTrace.DecisionDisposition.EXISTING_INTENT_RETAINED,
+                    winner,
+                    true);
         }
 
-        updateYieldRequests(winner, top.total(), scoring.get(), input.gameTime());
+        updateYieldRequests(winner, top.total(), scoring, input.gameTime());
     }
 
     public boolean hasRunningActionableIntent(DiscretionaryActivity activity) {
@@ -151,11 +211,14 @@ public final class DiscretionaryDirectorState {
         if (activity == DiscretionaryActivity.REST) {
             restAuthorityPhase = RestAuthorityPhase.DELIVERY;
         }
-        trace.record(
+        trace.transition(
+                target.decisionId(),
                 gameTime,
                 OpinionDecisionTrace.Stage.ADOPT,
                 target.intentId(),
                 activity,
+                target.lifecycle(),
+                InvalidationCause.NONE,
                 "utility=" + target.selectedUtility());
     }
 
@@ -165,22 +228,28 @@ public final class DiscretionaryDirectorState {
             return;
         }
         target.markRunning();
-        trace.record(
+        trace.transition(
+                target.decisionId(),
                 gameTime,
                 OpinionDecisionTrace.Stage.EXECUTOR,
                 target.intentId(),
                 activity,
+                target.lifecycle(),
+                InvalidationCause.NONE,
                 "running");
     }
 
     public void markRestClaimOpened(long gameTime) {
         if (runningIntent != null && runningIntent.activity() == DiscretionaryActivity.REST) {
             restAuthorityPhase = RestAuthorityPhase.CLAIMED;
-            trace.record(
+            trace.transition(
+                    runningIntent.decisionId(),
                     gameTime,
-                    OpinionDecisionTrace.Stage.EXECUTOR,
+                    OpinionDecisionTrace.Stage.CLAIM,
                     runningIntent.intentId(),
                     DiscretionaryActivity.REST,
+                    runningIntent.lifecycle(),
+                    InvalidationCause.NONE,
                     "rest-claim-opened");
         }
     }
@@ -196,12 +265,19 @@ public final class DiscretionaryDirectorState {
             DiscretionaryActivity released,
             DiscretionaryActivity adopted,
             long gameTime) {
-        trace.record(
+        DiscretionaryIntent releasedIntent = intentById(releasedIntentId);
+        if (releasedIntent == null) {
+            return;
+        }
+        trace.transition(
+                releasedIntent.decisionId(),
                 gameTime,
                 OpinionDecisionTrace.Stage.YIELD,
                 releasedIntentId,
-                adopted,
-                "released=" + released);
+                released,
+                releasedIntent.lifecycle(),
+                InvalidationCause.NONE,
+                "adopted=" + adopted);
     }
 
     public void markTerminalForIntent(
@@ -225,6 +301,14 @@ public final class DiscretionaryDirectorState {
             }
             runningIntent = null;
             incumbentActivity = null;
+        }
+    }
+
+    public void recordLearningForIntent(
+            UUID intentId, OpinionDecisionTrace.LearningOutcome learningOutcome) {
+        DiscretionaryIntent target = intentById(intentId);
+        if (target != null) {
+            trace.recordLearning(target.decisionId(), learningOutcome);
         }
     }
 
@@ -275,17 +359,25 @@ public final class DiscretionaryDirectorState {
     }
 
     private void issuePending(
-            DiscretionaryActivity winner, float utility, float runnerUp, long gameTime) {
+            long decisionId,
+            DiscretionaryActivity winner,
+            float utility,
+            float runnerUp,
+            long gameTime) {
         if (pendingIntent != null && pendingIntent.isActive()) {
             terminalize(pendingIntent, IntentLifecycle.INTERRUPTED, InvalidationCause.SUPERSEDED, gameTime, "superseded-pending");
             pendingIntent = null;
         }
-        pendingIntent = DiscretionaryIntent.pending(winner, utility, runnerUp, gameTime);
-        trace.record(
+        pendingIntent = DiscretionaryIntent.pending(decisionId, winner, utility, runnerUp, gameTime);
+        trace.attachIntent(decisionId, pendingIntent.intentId());
+        trace.transition(
+                decisionId,
                 gameTime,
                 OpinionDecisionTrace.Stage.INTENT,
                 pendingIntent.intentId(),
                 winner,
+                pendingIntent.lifecycle(),
+                InvalidationCause.NONE,
                 "utility=" + utility);
     }
 
@@ -294,17 +386,7 @@ public final class DiscretionaryDirectorState {
             float winnerUtility,
             ScoringResult scoring,
             long gameTime) {
-        if (incumbentActivity == null) {
-            return true;
-        }
-        if (incumbentActivity == winner) {
-            return true;
-        }
-        if (runningIntent != null && runningIntent.isWithinCommitment(gameTime)) {
-            return false;
-        }
-        float currentIncumbentUtility = utilityFor(scoring, incumbentActivity);
-        return winnerUtility >= currentIncumbentUtility + DiscretionaryDirectorConstants.SWITCH_MARGIN;
+        return switchBlocker(winner, winnerUtility, scoring, gameTime) == SwitchBlocker.NONE;
     }
 
     private void updateYieldRequests(
@@ -341,15 +423,42 @@ public final class DiscretionaryDirectorState {
         }
     }
 
-    private static Optional<ScoringResult> scoreWithExploreAdoptionGate(DirectorTickInput input) {
-        Optional<ScoringResult> scoring = IdleOpportunityPolicy.score(input.scoringInput());
-        if (scoring.isEmpty() || input.exploreAdoptionReady()) {
-            return scoring;
+    private static ScoringEvaluation evaluateCandidates(DirectorTickInput input) {
+        Optional<ScoringResult> raw = IdleOpportunityPolicy.score(input.scoringInput());
+        java.util.List<OpinionDecisionTrace.Candidate> candidates = new java.util.ArrayList<>();
+        java.util.List<ActivityUtilityBreakdown> eligible = new java.util.ArrayList<>();
+
+        for (DiscretionaryActivity activity : DiscretionaryActivity.values()) {
+            ActivityUtilityBreakdown breakdown = raw.stream()
+                    .flatMap(result -> result.ranked().stream())
+                    .filter(candidate -> candidate.activity() == activity)
+                    .findFirst()
+                    .orElse(null);
+            if (!input.scoringInput().availability().hasExecutor(activity)) {
+                candidates.add(OpinionDecisionTrace.Candidate.suppressed(
+                        activity,
+                        null,
+                        OpinionDecisionTrace.SuppressionReason.EXECUTOR_UNAVAILABLE));
+            } else if (!input.scoringInput().discretionaryEligible()) {
+                candidates.add(OpinionDecisionTrace.Candidate.suppressed(
+                        activity,
+                        breakdown,
+                        OpinionDecisionTrace.SuppressionReason.DISCRETIONARY_CONTEXT_BLOCKED));
+            } else if (activity == DiscretionaryActivity.EXPLORE && !input.exploreAdoptionReady()) {
+                candidates.add(OpinionDecisionTrace.Candidate.suppressed(
+                        activity,
+                        breakdown,
+                        OpinionDecisionTrace.SuppressionReason.EXPLORE_ADOPTION_NOT_READY));
+            } else if (breakdown != null) {
+                candidates.add(OpinionDecisionTrace.Candidate.eligible(breakdown));
+                eligible.add(breakdown);
+            }
         }
-        var filtered = scoring.get().ranked().stream()
-                .filter(breakdown -> breakdown.activity() != DiscretionaryActivity.EXPLORE)
-                .toList();
-        return filtered.isEmpty() ? Optional.empty() : Optional.of(ScoringResult.of(filtered));
+
+        Optional<ScoringResult> scoring = eligible.isEmpty()
+                ? Optional.empty()
+                : Optional.of(ScoringResult.of(eligible));
+        return new ScoringEvaluation(scoring, java.util.List.copyOf(candidates));
     }
 
     private void invalidateAll(IntentLifecycle terminal, InvalidationCause cause, long gameTime) {
@@ -380,37 +489,35 @@ public final class DiscretionaryDirectorState {
             long gameTime,
             String detail) {
         target.markTerminal(terminal, cause);
-        trace.record(
+        trace.transition(
+                target.decisionId(),
                 gameTime,
                 OpinionDecisionTrace.Stage.TERMINAL,
                 target.intentId(),
                 target.activity(),
-                terminal + (detail == null || detail.isBlank() ? "" : ":" + detail));
+                terminal,
+                cause,
+                detail);
     }
 
-    private UUID traceIntentId() {
-        if (pendingIntent != null) {
-            return pendingIntent.intentId();
+    private DiscretionaryIntent activeIntentFor(DiscretionaryActivity activity) {
+        if (pendingIntent != null && pendingIntent.isActive() && pendingIntent.activity() == activity) {
+            return pendingIntent;
         }
-        if (runningIntent != null) {
-            return runningIntent.intentId();
+        if (runningIntent != null && runningIntent.isActive() && runningIntent.activity() == activity) {
+            return runningIntent;
         }
         return null;
     }
 
-    private void recordScores(ScoringResult scoring, long gameTime) {
-        for (ActivityUtilityBreakdown breakdown : scoring.ranked()) {
-            trace.record(
-                    gameTime,
-                    OpinionDecisionTrace.Stage.SCORE,
-                    traceIntentId(),
-                    breakdown.activity(),
-                    breakdown.total()
-                            + " pref="
-                            + breakdown.preference()
-                            + " rep="
-                            + breakdown.repetition());
+    private DiscretionaryIntent intentById(UUID intentId) {
+        if (pendingIntent != null && pendingIntent.intentId().equals(intentId)) {
+            return pendingIntent;
         }
+        if (runningIntent != null && runningIntent.intentId().equals(intentId)) {
+            return runningIntent;
+        }
+        return null;
     }
 
     private static float runnerUpUtility(ScoringResult scoring) {
@@ -423,7 +530,23 @@ public final class DiscretionaryDirectorState {
     /** Test seam — seed running incumbent for switch/yield scenarios. */
     void seedIncumbent(DiscretionaryActivity activity, float utility, long gameTime) {
         incumbentActivity = activity;
-        runningIntent = DiscretionaryIntent.pending(activity, utility, 0f, gameTime);
+        long decisionId = trace.beginDecision(gameTime, java.util.List.of());
+        runningIntent = DiscretionaryIntent.pending(decisionId, activity, utility, 0f, gameTime);
+        trace.attachIntent(decisionId, runningIntent.intentId());
+        trace.conclude(
+                decisionId,
+                OpinionDecisionTrace.DecisionDisposition.INTENT_ISSUED,
+                activity,
+                false);
+        trace.transition(
+                decisionId,
+                gameTime,
+                OpinionDecisionTrace.Stage.INTENT,
+                runningIntent.intentId(),
+                activity,
+                runningIntent.lifecycle(),
+                InvalidationCause.NONE,
+                "test-seed utility=" + utility);
         runningIntent.markAdopted(Math.max(1L, gameTime));
         runningIntent.markRunning();
         if (activity == DiscretionaryActivity.REST) {
@@ -448,4 +571,31 @@ public final class DiscretionaryDirectorState {
     public void clearForUnload() {
         clearForTest();
     }
+
+    private SwitchBlocker switchBlocker(
+            DiscretionaryActivity winner,
+            float winnerUtility,
+            ScoringResult scoring,
+            long gameTime) {
+        if (incumbentActivity == null || incumbentActivity == winner) {
+            return SwitchBlocker.NONE;
+        }
+        if (runningIntent != null && runningIntent.isWithinCommitment(gameTime)) {
+            return SwitchBlocker.COMMITMENT;
+        }
+        float currentIncumbentUtility = utilityFor(scoring, incumbentActivity);
+        return winnerUtility >= currentIncumbentUtility + DiscretionaryDirectorConstants.SWITCH_MARGIN
+                ? SwitchBlocker.NONE
+                : SwitchBlocker.MARGIN;
+    }
+
+    private enum SwitchBlocker {
+        NONE,
+        COMMITMENT,
+        MARGIN
+    }
+
+    private record ScoringEvaluation(
+            Optional<ScoringResult> scoring,
+            java.util.List<OpinionDecisionTrace.Candidate> candidates) {}
 }

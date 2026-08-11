@@ -202,6 +202,16 @@ public final class DiscretionaryAuthority {
                 .orElse(null);
     }
 
+    public static void onLearningObserved(
+            UUID mobId,
+            UUID intentId,
+            OpinionDecisionTrace.LearningOutcome learningOutcome) {
+        if (!opinionGatesConsumers() || intentId == null) {
+            return;
+        }
+        stateFor(mobId).recordLearningForIntent(intentId, learningOutcome);
+    }
+
     private static DiscretionaryDirectorState stateFor(UUID mobId) {
         return OpinionExperienceRegistry.contextFor(mobId).discretionaryDirector();
     }
