@@ -112,6 +112,21 @@ deny-tagged block, and fire beginning mid-recovery. Minecraft execution requires
 | Optional-host safety | Client-only `@Pseudo` Mixin uses `require=0`; packaged injection targets only SPM's renderer | Dedicated-server classloading or absence of SPM prevents startup | Clean build/package inspection `CONFIRMED`; absent-host runtime bootstrap `UNVERIFIED` |
 | Scope boundary | Host visibility, Creative-only gate, 24-block range, focus behavior, text, position, and Goal authority remain host-owned | Scavenger displays labels through walls or changes AI while repairing contrast | Injection changes only draw arguments; static inspection `CONFIRMED` |
 
+### Structured crafting objective compatibility (1.9.2+)
+
+| Check | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Exhaustive recipe labels | Every `ScavengerCrafting.Step` maps to a stable `Crafting — <recipe>` line; `NOTHING` safely maps to `Crafting` | Raw enum names, missing tiers, or an empty readout | `CraftingReadoutTest.everyCraftingStepHasAnExplicitStableLabel` `CONFIRMED` |
+| Observation purity | Reading the selected label leaves ingredients and output untouched | Readout evaluation crafts, consumes, or reevaluates work | `CraftingReadoutTest.readingTheSelectedRecipeDoesNotMutateTheCraftingInputs` `CONFIRMED` |
+| Common-side ownership | SPM's server-built objective string receives the recipe label for both menu and billboard synchronization | A client-only replacement disagrees with the server/right-click screen | `ObjectiveReadoutMixinContractTest` + source call-path `CODE_CONFIRMED`; runtime sync `UNVERIFIED` |
+| Optional-host safety | Common `@Pseudo` bridge uses `require=0`; incompatible formatter falls back to `Craft torches` | Missing/changed SPM prevents addon or dedicated-server startup | Compile/package inspection `CONFIRMED`; absent/changed-host runtime bootstrap `UNVERIFIED` |
+| Scheduler parity | Existing Goal flags, priorities, timers, inventory policy, and navigation are unchanged | A cosmetic label changes PlayerMob behavior | Diff/static MAIBS `CODE_CONFIRMED`; several-minute runtime observation `UNVERIFIED` |
+
+Runtime visual probe: watch a crafting chain transition through planks, sticks, torches, and at
+least one table-required tool. Labels may trail a step change by SPM's existing five-tick refresh
+cadence. Confirm the intended recipe remains displayed during table approach. Separate Minecraft
+launch approval is required.
+
 ### Route interest scoring (1.8.5)
 
 | Check | Must happen | Must not happen | Evidence |

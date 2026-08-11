@@ -1,5 +1,32 @@
 # SPM Scavenger decisions
 
+## 2026-08-10 — structured recipe-only crafting readout · 1.9.2+
+
+- **Problem:** SPM's class-name fallback renders `CraftTorchesGoal` as `Craft torches`, even when
+  the same goal is making planks, sticks, a furnace, or a tool upgrade.
+- **Selected:** a pure exhaustive `ScavengerCrafting.Step` presentation mapping plus an optional
+  common-side `@Pseudo` Mixin at SPM's server-owned `ObjectiveReadout.describe(Goal)`. The goal
+  exposes only its already-selected recipe label; observation does not reevaluate policy or mutate
+  inventory, timers, navigation, flags, or scheduler state.
+- **Recipe-only product decision:** while finding, placing, or walking to a crafting table, the
+  readout continues to name the intended recipe. A physical-phase label was more literal but was
+  rejected by the user because the requested contract is `Crafting — <current recipe>`.
+- **Alternative — implement SPM's `DescribableGoal`:** simpler host integration, rejected because
+  it adds a compile-time SPM dependency to an addon deliberately designed to load without SPM.
+- **Alternative — patch/copy the host formatter or renderer:** rejected because it modifies or
+  duplicates host ownership, can diverge between server-synced menu text and client billboard
+  text, and increases redistribution/version-coupling risk.
+- **Failure behavior:** `require=0` preserves SPM's `Craft torches` fallback if the private host
+  formatter changes. This is compatibility degradation, not a startup failure.
+- **Must happen:** every crafting enum value has an explicit stable label, including
+  `Crafting — torches` and `Crafting — diamond pickaxe`.
+- **Must not happen:** the readout bridge changes Goal flags/priorities, crafting decisions,
+  inventory, navigation, or startup behavior when SPM is absent/incompatible.
+- **Evidence:** exhaustive/purity and common-mixin contract tests plus the full 600-test clean build
+  are `CONFIRMED`. Final-JAR inspection confirms the common bridge, `@Pseudo`, bare host-owned
+  `describe` selector, remapped `Goal` callback type, and `require=0`. Runtime visual behavior is
+  `UNVERIFIED`; see `TEST_MATRIX.md`.
+
 ## 2026-08-10 — optional decision-readout contrast compatibility · 1.9.2+
 
 - **Problem:** SPM's renderer passes the PlayerMob's world light into otherwise-white objective

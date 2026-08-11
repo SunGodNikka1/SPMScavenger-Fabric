@@ -73,6 +73,16 @@ public class CraftTorchesGoal extends Goal {
         setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
+    /**
+     * Live recipe-only objective consumed by the optional SPM readout bridge.
+     *
+     * <p>This is deliberately observational: it reads the already-selected step and does not
+     * reevaluate inventory policy, advance timers, or mutate goal state.
+     */
+    public String craftingReadout() {
+        return CraftingReadout.forStep(step);
+    }
+
     @Override
     public boolean canUse() {
         ScavengerConfig cfg = ScavengerConfig.get();

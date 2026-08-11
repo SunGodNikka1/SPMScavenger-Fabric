@@ -132,6 +132,9 @@ breaking and placement even when the corresponding addon setting is enabled.
 - One optional client compatibility mixin makes SPM 0.86.x's Creative decision readout full-bright
   with a stronger backdrop. It is `@Pseudo`/non-required and becomes a no-op if SPM is absent or
   the renderer signature changes; Scavenger does not replace or redistribute the host renderer.
+- One optional common-side readout bridge replaces the fallback `Craft torches` label with the
+  live recipe-only form `Crafting — <recipe>` (for example, `Crafting — diamond pickaxe`). The
+  selected recipe remains visible while the mob travels to or places a crafting table.
 - Existing SPM combat, fleeing, food, looting, social, order, and fire-escape goals retain higher
   priority.
 - The addon reuses the PlayerMob backpack through vanilla inventory interfaces.
