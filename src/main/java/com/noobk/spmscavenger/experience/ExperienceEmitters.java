@@ -131,18 +131,31 @@ public final class ExperienceEmitters {
     }
 
     public static void socialCompanionJoined(
-            Mob leader,
+            Mob leader, UUID companionId, UUID expeditionEpisodeId, long gameTime) {
+        socialCompanionJoined(
+                leader.getUUID(), companionId, expeditionEpisodeId, leader.blockPosition(), gameTime);
+    }
+
+    /**
+     * GAO-6R — social terminal on a dedicated sub-episode; parent expedition episode stays open.
+     */
+    public static void socialCompanionJoined(
+            UUID leaderId,
             UUID companionId,
             UUID expeditionEpisodeId,
-            long startedGameTime,
+            BlockPos at,
             long gameTime) {
-        MobExperienceContext context = OpinionExperienceRegistry.contextFor(leader.getUUID());
-        context.ensureEpisode(
-                expeditionEpisodeId, startedGameTime, Optional.of(ActivityKind.OVERLAND_EXPLORATION));
-        pipeline(leader).accept(new ExperienceEvent(
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(leaderId);
+        UUID socialEpisodeId =
+                SocialExperienceEpisodes.companionInviteEpisodeId(expeditionEpisodeId, companionId);
+        if (context.hasCompletedEpisode(socialEpisodeId)) {
+            return;
+        }
+        context.ensureEpisode(socialEpisodeId, gameTime, Optional.of(ActivityKind.SOCIALIZING));
+        pipeline(leaderId).accept(new ExperienceEvent(
                 ExperienceKind.SOCIAL_EXPEDITION,
                 gameTime,
-                expeditionEpisodeId,
+                socialEpisodeId,
                 OutcomeClass.VOLUNTARY_SUCCESS,
                 ExperienceCause.SOCIAL_COMPANION_INVITE,
                 0.15f,
@@ -151,7 +164,7 @@ public final class ExperienceEmitters {
                 0.0f,
                 0.2f,
                 Optional.of(ActivityKind.SOCIALIZING),
-                Optional.of(leader.blockPosition()),
+                Optional.of(at),
                 Optional.of(companionId)));
         EntityOpinionService.applyCompanionInvite(context, companionId);
     }

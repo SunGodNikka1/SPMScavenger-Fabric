@@ -5,8 +5,8 @@
 | Item | Status | Artifact |
 | --- | --- | --- |
 | **RT-MI-TS1** | Open — runtime falsification; launch not authorized | `task-33-brief.md` |
-| **GAO-6** | **DONE** (static) — SPM entity bridge + social expedition emitter; runtime `UNVERIFIED` | `task-37-report.md` |
-| **GAO-7** | Open — PersonalityModel | RFC phased table |
+| **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
+| **GAO-7** | **Next** — PersonalityModel | RFC phased table |
 | **RT-GAO-1** | **Narrowed** — static/MAIBS sufficient for parity, GAO-5B math, RET lifecycle; runtime only for `RUNTIME_QUESTION` (nav, SPM goal contention, perf) | RFC GAO validation topic |
 | **RET-GAO-1** | **DONE** (static) — bounded live + frozen snapshot store; runtime `UNVERIFIED` | `task-35-report.md` |
 
@@ -43,6 +43,7 @@ Task 34: complete with concerns — GAO-5 current-place inversion documented (54
 Task 35: complete — RET-GAO-1 bounded live/frozen registry; 553 tests
 Task 36: complete — GAO-5B destination route ranking; semantic inversion fixed (556 tests)
 Task 37: complete — GAO-6 ENTITY bridge + social expedition emitter (569 tests)
+Task 38: complete — GAO-6R social sub-episode repair; GAO-6 CLOSED (574 tests)
 
 Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 
@@ -53,7 +54,7 @@ Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 **Mining intelligence (MI):** MI-1 through MI-14C3-R1 static complete; tunnel executor shipped;
 **RT-MI-TS1** is the MI runtime frontier (`task-33-brief`).
 
-**GA-OPINION:** GAO-0 through GAO-6 + GAO-4.1 + RET-GAO-1 **static ACCEPT** (569 tests, MAIBS); runtime reserved for engine/SPM/perf `RUNTIME_QUESTION`s only — not a default feature gate.
+**GA-OPINION:** GAO-0 through GAO-6 (**CLOSED**) + GAO-4.1 + RET-GAO-1 **static ACCEPT** (574 tests, MAIBS); runtime reserved for engine/SPM/perf `RUNTIME_QUESTION`s only — not a default feature gate.
 
 **PERF:** RFC closed (task 32); craft-table phased scan shipped.
 

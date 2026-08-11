@@ -150,3 +150,30 @@ Implemented read-only SPM entity bridge, bounded supplemental entity opinion mem
 ### Recommended fix (not implemented)
 
 Emit `SOCIAL_EXPEDITION` on a **dedicated milestone episode id** (or reclassify as non-terminal milestone) so it does not close the expedition episode. Until fixed, static ACCEPT stands for bridge/memory only; expedition learning integrity is **`PARTIAL`** when companions join.
+
+---
+
+## GAO-6R — social sub-episode repair (Task 38)
+
+**Status:** `DONE` (static ACCEPT) — **GAO-6 phase CLOSED**
+
+**Fix (`CONFIRMED`):** `SocialExperienceEpisodes.companionInviteEpisodeId(expeditionEpisodeId, companionId)` —
+deterministic social sub-episode per companion; `ExperienceEmitters.socialCompanionJoined` no longer
+aliases the exploration episode. Tombstone guard makes duplicate same-companion invites idempotent.
+
+**Ownership after repair:**
+
+```text
+EXPEDITION_UNLOCKED (exploration episode open)
+        ├─ companion A → SOCIAL sub-episode A → terminal (compact)
+        ├─ companion B → SOCIAL sub-episode B → terminal (compact)
+        └─ EXPEDITION_END → terminal (exploration episode)
+```
+
+**Tests:** `SocialCompanionEpisodeRepairTest` (5) — all four repair proofs + deterministic id.
+
+**MAIBS re-pass:** `PASS — BEHAVIORALLY_PLAUSIBLE` for episode ownership; defects #1–#2 **resolved**.
+
+**Build:** `.\gradlew.bat clean build` — BUILD SUCCESSFUL; **574 tests**, 0 failures.
+
+**Frontier:** **GAO-7** PersonalityModel.

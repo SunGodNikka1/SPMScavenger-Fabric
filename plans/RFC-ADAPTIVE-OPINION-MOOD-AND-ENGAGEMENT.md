@@ -9,7 +9,7 @@
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
 | **Mode** | `VALIDATION` — GAO-0…6 static complete; runtime reserved for `RUNTIME_QUESTION` only |
-| **Status** | GAO-0 through GAO-6 + GAO-4.1 + **RET-GAO-1** `IMPLEMENTED / STATIC ACCEPT` (569 tests); not a blanket runtime gate |
+| **Status** | GAO-0 through GAO-6 (**CLOSED**) + GAO-4.1 + **RET-GAO-1** `IMPLEMENTED / STATIC ACCEPT` (574 tests); not a blanket runtime gate |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
@@ -1197,7 +1197,7 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-5B** | PLACE destination ranking | **IMPLEMENTED:** `PlaceOpinionRouteRanker`; `ExploringGoal` route score; current-position PLACE removed from `ActivityUtilityScorer` | GAO-5, RET-GAO-1 |
 | **RET-GAO-1** | Registry lifetime | **IMPLEMENTED / STATIC ACCEPT:** live + frozen snapshot store (128 LRU + TTL sweep-on-park); `parkOnUnload`/`resumeOnLoad` | GAO-0c |
 | **RT-GAO-1** | Targeted runtime falsification | **NARROWED** — not a default feature gate; file `RUNTIME_QUESTION` probes only | PD-GAO-12 |
-| **GAO-6** | ENTITY bridge | **IMPLEMENTED:** `SpmEntityOpinionBridge`, `EntityOpinionMemory`, `EntityOpinionService`, `socialCompanionJoined` emitter; snapshot + death lifecycle | GAO-4, RET-GAO-1 |
+| **GAO-6** | ENTITY bridge | **CLOSED:** `SpmEntityOpinionBridge`, `EntityOpinionMemory`, GAO-6R `SocialExperienceEpisodes` | GAO-4, RET-GAO-1 |
 | **GAO-7** | PersonalityModel | Trait-weighted experience scaling | GAO-2 |
 | **GAO-8** | Observable expression | Movement/scan biases | GAO-4, deferred UX |
 
@@ -2562,9 +2562,9 @@ rehydrated MobExperienceContext
 
 ---
 
-## Topic: GAO-6 — ENTITY bridge (`IMPLEMENTED / STATIC ACCEPT`)
+## Topic: GAO-6 — ENTITY bridge (`CLOSED` — Tasks 37 + GAO-6R)
 
-**Status:** Task 37 — `STATIC ACCEPT` — 569 tests
+**Status:** `STATIC ACCEPT` — **574 tests**; phase **CLOSED** after GAO-6R episode repair
 
 ```text
 PlayerMobs.feelingToward (read-only, SPM authority)
@@ -2574,37 +2574,55 @@ SpmEntityOpinionBridge.feelingChannel / travelsTogether
 EntityOpinionMemory (supplemental LRU, max 16) ← EntityOpinionService
         ↑
 ExperienceEmitters.socialCompanionJoined ← ExploringGoal.inviteCompanions
+        ↓
+SocialExperienceEpisodes.companionInviteEpisodeId (GAO-6R — per-companion terminal sub-episode)
 ```
 
 **Delivered:**
 
 - `SpmEntityOpinionBridge` — SPM 0–10 → opinion scale; mutual-above-neutral companion gate; `utilitySupplement` (±12 max, 75% SPM / 25% learned) for future SOCIAL scoring.
 - `EntityOpinionMemory` — bounded supplemental affinity; snapshot + death clear (mirrors PLACE).
-- First production `ExperienceEvent.entity` emitter: `SOCIAL_EXPEDITION` on companion invite (+8 learned delta).
+- `SOCIAL_EXPEDITION` on companion invite (+8 learned delta); **GAO-6R:** dedicated social sub-episode id — exploration episode stays open until `EXPEDITION_END`.
+
+**GAO-6R episode ownership (`CONFIRMED` — `SocialCompanionEpisodeRepairTest`):**
+
+| Proof | Result |
+| --- | --- |
+| Companion join does not close exploration episode | PASS |
+| `EXPEDITION_END` commits OVERLAND_EXPLORATION learning after companion | PASS |
+| Two companions → separate social sub-episodes + learning each | PASS |
+| Duplicate same-companion invite idempotent | PASS |
 
 **Must happen:** SPM read-only; supplemental memory never overrides `feelingToward`.
 
 **Must not happen:** SPM ledger writes; entity opinion vetoes mandatory work; SOCIAL discretionary director in this slice.
 
-**Deferred:** `SOCIAL_INTERACTION` emitters (greet/follow); SOCIAL discretionary activity; runtime SPM reflection proof.
+**Deferred (acceptable stepping stones):** `SOCIAL_INTERACTION` emitters; `utilitySupplement` consumer; runtime SPM reflection.
 
-**Tests:** `EntityOpinionMemoryTest`, `SpmEntityOpinionBridgeTest`, `EntityOpinionServiceTest`; retention test entity round-trip.
+**Tests:** `EntityOpinionMemoryTest`, `SpmEntityOpinionBridgeTest`, `EntityOpinionServiceTest`, `SocialCompanionEpisodeRepairTest`; retention entity round-trip.
 
-### MAIBS-1 (post-impl, 2026-08-10)
+### MAIBS-1 (GAO-6R re-pass, 2026-08-10)
 
-**Gate:** `CONDITIONAL — ACCEPTABLE_STEPPING_STONE` (movement/social invite loop) + **`ARCHITECTURE_DEFECT`** (episode ownership)
+**Gate:** **`PASS — BEHAVIORALLY_PLAUSIBLE`** (movement + episode ownership)
 
-**Physical loop (`CODE_CONFIRMED`):** GAO-6 does not change navigation, waypoint scoring, or companion lateral geometry. Companion invite still fires once at `PlanResult.READY`; eligibility still mutual-above-neutral SPM `feelingToward`. Player sees 0–4 parallel walkers on the same heading — same as pre-GAO-6 movement.
+**Physical loop (`CODE_CONFIRMED`):** unchanged — parallel companion walk, no SPM writes.
 
-**Semantic drift (`ARCHITECTURE_DEFECT`):** `socialCompanionJoined` reuses `expeditionEpisodeId` but `SOCIAL_EXPEDITION` is terminal (`EpisodeBoundaryPolicy`). First companion invite **closes** the expedition episode while the walk continues → `EXPEDITION_END` terminal learning/affect for that expedition is swallowed. Second+ companions still get `EntityOpinionService +8` (called outside pipeline) but not second affect pulses.
+**Episode ownership (`CODE_CONFIRMED` post-GAO-6R):** social terminals compact independently; expedition span survives companion joins until `EXPEDITION_END`.
 
-**Dead path (`ACCEPTABLE_STEPPING_STONE`):** `utilitySupplement` has no production consumer — no discretionary SOCIAL scoring yet.
+**Stepping stones retained:** `utilitySupplement` unwired; supplemental entity memory does not gate invites.
 
-**Runtime probes:** companion invite log; solo vs companion `OVERLAND_EXPLORATION` preference after completion; SPM `FollowLovedOneGoal` contention.
+**Frontier:** **GAO-7** PersonalityModel.
+---
 
-Full trace: `task-37-report.md` MAIBS-1 section.
+## Contribution — Agent_Cursor (GAO-6R — Task 38)
 
-**Frontier after:** **GAO-7** PersonalityModel; **episode-id fix** recommended before claiming full expedition learning parity with companions.
+**Agent:** Agent_Cursor **Date:** 2026-08-10 **Type:** `REPAIR`
+
+**Delivered:** `SocialExperienceEpisodes` — per-companion terminal social sub-episodes; expedition episode preserved; idempotent duplicate invites.
+
+**Evidence (`CONFIRMED`):** `SocialCompanionEpisodeRepairTest`; `.\gradlew.bat clean build` — 574 tests, 0 failures. MAIBS re-pass: **PASS**.
+
+**GAO-6 phase CLOSED.** Frontier: **GAO-7**.
 
 ---
 

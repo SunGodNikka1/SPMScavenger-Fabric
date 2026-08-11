@@ -405,7 +405,6 @@ public final class ExploringGoal extends Goal {
                         mob,
                         other.getUUID(),
                         expeditionEpisodeId(expedition),
-                        expedition.startedTick,
                         now);
                 taken++;
             }
