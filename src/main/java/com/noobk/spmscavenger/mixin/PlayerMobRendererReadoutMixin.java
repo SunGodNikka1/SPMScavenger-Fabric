@@ -1,7 +1,10 @@
 package com.noobk.spmscavenger.mixin;
 
 import com.noobk.spmscavenger.client.DecisionReadoutContrast;
+import com.noobk.spmscavenger.client.IrisShaderState;
+import com.noobk.spmscavenger.client.ShaderReadoutOverlay;
 import net.minecraft.client.gui.Font;
+import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
@@ -30,6 +33,18 @@ public abstract class PlayerMobRendererReadoutMixin {
     private void spmscavenger$brightenDecisionReadout(Args args) {
         Font.DisplayMode mode = args.get(7);
         boolean seeThrough = mode == Font.DisplayMode.SEE_THROUGH;
+        IrisShaderState.Snapshot shader = ShaderReadoutOverlay.shaderState();
+        if (shader.shaderPackInUse()) {
+            if (!seeThrough && !shader.shadowPass()) {
+                ShaderReadoutOverlay.capture(
+                        args.get(0), args.get(1), args.get(2), args.get(3), (Matrix4f) args.get(5));
+            }
+            // Photon directionally lights world text. Suppress both host passes only while its
+            // pipeline is active; the captured line is redrawn after world post-processing.
+            args.set(3, 0x00000000);
+            args.set(8, 0x00000000);
+            return;
+        }
         args.set(3, DecisionReadoutContrast.textColor(args.get(3), seeThrough));
         args.set(8, DecisionReadoutContrast.backgroundColor(args.get(8), seeThrough));
         args.set(9, DecisionReadoutContrast.packedLight());

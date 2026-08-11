@@ -43,6 +43,18 @@
   a Mixin error, but the user observed the decision render as completely black under the active
   Iris/Sodium stack. Code/bytecode confirms the override raised SPM's 25% base plate to 50%; exact
   shader causality remains `INFERRED` until the rebuilt visual is retested.
+- **Photon/Iris repair:** Photon 1.3b on Iris 1.8.8 still directionally darkened the world-space
+  glyphs after the backdrop correction; looking toward the sky changed their brightness, while
+  disabling shaders made them readable. Packed light therefore is not sufficient for this backend.
+  While Iris reports an active pack, Scavenger captures only SPM's already-formatted solid lines,
+  suppresses their two shader-affected world passes, and redraws them through Fabric's post-world
+  HUD callback. The shader-off path remains the original host renderer plus the narrow light fix.
+- **Alternative — patch Photon:** rejected because it modifies a third-party shader pack and would
+  not generalize to other packs. **Alternative — always use the HUD overlay:** rejected because it
+  needlessly changes vanilla/Sodium rendering and makes an optional compatibility path authoritative.
+- **Lifetime:** the per-frame capture list has a 512-line hard cap and production eviction at both
+  world-render start and HUD-pass completion. No entity, UUID, or cross-frame objective state is
+  retained.
 - **Compatibility trade-off:** `require=0` prevents a future SPM renderer change from crashing the
   client, but can turn the repair into a silent no-op. The exact supported host is SPM 0.86.x; a
   runtime screenshot remains the verification probe after upgrades.
@@ -52,7 +64,7 @@
 - **Evidence:** focused contrast tests cover full-bright glyphs, lighter solid secondary text, and
   exact host background/translucent-pass preservation; remapped JAR
   inspection confirms the Mixin, policy, config, and intermediary `Font.drawInBatch` target are
-  packaged. The full 600-test clean build passes. Minecraft visual behavior remains `UNVERIFIED`.
+  packaged. The full 602-test clean build passes. Minecraft visual behavior remains `UNVERIFIED`.
 
 ## 2026-08-08 — consumer-driven iron tools (TT-2b + FS-8) · 1.9.2+
 

@@ -130,8 +130,11 @@ breaking and placement even when the corresponding addon setting is enabled.
 - Goals are attached only to confirmed Social Player Mobs on Fabric's server entity-load event.
 - One accessor mixin exposes vanilla `Mob.goalSelector`; SPM code is not copied or bundled.
 - One optional client compatibility mixin makes SPM 0.86.x's Creative decision glyphs full-bright
-  while preserving SPM/Minecraft's user-controlled backdrop. It is `@Pseudo`/non-required and becomes a no-op if SPM is absent or
-  the renderer signature changes; Scavenger does not replace or redistribute the host renderer.
+  while preserving SPM/Minecraft's user-controlled backdrop. With an active Iris shader pack, the
+  already-formatted lines are redrawn in a bounded post-shader HUD pass so packs such as Photon
+  cannot directionally darken them. Iris is detected reflectively and remains optional. The Mixin
+  is `@Pseudo`/non-required and becomes a no-op if SPM is absent or its renderer signature changes;
+  Scavenger does not replace or redistribute the host renderer.
 - One optional common-side readout bridge replaces the fallback `Craft torches` label with the
   live recipe-only form `Crafting — <recipe>` (for example, `Crafting — diamond pickaxe`). The
   selected recipe remains visible while the mob travels to or places a crafting table.

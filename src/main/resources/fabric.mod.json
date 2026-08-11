@@ -9,6 +9,7 @@
   "environment": "*",
   "entrypoints": {
     "main": ["com.noobk.spmscavenger.SpmScavenger"],
+    "client": ["com.noobk.spmscavenger.client.SpmScavengerClient"],
     "modmenu": ["com.noobk.spmscavenger.client.SpmScavengerModMenu"]
   },
   "mixins": ["spmscavenger.mixins.json"],
