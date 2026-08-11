@@ -8,8 +8,8 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
-| **Mode** | `WORKING_FROM_PLAN` — GAO-9 implemented and statically accepted; next optional frontier is GAO-8B read-only UI/debug expression |
-| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1** (618 tests) |
+| **Mode** | `PROGRESSIVE_CONTINUATION` — GAO-8B explainability design; causal-trace prerequisite under review |
+| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1** (618 tests); GAO-8B `PREREQUISITE DEFECT` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
@@ -39,8 +39,10 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** GAO-9 is statically closed. A later GAO-8B may add read-only debug/UI
-expression; runtime remains non-default under PD-GAO-12 and requires a named `RUNTIME_QUESTION`.
+**Nearest frontier:** repair/lock GAO-8B-B1 causal trace integrity before authorizing the visual
+inspector. A screen that reconstructs a plausible explanation from current values would violate
+D-GAO-025 even if it looked convincing. Runtime remains non-default under PD-GAO-12 and requires a
+named `RUNTIME_QUESTION`.
 
 ---
 
@@ -275,6 +277,15 @@ distribution evidence shows it is inert or dominates novelty/history.
 - Modded biomes participate through vanilla biome tags. Missing tags mean neutral, not disliked.
 - No client-only types, packets, Goal flags, navigation calls, block scans, or scheduler scans are
   introduced.
+- **Still Life 0.1.1 static compatibility (2026-08-10):** the verified Modrinth artifact
+  (`SHA-1 ef980781480a4034d336a447a8a0d9fd4dbe5c5b`) contains 108 custom biomes, zero classes,
+  zero Mixins, and no exact datapack-path collision with Scavenger. Its tags cover nine custom
+  `minecraft:is_forest` biomes and all ten custom oceans through `is_ocean`/`is_deep_ocean`.
+  Forest-like biomes assigned only to other families remain neutral under D-GAO-036; this is
+  incomplete semantic coverage, not an incompatibility. Still Life requires Lithosphere, warns
+  against other Overworld biome replacements, and documents potentially slow world generation.
+  Coexistence behavior/TPS remain `UNVERIFIED` because no installed artifact or runtime log was
+  available. Source: `https://modrinth.com/datapack/still-life` and inspected 0.1.1 JAR.
 
 ### Behavioral Prediction (MAIBS-1)
 
@@ -1207,6 +1218,186 @@ Status: `IMPLEMENTED / STATIC ACCEPT`.
 
 ---
 
+## Topic: Observable expression — GAO-8B read-only inspection
+
+**Status:** `PREREQUISITE DEFECT / DESIGN REVIEW` — Task 42A must repair causal evidence before the
+Task 42B screen; PD-GAO-14 still owns entry/access
+
+### Goal and boundary
+
+Make the AI understandable: expose the already-existing Personality, affect, learned preferences,
+discretionary authority, and causal decision history to a player/operator without turning
+observation into behavior.
+
+**User product direction (PD-GAO-15):** GAO-8B is an explanation surface, not a telemetry dump.
+For every claimed decision it should answer, from evidence captured at decision time:
+
+1. **What am I doing now?**
+2. **Why did this option win?**
+3. **Why did the alternative lose or why was no option chosen?**
+4. **Did the intent reach the executor, or where did handoff stop?**
+5. **What exact outcome occurred and what, if anything, was learned?**
+
+Raw channel values remain available under progressive disclosure, but the primary screen must not
+make the player mentally reverse-engineer utility arithmetic.
+
+| GAO-8B may | GAO-8B must not |
+| --- | --- |
+| Build an immutable bounded snapshot on an explicit inspection request | Call `contextFor`, create a context, learn, rescore, issue an intent, or refresh affect |
+| Render an addon-owned client screen | Patch SPM's inventory layout or append debug state to the world billboard/objective label |
+| Show current affect/personality, existing activity/environment opinions, authority phase, and trace | Expose live mutable maps, world references, arbitrary NBT, inventory, or a control/edit button |
+| Validate target/range/access server-side and fail closed | Trust a client-supplied UUID, inspect an unloaded entity, or crash when SPM is absent/changed |
+
+`CODE_CONFIRMED` current evidence:
+
+- SPM's `PlayerMobScreen` is a Creative inventory/editor with a fixed disposition panel and
+  objectives gutter. It exposes no addon panel API; integrating there requires a client Mixin into
+  host layout/lifecycle code.
+- Scavenger has no networking implementation, per-mob Opinion screen/payload, SPM screen Mixin, or
+  keybind/client command (four `NOT FOUND` probes).
+- `OpinionExperienceRegistry.find(UUID)` is the existing non-allocating live lookup. In contrast,
+  `contextFor` allocates/rehydrates and is forbidden on a readout path.
+- `AffectiveState`, immutable `PersonalityModel`, memory snapshots, director authority, and the
+  current 24-**entry** bounded `OpinionDecisionTrace` contain useful read-only data. No second
+  activity/GoalSelector scan is necessary. The trace does **not yet** satisfy the causal explanation
+  contract below.
+- SPM remains optional through `PlayerMobs.isPlayerMob`; the addon already depends on Fabric API,
+  so a project-owned request/response payload does not require another dependency.
+
+### Entry-point alternatives
+
+| Option | Benefit | Strongest objection / failure mode | Verdict |
+| --- | --- | --- | --- |
+| A — optional button/panel in SPM `PlayerMobScreen` | Most discoverable while viewing the mob; target already known | Version-locked `@Pseudo` UI Mixin, Creative-only host screen, fixed-layout collisions, silent loss after host rename | Keep as a later optional adapter only if SPM exposes a supported screen-extension API |
+| **B — addon-owned screen opened by a configurable inspect key while targeting a PlayerMob** | No host-screen/layout mutation; screen and packet contract are owned here; SPM-absent path can fail closed | Keybind discovery/conflicts; requires one bounded request/response pair; server must reject stale/spoofed targets | **RECOMMENDED** |
+| C — operator command/chat dump | Lowest code and no custom screen | Poor readability, no real UI, long traces spam chat, awkward target selection | Diagnostic fallback, not the GAO-8B product |
+
+**D-GAO-039 (`PROPOSED`):** GAO-8B reads one immutable on-demand view from
+`OpinionExperienceRegistry.find`; it never allocates state, invokes policy, scans goals/world, or
+streams background updates. A missing context renders `No Opinion state yet` rather than creating
+neutral memory. Refresh is explicit; stale-but-labelled data is safer than hidden periodic work.
+
+**D-GAO-040 (`PROPOSED`):** the recommended frontend is an addon-owned screen and bounded common
+DTO. The server resolves the supplied entity id in the requesting player's level, validates a live
+PlayerMob, distance, and access policy, and copies only finite enum/channel/trace data. Client-only
+screen types stay out of common packet/snapshot signatures. Responses carry a request id/entity id
+so a late response cannot populate a different or already-closed inspection.
+
+### GAO-8B-B1 — current trace cannot prove its own explanation (`CODE_CONFIRMED`)
+
+The existing D-GAO-025 implementation is useful logging, but it is not an end-to-end causal record:
+
+- `recordScores` and `SELECT` call `traceIntentId()` **before** `issuePending` creates the new
+  intent. A fresh decision therefore records a null id; while another intent exists it may inherit
+  that previous id.
+- `SCORE` stores only `total`, `preference`, and `repetition` in a string. The real
+  `ActivityUtilityBreakdown` also contains base usefulness, boredom/stress/novelty fit, recent
+  reward, failure pressure, and cost; those causes are discarded.
+- The ring bounds 24 individual events, not 16–32 decisions. A multi-stage decision can lose its
+  scores while retaining its later terminal, producing a misleading partial chain.
+- Early exits such as disabled/frozen/mandatory authority/no scoring result do not consistently
+  leave a structured current suppression reason when no intent exists.
+- Current tests assert that stages exist and that ADOPT/EXECUTOR share the issued intent id. They do
+  not assert one correlatable `SCORE → SELECT → INTENT → ADOPT → EXECUTOR → TERMINAL` chain.
+
+This is not currently proven to change mob behavior. It is an **observability architecture defect**:
+a GAO-8B UI would either expose gaps honestly or invent a causal story after the fact.
+
+| Repair option | Benefit | Strongest objection / failure mode | Verdict |
+| --- | --- | --- | --- |
+| Parse strings and recompute “why” from current mood/memory | Smallest diff | State may have changed; explanation can disagree with the historical decision; parsing is brittle | **REJECT** |
+| Keep event ring, add a decision id and every score component, raise entry cap | Incremental | Entry eviction can still cut one decision in half; capacity means events, not decisions | Acceptable fallback only if decision records prove too invasive |
+| **Bounded decision records with structured candidates + transitions** | One causal owner; retains or evicts a whole decision; UI does not infer history | Requires a narrow trace-model migration and lifecycle tests before UI work | **RECOMMENDED** |
+
+**D-GAO-041 (`PROPOSED`):** explainability evidence is captured at the decision/transition that
+created it, never recomputed from later affect or memory. Each bounded decision record owns a local
+monotonic `decisionId`, full immutable candidate breakdowns, selection/suppression reason, optional
+intent id, and later claim/yield/executor/terminal transitions with exact causes. The intent carries
+its originating decision id so later callbacks cannot attach to the wrong evaluation.
+
+**D-GAO-042 (`PROPOSED`):** retention is bounded by complete **decisions**, not raw events. Eviction
+removes one oldest complete record atomically; no per-intent/global lookup map or minted persistent
+identity is added. A separately stored current `DecisionDisposition` may state disabled, frozen,
+mandatory authority, no candidates, below threshold, commitment hold, switch-margin hold, pending,
+running, or terminal. It is observability only and grants no scheduler authority.
+
+### Proposed readout
+
+| Section | Initial contents | Explicit omission |
+| --- | --- | --- |
+| Summary | Plain-language “Doing / Because / Held by / Last outcome” plus mob name/id and Opinion state | No scheduler rescan, inferred history, or claim-control buttons |
+| Affect | Engagement, boredom, satisfaction, stress, novelty, meaningful-progress age | No derived value edits or forced mood |
+| Personality | Six immutable GAO-7 traits | No trait sliders; SPM remains disposition owner |
+| Preferences | Existing activity and environment entries; bounded place/entity counts | No zero-entry creation; raw place/entity identities deferred unless a debugging need proves value |
+| Why | Whole bounded decisions: candidates/components → winner/suppression → handoff → terminal/learning eligibility | No string parsing, perpetual log, disk export, or unbounded history |
+
+### Access product decision — PD-GAO-14
+
+| Option | Compatibility/safety | Product effect |
+| --- | --- | --- |
+| **Creative/operator only — recommended for gen-1** | Matches the diagnostic nature and SPM's Creative editor; avoids exposing internal relationship/place history in multiplayer | Survival players cannot inspect without permission |
+| Any nearby player | Most accessible | Turns debug state into gameplay information and needs a deliberate privacy/gameplay policy |
+| Server-configurable disabled / privileged / all | Most flexible | Adds configuration, synchronization, and test surface before the basic screen is proven |
+
+Recommendation: lock **Option B entry point + Creative/operator-only access** for Task 42. Revisit a
+server-configurable/all-player mode only after the readout has a player-facing design rather than a
+diagnostic dump.
+
+### Behavioral prediction and adversarial review (MAIBS-1)
+
+```text
+player targets live PlayerMob
+        → presses inspect key
+        → server validates target/range/permission
+        → copies existing bounded state
+        → client opens static read-only screen
+        → mob's GoalSelector and physical behavior continue unchanged
+```
+
+| Scenario | Must happen | Must not happen |
+| --- | --- | --- |
+| Context exists | Snapshot displays the same stored channel/trait/opinion/trace values | Opening or refreshing changes any value |
+| No context / Opinion disabled | Clear unavailable/disabled state | `contextFor` allocates neutral state |
+| Target moves/dies or id is spoofed | Server rejects; client keeps/clears labelled stale view safely | Inspect another/unloaded entity or throw |
+| SPM absent/API changed | Feature no-ops or reports unavailable once; addon remains loadable | Hard client/server classloading failure |
+| Screen closes before reply | Late request id is discarded | Old data opens or contaminates the next target |
+| Many mobs/players | Work occurs only per explicit bounded request | Per-tick sync, Goal scan, or retained per-viewer map |
+
+Predicted weird behaviors: values can be one request old (`ACCEPTABLE_STEPPING_STONE`); a mob may
+change objective while the static screen is open (`ACCEPTABLE_STEPPING_STONE`, explicit Refresh);
+a rejected target can make the screen appear briefly unavailable (`RUNTIME_QUESTION`). Any change
+in physical behavior, memory, or scheduler state is an `ARCHITECTURE_DEFECT`.
+
+**MAIBS preflight:** `PASS — BEHAVIORALLY PLAUSIBLE` for the proposed contract. It introduces no
+Goal, flag, navigation, scan, inventory/world interaction, or authority path. Runtime GUI layout
+and request/response timing remain `UNVERIFIED` until implementation and a separately approved
+targeted launch.
+
+### Task 42A — GAO-8B causal trace repair (`PROPOSED PREREQUISITE`)
+
+| Field | Contract |
+| --- | --- |
+| Dependencies | D-GAO-025 implementation; GAO-3/4 utility and authority complete |
+| Scope | Replace the event-string ring with bounded whole-decision records; carry decision id through intent/handoff; structured score/suppression/terminal evidence; focused migration tests; no UI/network |
+| Must happen | One query can distinguish policy winner, abstention/hold, unclaimed intent, failed handoff, running executor, and exact terminal without consulting current state |
+| Must not happen | Trace recomputes decisions, changes scorer/director results, retains live entities, grows per tick without bound, or grants activity authority |
+| Tests | Full component preservation; fresh/overlapping decision correlation; abstain/commitment/switch/no-candidate/mandatory reasons; complete-record eviction; intent lifecycle; neutral behavior parity |
+| Verification | Focused tests, full suite, clean build, RET-1/static MAIBS; no runtime required for pure trace semantics |
+
+### Task 42B — GAO-8B understandable Opinion inspector (`BLOCKED BY 42A + PD-GAO-14`)
+
+| Field | Contract |
+| --- | --- |
+| Dependencies | GAO-0 through GAO-9 and RET-GAO-1 complete |
+| Scope | Pure immutable `OpinionReadoutSnapshot`; plain-language explanation projection over Task 42A evidence; non-allocating factory; bounded request/response payload; addon-owned client screen/keybind; focused tests; documentation |
+| Constraints | Stock/optional SPM; no host-screen or objective-billboard mutation; no state allocation/write; no background stream; common APIs expose no client types; access/range validated server-side |
+| Must happen | A permitted player can answer what/why/alternative/handoff/outcome/learning from captured evidence, inspect raw values secondarily, and manually refresh |
+| Must not happen | Inspecting creates state, changes AI, leaks an unbounded payload, trusts spoofed ids, or crashes without SPM |
+| Tests | Snapshot exactness/non-allocation/immutability/bounds; permission/range/type/death rejection; payload round-trip and caps; late-response token; optional-SPM path; screen smoke/static layout; negative Goal/config/state-write scan |
+| Verification | Focused tests, full suite, clean build, final-JAR packet/client packaging, static MAIBS; runtime requires separate approval |
+
+---
+
 ## Topic: SPM compatibility bridge
 
 **Status:** `IMPLEMENTED` (GAO-6 MVP) — read-only bridge + supplemental memory; full SOCIAL discretionary scoring deferred
@@ -1480,7 +1671,7 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 through GAO-9 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; later GAO-8B UI/runtime tuning unplanned
+**Status:** GAO-0 through GAO-9 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-8B causal-trace prerequisite under review
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
@@ -1499,6 +1690,7 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-6** | ENTITY bridge | **CLOSED:** `SpmEntityOpinionBridge`, `EntityOpinionMemory`, GAO-6R `SocialExperienceEpisodes` | GAO-4, RET-GAO-1 |
 | **GAO-7** | PersonalityModel | **CLOSED / STATIC ACCEPT:** immutable six-trait model; SPM-host anchors + deterministic UUID latent traits; bounded subjective learning at the single normalized seam; snapshot lifecycle; 581-test clean build | GAO-2, GAO-6 |
 | **GAO-8A** | Passive physical expression | **CLOSED / STATIC ACCEPT:** bounded scheduler-owned LOOK expression; Task 40; 593 tests | GAO-0, GAO-1, GAO-6, GAO-7 |
+| **GAO-8B** | Understandable Opinion inspection | **PREREQUISITE DEFECT:** Task 42A structured causal trace precedes Task 42B addon-owned on-demand explanation UI; PD-GAO-14 still open | GAO-0 through GAO-9, RET-GAO-1 |
 | **GAO-9** | Overland environment affinity | **CLOSED / STATIC ACCEPT:** finite multi-label context, completion-only normalized learning, enum-bounded snapshot memory, and ±10 valid-route ranking; PROJECT memory superseded; 618 tests | GAO-0c, GAO-2, GAO-5B, RET-GAO-1 |
 
 ### GAO-0b implementation task (`IMPLEMENTED / STATIC VERIFIED`)
@@ -1691,6 +1883,8 @@ companion coordination—not competing activity semantics.
 | **PD-GAO-11** | `LOCKED` | REST executor for discretionary choice | Campfire / SeekShelter / both | **Campfire + `RestSessionClaim` only** — `SeekShelterGoal` (p2 safety) is never the discretionary REST executor |
 | **PD-GAO-12** | `LOCKED` | When is runtime required vs static ACCEPT? | runtime default gate / static-first / hybrid | **Static-first:** `CODE + TESTS + MAIBS` → confident → **ACCEPT STATIC**; runtime only when uncertainty is Minecraft engine, SPM `GoalSelector`, mod interaction, or perf/heap — not utility arithmetic |
 | **PD-GAO-13** | `LOCKED` | What authority may observable mood/personality expression have? | passive LOOK/cosmetic output / activity-driving behavior | **Passive expression only:** head/look, harmless idle cadence, tiny cosmetic output, later debug/UI; never activity choice, MOVE authority, priority changes, or command/combat/progression override — user 2026-08-10 |
+| **PD-GAO-14** | `OPEN — RECOMMENDATION READY` | GAO-8B entry point and access | SPM-screen adapter / addon inspect key; privileged / all / configurable | **Recommend addon-owned inspect key + Creative/operator-only gen-1 access**; user decision required before Task 42 |
+| **PD-GAO-15** | `LOCKED (PRODUCT DIRECTION)` | Is GAO-8B a raw telemetry viewer or causal explanation? | raw numeric dump / **plain-language causal explanation with progressive disclosure** | **Make the AI understandable:** what, why, rejected alternative/suppression, handoff, outcome, and learning; raw values secondary — user 2026-08-10 |
 
 #### PD-GAO-03 death semantics (`LOCKED` — GAO-2)
 
@@ -1727,6 +1921,8 @@ in-memory learning plus runtime death reset only.
 | **GAO-PERSONALITY** | Personality modifies only bounded subjective learning deltas at one normalized-evidence seam; neutral personality preserves GAO-2 exactly and no trait grants scheduler authority |
 | **GAO-EXPRESSION** | Passive expression owns LOOK only through GoalSelector, is finite/interruptible/noise-filtered, uses no navigation/world action, and cannot overwrite higher-priority authority |
 | **GAO-TRACE** | Bounded per-mob trace covers candidates/scores → intent → claim → yield/handoff → executor admission/start → exact terminal cause |
+| **GAO-READOUT** | Inspection is server-authoritative, on-demand, bounded, non-allocating/read-only, optional-SPM-safe, and introduces no background sync or AI authority |
+| **GAO-EXPLAIN** | Every explanation is derived from one structured decision-time causal record; no later-state recomputation, string parsing, cross-intent attachment, or partial-record eviction |
 | **MAIBS-1** | Multi-minute discretionary sessions look human-plausible (explore → rest → socialize → return) |
 | **AV-STATIC** | Utility math, parity paths, registry lifetime, and route-bias arithmetic provable from code + deterministic tests without launch |
 
@@ -1916,6 +2112,10 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 | D-GAO-036 | ENVIRONMENT is an immutable multi-label context captured only at existing event/valid-route seams | `IMPLEMENTED` | `EnvironmentProfile/Classifier`; five enum labels; no scanner |
 | D-GAO-037 | Environment learning requires an attributable environment terminal; gen-1 learns from expedition completion, not generic failure/frontier/authority/stale closure | `IMPLEMENTED` | `EnvironmentOpinionService`; one personality-scaled delta divided across labels |
 | D-GAO-038 | Environment affinity is a ±10 soft tie-breaker among already-valid routes; mean multi-label score; never terrain-safety or mandatory descent/handoff authority | `IMPLEMENTED` | Below PLACE ±15, visited -20, anti-fixation -100; path/safety mutation negative scan |
+| D-GAO-039 | GAO-8B snapshots existing state on explicit request through non-allocating lookup; missing state stays missing; no policy/scan/background refresh | `PROPOSED` | Task 42 read-side purity/non-allocation gate |
+| D-GAO-040 | GAO-8B uses a bounded server-validated common DTO and addon-owned screen; no client type in common API and no host UI/billboard mutation | `PROPOSED` | Entry/access await PD-GAO-14 |
+| D-GAO-041 | Explanation evidence is captured at decision time in one structured record and carried through intent/handoff/terminal; never reconstructed from later state | `PROPOSED` | GAO-8B-B1 / Task 42A |
+| D-GAO-042 | Trace retention is bounded by whole decisions with explicit current suppression disposition; no partial-chain eviction or authority side effect | `PROPOSED` | GAO-8B-B1 / RET-1 |
 
 ---
 
@@ -1923,6 +2123,8 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-10 | Agent_Codex | **GAO-8B understandability review.** User defined the product as “make the AI understandable.” Static trace audit found GAO-8B-B1: score/select precede new intent identity, can inherit an incumbent id, discard most utility components into strings, and use an event rather than decision bound; existing tests do not prove complete causal correlation. Locked PD-GAO-15 direction; proposed D-GAO-041/042 and split Task 42A causal trace repair from Task 42B UI. No Java edit, test/build, runtime launch, commit, push, or PR |
+| 2026-08-10 | Agent_Codex | **GAO-8B continuation and Still Life compatibility evidence.** Inspected pinned SPM screen/menu/readout and current addon state owners; recorded four absent-surface probes; compared host-screen, addon-screen, and command frontends; proposed D-GAO-039/040 and Task 42 with an on-demand non-allocating snapshot and server validation. Recommended addon inspect key + privileged access in PD-GAO-14. Added verified Still Life 0.1.1 tag/resource compatibility and its runtime/performance limits. No Java edit, build, runtime launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **Task 41 GAO-9 implementation.** User accepted D-GAO-035…038 and explicitly locked semantic-affinity ≠ terrain-safety. Added five-label immutable classification, raw/normalized evidence context, completion-only divided learning, enum-bounded snapshot/death lifecycle, and ±10 mean affinity after existing ticking/route validity. RED focused suite, full suite, clean build, package inspection, and static MAIBS pass: 618 tests. Runtime route distribution/performance remain UNVERIFIED; no Minecraft launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **GAO-9 decision-ready closure review.** Found original ENVIRONMENT/PROJECT taxonomy gap; rejected per-project memory as ACTIVITY/PLACE/EPISODE duplication and RET-1 risk; verified target biome tags, snow predicate, expedition attribution, and the existing ticking-guarded route seam; compared three environment models; proposed D-GAO-035…038 and Task 41 with conservative success-only gen-1 learning, no second scan, bounded route bias, parity/performance/MAIBS gates. No Java edits, build, runtime launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **Task 40 GAO-8A implementation.** Added pure expression policy/profile/tone, ephemeral bounded-context publication, priority-8 LOOK-only passive goal, strict self-liked social gaze, Opinion-on Antics gaze guard, and 12 focused tests. Post-GREEN MAIBS found/repaired lost-social-target world-origin gaze, master-disable stale eligibility, and missing ENGAGED abstention. Focused tests, full suite, and clean build pass: 593 tests. Runtime visual cadence remains UNVERIFIED; no launch, commit, push, or PR |
@@ -3317,3 +3519,83 @@ and many-mob classification cost remain `UNVERIFIED` under PD-GAO-12.
 
 **Frontier after:** GAO-9 is closed. The next optional design frontier is GAO-8B read-only debug/UI
 expression, or a separately filed runtime question for environment route salience/performance.
+
+---
+
+## Contribution — Agent_Codex (GAO-8B decision-ready continuation)
+
+**Agent:** Agent_Codex
+
+**Date/Session:** 2026-08-10
+
+**Contribution type:** `RESEARCH / REVIEW / DESIGN / MAIBS_STATIC`
+
+**Frontier before:** GAO-9 was statically closed; GAO-8B existed only as an optional read-only
+UI/debug direction with no entry point, data boundary, access policy, task, or acceptance gate.
+
+**Action:** verified the pinned SPM v0.86.0 screen/menu/readout and the addon's actual registry,
+snapshot, trace, client, dependency, and optional-host seams. Recorded four negative probes for
+networking, Opinion UI/payload, SPM-screen integration, and key/command entry points. Compared three
+frontends and promoted the addon-owned on-demand inspector as the compatibility-first design.
+Defined D-GAO-039/040, GAO-READOUT, MAIBS scenarios, and Task 42; preserved access as PD-GAO-14.
+Also integrated the completed Still Life 0.1.1 artifact/tag compatibility finding into GAO-9.
+
+**Strongest objection:** a key-opened custom screen is less discoverable than modifying SPM's
+existing inventory screen and adds one packet round-trip. The host-screen alternative loses because
+it is Creative-only, has no extension API, and requires a version-sensitive UI Mixin. Switch if SPM
+later exposes a supported addon-panel API.
+
+**Evidence:** SPM reference tag `v0.86.0` / commit
+`4b80b5e849ccabd69e7c9c2f44dc25f7233c7796`; `PlayerMobScreen`, `PlayerMobMenu`,
+`ObjectiveReadout`; `OpinionExperienceRegistry.find`; bounded context/memory/trace owners; clean
+working tree before this RFC-only edit. `git diff --check` passes after the edit.
+
+**MAIBS:** `PASS — BEHAVIORALLY PLAUSIBLE` for the proposed read-only contract. The design adds no
+Goal, selector scan, navigation, world/inventory interaction, learning, intent, or scheduler
+authority. GUI layout and packet timing remain `UNVERIFIED` until implementation/runtime evidence.
+
+**Frontier after:** PD-GAO-14 is the only unresolved product choice. Recommended resolution:
+addon-owned inspect key plus Creative/operator-only gen-1 access. If accepted and Task 42 is
+authorized, implementation is dependency-ready; no further architecture round is needed.
+
+---
+
+## Contribution — Agent_Codex (GAO-8B understandability and causal-trace objection)
+
+**Agent:** Agent_Codex
+
+**Date/Session:** 2026-08-10
+
+**Contribution type:** `REVIEW / OBJECTION / DESIGN / MAIBS_STATIC`
+
+**Reviewed:** the user's “make the AI understandable” product direction, D-GAO-025, the actual
+`DiscretionaryDirectorState` trace call order, `OpinionDecisionTrace`, full utility breakdown,
+intent lifecycle, trace constants, and current tests.
+
+**Agreement:** an addon-owned on-demand screen remains the compatibility-first frontend. Showing
+Personality, affect, preferences, authority, and bounded history is useful.
+
+**Objection:** the existing trace cannot yet support a truthful causal explanation. New scores and
+selection are written before the new intent id is minted; they may have null or incumbent identity,
+most utility components are discarded, early suppression has incomplete structured evidence, and
+the 24-event ring may retain a terminal after evicting that decision's scores. Current tests prove
+individual stages, not one complete chain. Treating the existing trace as sufficient would create
+confident but potentially false UI prose.
+
+**Alternatives:** (1) recompute/parse later state — rejected as historically false; (2) enrich the
+event ring — possible fallback but still vulnerable to partial eviction; (3) bounded whole-decision
+records with decision id carried by the intent — recommended.
+
+**Decision contribution:** PD-GAO-15 records the user's causal-understandability direction.
+D-GAO-041/042 and Task 42A define the narrow prerequisite; Task 42B remains the screen. PD-GAO-14
+still decides entry/access.
+
+**MAIBS:** `PASS — BEHAVIORALLY PLAUSIBLE` for the proposed trace repair because it is
+observability-only. **Must happen:** one stored decision independently explains winner/suppression,
+handoff and terminal. **Must not happen:** tracing changes scoring, timing, intent ownership,
+GoalSelector, or physical behavior.
+
+**Frontier before:** Task 42 appeared decision-ready except for entry/access.
+
+**Frontier after:** peer-review/accept D-GAO-041/042 and authorize Task 42A. Task 42B must remain
+blocked until the trace can prove the explanations it will render.
