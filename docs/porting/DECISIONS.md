@@ -1,5 +1,31 @@
 # SPM Scavenger decisions
 
+## 2026-08-10 — GAO-9 bounded overland environment affinity · 1.9.4
+
+- **Selected:** `FOREST`, `OCEAN`, `SNOWY`, `NETHER`, and `END` form one finite multi-label semantic
+  profile. Classification occurs only at a successful expedition terminal or an already-valid
+  final route destination; no terrain scanner or biome-key map exists.
+- **PROJECT rejected:** project type remains ACTIVITY, site remains PLACE, and one execution remains
+  EPISODE/TRACE. A project-ID opinion map would duplicate owners and create a low-reuse RET-1 risk.
+- **Learning:** only attributable `EXPEDITION_COMPLETE` evidence learns environment affinity. One
+  personality-scaled terminal delta is divided across labels. Path failure, simulation frontier,
+  player/authority cancellation, protected interruption, combat, and stale closure teach nothing.
+- **Route effect:** mean label affinity contributes at most ±10 after route construction and the
+  entity-ticking guard. PLACE remains ±15, visited-region penalty −20, and anti-fixation −100.
+- **Safety invariant:** semantic preference never changes path malus, powder-snow avoidance or
+  escape, hazard handling, reachability, ticking validity, mandatory cave/descent authority, or
+  competence. Loving snow never means walking into powder snow.
+- **Alternatives:** exact-biome memory was rejected as high-cardinality/version-fragile; PLACE-only
+  was retained as a fallback but cannot generalize a forest experience to another forest.
+- **Must happen:** a completed forest expedition modestly favors a comparable later valid forest
+  route through the existing normalized pipeline.
+- **Must not happen:** generic failure creates dislike, environment resurrects an invalid route,
+  Opinion-off behavior changes, or project/biome maps grow without bound.
+- **Evidence:** the final 1.9.4 clean build passes 618 tests with zero failures/errors/skips;
+  `build/libs/spmscavenger-1.9.4.jar` SHA-256 is
+  `34B312717E452AB0F2C132536B0415E8FE3D593A225C8164EA512A2AA7A389AE`. Runtime route distribution
+  and scale performance remain `UNVERIFIED`.
+
 ## 2026-08-10 — structured recipe-only crafting readout · 1.9.2+
 
 - **Problem:** SPM's class-name fallback renders `CraftTorchesGoal` as `Craft torches`, even when

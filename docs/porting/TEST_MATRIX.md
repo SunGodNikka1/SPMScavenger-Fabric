@@ -1,6 +1,6 @@
 # SPM Scavenger test matrix
 
-## Stay-near/exploration arbitration — current 1.9.3 artifact
+## Stay-near/exploration arbitration — current 1.9.4 artifact
 
 | Check | Must happen | Must not happen | Evidence |
 |---|---|---|---|
@@ -13,6 +13,22 @@ Runtime acceptance requires a separately approved Minecraft launch: start an exp
 stay-near order while it is moving, and observe one `STAY_ANCHOR` end followed by no further
 `Exploring` objective while the anchor exists. Clear the order and confirm exploration can later
 start again. Repeat with combat interruption and confirm the remaining route resumes.
+
+## GAO-9 overland environment affinity — 1.9.4
+
+| Check | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Classification | Existing inspected positions may carry any subset of `FOREST`, `OCEAN`, `SNOWY`, `NETHER`, `END`; unknown is neutral | Name-based biome guessing or a mutually-exclusive fake category | `EnvironmentProfileTest` `CONFIRMED` |
+| Attribution | Only `OVERLAND_EXPLORATION` + `EXPEDITION_END` + `VOLUNTARY_SUCCESS` + `EXPEDITION_COMPLETE` learns | Path/frontier/order/combat/stale failure teaches environment dislike | `EnvironmentOpinionLearningTest` `CONFIRMED` |
+| Multi-label normalization | One personality-scaled delta is divided across labels | FOREST+SNOWY doubles total learning | `completedExpeditionDividesOneLearningDeltaAcrossLabels` `CONFIRMED` |
+| Route authority | Mean environment preference contributes at most ±10 after route/ticking validity | Affinity erases visited −20/anti-fixation −100 or makes an invalid route valid | `EnvironmentOpinionRouteRankerTest` + integration contract `CODE_CONFIRMED`; runtime distribution `UNVERIFIED` |
+| Terrain safety | Liking `SNOWY` is semantic only | Snow affinity alters powder-snow malus, escape, hazards, navigation, or survival | negative source-contract scan `CODE_CONFIRMED`; runtime cross-mod safety `UNVERIFIED` |
+| Opinion disabled | No environment learning, classification, or route bias occurs | Opinion-off route order changes | gate tests/call-path `CODE_CONFIRMED` |
+| Lifetime | Five-entry enum memory survives park/resume and partial-death preference semantics | Per-biome/project map, minted ID, or unbounded retention | retention/cardinality tests `CONFIRMED`; heap trend `UNVERIFIED` |
+
+Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`. No Goal, flag, priority, path, scan cadence, or
+mandatory-work ownership changed. Long-duration route distribution and performance remain
+`UNVERIFIED`; no Minecraft launch was authorized.
 
 ## Tool tier upgrades — Phase 1 stone (1.9.1+)
 

@@ -6,6 +6,7 @@ import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.opinion.OpinionMemory;
 import com.noobk.spmscavenger.opinion.OpinionMemoryService;
 import com.noobk.spmscavenger.opinion.EntityOpinionMemory;
+import com.noobk.spmscavenger.opinion.EnvironmentOpinionMemory;
 import com.noobk.spmscavenger.opinion.PlaceOpinionMemory;
 import com.noobk.spmscavenger.opinion.PersonalityFactory;
 import com.noobk.spmscavenger.opinion.PersonalityModel;
@@ -32,6 +33,7 @@ public final class MobExperienceContext {
     private final OpinionMemory opinionMemory = new OpinionMemory();
     private final PlaceOpinionMemory placeOpinionMemory = new PlaceOpinionMemory();
     private final EntityOpinionMemory entityOpinionMemory = new EntityOpinionMemory();
+    private final EnvironmentOpinionMemory environmentOpinionMemory = new EnvironmentOpinionMemory();
     private final DiscretionaryDirectorState discretionaryDirector = new DiscretionaryDirectorState();
     private PersonalityModel personalityModel;
     private final OpinionExperienceSinks sinks;
@@ -125,6 +127,10 @@ public final class MobExperienceContext {
 
     public EntityOpinionMemory entityOpinionMemory() {
         return entityOpinionMemory;
+    }
+
+    public EnvironmentOpinionMemory environmentOpinionMemory() {
+        return environmentOpinionMemory;
     }
 
     public DiscretionaryDirectorState discretionaryDirector() {
@@ -334,6 +340,7 @@ public final class MobExperienceContext {
                 opinionMemory.captureSnapshot(),
                 placeOpinionMemory.captureSnapshot(),
                 entityOpinionMemory.captureSnapshot(),
+                environmentOpinionMemory.captureSnapshot(),
                 parkedAtGameTime);
     }
 
@@ -349,5 +356,6 @@ public final class MobExperienceContext {
         opinionMemory.restoreFromSnapshot(snapshot.activityOpinions());
         placeOpinionMemory.restoreFromSnapshot(snapshot.placePreferences());
         entityOpinionMemory.restoreFromSnapshot(snapshot.entityPreferences());
+        environmentOpinionMemory.restoreFromSnapshot(snapshot.environmentPreferences());
     }
 }

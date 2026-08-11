@@ -25,6 +25,11 @@ import com.noobk.spmscavenger.opinion.IntentLifecycle;
 import com.noobk.spmscavenger.opinion.PlaceOpinionMemory;
 import com.noobk.spmscavenger.opinion.SpmEntityOpinionBridge;
 import com.noobk.spmscavenger.opinion.PlaceOpinionRouteRanker;
+import com.noobk.spmscavenger.opinion.EnvironmentClassifier;
+import com.noobk.spmscavenger.opinion.EnvironmentOpinionMemory;
+import com.noobk.spmscavenger.opinion.EnvironmentOpinionRouteRanker;
+import com.noobk.spmscavenger.opinion.EnvironmentProfile;
+import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.mining.NaturalDescentExhaustionPolicy;
 import com.noobk.spmscavenger.mining.NaturalDescentSearchState;
 import com.noobk.spmscavenger.mining.NaturalDescentStatus;
@@ -543,6 +548,7 @@ public final class ExploringGoal extends Goal {
         // is inspected at most once no matter how many routes cross it. Discarded on return.
         ChunkInterest interest = forced ? null : new ChunkInterest(level);
         PlaceOpinionMemory placeMemory = placeMemoryForRouteRanking();
+        EnvironmentOpinionMemory environmentMemory = environmentMemoryForRouteRanking();
 
         RouteCandidate best = null;
         if (!forced && readiness.hasDescentPressure()) {
@@ -609,6 +615,13 @@ public final class ExploringGoal extends Goal {
                 IntendedWaypoint destination = waypoints.get(waypoints.size() - 1);
                 score += PlaceOpinionRouteRanker.routeBias(
                         placeMemory, destination.x, destination.z);
+                if (environmentMemory != null && OpinionFeatureGate.isEnabled()) {
+                    int surfaceY = level.getHeight(
+                            Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, destination.x, destination.z);
+                    EnvironmentProfile profile = EnvironmentClassifier.classify(
+                            level, new BlockPos(destination.x, surfaceY, destination.z));
+                    score += EnvironmentOpinionRouteRanker.routeBias(environmentMemory, profile);
+                }
             }
             RouteCandidate candidate = new RouteCandidate(headingX, headingZ, sector, waypoints, score);
             if (best == null || candidate.score > best.score) {
@@ -636,6 +649,11 @@ public final class ExploringGoal extends Goal {
     private PlaceOpinionMemory placeMemoryForRouteRanking() {
         MobExperienceContext context = OpinionExperienceRegistry.find(mob.getUUID());
         return context == null ? new PlaceOpinionMemory() : context.placeOpinionMemory();
+    }
+
+    private EnvironmentOpinionMemory environmentMemoryForRouteRanking() {
+        MobExperienceContext context = OpinionExperienceRegistry.find(mob.getUUID());
+        return context == null ? null : context.environmentOpinionMemory();
     }
 
     /**

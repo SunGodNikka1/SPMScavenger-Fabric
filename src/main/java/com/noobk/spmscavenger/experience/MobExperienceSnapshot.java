@@ -2,6 +2,7 @@ package com.noobk.spmscavenger.experience;
 
 import com.noobk.spmscavenger.opinion.ActivityOpinionMemory;
 import com.noobk.spmscavenger.opinion.PersonalityModel;
+import com.noobk.spmscavenger.opinion.EnvironmentKind;
 
 import java.util.Map;
 import java.util.Objects;
@@ -26,6 +27,7 @@ public record MobExperienceSnapshot(
         Map<ActivityKind, ActivityOpinionMemory.Snapshot> activityOpinions,
         Map<Long, Float> placePreferences,
         Map<UUID, Float> entityPreferences,
+        Map<EnvironmentKind, Float> environmentPreferences,
         long parkedAtGameTime) {
 
     public MobExperienceSnapshot {
@@ -34,8 +36,10 @@ public record MobExperienceSnapshot(
         Objects.requireNonNull(activityOpinions, "activityOpinions");
         Objects.requireNonNull(placePreferences, "placePreferences");
         Objects.requireNonNull(entityPreferences, "entityPreferences");
+        Objects.requireNonNull(environmentPreferences, "environmentPreferences");
         activityOpinions = Map.copyOf(activityOpinions);
         placePreferences = Map.copyOf(placePreferences);
         entityPreferences = Map.copyOf(entityPreferences);
+        environmentPreferences = Map.copyOf(environmentPreferences);
     }
 }

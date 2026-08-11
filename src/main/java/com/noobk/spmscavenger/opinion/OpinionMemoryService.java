@@ -23,5 +23,6 @@ public final class OpinionMemoryService {
         PersonalityLearningResponse response =
                 context.personalityModel().learningResponse(evidence);
         context.opinionMemory().apply(evidence, duration, response);
+        EnvironmentOpinionService.apply(context.environmentOpinionMemory(), evidence, response);
     }
 }

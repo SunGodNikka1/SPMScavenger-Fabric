@@ -1,5 +1,7 @@
 package com.noobk.spmscavenger.experience;
 
+import com.noobk.spmscavenger.opinion.EnvironmentProfile;
+
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,5 +15,18 @@ public record EpisodeLearningEvidence(
         OutcomeClass outcome,
         ExperienceCause cause,
         float repetitionWeight,
-        long gameTime) {
+        long gameTime,
+        Optional<EnvironmentProfile> environment) {
+
+    public EpisodeLearningEvidence(
+            UUID episodeId,
+            Optional<ActivityKind> activity,
+            ExperienceKind terminalKind,
+            OutcomeClass outcome,
+            ExperienceCause cause,
+            float repetitionWeight,
+            long gameTime) {
+        this(episodeId, activity, terminalKind, outcome, cause, repetitionWeight, gameTime,
+                Optional.empty());
+    }
 }

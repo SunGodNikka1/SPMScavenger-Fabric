@@ -119,7 +119,8 @@ public final class ActivityEpisode {
                         event.outcome(),
                         event.cause(),
                         weight * ExperienceOutcomePolicy.preferenceSign(event.outcome(), event.cause()),
-                        event.gameTime()));
+                        event.gameTime(),
+                        event.environment()));
             }
         }
 
@@ -146,7 +147,8 @@ public final class ActivityEpisode {
                         event.outcome(),
                         event.cause(),
                         sign,
-                        event.gameTime()));
+                        event.gameTime(),
+                        event.environment()));
             }
         } else if (ExperienceOutcomePolicy.mayEmitFailureLearning(
                 event.outcome(), failureCount)) {
@@ -157,7 +159,8 @@ public final class ActivityEpisode {
                     event.outcome(),
                     event.cause(),
                     -0.5f,
-                    event.gameTime()));
+                    event.gameTime(),
+                    event.environment()));
         }
         closed = true;
     }

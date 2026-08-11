@@ -3,6 +3,8 @@ package com.noobk.spmscavenger.experience;
 import com.noobk.spmscavenger.opinion.OpinionMemory;
 import com.noobk.spmscavenger.opinion.PersonalityFactory;
 import com.noobk.spmscavenger.opinion.PersonalityModel;
+import com.noobk.spmscavenger.opinion.EnvironmentKind;
+import com.noobk.spmscavenger.opinion.EnvironmentProfile;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -62,6 +64,8 @@ class OpinionExperienceRegistryRetentionTest {
         context.placeOpinionMemory().recordOutcome(0xBEEFL, 7f);
         UUID entityId = UUID.randomUUID();
         context.entityOpinionMemory().recordOutcome(entityId, 9f);
+        context.environmentOpinionMemory().recordOutcome(
+                EnvironmentProfile.of(EnvironmentKind.FOREST), 11f);
 
         OpinionExperienceRegistry.parkOnUnload(mobId, 100L);
         assertNull(OpinionExperienceRegistry.find(mobId), "live context discarded on park");
@@ -72,8 +76,25 @@ class OpinionExperienceRegistryRetentionTest {
         assertTrue(reloaded.opinionMemory().preference(ActivityKind.REST) > 0f);
         assertEquals(7f, reloaded.placeOpinionMemory().preference(0xBEEFL), 0.001f);
         assertEquals(9f, reloaded.entityOpinionMemory().preference(entityId), 0.001f);
+        assertEquals(11f, reloaded.environmentOpinionMemory().preference(EnvironmentKind.FOREST), 0.001f);
         assertEquals(0, reloaded.liveEpisodeCount(),
                 "suspended episodes must not survive park");
+    }
+
+    @Test
+    void mustHappen_environmentPreferenceUsesPartialDeathPersistence() {
+        UUID mobId = UUID.randomUUID();
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
+        context.environmentOpinionMemory().recordOutcome(
+                EnvironmentProfile.of(EnvironmentKind.SNOWY), 12f);
+
+        OpinionExperienceRegistry.onDeath(mobId);
+
+        assertEquals(12f,
+                OpinionExperienceRegistry.contextFor(mobId)
+                        .environmentOpinionMemory().preference(EnvironmentKind.SNOWY),
+                0.001f,
+                "semantic preference survives like Activity preference; no episodic fields exist here");
     }
 
     @Test

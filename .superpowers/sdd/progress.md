@@ -8,6 +8,7 @@
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
+| **GAO-9** | **CLOSED / STATIC ACCEPT** — bounded overland environment affinity; 618 tests | `task-41-report.md` |
 | **RT-GAO-1** | **Narrowed** — static/MAIBS sufficient for parity, GAO-5B math, RET lifecycle; runtime only for `RUNTIME_QUESTION` (nav, SPM goal contention, perf) | RFC GAO validation topic |
 | **RET-GAO-1** | **DONE** (static) — bounded live + frozen snapshot store; runtime `UNVERIFIED` | `task-35-report.md` |
 
@@ -47,6 +48,7 @@ Task 37: complete — GAO-6 ENTITY bridge + social expedition emitter (569 tests
 Task 38: complete — GAO-6R social sub-episode repair; GAO-6 CLOSED (574 tests)
 Task 39: complete with concerns — GAO-7 PersonalityModel static accept (581 tests; runtime visual salience unverified)
 Task 40: complete with concerns — GAO-8A passive physical expression (593 tests; runtime visual cadence unverified)
+Task 41: complete with concerns — GAO-9 overland environment affinity (618 tests; runtime distribution/performance unverified)
 
 Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 
@@ -57,7 +59,7 @@ Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 **Mining intelligence (MI):** MI-1 through MI-14C3-R1 static complete; tunnel executor shipped;
 **RT-MI-TS1** is the MI runtime frontier (`task-33-brief`).
 
-**GA-OPINION:** GAO-0 through GAO-8A (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + RET-GAO-1 (593 tests, MAIBS); runtime reserved for engine/SPM/perf `RUNTIME_QUESTION`s only — not a default feature gate.
+**GA-OPINION:** GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + RET-GAO-1 (618 tests, MAIBS); runtime reserved for engine/SPM/perf `RUNTIME_QUESTION`s only — not a default feature gate.
 
 **PERF:** RFC closed (task 32); craft-table phased scan shipped.
 

@@ -6,7 +6,7 @@ Scavenger gives PlayerMobs purposeful work outside Dungeon Train: they gather re
 upgrade tools, use furnaces, place torches, seek shelter, explore, recover from environmental traps,
 and perform small player-like social behaviors.
 
-> Current mod version: **1.9.3**
+> Current mod version: **1.9.4**
 > Minecraft: **1.21.1** · Fabric Loader: **0.16.14+** · Java: **21**
 
 ## Requirements
@@ -27,7 +27,7 @@ or redistribute Social Player Mobs.
 
 1. Install Minecraft 1.21.1, Fabric Loader, and Fabric API.
 2. Install Social Player Mobs.
-3. Copy `spmscavenger-1.9.3.jar` into the instance's `mods` directory.
+3. Copy `spmscavenger-1.9.4.jar` into the instance's `mods` directory.
 4. Optionally install Cloth Config and Mod Menu.
 5. Keep the vanilla `mobGriefing` rule enabled if mobs should gather or place blocks:
 
@@ -73,6 +73,11 @@ repeated trips, and bounded failure/replan limits prevent permanent path loops.
 
 Friendly PlayerMobs may join an expedition when both mobs' SPM relationship values are positive.
 Persistent stay-near orders always win and cancel an incompatible expedition.
+
+With Opinion enabled, a successfully completed expedition can build a small semantic affinity for
+tagged `FOREST`, `OCEAN`, `SNOWY`, `NETHER`, or `END` environments. This is only a ±10 tie-breaker
+among destinations that already passed ticking and route construction checks. It never changes
+terrain safety, powder-snow avoidance/escape, mandatory descent, or pathfinding capability.
 
 ### Environmental escape
 
@@ -162,14 +167,14 @@ On Linux or macOS:
 The installable artifact is written to:
 
 ```text
-build/libs/spmscavenger-1.9.3.jar
+build/libs/spmscavenger-1.9.4.jar
 ```
 
-The latest verified clean build completed with **605 tests, zero failures, zero errors, and zero
+The latest verified clean build completed with **618 tests, zero failures, zero errors, and zero
 skips**. Its SHA-256 was:
 
 ```text
-B2F9C72AC8FF1843E4039E089845AF29D82F73792201C63711AD393A27CAAA75
+34B312717E452AB0F2C132536B0415E8FE3D593A225C8164EA512A2AA7A389AE
 ```
 
 That hash changes whenever source or packaged resources change.
@@ -191,7 +196,7 @@ automatically mean the behavior has been observed in Minecraft.
 
 - **Build/unit/package:** confirmed for the current source tree.
 - **Selected earlier gameplay:** bed use and basic gathering were observed in prior sessions.
-- **Current combined 1.9.3 behavior:** runtime verification remains incomplete for the full
+- **Current combined 1.9.4 behavior:** runtime verification remains incomplete for the full
   gather → smelt → iron/diamond upgrade loop, long expeditions, companions, save/reload recovery,
   dedicated servers, and large-mob performance.
 - **Mining intelligence:** MI-1 gather intent and MI-3/MI-23 NEED allocation exist. Marginal wealth,

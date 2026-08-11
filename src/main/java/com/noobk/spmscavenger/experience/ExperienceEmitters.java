@@ -6,9 +6,13 @@ import com.noobk.spmscavenger.mining.MiningProjectMode;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 import com.noobk.spmscavenger.opinion.EntityOpinionService;
 import com.noobk.spmscavenger.opinion.PlaceOpinionService;
+import com.noobk.spmscavenger.opinion.EnvironmentClassifier;
+import com.noobk.spmscavenger.opinion.EnvironmentProfile;
+import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.progression.TaskLifecycle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.server.level.ServerLevel;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -51,6 +55,12 @@ public final class ExperienceEmitters {
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob);
         context.ensureEpisode(
                 episodeId, startedGameTime, Optional.of(ActivityKind.OVERLAND_EXPLORATION));
+        Optional<EnvironmentProfile> environment = Optional.empty();
+        if (OpinionFeatureGate.isEnabled()
+                && semantics.cause() == ExperienceCause.EXPEDITION_COMPLETE
+                && mob.level() instanceof ServerLevel level) {
+            environment = Optional.of(EnvironmentClassifier.classify(level, mob.blockPosition()));
+        }
         pipeline(mob).accept(new ExperienceEvent(
                 ExperienceKind.EXPEDITION_END,
                 gameTime,
@@ -64,7 +74,8 @@ public final class ExperienceEmitters {
                 0.0f,
                 Optional.of(ActivityKind.OVERLAND_EXPLORATION),
                 Optional.of(mob.blockPosition()),
-                Optional.empty()));
+                Optional.empty(),
+                environment));
     }
 
     public static void miningProgress(
