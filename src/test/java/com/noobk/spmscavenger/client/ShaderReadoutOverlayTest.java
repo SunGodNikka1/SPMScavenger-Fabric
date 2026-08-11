@@ -26,4 +26,19 @@ class ShaderReadoutOverlayTest {
         assertNull(ShaderReadoutOverlay.project(identity, identity, 0, 200, 2.0, 0.0F, 0.0F));
         assertNull(ShaderReadoutOverlay.project(identity, identity, 200, 200, 0.0, 0.0F, 0.0F));
     }
+
+    @Test
+    void worldProjectionIsAppliedAfterTheEntityBillboardTransform() {
+        Matrix4f projection = new Matrix4f().ortho(0.0F, 100.0F, 100.0F, 0.0F, -1.0F, 1.0F);
+        Matrix4f billboard = new Matrix4f()
+                .translate(30.0F, 40.0F, 0.0F)
+                .scale(0.5F);
+
+        ShaderReadoutOverlay.Projection result = ShaderReadoutOverlay.project(
+                billboard, projection, 200, 200, 2.0, -10.0F, 20.0F);
+
+        assertEquals(25.0F, result.x(), 0.001F);
+        assertEquals(50.0F, result.y(), 0.001F);
+        assertEquals(0.5F, result.scale(), 0.001F);
+    }
 }

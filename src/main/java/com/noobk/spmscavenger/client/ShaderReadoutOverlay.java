@@ -1,7 +1,6 @@
 package com.noobk.spmscavenger.client;
 
 import com.mojang.blaze3d.platform.Window;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import org.joml.Matrix4f;
@@ -22,13 +21,21 @@ public final class ShaderReadoutOverlay {
     /** Hard cap for adversarial/full-stack readouts; production eviction occurs every frame. */
     static final int MAX_CAPTURED_LINES = 512;
     private static final List<CapturedLine> LINES = new ArrayList<>();
+    private static Matrix4f frameProjection;
 
     private ShaderReadoutOverlay() {
     }
 
-    /** Called from the world-render START event, before any entity billboard can be captured. */
-    public static void beginFrame() {
+    /**
+     * Called from the world-render START event, before any entity billboard can be captured.
+     *
+     * <p>The context matrix is the projection selected for this world render. Reading
+     * {@code RenderSystem.getProjectionMatrix()} later from an entity callback is not equivalent:
+     * Iris may temporarily expose a different pipeline matrix there.
+     */
+    public static void beginFrame(Matrix4f projectionMatrix) {
         LINES.clear();
+        frameProjection = projectionMatrix == null ? null : new Matrix4f(projectionMatrix);
     }
 
     public static IrisShaderState.Snapshot shaderState() {
@@ -41,9 +48,11 @@ public final class ShaderReadoutOverlay {
 
         Minecraft minecraft = Minecraft.getInstance();
         Window window = minecraft.getWindow();
+        Matrix4f projectionMatrix = frameProjection;
+        if (projectionMatrix == null) return;
         Projection projection = project(
                 modelMatrix,
-                RenderSystem.getProjectionMatrix(),
+                projectionMatrix,
                 window.getWidth(),
                 window.getHeight(),
                 window.getGuiScale(),
@@ -72,6 +81,7 @@ public final class ShaderReadoutOverlay {
         } finally {
             // Also evict after consumption so a frame with no subsequent world render cannot ghost.
             LINES.clear();
+            frameProjection = null;
         }
     }
 

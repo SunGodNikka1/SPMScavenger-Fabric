@@ -49,6 +49,21 @@
   While Iris reports an active pack, Scavenger captures only SPM's already-formatted solid lines,
   suppresses their two shader-affected world passes, and redraws them through Fabric's post-world
   HUD callback. The shader-off path remains the original host renderer plus the narrow light fix.
+- **Duplicate-label repair after runtime falsification:** the first overlay build set the two host
+  glyph colours to alpha zero and sampled `RenderSystem.getProjectionMatrix()` from inside the
+  entity draw. The user's 2026-08-10 screenshot showed both failure modes at once: Photon's world
+  pipeline still rasterized a dark `Idle` over the mob, and the bright HUD copy appeared enlarged
+  at the left edge. The selected repair sends an empty string to both shader-affected host calls
+  after capturing the normal pass, and snapshots Fabric `WorldRenderContext.projectionMatrix()` at
+  world-render start. The latter is copied and combined with SPM's entity billboard matrix, so an
+  Iris-temporary projection cannot displace the post-HUD copy. Nested Iris shadow renders are
+  explicitly excluded from replacing that main-camera snapshot.
+- **Log evidence:** the supplied session log records Iris 1.8.8, Photon 1.3b, Sodium, and the shader
+  disable transition (lines 52–76 and 295–297). Searches found **NOT FOUND** for a Scavenger
+  error/exception, a `PlayerMobRendererReadoutMixin` apply failure, and an objective-readout render
+  exception. This rules out a logged startup/injection failure; the screenshot is the runtime
+  evidence for duplicate rasterization/projection symptoms. Exact final visual correctness remains
+  `UNVERIFIED` pending retest of the rebuilt artifact.
 - **Alternative — patch Photon:** rejected because it modifies a third-party shader pack and would
   not generalize to other packs. **Alternative — always use the HUD overlay:** rejected because it
   needlessly changes vanilla/Sodium rendering and makes an optional compatibility path authoritative.
@@ -58,13 +73,15 @@
 - **Compatibility trade-off:** `require=0` prevents a future SPM renderer change from crashing the
   client, but can turn the repair into a silent no-op. The exact supported host is SPM 0.86.x; a
   runtime screenshot remains the verification probe after upgrades.
-- **Must happen:** decision glyphs remain readable in an unlit cave after installing the rebuilt JAR.
+- **Must happen:** exactly one decision label remains attached above the PlayerMob and readable in
+  an unlit cave after installing the rebuilt JAR with Photon enabled.
 - **Must not happen:** the host JAR/source, objective contents, Creative/range/focus gates, AI,
-  navigation, dedicated-server classloading, or user-controlled background alpha changes.
+  navigation, dedicated-server classloading, or user-controlled background alpha changes; no dark
+  world-pass duplicate or detached left-edge HUD copy may remain.
 - **Evidence:** focused contrast tests cover full-bright glyphs, lighter solid secondary text, and
   exact host background/translucent-pass preservation; remapped JAR
   inspection confirms the Mixin, policy, config, and intermediary `Font.drawInBatch` target are
-  packaged. The full 602-test clean build passes. Minecraft visual behavior remains `UNVERIFIED`.
+  packaged. The full 603-test clean build passes. Minecraft visual behavior remains `UNVERIFIED`.
 
 ## 2026-08-08 — consumer-driven iron tools (TT-2b + FS-8) · 1.9.2+
 

@@ -40,8 +40,9 @@ public abstract class PlayerMobRendererReadoutMixin {
                         args.get(0), args.get(1), args.get(2), args.get(3), (Matrix4f) args.get(5));
             }
             // Photon directionally lights world text. Suppress both host passes only while its
-            // pipeline is active; the captured line is redrawn after world post-processing.
-            args.set(3, 0x00000000);
+            // pipeline is active; alpha-zero glyphs can still be rasterized by shader packs, so
+            // an empty draw is required to avoid a second dark copy of the same objective.
+            args.set(0, "");
             args.set(8, 0x00000000);
             return;
         }

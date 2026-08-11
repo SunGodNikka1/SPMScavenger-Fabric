@@ -9,7 +9,13 @@ public final class SpmScavengerClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        WorldRenderEvents.START.register(context -> ShaderReadoutOverlay.beginFrame());
+        WorldRenderEvents.START.register(context -> {
+            // Iris can run a nested shadow-world render. Its projection must never replace the
+            // main camera snapshot later used for the post-HUD billboard.
+            if (!ShaderReadoutOverlay.shaderState().shadowPass()) {
+                ShaderReadoutOverlay.beginFrame(context.projectionMatrix());
+            }
+        });
         HudRenderCallback.EVENT.register((graphics, tickCounter) ->
                 ShaderReadoutOverlay.render(graphics));
     }
