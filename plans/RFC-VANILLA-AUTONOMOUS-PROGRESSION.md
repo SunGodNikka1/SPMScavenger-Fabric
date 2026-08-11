@@ -8,9 +8,9 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Target progression** | **Vanilla Minecraft 1.21.1** survival (not a third-party tech mod) |
 | **Scope** | Autonomous progression architecture plus narrowly authorized repairs to existing survival executors |
-| **Mode** | `WORKING_FROM_PLAN` — Shelter Commitment Resume Repair (`SCR-1`) authorized |
-| **Status** | `RESEARCHING`; `SCR-1 IMPLEMENTED / STATIC VERIFIED / RUNTIME PENDING` as a prerequisite before Opinion Task 42B |
-| **User constraint** | The RFC was originally design-only; on 2026-08-11 the user explicitly authorized only `SCR-1`, its focused build/tests, and the occupied-bed/closed-door runtime test |
+| **Mode** | `WORKING_FROM_PLAN` — Shelter Interior & Capacity Intelligence (`SCR-2`) authorized |
+| **Status** | `RESEARCHING`; `SCR-1 RUNTIME_CONFIRMED`; `SCR-2 IMPLEMENTED / STATIC VERIFIED / RUNTIME PENDING`; `SCR-3 DEFERRED` |
+| **User constraint** | The RFC was originally design-only; the user has now separately authorized `SCR-1` and `SCR-2` implementation. Minecraft launches, commits, pushes, and `SCR-3` remain separately gated |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `progression/TaskLifecycle.java` |
 | **Owners** | User (product); architecture TBD |
 | **Last update** | 2026-08-11 |
@@ -479,6 +479,145 @@ rechecked before resumption.
 implementation remains `FAIL — ARCHITECTURE_DEFECT` until code and the approved runtime scenario
 prove the transition.
 
+### SCR-2 — Shelter Interior & Capacity Intelligence
+
+**Status:** `IMPLEMENTED / STATIC VERIFIED / RUNTIME PENDING`
+
+**Authorization:** user, 2026-08-11
+
+**Dependency:** SCR-1 commitment/resume lifecycle (`RUNTIME_CONFIRMED` by user)
+
+#### Evidence and defect
+
+`RUNTIME_CONFIRMED`: some PlayerMobs shelter outside classic one-bed village houses even though
+reachable interior standing space exists. `CODE_CONFIRMED`: the default radius-16 scan evaluates
+up to `(33 × 33 × 9) = 9,801` positions; a generic candidate needs only no sky plus immediate
+standability. Final arithmetic sees usable bed, immediately adjacent solid blocks, block light,
+and distance. It does not classify room-scale enclosure, reserve generic standing capacity, or
+ask navigation until after one geometric winner is selected.
+
+Three absence probes: no interior/room classifier in source or tests; no generic shelter-standing
+reservation outside the bed claim map; no candidate-level `createPath`/`Path.canReach` probe in the
+search phase. SCR-3 shelter/home memory is also absent, but intentionally remains deferred.
+
+#### Behavioral Prediction (MAIBS-1)
+
+| Layer | Result |
+| --- | --- |
+| Intended behavior | Prefer reachable indoor room capacity; distribute multiple mobs across free standing areas; use porches only after better capacity is exhausted |
+| Current mechanism | One global arithmetic score over every covered/standable position; path requested only after selection; only beds are claimed |
+| Predicted SCR-2 behavior | Cheap safe/ticking candidates enter a spatially diverse shortlist; semantic tier dominates quality/distance; at most four ranked positions receive path probes; one commitment-owned spacing reservation is acquired before adoption |
+| Failure/weirdness prevented | porch beating room center, shortlist filled by adjacent porch cells, several mobs choosing one square, unreachable winner hiding reachable fallback, old commitment releasing a newer reservation |
+| Confidence | current defect `CODE + RUNTIME_CONFIRMED`; proposed mechanics `GAME_MECHANICS_INFERRED`; final physical behavior remains `UNVERIFIED` until runtime |
+
+Coordinate scenario: mob `(0,64,0)`, closed door around `(5,64,0)`, occupied bed around
+`(8,64,0)`, porch `(4,64,1)`, interior `(7,64,1)`. The old model can award the porch an immediate
+wall plus ceiling while the room center sees only its ceiling. SCR-2 must classify the room from
+bounded horizontal boundaries/roof continuity, path through the door, reserve the interior site,
+and then reuse SCR-1 when the door operation interrupts `MOVE`.
+
+Temporal prediction:
+
+```text
+T0 dusk scan (staggered)
+→ cheap covered/standable/safe/entity-ticking filter
+→ spatially diverse bounded shortlist
+→ semantic classify/rank
+→ <=4 path probes
+→ conditional reservation + ShelterCommitment
+T+10..60 door operation may suspend; reservation and commitment survive
+T+60..200 fresh path resumes; arrival retains reservation while resting
+T+1200 reservation remains condition-bound/periodically refreshed, or is physically removed on
+           dawn/cancel/unload/death/expiry; later mobs use remaining capacity or another shelter
+```
+
+#### Locked architecture
+
+1. Keep `SeekShelterGoal`; add no competing Goal or scheduler authority.
+2. Hard filters: covered, standable, non-hazardous for the mob, and server entity-ticking.
+3. Shortlist: bounded and spatially bucketed; do not take the first/top adjacent score cluster.
+4. Semantic tiers are lexicographic, never additive:
+   `USABLE_BED > INTERIOR_ROOM > DEEPLY_COVERED > PORCH_OVERHANG > EXPOSED`.
+5. Within one tier rank enclosure evidence/roof continuity/light, then distance and stable
+   coordinates. An arithmetic quality value cannot move a candidate across tiers.
+6. Probe at most four candidates with the mapped vanilla navigation API; a null/partial path is not
+   admissible. Path objects remain disposable and are not stored in `ShelterCommitment`.
+7. A generic spacing reservation is part of SCR-2. The registry is keyed by owner UUID (not minted
+   ID), while each immutable reservation records commitment ID, dimension-aware site, spacing,
+   and expiry. Release/refresh requires matching commitment ID so stale attempts cannot affect a
+   newer reservation.
+8. One reservation per mob; short suspension retains it; arrival holds it through the shelter
+   session; cancellation/dawn/unload/death/server stop releases it; production expiry is physically
+   swept. Bed claims remain distinct but the bed commitment also reserves surrounding capacity.
+9. `SCR-3 Known Shelter Memory` is explicitly deferred. Selection/path start/door entry teach
+   nothing. Future memory may learn only after successful valid interior/bed arrival.
+
+#### Alternatives
+
+| Option | Benefit | Failure mode | Decision |
+| --- | --- | --- | --- |
+| Add an `INTERIOR` numeric bonus to `ShelterScore` | smallest diff | enough other arithmetic can make a porch win again; violates semantic priority | rejected |
+| Flood-fill/structure recognition | strongest topology model | unbounded block work, door/window/modded-building complexity, poor many-mob scaling | rejected |
+| **Bounded geometry evidence + lexicographic tier + four path probes + reservations** | loader/mod agnostic, deterministic, bounded, preserves existing Goal lifecycle | approximate classifier needs adversarial runtime tuning | **LOCKED — user** |
+
+#### Predicted Weird Behaviors
+
+- A very large hall whose walls lie beyond the fixed boundary depth may rank as deeply covered
+  rather than interior: `ACCEPTABLE_STEPPING_STONE`; it still beats porch when roof continuity is
+  strong, and runtime determines whether the probe depth needs tuning.
+- An oversized spacing radius can under-use a tiny house; an undersized radius can produce visual
+  crowding: `RUNTIME_QUESTION`, falsified by 1/4/10-mob capacity scenarios.
+- Four unreachable high-tier candidates can exhaust the path budget before a reachable porch:
+  `ACCEPTABLE_STEPPING_STONE` only if bounded and followed by rescan/backoff; an infinite retry is
+  an `ARCHITECTURE_DEFECT`.
+- A non-sheltering villager/entity can physically occupy an otherwise unreserved position:
+  `RUNTIME_QUESTION`; final-candidate occupancy must be checked within the four-probe budget.
+
+#### Implemented mechanism and evidence
+
+`SeekShelterGoal` now gathers only covered, standable, mob-safe, entity-ticking candidates. The
+pure `ShelterSelectionPolicy` retains both enclosed-looking and open room-center representatives
+per 2×2×2 spatial bucket, distributes a maximum of 24 generic and four bed candidates across four
+distance bands, then classifies at most 28 candidates by boundaries within five blocks and five
+roof samples. Tier is compared before quality and distance. Navigation admits at most four paths,
+requires `Path.canReach()`, and rejects any path node outside entity-ticking simulation.
+
+`ShelterReservationRegistry` stores one dimension-aware, spacing-aware reservation per owner UUID;
+the reservation records the commitment UUID as a conditional token. It is refreshed only by the
+matching live commitment and physically removed on expiry, cancel, unload, death, or server stop.
+An occupancy AABB rejects a cell another living entity is already using. Bed claims remain
+separate and are now acquired conditionally rather than overwriting another live claimant.
+
+Post-implementation MAIBS found one defect before handoff: four unreachable top-ranked positions
+would consume every path probe on every later scan. `ShelterCandidateRejections` now remembers at
+most 16 failed positions for 80 ticks, sweeps once per shelter scan, and lets later scans advance to
+reachable fallback candidates without making the path budget unbounded. It deliberately does not
+remember semantic shelter quality and is not SCR-3 home memory.
+
+Static evidence: 21 focused `Shelter*Test` tests pass; the full 649-test suite and `clean build`
+pass with zero failures, errors, or skips. Final remapped artifact:
+`build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`451A5891E338EADEC66D5546EB9498DA156C1BC1F3E86040ACD089C16C2A9CF7`; it contains all SCR-2
+classes and excludes the temporary datapack. Minecraft was not launched, so interior recognition
+and multi-mob physical distribution remain `UNVERIFIED`.
+
+#### SCR-2 task and gates
+
+| Field | Contract |
+| --- | --- |
+| Owner | Agent_Codex |
+| Scope | pure geometry/ranking/shortlist policy, bounded path admission, commitment-owned generic reservations, SCR-1 integration, tests/datapack/docs |
+| Must happen | occupied-bed village house: PlayerMobs enter distinct reachable interior spaces up to physical capacity; additional mobs choose another interior then porch fallback |
+| Must not happen | porch outranks an admissible interior; adjacent cells fill the shortlist; more than four path probes per scan; two live commitments own overlapping reserved space; stale commitment releases newer reservation; path or memory persists outside SCR-1/SCR-2 bounds |
+| Static gates | tier dominance; shortlist diversity/cap; path-probe cap/fallback; spacing/dimension/expiry/conditional-release; interruption retention; unload/death/server-stop cleanup; no new Goal |
+| Runtime | extend `test-datapacks/shelter-commitment/` with one-, four-, and over-capacity occupied-bed village-house scenarios; separate launch approval still required |
+| Gate | `CODE/UNIT/BUILD/MAIBS_STATIC PASS`; `VERIFIED` still requires runtime geometry and multi-mob distribution evidence |
+
+**Frontier before:** SCR-1 fixed door commitment but outdoor/eave selection and generic capacity
+remained defective. **Action:** implemented and statically verified the bounded
+classifier/ranker/path/reservation pipeline. **Frontier after:** run SCR-2A/B/C with separate
+Minecraft-launch approval; keep SCR-3 blocked until those runtime geometry/capacity gates pass.
+
 ---
 
 ## Topic: Missing AI behaviors
@@ -688,6 +827,7 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Codex | 2026-08-11 | Implemented `SCR-2`: bounded diverse shortlist, lexicographic interior tiers, four entity-ticking path probes, commitment-owned spacing reservations, physical occupancy admission, bounded failed-candidate backoff, 21 focused tests, 649-test suite, expanded runtime datapack, and post-implementation MAIBS; runtime remains pending |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-1`: persistent bounded shelter commitment, suspend/cancel taxonomy through the shared observer, fresh-path resume, stay/authority invalidation, canonical bed claims, unload/death cleanup, 13 focused tests, 639-test clean build, runtime datapack, and post-GREEN MAIBS. Runtime remains pending before Task 42B |
 | Agent_Cursor | 2026-08-08 | Initial RFC from SPM v0.86.0 source audit + scavenger codebase; user requested design-only (no mod) |
 

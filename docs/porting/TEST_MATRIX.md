@@ -315,7 +315,7 @@ for these exact runtime scenarios was granted on 2026-08-11; visual/log evidence
 
 | Scenario | Setup | Must happen | Must not happen | Evidence |
 | --- | --- | --- | --- | --- |
-| SCR-1A occupied bed | `spm_shelter:scenario/occupied_bed` | Same commitment pauses for deliberate door use, replans, crosses, and completes at the covered interior | Repeated open/close/reselect loop | Code/unit/build `CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-1A occupied bed | `spm_shelter:scenario/occupied_bed` | Same commitment pauses for deliberate door use, replans, crosses, and completes at the covered interior | Repeated open/close/reselect loop | `USER_RUNTIME_CONFIRMED` after repair; code/unit/build `CONFIRMED` |
 | SCR-1B free bed | `spm_shelter:scenario/free_bed` | Bed claim survives the short door interruption and the mob sleeps | Opposite bed halves or a rescan steal the same bed | Canonical claim test `CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-1C dawn/authority | Change to day or introduce combat/command during interruption | Commitment cancels and the higher authority owns behavior | Old shelter resumes after invalidation | Static policy/call path `CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-1D invalid/failing route | Break destination or make repaths fail | Destination cancels/rejects after bounded failure | Immortal retry or reset budget | Unit/static `CONFIRMED`; runtime `UNVERIFIED` |
@@ -330,3 +330,26 @@ Runtime attempt evidence (2026-08-11): no test world or SPM runtime JAR exists i
 pinned SPM reference for a dedicated-server fixture failed during Gradle configuration at
 `build.gradle.kts:153` (`file://D:\\.../repo` is an invalid Windows file URI). The reference was not
 edited. No Minecraft process launched; SCR-1A/B remain `UNVERIFIED`.
+
+## SCR-2 shelter interior and capacity intelligence
+
+Runtime datapack: the same `test-datapacks/shelter-commitment/` kit now contains SCR-2A/B/C.
+Minecraft was not launched under this authorization, so all physical classification/distribution
+outcomes remain `UNVERIFIED`.
+
+| Scenario | Setup | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- | --- |
+| SCR-2A one mob | `spm_shelter:scenario/interior_one` | Reachable interior outranks the nearer exterior eave | Covered porch is treated as equivalent to an interior room | Tier/unit/static `CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-2B four mobs | `spm_shelter:scenario/capacity_four` | Four commitments acquire separated interior sites | Same/adjacent standing cells or entrance pile | Reservation unit/static `CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-2C over capacity | `spm_shelter:scenario/over_capacity` | Interior capacity fills before separated lower-tier fallback | Porch displaces available room capacity or all mobs converge | Policy static `CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-2D unreachable leaders | Four highest-tier paths fail | At most four probes now; later scans skip recent failures and advance | Same four positions suppress fallback forever | Rejection-ledger unit/static `CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-2E lifecycle | Suspend, dawn, unload, death, server stop, expiry | Matching commitment retains/refreshes then conditionally releases its reservation | Old commitment releases newer ownership or static map grows forever | Unit/static `CONFIRMED`; heap trend `UNVERIFIED` |
+
+Static gates: 21 focused `Shelter*Test` tests and the full 649-test suite pass with zero failures,
+errors, or skips. Selection is capped at 28 semantic evaluations and four path probes per scan;
+failed-candidate state is per-goal and capped at 16, while the shared reservation registry is keyed
+by owner UUID with production expiry/cancel/unload/death/server-stop eviction. `clean build` passes;
+artifact `build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`451A5891E338EADEC66D5546EB9498DA156C1BC1F3E86040ACD089C16C2A9CF7`, contains the SCR-2
+classes and excludes the test datapack. Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`; physical
+outcome remains open.

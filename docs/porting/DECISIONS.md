@@ -1039,3 +1039,41 @@ Post-GREEN review also found that an arrived non-bed shelter was still dynamical
 `MANDATORY_SAFETY`, causing `RestSessionCoordinator` to close its own shelter-recovery claim as
 mandatory work. The shared classifier now reports `REST` only after commitment arrival or actual
 sleep; approach remains safety. This is a classification correction, not discretionary selection.
+
+## 2026-08-11 — SCR-2 Shelter Interior & Capacity Intelligence
+
+The user-observed post-SCR-1 gap was semantic rather than a navigation failure: a porch/eave could
+satisfy no-sky, standability, immediate enclosure, light, and distance more strongly than the
+center of a real room. Generic standing positions also had no ownership, so several PlayerMobs
+could select one square.
+
+Three options were assessed. A numeric interior bonus was rejected because other score terms could
+still reverse semantic priority. Flood-fill/structure recognition was rejected because its cost,
+door/window semantics, and modded-building assumptions do not fit a many-mob addon. The selected
+bounded design preserves `SeekShelterGoal`, samples diverse candidate geometry, ranks semantic tiers
+lexicographically, probes at most four vanilla paths, and reserves spacing through the existing
+commitment lifecycle.
+
+The semantic order is `USABLE_BED > INTERIOR_ROOM > DEEPLY_COVERED > PORCH_OVERHANG > EXPOSED`.
+Only safe, standable, entity-ticking candidates enter the generic pool. A path must be complete and
+remain in entity-ticking space. Reservations are dimension-aware, keyed by owner UUID, and carry a
+commitment-ID conditional token so stale cancellation cannot release newer ownership. They have a
+600-tick renewable lifetime and production eviction on expiry, cancel, unload, death, and server
+stop. This is capacity control, not Known Shelter Memory; SCR-3 remains deferred.
+
+Post-implementation review found that a strict four-probe cap could repeatedly test the same four
+unreachable leaders forever. The repair adds a per-goal, 16-entry/80-tick physically swept
+failed-candidate ledger. It advances later scans without converting an approximate path failure
+into learned dislike or persistent shelter memory.
+
+**Must happen:** valid reachable interiors beat nearer porches and multiple mobs occupy separated
+room capacity. **Must not happen:** numeric quality crosses tiers, more than four paths are probed
+per scan, stale commitments release newer reservations, or the same unreachable quartet suppresses
+fallback indefinitely.
+
+Evidence: 21 focused shelter tests, all 649 tests, and `clean build` pass. Remapped artifact
+`build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`451A5891E338EADEC66D5546EB9498DA156C1BC1F3E86040ACD089C16C2A9CF7`, contains the new classes
+and excludes the runtime datapack. Static MAIBS is `PASS — BEHAVIORALLY_PLAUSIBLE`. Minecraft was
+not launched; SCR-2A/B/C physical classification, door traversal with the new targets, and
+multi-mob distribution are `UNVERIFIED`.

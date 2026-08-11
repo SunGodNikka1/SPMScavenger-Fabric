@@ -16,7 +16,14 @@ class ShelterCommitmentTest {
     @Test
     void doorSuspensionKeepsDestinationClaimAndBudgets() {
         BlockPos destination = new BlockPos(8, 64, 2);
-        ShelterCommitment commitment = new ShelterCommitment(destination, destination, MOB, 100L);
+        UUID commitmentId = UUID.fromString("00000000-0000-0000-0000-000000000052");
+        ShelterCommitment commitment = new ShelterCommitment(
+                commitmentId,
+                destination,
+                destination,
+                ShelterSelectionPolicy.Tier.USABLE_BED,
+                MOB,
+                100L);
 
         commitment.activate();
         for (int i = 0; i < 37; i++) {
@@ -28,6 +35,8 @@ class ShelterCommitmentTest {
 
         assertEquals(destination, commitment.destination());
         assertEquals(destination, commitment.bedPos().orElseThrow());
+        assertEquals(commitmentId, commitment.commitmentId());
+        assertEquals(ShelterSelectionPolicy.Tier.USABLE_BED, commitment.shelterTier());
         assertEquals(MOB, commitment.claimant());
         assertEquals(37, commitment.activeApproachTicks());
         assertEquals(1, commitment.pathFailureCount());

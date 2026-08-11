@@ -24,8 +24,10 @@ final class ShelterCommitment {
         ARRIVED
     }
 
+    private final UUID commitmentId;
     private final BlockPos destination;
     private final Optional<BlockPos> bedPos;
+    private final ShelterSelectionPolicy.Tier shelterTier;
     private final UUID claimant;
     private final long startedAt;
     private int activeApproachTicks;
@@ -35,11 +37,28 @@ final class ShelterCommitment {
     private boolean restClaimOpened;
 
     ShelterCommitment(BlockPos destination, BlockPos bedPos, UUID claimant, long startedAt) {
+        this(UUID.randomUUID(), destination, bedPos, ShelterSelectionPolicy.Tier.PORCH_OVERHANG,
+                claimant, startedAt);
+    }
+
+    ShelterCommitment(
+            UUID commitmentId,
+            BlockPos destination,
+            BlockPos bedPos,
+            ShelterSelectionPolicy.Tier shelterTier,
+            UUID claimant,
+            long startedAt) {
+        this.commitmentId = Objects.requireNonNull(commitmentId, "commitmentId");
         this.destination = Objects.requireNonNull(destination, "destination").immutable();
         this.bedPos = Optional.ofNullable(bedPos).map(BlockPos::immutable);
+        this.shelterTier = Objects.requireNonNull(shelterTier, "shelterTier");
         this.claimant = Objects.requireNonNull(claimant, "claimant");
         this.startedAt = startedAt;
         this.state = State.PENDING;
+    }
+
+    UUID commitmentId() {
+        return commitmentId;
     }
 
     BlockPos destination() {
@@ -48,6 +67,10 @@ final class ShelterCommitment {
 
     Optional<BlockPos> bedPos() {
         return bedPos;
+    }
+
+    ShelterSelectionPolicy.Tier shelterTier() {
+        return shelterTier;
     }
 
     UUID claimant() {

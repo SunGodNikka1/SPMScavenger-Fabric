@@ -1,24 +1,32 @@
 package com.noobk.spmscavenger.goal;
 
 import com.noobk.spmscavenger.ScavengerConfig;
-import com.noobk.spmscavenger.ShelterScore;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.activity.ActivityObservationService;
 import com.noobk.spmscavenger.experience.RestAnchorType;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.pathfinder.Path;
+import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
+import net.minecraft.world.phys.AABB;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,8 +36,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <h2>Ranked, not nearest-first</h2>
  *
- * Candidates are scored by {@link ShelterScore}: a bed dominates, then enclosure, then light, with a
- * mild distance penalty. See that class for why each weight is what it is.
+ * Candidates pass a bounded SCR-2 pipeline: cheap physical filtering, spatially diverse
+ * shortlisting, approximate interior classification, lexicographic semantic ranking, at most four
+ * path probes, then a commitment-owned standing reservation.
  *
  * <h2>Sleeping is real, not a pose</h2>
  *
@@ -69,6 +78,7 @@ public class SeekShelterGoal extends Goal {
 
     private ShelterCommitment commitment;
     private final PhasedScanClock scanClock;
+    private final ShelterCandidateRejections candidateRejections = new ShelterCandidateRejections();
     private boolean executionRunning;
     private BlockPos rejectedDestination;
     private long rejectedUntilTick;
@@ -228,7 +238,7 @@ public class SeekShelterGoal extends Goal {
 
     // ---- Searching --------------------------------------------------------
 
-    /** Picks the best-scoring candidate in range, or leaves the goal unused. */
+    /** Picks the best reachable semantic shelter in range, or leaves the goal unused. */
     private boolean search(ScavengerConfig cfg) {
         Level level = mob.level();
         BlockPos origin = mob.blockPosition();
@@ -236,19 +246,21 @@ public class SeekShelterGoal extends Goal {
         long now = level.getGameTime();
 
         sweepExpiredClaims(now);
+        candidateRejections.sweep(now);
         if (rejectedDestination != null && now > rejectedUntilTick) {
             rejectedDestination = null;
         }
 
-        BlockPos bestStand = null;
-        BlockPos bestBed = null;
-        double bestScore = -Double.MAX_VALUE;
+        List<ShelterSelectionPolicy.RawCandidate> rawCandidates = new ArrayList<>();
 
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
                 for (int dy = -4; dy <= 4; dy++) {
                     BlockPos pos = origin.offset(dx, dy, dz);
                     if (rejectedDestination != null && rejectedDestination.equals(pos)) {
+                        continue;
+                    }
+                    if (candidateRejections.contains(pos)) {
                         continue;
                     }
                     if (level instanceof ServerLevel serverLevel
@@ -259,36 +271,69 @@ public class SeekShelterGoal extends Goal {
                     double distance = Math.sqrt(pos.distSqr(origin));
 
                     boolean isBed = cfg.sleepInBeds && state.is(BlockTags.BEDS) && claimable(pos, state);
-                    if (!isBed && (level.canSeeSky(pos) || !standable(level, pos))) {
+                    if (!isBed && (level.canSeeSky(pos) || !standable(level, pos) || !safeForMob(pos))) {
                         continue;
                     }
-                    double score = ShelterScore.score(
-                            isBed,
+                    rawCandidates.add(new ShelterSelectionPolicy.RawCandidate(
+                            pos,
+                            isBed ? canonicalBedPos(pos, state) : null,
                             solidNeighbours(level, pos),
                             level.getBrightness(LightLayer.BLOCK, pos),
-                            distance,
-                            cfg.torchLightLevel);
-
-                    if (!isBed && score < ShelterScore.MIN_WORTHWHILE_SPOT) {
-                        continue; // a bare overhang is not worth walking to
-                    }
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestStand = pos.immutable();
-                        bestBed = isBed ? canonicalBedPos(pos, state) : null;
-                    }
+                            distance));
                 }
             }
         }
 
-        if (bestStand == null) {
-            return false;
+        List<ShelterSelectionPolicy.RankedCandidate> ranked = new ArrayList<>();
+        for (ShelterSelectionPolicy.RawCandidate raw :
+                ShelterSelectionPolicy.diverseShortlist(rawCandidates, r)) {
+            ShelterSelectionPolicy.Evidence evidence = interiorEvidence(level, raw.standPos());
+            ranked.add(new ShelterSelectionPolicy.RankedCandidate(
+                    raw,
+                    ShelterSelectionPolicy.classify(raw.bed(), evidence),
+                    evidence));
         }
-        commitment = new ShelterCommitment(bestStand, bestBed, mob.getUUID(), now);
-        if (bestBed != null) {
-            claim(bestBed, commitment.claimant(), now);
+
+        ShelterSelectionPolicy.PathProbeBudget pathProbeBudget =
+                new ShelterSelectionPolicy.PathProbeBudget();
+        for (ShelterSelectionPolicy.RankedCandidate candidate : ShelterSelectionPolicy.rank(ranked)) {
+            ShelterSelectionPolicy.RawCandidate raw = candidate.raw();
+            if (candidate.tier() == ShelterSelectionPolicy.Tier.EXPOSED
+                    || occupied(raw.standPos())
+                    || !ShelterReservationRegistry.available(
+                            mob.getUUID(), level.dimension(), raw.standPos(),
+                            ShelterReservationRegistry.DEFAULT_SPACING_RADIUS, now)) {
+                continue;
+            }
+            if (!pathProbeBudget.tryAcquire()) {
+                break;
+            }
+            Path path = mob.getNavigation().createPath(raw.standPos(), raw.bed() ? 1 : 0);
+            if (path == null || !path.canReach() || !pathStaysEntityTicking(path)) {
+                candidateRejections.reject(raw.standPos(), now);
+                continue;
+            }
+
+            UUID commitmentId = UUID.randomUUID();
+            if (!ShelterReservationRegistry.reserve(
+                    mob.getUUID(), commitmentId, level.dimension(), raw.standPos(),
+                    ShelterReservationRegistry.DEFAULT_SPACING_RADIUS, now)) {
+                continue;
+            }
+            if (raw.bed() && !tryClaim(raw.bedPos(), mob.getUUID(), now)) {
+                ShelterReservationRegistry.release(mob.getUUID(), commitmentId);
+                continue;
+            }
+            commitment = new ShelterCommitment(
+                    commitmentId,
+                    raw.standPos(),
+                    raw.bedPos(),
+                    candidate.tier(),
+                    mob.getUUID(),
+                    now);
+            return true;
         }
-        return true;
+        return false;
     }
 
     /** Free bed, not already occupied and not being walked toward by another mob. */
@@ -333,11 +378,13 @@ public class SeekShelterGoal extends Goal {
     /** Gate RET-1d - release every bed claim when the server stops. */
     public static void shutdownServerState() {
         CLAIMS.clear();
+        ShelterReservationRegistry.shutdownServerState();
     }
 
     /** Release claims when Minecraft removes the owning entity without a final Goal stop tick. */
     public static void onEntityUnload(UUID mobId) {
         CLAIMS.entrySet().removeIf(entry -> entry.getValue().mob().equals(mobId));
+        ShelterReservationRegistry.releaseOwner(mobId);
     }
 
     /** Death has the same ownership semantics as unload, but remains explicit for auditability. */
@@ -373,19 +420,28 @@ public class SeekShelterGoal extends Goal {
         CLAIMS.entrySet().removeIf(entry -> now > entry.getValue().expiresAtTick());
     }
 
-    private void claim(BlockPos pos, UUID claimant, long now) {
-        CLAIMS.put(pos.immutable(), new Claim(claimant, now + CLAIM_TICKS));
+    private static synchronized boolean tryClaim(BlockPos pos, UUID claimant, long now) {
+        BlockPos key = pos.immutable();
+        Claim current = CLAIMS.get(key);
+        if (current != null && now <= current.expiresAtTick() && !current.mob().equals(claimant)) {
+            return false;
+        }
+        CLAIMS.put(key, new Claim(claimant, now + CLAIM_TICKS));
+        return true;
     }
 
     private void release() {
-        if (commitment == null || commitment.bedPos().isEmpty()) {
+        if (commitment == null) {
             return;
         }
-        BlockPos bedPos = commitment.bedPos().orElseThrow();
-        Claim claim = CLAIMS.get(bedPos);
-        // Only drop a claim this mob actually owns — another mob may have taken it after expiry.
-        if (claim != null && claim.mob().equals(commitment.claimant())) {
-            CLAIMS.remove(bedPos);
+        ShelterReservationRegistry.release(commitment.claimant(), commitment.commitmentId());
+        if (commitment.bedPos().isPresent()) {
+            BlockPos bedPos = commitment.bedPos().orElseThrow();
+            Claim claim = CLAIMS.get(bedPos);
+            // Only drop a claim this mob actually owns — another mob may have taken it after expiry.
+            if (claim != null && claim.mob().equals(commitment.claimant())) {
+                CLAIMS.remove(bedPos, claim);
+            }
         }
     }
 
@@ -429,6 +485,13 @@ public class SeekShelterGoal extends Goal {
         }
         if (level instanceof ServerLevel serverLevel
                 && !serverLevel.isPositionEntityTicking(destination)) {
+            return false;
+        }
+        if (!ShelterReservationRegistry.ownsAndRefresh(
+                commitment.claimant(),
+                commitment.commitmentId(),
+                GlobalPos.of(level.dimension(), destination),
+                level.getGameTime())) {
             return false;
         }
         if (commitment.bedPos().isPresent()) {
@@ -510,5 +573,71 @@ public class SeekShelterGoal extends Goal {
             return false;
         }
         return level.getBlockState(pos).isAir() && level.getBlockState(pos.above()).isAir();
+    }
+
+    /** Reject navigation node types that are unsafe even when geometrically standable. */
+    private boolean safeForMob(BlockPos pos) {
+        PathType type = WalkNodeEvaluator.getPathTypeStatic(mob, pos);
+        return switch (type) {
+            case BLOCKED, FENCE, POWDER_SNOW, DANGER_POWDER_SNOW,
+                    LAVA, WATER, WATER_BORDER,
+                    DANGER_FIRE, DAMAGE_FIRE, DANGER_OTHER, DAMAGE_OTHER,
+                    DAMAGE_CAUTIOUS, DANGER_TRAPDOOR, STICKY_HONEY -> false;
+            default -> mob.getPathfindingMalus(type) >= 0.0F;
+        };
+    }
+
+    /** Bounded approximation of room/cave enclosure for shortlisted candidates only. */
+    private static ShelterSelectionPolicy.Evidence interiorEvidence(Level level, BlockPos pos) {
+        int boundaries = 0;
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            if (boundaryWithin(level, pos, direction)) {
+                boundaries++;
+            }
+        }
+        int roofCoverage = level.canSeeSky(pos) ? 0 : 1;
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            if (!level.canSeeSky(pos.relative(direction))) {
+                roofCoverage++;
+            }
+        }
+        return new ShelterSelectionPolicy.Evidence(boundaries, roofCoverage);
+    }
+
+    private static boolean boundaryWithin(Level level, BlockPos origin, Direction direction) {
+        for (int distance = 1; distance <= ShelterSelectionPolicy.BOUNDARY_PROBE_DISTANCE; distance++) {
+            BlockPos lower = origin.relative(direction, distance);
+            BlockState lowerState = level.getBlockState(lower);
+            BlockPos upper = lower.above();
+            BlockState upperState = level.getBlockState(upper);
+            if (isBoundary(level, lower, lowerState) || isBoundary(level, upper, upperState)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isBoundary(Level level, BlockPos pos, BlockState state) {
+        return state.getBlock() instanceof DoorBlock || state.isSolidRender(level, pos);
+    }
+
+    private boolean occupied(BlockPos pos) {
+        AABB capacityArea = new AABB(pos).inflate(0.55, 0.25, 0.55);
+        return !mob.level().getEntitiesOfClass(
+                LivingEntity.class,
+                capacityArea,
+                entity -> entity != mob && entity.isAlive()).isEmpty();
+    }
+
+    private boolean pathStaysEntityTicking(Path path) {
+        if (!(mob.level() instanceof ServerLevel serverLevel)) {
+            return true;
+        }
+        for (int i = 0; i < path.getNodeCount(); i++) {
+            if (!serverLevel.isPositionEntityTicking(path.getNode(i).asBlockPos())) {
+                return false;
+            }
+        }
+        return true;
     }
 }
