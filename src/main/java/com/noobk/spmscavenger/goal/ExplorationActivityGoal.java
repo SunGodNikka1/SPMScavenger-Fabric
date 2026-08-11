@@ -118,7 +118,7 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         }
 
         RestSessionCoordinator.validate(mob, observation, mob.level().getGameTime());
-        AffectiveStateService.observe(mob.getUUID(), observation, OBSERVE_INTERVAL);
+        AffectiveStateService.observe(mob, observation, OBSERVE_INTERVAL);
         DiscretionaryAvailability availability = new DiscretionaryAvailability(cfg.exploring, cfg.campfire);
         long now = mob.level().getGameTime();
         int idleTicks = ExploreReadinessThresholds.idleTicks(cfg, mob.getUUID());

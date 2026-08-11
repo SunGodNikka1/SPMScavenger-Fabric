@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.experience;
 
 import com.noobk.spmscavenger.opinion.ActivityOpinionMemory;
+import com.noobk.spmscavenger.opinion.PersonalityModel;
 
 import java.util.Map;
 import java.util.Objects;
@@ -21,6 +22,7 @@ public record MobExperienceSnapshot(
         float stress,
         float novelty,
         int ticksSinceMeaningfulProgress,
+        PersonalityModel personalityModel,
         Map<ActivityKind, ActivityOpinionMemory.Snapshot> activityOpinions,
         Map<Long, Float> placePreferences,
         Map<UUID, Float> entityPreferences,
@@ -28,6 +30,7 @@ public record MobExperienceSnapshot(
 
     public MobExperienceSnapshot {
         Objects.requireNonNull(mobId, "mobId");
+        Objects.requireNonNull(personalityModel, "personalityModel");
         Objects.requireNonNull(activityOpinions, "activityOpinions");
         Objects.requireNonNull(placePreferences, "placePreferences");
         Objects.requireNonNull(entityPreferences, "entityPreferences");

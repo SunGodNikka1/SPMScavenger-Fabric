@@ -20,6 +20,8 @@ public final class OpinionMemoryService {
         if (EpisodeBoundaryPolicy.closesEpisode(evidence.terminalKind(), evidence.cause())) {
             duration = context.episodeDuration(evidence.episodeId(), evidence.gameTime());
         }
-        context.opinionMemory().apply(evidence, duration);
+        PersonalityLearningResponse response =
+                context.personalityModel().learningResponse(evidence);
+        context.opinionMemory().apply(evidence, duration, response);
     }
 }

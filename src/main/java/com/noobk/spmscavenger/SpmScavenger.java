@@ -99,7 +99,7 @@ public class SpmScavenger implements ModInitializer {
 
         ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
-                OpinionExperienceRegistry.resumeOnLoad(mob.getUUID());
+                OpinionExperienceRegistry.resumeOnLoad(mob);
                 install(mob);
             }
         });

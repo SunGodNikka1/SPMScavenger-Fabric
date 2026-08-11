@@ -7,6 +7,8 @@ import com.noobk.spmscavenger.opinion.OpinionMemory;
 import com.noobk.spmscavenger.opinion.OpinionMemoryService;
 import com.noobk.spmscavenger.opinion.EntityOpinionMemory;
 import com.noobk.spmscavenger.opinion.PlaceOpinionMemory;
+import com.noobk.spmscavenger.opinion.PersonalityFactory;
+import com.noobk.spmscavenger.opinion.PersonalityModel;
 
 import java.util.Collections;
 import java.util.EnumMap;
@@ -30,6 +32,7 @@ public final class MobExperienceContext {
     private final PlaceOpinionMemory placeOpinionMemory = new PlaceOpinionMemory();
     private final EntityOpinionMemory entityOpinionMemory = new EntityOpinionMemory();
     private final DiscretionaryDirectorState discretionaryDirector = new DiscretionaryDirectorState();
+    private PersonalityModel personalityModel;
     private final OpinionExperienceSinks sinks;
     private final EpisodeRoutingPipeline pipeline;
     /**
@@ -72,6 +75,7 @@ public final class MobExperienceContext {
 
     public MobExperienceContext(UUID mobId, OpinionExperienceSinks delegate) {
         this.mobId = Objects.requireNonNull(mobId, "mobId");
+        this.personalityModel = PersonalityFactory.fromIdentity(mobId, null, null);
         OpinionExperienceSinks external =
                 delegate == null ? OpinionExperienceSinks.noOp() : delegate;
         this.sinks = new OpinionExperienceSinks() {
@@ -102,6 +106,15 @@ public final class MobExperienceContext {
 
     public OpinionMemory opinionMemory() {
         return opinionMemory;
+    }
+
+    public PersonalityModel personalityModel() {
+        return personalityModel;
+    }
+
+    /** Bind a host-anchored immutable profile while retaining one context and learning owner. */
+    public void bindPersonality(PersonalityModel personalityModel) {
+        this.personalityModel = Objects.requireNonNull(personalityModel, "personalityModel");
     }
 
     public PlaceOpinionMemory placeOpinionMemory() {
@@ -304,6 +317,7 @@ public final class MobExperienceContext {
                 affectiveState.stress(),
                 affectiveState.novelty(),
                 affectiveState.ticksSinceMeaningfulProgress(),
+                personalityModel,
                 opinionMemory.captureSnapshot(),
                 placeOpinionMemory.captureSnapshot(),
                 entityOpinionMemory.captureSnapshot(),
@@ -318,6 +332,7 @@ public final class MobExperienceContext {
                 snapshot.stress(),
                 snapshot.novelty(),
                 snapshot.ticksSinceMeaningfulProgress());
+        personalityModel = snapshot.personalityModel();
         opinionMemory.restoreFromSnapshot(snapshot.activityOpinions());
         placeOpinionMemory.restoreFromSnapshot(snapshot.placePreferences());
         entityOpinionMemory.restoreFromSnapshot(snapshot.entityPreferences());

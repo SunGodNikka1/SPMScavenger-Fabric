@@ -24,7 +24,7 @@ public final class RestSessionCoordinator {
 
     public static Optional<RestSessionClaim> openCampfireRest(
             Mob mob, BlockPos firePos, BlockPos idlePos, long gameTime) {
-        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob.getUUID());
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob);
         if (context.hasLiveRestClaim()) {
             return context.restClaim();
         }
@@ -47,7 +47,7 @@ public final class RestSessionCoordinator {
 
     public static Optional<RestSessionClaim> openShelterRecovery(
             Mob mob, BlockPos anchor, RestAnchorType anchorType, long gameTime) {
-        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob.getUUID());
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob);
         if (context.hasLiveRestClaim()) {
             return context.restClaim();
         }

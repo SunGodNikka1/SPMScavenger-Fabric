@@ -44,12 +44,21 @@ public final class OpinionMemory {
      * records must never call this directly.
      */
     public void apply(EpisodeLearningEvidence evidence, long episodeDurationTicks) {
+        apply(evidence, episodeDurationTicks, PersonalityLearningResponse.NEUTRAL);
+    }
+
+    /** GAO-7 subjective scaling; objective episode facts remain unchanged. */
+    public void apply(
+            EpisodeLearningEvidence evidence,
+            long episodeDurationTicks,
+            PersonalityLearningResponse personality) {
         Objects.requireNonNull(evidence, "evidence");
+        Objects.requireNonNull(personality, "personality");
         if (!OpinionLearningPolicy.accepts(evidence)) {
             return;
         }
         ActivityKind kind = evidence.activity().orElseThrow();
-        OpinionLearningPolicy.apply(memoryOf(kind), evidence, episodeDurationTicks);
+        OpinionLearningPolicy.apply(memoryOf(kind), evidence, episodeDurationTicks, personality);
     }
 
     /**

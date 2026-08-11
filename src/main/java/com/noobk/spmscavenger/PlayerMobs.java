@@ -40,6 +40,9 @@ public final class PlayerMobs {
     /** Result of reading SPM's persistent stay-near order through its public accessor. */
     public enum StayAnchorState { ABSENT, PRESENT, UNAVAILABLE }
 
+    /** GAO-7 read-only snapshot of SPM's two persisted disposition dimensions. */
+    public record Disposition(int fightFlight, int friendliness) {}
+
     /**
      * Fallback only. Pinned to {@code FeelingLedger.DEFAULT} as observed in
      * {@code playermob-fabric-0.86.0+1.21.1.jar}; used solely when the live field cannot be read.
@@ -90,6 +93,10 @@ public final class PlayerMobs {
     private static Method getStayAnchor;
     private static boolean stayAnchorResolved;
     private static boolean warnedStayAnchor;
+    private static Method fightFlight;
+    private static Method friendliness;
+    private static boolean dispositionResolved;
+    private static boolean warnedDisposition;
 
     private PlayerMobs() {
     }
@@ -128,6 +135,66 @@ public final class PlayerMobs {
     public static boolean isPlayerMob(Mob mob) {
         Class<? extends PathfinderMob> type = playerMobClass();
         return type != null && type.isInstance(mob);
+    }
+
+    /**
+     * Read SPM's persisted public disposition traits without becoming a second personality owner.
+     * Returns {@code null} when the optional host or either accessor is unavailable; GAO-7 then
+     * uses neutral host anchors and deterministic addon latent traits.
+     */
+    public static Disposition disposition(Mob mob) {
+        if (!isPlayerMob(mob)) {
+            return null;
+        }
+        resolveDispositionMethods();
+        if (fightFlight == null || friendliness == null) {
+            return null;
+        }
+        try {
+            Object fight = fightFlight.invoke(mob);
+            Object friendly = friendliness.invoke(mob);
+            if (fight instanceof Number fightNumber && friendly instanceof Number friendlyNumber) {
+                return new Disposition(fightNumber.intValue(), friendlyNumber.intValue());
+            }
+            warnDispositionUnavailable(new IllegalStateException(
+                    "SPM disposition accessors returned non-numeric values"));
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            fightFlight = null;
+            friendliness = null;
+            dispositionResolved = true;
+            warnDispositionUnavailable(e);
+        }
+        return null;
+    }
+
+    private static synchronized void resolveDispositionMethods() {
+        if (dispositionResolved) {
+            return;
+        }
+        dispositionResolved = true;
+        Class<? extends PathfinderMob> type = playerMobClass();
+        if (type == null) {
+            return;
+        }
+        try {
+            fightFlight = type.getMethod("fightFlight");
+            friendliness = type.getMethod("friendliness");
+        } catch (NoSuchMethodException e) {
+            fightFlight = null;
+            friendliness = null;
+            warnDispositionUnavailable(e);
+        }
+    }
+
+    private static void warnDispositionUnavailable(Throwable cause) {
+        if (warnedDisposition) {
+            return;
+        }
+        warnedDisposition = true;
+        SpmScavenger.LOGGER.warn(
+                "[spmscavenger] PlayerMob disposition accessors are unavailable; GAO-7 uses "
+                        + "neutral host anchors. This mod likely needs an update.",
+                cause);
     }
 
     /**

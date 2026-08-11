@@ -8,14 +8,14 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
-| **Mode** | `PLANNING` — GAO-7 PersonalityModel contract at decision frontier |
-| **Status** | GAO-0 through GAO-6 (**CLOSED**) + GAO-4.1 + **RET-GAO-1** `IMPLEMENTED / STATIC ACCEPT` (574 tests); not a blanket runtime gate |
+| **Mode** | `VALIDATION` — GAO-7 implemented and statically accepted; GAO-8 is next product frontier |
+| **Status** | GAO-0 through GAO-7 (**CLOSED**) + GAO-4.1 + **RET-GAO-1** `IMPLEMENTED / STATIC ACCEPT` (581 tests); not a blanket runtime gate |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-10 (GAO-6R closed; GAO-7 PersonalityModel contract review) |
+| **Last update** | 2026-08-10 (Task 39: GAO-7 PersonalityModel static accept) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,8 +39,8 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** **GAO-7** PersonalityModel — decide and authorize the bounded host-anchored
-learning-weight model below. GAO-6/6R is **CLOSED / STATIC ACCEPT**. Runtime is **not** the default validation gate;
+**Nearest frontier:** **GAO-8** observable expression product/design decision. GAO-7 is
+**CLOSED / STATIC ACCEPT** after Task 39. Runtime is **not** the default validation gate;
 escalate only for `RUNTIME_QUESTION`s (navigation, SPM goal contention, modpack perf). See
 **PD-GAO-12** and Topic: Validation.
 
@@ -1199,7 +1199,7 @@ mandatory artificial diversity between cooperative mobs.
 | **RET-GAO-1** | Registry lifetime | **IMPLEMENTED / STATIC ACCEPT:** live + frozen snapshot store (128 LRU + TTL sweep-on-park); `parkOnUnload`/`resumeOnLoad` | GAO-0c |
 | **RT-GAO-1** | Targeted runtime falsification | **NARROWED** — not a default feature gate; file `RUNTIME_QUESTION` probes only | PD-GAO-12 |
 | **GAO-6** | ENTITY bridge | **CLOSED:** `SpmEntityOpinionBridge`, `EntityOpinionMemory`, GAO-6R `SocialExperienceEpisodes` | GAO-4, RET-GAO-1 |
-| **GAO-7** | PersonalityModel | **PROPOSED / IMPLEMENTATION UNAUTHORIZED:** immutable six-trait model; SPM-host anchors + deterministic latent traits; semantic preference/reward/failure weighting at the normalized learning seam; never action authority | GAO-2, GAO-6 |
+| **GAO-7** | PersonalityModel | **CLOSED / STATIC ACCEPT:** immutable six-trait model; SPM-host anchors + deterministic UUID latent traits; bounded subjective learning at the single normalized seam; snapshot lifecycle; 581-test clean build | GAO-2, GAO-6 |
 | **GAO-8** | Observable expression | Movement/scan biases | GAO-4, deferred UX |
 
 ### GAO-0b implementation task (`IMPLEMENTED / STATIC VERIFIED`)
@@ -1601,8 +1601,8 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 | D-GAO-026 | GAO-0b owns schema vocabulary + interface-only ingress; GAO-0c owns processing and emitter wiring | `LOCKED` | Resolves `OutcomeClass` phase cycle without a silent/no-op runtime pipeline |
 | D-GAO-027 | `ActivityKind` is distinct from `ActivityClass`; initial route/activity values are explicit | `LOCKED` | Preserves subjective route preference without coupling it to scheduler authority taxonomy |
 | D-GAO-028 | Personality interprets normalized experience; it never selects or commands an activity | `LOCKED` | User-confirmed GAO-7 boundary; preserves director and GoalSelector ownership |
-| D-GAO-029 | Hybrid immutable personality uses SPM friendliness/fight-flight anchors plus deterministic UUID latent traits | `PROPOSED` | Recommended over independent UUID noise; neutral fallback on host API drift |
-| D-GAO-030 | Scale subjective preference/reward only, initially within `[0.75,1.25]`; objective repetition/duration and eligibility remain unchanged | `PROPOSED` | Prevents personality from rewriting episode facts or causal gates |
+| D-GAO-029 | Hybrid immutable personality uses SPM friendliness/fight-flight anchors plus deterministic UUID latent traits | `IMPLEMENTED` | `PersonalityFactory`; neutral host fallback; profile retained in bounded park snapshot |
+| D-GAO-030 | Scale subjective preference/reward only, initially within `[0.75,1.25]`; objective repetition/duration and eligibility remain unchanged | `IMPLEMENTED` | Exact neutral parity plus no-create/no-invert/no-eligibility tests |
 
 ---
 
@@ -1610,6 +1610,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-10 | Agent_Codex | **Task 39 GAO-7 implementation.** Added immutable `PersonalityModel`, deterministic host-anchored factory, positive bounded `PersonalityLearningResponse`, read-only SPM disposition access, one learning-seam integration, bounded snapshot lifecycle, and invariants for neutral parity/no-create/no-invert/no-eligibility/objective-fact preservation. Focused tests, full suite, and clean build pass: 581 tests, zero failures/errors/skips. Static MAIBS PASS; runtime visual differentiation remains UNVERIFIED and non-blocking under PD-GAO-12. No Minecraft launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **GAO-7 decision-ready contract.** Confirmed GAO-6R closure evidence; located the single context-aware learning seam and SPM's two public stable traits; rejected wholesale evidence scaling; compared hybrid, UUID-only, and stored-profile designs; added D-GAO-028…030, GAO-M13, Task 39, MAIBS prediction, parity/RET gates, and one implementation decision. No Java edits, tests, build, runtime, commit, or push |
 | 2026-08-10 | Agent_Cursor | **Tasks 35–36 + PD-GAO-12.** RET-GAO-1 bounded registry; GAO-5B destination ranking; static acceptance workflow; RT-GAO-1 narrowed; 556 tests; MAIBS post-impl reconciled |
 | 2026-08-10 | Agent_Cursor | **GAO-4.1 + GAO-5 + RT-GAO minimal** — threshold wiring, PLACE opinion MVP, static sanity tests; 548 tests/clean build; runtime unverified |
@@ -2624,7 +2625,7 @@ SocialExperienceEpisodes.companionInviteEpisodeId (GAO-6R — per-companion term
 
 ## Topic: GAO-7 — PersonalityModel
 
-**Status:** `PROPOSED / DECISION-READY / IMPLEMENTATION UNAUTHORIZED`
+**Status:** `CLOSED / IMPLEMENTED / STATIC ACCEPT` — Task 39; 581 tests
 
 **Goal:** Make two mobs interpret the same normalized experience differently without allowing
 personality to select, start, cancel, or veto an activity.
@@ -2719,7 +2720,7 @@ arrives → personality modifies only subjective learning → memory changes →
 rescored by the existing director → existing executor and GoalSelector still own physical behavior.
 There is no new Goal and no new preemption path.
 
-### Proposed implementation task — Task 39
+### Implementation task — Task 39 (`COMPLETE / STATIC ACCEPT`)
 
 | Field | Contract |
 | --- | --- |
@@ -2729,16 +2730,64 @@ There is no new Goal and no new preemption path.
 | Must not happen | Personality starts EXPLORE, changes Goal priority/readiness, scales repetition/duration, bypasses `OpinionLearningPolicy.accepts`, changes Opinion-off parity, or allocates unbounded per-mob state |
 | Required tests | deterministic identity; `[0,1]` bounds; semantic correlation; neutral baseline parity; positive and negative response bounds; blocked outcomes stay blocked; repetition/duration unchanged; host accessor missing fallback; snapshot/unload recomputation parity; two-mob divergence after equal evidence |
 | Static gates | GAO-COMPETENCE, GAO-HIERARCHY, GAO-ATTRIBUTION, GAO-PARITY, RET-1, AV-1, MAIBS-1 |
-| Runtime | Not required by default under PD-GAO-12; file a `RUNTIME_QUESTION` only if static tests cannot resolve an actual in-world uncertainty |
+| Runtime | Not required by default under PD-GAO-12; visible long-term differentiation remains `UNVERIFIED`, but no unresolved engine/goal ownership question requires a launch |
+
+### Implemented result and semantic-drift review
+
+```text
+PLANNED
+host-anchored immutable traits scale normalized subjective learning only
+        ↓
+IMPLEMENTED
+PlayerMobs.disposition → PersonalityFactory → MobExperienceContext
+→ OpinionMemoryService → PersonalityLearningResponse → OpinionLearningPolicy
+        ↓
+PREDICTED RUNTIME
+identical physical activity initially; repeated equal experiences produce bounded preference
+divergence; the existing director may choose differently on a later idle decision
+```
+
+| Gate | Evidence | Result |
+| --- | --- | --- |
+| Deterministic/bounded identity | `PersonalityModelTest.optionA_isDeterministicBoundedAndHostAnchored` | PASS |
+| Neutral pre-GAO-7 parity | `neutralResponse_isExactPreGao7Parity` | PASS — exact snapshot equality |
+| No create/invert/eligibility change | `personalityScalesButNeverCreatesInvertsOrChangesEligibility` | PASS |
+| Objective facts unchanged | `objectiveEpisodeFactsDoNotDependOnPersonality` | PASS |
+| Failure/hazard semantics | `persistenceAndRiskOnlyBoundNegativeInterpretation` | PASS; both deltas remain negative |
+| RET-GAO-1 lifecycle | `mustHappen_personalitySurvivesUnloadWithoutRecomputationDrift` | PASS; no new registry |
+| Scheduler/action boundary | static reference scan: no Personality reads in goals, mining, readiness, or director | PASS |
+| Build | `gradlew.bat clean build`; 581 tests, 0 failures/errors/skips | PASS |
+
+**Post-implementation MAIBS:** `PASS — BEHAVIORALLY_PLAUSIBLE`.
+
+- No coordinates, navigation, Goal flags/priorities, scans, cooldowns, inventory, safety, or
+  interruption/resume ownership changed.
+- T0 through the current episode remains physically identical. Only the normalized learning delta
+  changes; later existing utility scoring consumes the resulting preference.
+- Multiple mobs share no mutable personality state; the calculation is O(1) per accepted learning
+  record and host reflection occurs only on first context binding/load, not every tick.
+
+**Predicted weird behaviors:**
+
+1. Strong repeated success can still saturate the existing ±100 preference channel —
+   `ACCEPTABLE_STEPPING_STONE`, bounded by both multiplier and memory clamp.
+2. If SPM renames its disposition accessors, personalities lose host coherence but remain stable
+   through neutral anchors + UUID latent traits — `ACCEPTABLE_STEPPING_STONE`, warning emitted once.
+3. A reincarnated entity with a new UUID receives a new gen-1 personality — explicitly accepted
+   product behavior, not silent identity carry-over.
+
+**Parity:** `FUNCTIONAL / STATIC ACCEPT`. Exact neutral GAO-2 mutation is confirmed. What a player
+visually perceives after many episodes is `UNVERIFIED`; a runtime launch was neither required nor
+authorized.
 
 ### Open questions
 
-1. Accept Option A and the conservative `[0.75,1.25]` first-generation bound?
-2. Treat reincarnated echoes as new personalities in gen-1 (recommended), or explicitly carry a
-   profile through SPM snapshots in a later persistence phase?
+1. Explicit editable personality presets/UI remain deferred to a later product phase.
+2. Carrying personality through reincarnation identity changes remains deferred; gen-1 treats a
+   new UUID as a new personality.
 
-**Current preferred design:** Option A; new UUID means new gen-1 personality; Task 39 is
-dependency-ready only after user acceptance/implementation authorization.
+**Decision:** Option A delivered; D-GAO-028…030 implemented. **Frontier:** GAO-8 observable
+expression.
 
 ---
 
@@ -2856,3 +2905,35 @@ Task 39 are decision-ready. No implementation authority was inferred from `Conti
 
 **Frontier after:** accept D-GAO-029/030 and authorize Task 39, or amend the personality source,
 multiplier bound, or reincarnation identity policy.
+
+---
+
+## Contribution — Agent_Codex (Task 39 implementation)
+
+**Agent:** Agent_Codex
+
+**Date/Session:** 2026-08-10
+
+**Contribution type:** `IMPLEMENTATION / VALIDATION / MAIBS_STATIC`
+
+**Frontier before:** D-GAO-029/030, Option A, new-UUID semantics, bounds, and Task 39 were explicitly
+accepted and authorized by the user.
+
+**Delivered:** immutable six-trait model and semantic response; SPM public disposition bridge;
+deterministic UUID latent traits; single normalized-learning integration; profile park-snapshot
+lifecycle; exact neutral parity and the explicit no-create/no-invert/no-eligibility invariant.
+
+**Validation:** focused suite PASS; full suite PASS; clean build PASS; 581 tests, zero
+failures/errors/skips; `git diff --check` PASS. Static reference scan found no Personality consumer
+in Goal, mining, readiness, or director-selection code.
+
+**Process correction:** Task 39 implementation began before the numbered-task brief workflow was
+loaded in this turn. The brief was then created from the already locked RFC contract before final
+validation. This sequencing deviation did not change scope, but it is recorded rather than hidden.
+
+**MAIBS result:** `PASS — BEHAVIORALLY_PLAUSIBLE`; physical behavior and scheduler ownership are
+unchanged until learned preference influences a later existing idle decision. Runtime appearance
+remains `UNVERIFIED` and is not a default gate under PD-GAO-12.
+
+**Frontier after:** GAO-8 observable expression is the next optional product/design phase. No
+implementation authorization for GAO-8 is implied.

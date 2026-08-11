@@ -41,6 +41,14 @@ public final class OpinionLearningPolicy {
             ActivityOpinionMemory memory,
             EpisodeLearningEvidence evidence,
             long episodeDurationTicks) {
+        apply(memory, evidence, episodeDurationTicks, PersonalityLearningResponse.NEUTRAL);
+    }
+
+    public static void apply(
+            ActivityOpinionMemory memory,
+            EpisodeLearningEvidence evidence,
+            long episodeDurationTicks,
+            PersonalityLearningResponse personality) {
         if (!accepts(evidence)) {
             return;
         }
@@ -54,8 +62,10 @@ public final class OpinionLearningPolicy {
         if (EpisodeNormalizationPolicy.isMilestone(evidence.terminalKind())) {
             memory.addRepetition(Math.abs(weight) * OpinionMemory.MILESTONE_REPETITION_SCALE);
             if (weight > 0f) {
-                memory.addRecentReward(weight);
-                memory.addPreference(weight * OpinionMemory.MILESTONE_PREFERENCE_SCALE);
+                memory.addRecentReward(weight * personality.rewardMultiplier());
+                memory.addPreference(weight
+                        * personality.preferenceMultiplier()
+                        * OpinionMemory.MILESTONE_PREFERENCE_SCALE);
             }
             return;
         }
@@ -64,10 +74,14 @@ public final class OpinionLearningPolicy {
             memory.setRecentDuration(episodeDurationTicks);
             memory.addRepetition(sessionRepetition(episodeDurationTicks));
             if (weight > 0f) {
-                memory.addPreference(weight * OpinionMemory.TERMINAL_PREFERENCE_SCALE);
-                memory.addRecentReward(weight);
+                memory.addPreference(weight
+                        * personality.preferenceMultiplier()
+                        * OpinionMemory.TERMINAL_PREFERENCE_SCALE);
+                memory.addRecentReward(weight * personality.rewardMultiplier());
             } else if (weight < 0f) {
-                memory.addPreference(weight * OpinionMemory.TERMINAL_PREFERENCE_SCALE);
+                memory.addPreference(weight
+                        * personality.failurePreferenceMultiplier()
+                        * OpinionMemory.TERMINAL_PREFERENCE_SCALE);
                 memory.recordFailure();
             }
         }

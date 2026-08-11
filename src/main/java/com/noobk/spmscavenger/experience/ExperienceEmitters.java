@@ -23,7 +23,7 @@ public final class ExperienceEmitters {
     }
 
     public static void expeditionUnlocked(Mob mob, UUID episodeId, long gameTime) {
-        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob.getUUID());
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob);
         context.ensureEpisode(
                 episodeId, gameTime, Optional.of(ActivityKind.OVERLAND_EXPLORATION));
         pipeline(mob).accept(new ExperienceEvent(
@@ -48,7 +48,7 @@ public final class ExperienceEmitters {
             long startedGameTime,
             long gameTime,
             ExpeditionEndAttribution.Semantics semantics) {
-        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob.getUUID());
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob);
         context.ensureEpisode(
                 episodeId, startedGameTime, Optional.of(ActivityKind.OVERLAND_EXPLORATION));
         pipeline(mob).accept(new ExperienceEvent(
@@ -108,7 +108,7 @@ public final class ExperienceEmitters {
                 Optional.of(at),
                 Optional.empty()));
         PlaceOpinionService.applyMiningTerminal(
-                OpinionExperienceRegistry.contextFor(mob.getUUID()), end, at);
+                OpinionExperienceRegistry.contextFor(mob), end, at);
     }
 
     public static void restSessionOpened(UUID mobId, RestSessionClaim claim, long gameTime) {
@@ -132,6 +132,7 @@ public final class ExperienceEmitters {
 
     public static void socialCompanionJoined(
             Mob leader, UUID companionId, UUID expeditionEpisodeId, long gameTime) {
+        OpinionExperienceRegistry.contextFor(leader);
         socialCompanionJoined(
                 leader.getUUID(), companionId, expeditionEpisodeId, leader.blockPosition(), gameTime);
     }
@@ -191,14 +192,14 @@ public final class ExperienceEmitters {
     }
 
     private static void ensureMiningEpisode(Mob mob, MiningProject project) {
-        OpinionExperienceRegistry.contextFor(mob.getUUID()).ensureEpisode(
+        OpinionExperienceRegistry.contextFor(mob).ensureEpisode(
                 episodeFor(project, mob.getUUID()),
                 project.startedGameTime(),
                 Optional.of(activityFor(project.mode())));
     }
 
     private static EpisodeRoutingPipeline pipeline(Mob mob) {
-        return pipeline(mob.getUUID());
+        return OpinionExperienceRegistry.contextFor(mob).pipeline();
     }
 
     private static EpisodeRoutingPipeline pipeline(UUID mobId) {

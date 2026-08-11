@@ -1,6 +1,8 @@
 package com.noobk.spmscavenger.experience;
 
 import com.noobk.spmscavenger.opinion.OpinionMemory;
+import com.noobk.spmscavenger.opinion.PersonalityFactory;
+import com.noobk.spmscavenger.opinion.PersonalityModel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -72,6 +74,19 @@ class OpinionExperienceRegistryRetentionTest {
         assertEquals(9f, reloaded.entityOpinionMemory().preference(entityId), 0.001f);
         assertEquals(0, reloaded.liveEpisodeCount(),
                 "suspended episodes must not survive park");
+    }
+
+    @Test
+    void mustHappen_personalitySurvivesUnloadWithoutRecomputationDrift() {
+        UUID mobId = UUID.randomUUID();
+        PersonalityModel hostAnchored = PersonalityFactory.fromIdentity(mobId, 10, 0);
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
+        context.bindPersonality(hostAnchored);
+
+        OpinionExperienceRegistry.parkOnUnload(mobId, 100L);
+        OpinionExperienceRegistry.resumeOnLoad(mobId);
+
+        assertEquals(hostAnchored, OpinionExperienceRegistry.contextFor(mobId).personalityModel());
     }
 
     @Test

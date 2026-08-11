@@ -1,5 +1,7 @@
 package com.noobk.spmscavenger.experience;
 
+import com.noobk.spmscavenger.opinion.PersonalityFactory;
+import net.minecraft.world.entity.Mob;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -58,6 +60,21 @@ public final class OpinionExperienceRegistry {
     }
 
     /**
+     * GAO-7 production allocation seam. Existing live contexts already carry their stable profile;
+     * a newly allocated context binds SPM's host disposition exactly once.
+     */
+    public static MobExperienceContext contextFor(Mob mob) {
+        Objects.requireNonNull(mob, "mob");
+        MobExperienceContext live = LIVE_CONTEXTS.get(mob.getUUID());
+        if (live != null) {
+            return live;
+        }
+        MobExperienceContext created = contextFor(mob.getUUID());
+        created.bindPersonality(PersonalityFactory.fromMob(mob));
+        return created;
+    }
+
+    /**
      * RET-GAO-1 — park live context on chunk unload: snapshot learned state, discard heavyweight
      * execution state, bound retained entries via {@link FrozenContextStore}.
      */
@@ -79,6 +96,16 @@ public final class OpinionExperienceRegistry {
             return;
         }
         FROZEN_SNAPSHOTS.remove(mobId).ifPresent(OpinionExperienceRegistry::rehydrate);
+    }
+
+    /** Rehydrate a parked context and re-anchor its immutable profile to the live SPM entity. */
+    public static void resumeOnLoad(Mob mob) {
+        Objects.requireNonNull(mob, "mob");
+        resumeOnLoad(mob.getUUID());
+        MobExperienceContext context = LIVE_CONTEXTS.get(mob.getUUID());
+        if (context != null) {
+            context.bindPersonality(PersonalityFactory.fromMob(mob));
+        }
     }
 
     public static void invalidateEphemeral(UUID mobId) {
