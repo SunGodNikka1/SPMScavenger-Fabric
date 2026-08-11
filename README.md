@@ -92,7 +92,10 @@ or suffocating block when configured. Escape mining:
 
 ### Shelter, lighting, and camp life
 
-- Seek ranked shelter at dusk, preferring an available bed, enclosure, and safe light.
+- Seek ranked shelter at dusk: structural interiors outrank caves, trees, eaves, and porches;
+  several mobs reserve separated standing capacity instead of crowding one cell.
+- Treat arrival as a current condition: harmless social displacement returns to the same reserved
+  shelter, while an already-safe interior never chases a bed across exposed ground.
 - Sleep in real beds and release them at dawn or after interruption.
 - Place backpack torches at dark supported positions; torches are consumed, never conjured.
 - Craft and place a campfire after essential torch/tool needs are satisfied.

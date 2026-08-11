@@ -41,6 +41,11 @@ authority must cancel autonomous shelter.
 | SCR-2A | `/function spm_shelter:scenario/interior_one` | One mob crosses the door and continues to its deeper reserved interior block even though a nearer exterior eave/inside threshold is covered | Porch/eave or the block immediately inside the door is accepted as completed shelter |
 | SCR-2B | `/function spm_shelter:scenario/capacity_four` | Four mobs choose separated interior standing areas | Mobs reserve the same or immediately adjacent cells and pile at the entrance |
 | SCR-2C | `/function spm_shelter:scenario/over_capacity` | Interior capacity fills first; surplus mobs choose separated lower-tier fallback or remain without a shelter commitment | Lower-tier candidates displace available interior slots; all mobs converge on one block |
+| SCR-2R2-A | Start `interior_one`, then place a leaf canopy/tree fallback closer to the test mob | The structural house interior wins; a log-walled house remains valid | Leaf canopy becomes `INTERIOR_ROOM`, or logs are blacklisted as walls |
+| SCR-2R2-B | Teleport the mob to a free cell in the built room before dusk | It adopts the current interior or a same-protected-site bed and stays indoors | It crosses the exterior to chase a remote bed or opens the door to seek generic shelter |
+| SCR-2R2-C | After standing shelter reaches `ARRIVED`, trigger a friendly greeting that moves it away | The claim suspends, the same commitment enters `RETURNING`, and the mob returns to the exact reserved cell | Historical `ARRIVED` remains sticky or a new shelter is selected after the greeting |
+| SCR-2R2-D | Put a free bed in a second house across at least three sky-exposed path nodes | A mob already safe in the first interior refuses that bed upgrade | Bed tier overrides terrain safety and pulls the mob outside |
+| SCR-2R2-E | Let a mob settle under a tree/eave, then make a valid house interior reachable | The bounded 200-tick upgrade check replaces the fallback only with a strictly higher tier | Equal-tier target churn or a new scan every tick |
 
 For the combat negative case, spawn or lure a hostile that gives the PlayerMob an active combat
 target during the door interruption. Combat must win; the old shelter commitment must not resume.

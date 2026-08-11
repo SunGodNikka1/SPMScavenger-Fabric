@@ -187,6 +187,10 @@ public final class MobExperienceContext {
         return restClaim.filter(RestSessionClaim::isLive).isPresent();
     }
 
+    public boolean hasActiveRestClaim() {
+        return restClaim.filter(RestSessionClaim::isActive).isPresent();
+    }
+
     public void setRestClaim(Optional<RestSessionClaim> claim) {
         restClaim = Objects.requireNonNull(claim, "claim");
     }

@@ -47,6 +47,16 @@ class ShelterSelectionPolicyTest {
     }
 
     @Test
+    void foliageCoverNeverCreatesAnInteriorOrDeepShelterTier() {
+        assertEquals(ShelterSelectionPolicy.Tier.PORCH_OVERHANG,
+                ShelterSelectionPolicy.classify(
+                        false, new ShelterSelectionPolicy.Evidence(4, 0, 5, 5)));
+        assertEquals(ShelterSelectionPolicy.Tier.INTERIOR_ROOM,
+                ShelterSelectionPolicy.classify(
+                        false, new ShelterSelectionPolicy.Evidence(4, 5, 0, 5)));
+    }
+
+    @Test
     void deeperInteriorWinsWithinTierAndArrivalRequiresReservedBlock() {
         ShelterSelectionPolicy.RankedCandidate threshold = ranked(
                 3, ShelterSelectionPolicy.Tier.INTERIOR_ROOM, 4, 5, 2, 15);
@@ -112,6 +122,32 @@ class ShelterSelectionPolicyTest {
         }
         assertFalse(budget.tryAcquire());
         assertEquals(ShelterSelectionPolicy.MAX_PATH_PROBES, budget.used());
+    }
+
+    @Test
+    void doorSeedsShareExistingShortlistCapacity() {
+        List<ShelterSelectionPolicy.RawCandidate> candidates = new ArrayList<>();
+        for (int i = 0; i < 80; i++) {
+            candidates.add(raw(i * 2, 64, 20, false, 4, 15, i + 1));
+        }
+        ShelterSelectionPolicy.RawCandidate behindDoor =
+                raw(4, 64, 0, false, 0, 0, 30);
+        candidates.add(behindDoor);
+
+        List<ShelterSelectionPolicy.RawCandidate> shortlist =
+                ShelterSelectionPolicy.diverseShortlist(
+                        candidates, 80, List.of(BlockPos.ZERO));
+
+        assertTrue(shortlist.size() <= ShelterSelectionPolicy.MAX_SHORTLIST);
+        assertTrue(shortlist.contains(behindDoor));
+    }
+
+    @Test
+    void protectedBedRouteAllowsOnlyBoundedDoorwayExposure() {
+        assertTrue(ShelterSelectionPolicy.routeWithinExposureBudget(
+                List.of(true, true, false, false, true), 2));
+        assertFalse(ShelterSelectionPolicy.routeWithinExposureBudget(
+                List.of(true, false, false, false, true), 2));
     }
 
     private static ShelterSelectionPolicy.RankedCandidate ranked(

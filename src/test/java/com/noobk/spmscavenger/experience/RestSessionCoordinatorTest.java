@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -63,5 +64,22 @@ class RestSessionCoordinatorTest {
         RestSessionCoordinator.invalidateOnUnload(MOB, 50L);
 
         assertFalse(OpinionExperienceRegistry.contextFor(MOB).hasLiveRestClaim());
+    }
+
+    @Test
+    void suspendedShelterClaimRemainsLiveButDoesNotReportActiveRest() {
+        RestSessionClaim claim = new RestSessionClaim(
+                UUID.randomUUID(), Optional.empty(), UUID.randomUUID(),
+                RestSourceKind.SHELTER_RECOVERY, BlockPos.ZERO,
+                RestAnchorType.SHELTER_STAND, 0L, 0L, 0L, Optional.empty());
+        RestSessionClaim suspended = claim.suspended(20L);
+
+        OpinionExperienceRegistry.contextFor(MOB).setRestClaim(Optional.of(suspended));
+
+        assertTrue(OpinionExperienceRegistry.contextFor(MOB).hasLiveRestClaim());
+        assertFalse(OpinionExperienceRegistry.contextFor(MOB).hasActiveRestClaim());
+        assertTrue(suspended.resumed(30L).isActive());
+        assertEquals(claim.claimId(), suspended.resumed(30L).claimId());
+        assertEquals(claim.commitmentId(), suspended.resumed(30L).commitmentId());
     }
 }

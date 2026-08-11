@@ -90,4 +90,30 @@ class ShelterCommitmentTest {
         assertTrue(commitment.restClaimOpened());
         assertEquals(ShelterCommitment.State.ARRIVED, commitment.state());
     }
+
+    @Test
+    void displacedArrivalUsesFreshBoundedReturnBudgetAndCanArriveAgain() {
+        ShelterCommitment commitment = new ShelterCommitment(BlockPos.ZERO, null, MOB, 0L);
+        commitment.activate();
+        for (int i = 0; i < 350; i++) {
+            commitment.recordActiveApproachTick();
+        }
+        commitment.arrive();
+
+        commitment.beginReturning(2_000L);
+        commitment.suspend();
+        commitment.activate();
+        for (int i = 0; i < 399; i++) {
+            commitment.recordActiveApproachTick();
+        }
+
+        assertEquals(ShelterCommitment.State.RETURNING, commitment.state());
+        assertFalse(commitment.approachBudgetExhausted(2_399L));
+        commitment.recordActiveApproachTick();
+        assertTrue(commitment.approachBudgetExhausted(2_400L));
+
+        commitment.arrive();
+        assertEquals(ShelterCommitment.State.ARRIVED, commitment.state());
+        assertFalse(commitment.approachBudgetExhausted(20_000L));
+    }
 }

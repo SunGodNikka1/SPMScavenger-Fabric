@@ -21,6 +21,7 @@ final class ShelterCommitment {
         PENDING,
         ACTIVE,
         SUSPENDED,
+        RETURNING,
         ARRIVED
     }
 
@@ -33,6 +34,9 @@ final class ShelterCommitment {
     private int activeApproachTicks;
     private int pathFailureCount;
     private int resumeAttempts;
+    private long returnStartedAt = -1L;
+    private int returnActiveTicks;
+    private int returnPathFailures;
     private State state;
     private boolean restClaimOpened;
 
@@ -104,26 +108,42 @@ final class ShelterCommitment {
     void activate() {
         if (state == State.SUSPENDED) {
             resumeAttempts++;
+            state = State.ACTIVE;
         }
-        if (state != State.ARRIVED) {
+        if (state == State.PENDING) {
             state = State.ACTIVE;
         }
     }
 
     void suspend() {
-        if (state != State.ARRIVED) {
+        if (state != State.ARRIVED && state != State.RETURNING) {
             state = State.SUSPENDED;
+        }
+    }
+
+    void beginReturning(long now) {
+        if (state == State.ARRIVED) {
+            state = State.RETURNING;
+            returnStartedAt = now;
+            returnActiveTicks = 0;
+            returnPathFailures = 0;
         }
     }
 
     void recordActiveApproachTick() {
         if (state == State.ACTIVE) {
             activeApproachTicks++;
+        } else if (state == State.RETURNING) {
+            returnActiveTicks++;
         }
     }
 
     void recordPathFailure() {
-        pathFailureCount++;
+        if (state == State.RETURNING) {
+            returnPathFailures++;
+        } else {
+            pathFailureCount++;
+        }
     }
 
     void arrive() {
@@ -135,9 +155,16 @@ final class ShelterCommitment {
     }
 
     boolean approachBudgetExhausted(long now) {
-        return state != State.ARRIVED
-                && (activeApproachTicks >= MAX_ACTIVE_APPROACH_TICKS
-                        || now - startedAt >= MAX_PRE_ARRIVAL_TICKS
-                        || pathFailureCount >= MAX_PATH_FAILURES);
+        if (state == State.ARRIVED) {
+            return false;
+        }
+        if (state == State.RETURNING) {
+            return returnActiveTicks >= MAX_ACTIVE_APPROACH_TICKS
+                    || (returnStartedAt >= 0L && now - returnStartedAt >= MAX_PRE_ARRIVAL_TICKS)
+                    || returnPathFailures >= MAX_PATH_FAILURES;
+        }
+        return activeApproachTicks >= MAX_ACTIVE_APPROACH_TICKS
+                || now - startedAt >= MAX_PRE_ARRIVAL_TICKS
+                || pathFailureCount >= MAX_PATH_FAILURES;
     }
 }

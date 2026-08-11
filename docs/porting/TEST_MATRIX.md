@@ -345,6 +345,10 @@ outcomes remain `UNVERIFIED`.
 | SCR-2D unreachable leaders | Four highest-tier paths fail | At most four probes now; later scans skip recent failures and advance | Same four positions suppress fallback forever | Rejection-ledger unit/static `CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2E lifecycle | Suspend, dawn, unload, death, server stop, expiry | Matching commitment retains/refreshes then conditionally releases its reservation | Old commitment releases newer ownership or static map grows forever | Unit/static `CONFIRMED`; heap trend `UNVERIFIED` |
 | SCR-2R doorway depth | Closed-door house with deeper free room cells | After crossing, mob continues to the exact deeper reservation | Door-adjacent cell ranks as interior or two-block arrival tolerance completes at threshold | User reproduced old failure; policy/contract tests `CONFIRMED`; repaired runtime `UNVERIFIED` |
+| SCR-2R2 structural evidence | House plus nearer tree/eave; log-walled variant | Full-height non-leaf walls and structural roof classify the house above foliage fallback; logs remain eligible | Leaves create room walls or a blanket log blacklist breaks cabins | Policy + source-contract tests `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-2R2 current satisfaction | Mob begins in a valid room with a free bed across exposed ground | Current interior is adopted; only a bed route with at most two exposed nodes may upgrade it | Global shelter scan makes the mob leave a safe house | Route-budget/policy/source-contract tests `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-2R2 return | Arrived standing shelter, then benign moving social interruption | Rest becomes inactive-but-live; same commitment/reservation enters bounded `RETURNING` and resumes on exact re-arrival | Sticky historical arrival, duplicate rest opening, or reset/unbounded return budget | Commitment/rest/source-contract tests `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-2R2 fallback upgrade | Mob arrives at tree/eave/deep-cover fallback; better tier later becomes reachable | Every 200 ticks at most, only a strictly higher tier can atomically replace the fallback | Per-tick scan, equal-tier churn, or losing the old reservation when replacement fails | Static call-path + contract test `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 
 Static gates after SCR-2R: 24 focused `Shelter*Test` tests and the full 652-test suite pass with zero failures,
 errors, or skips. Selection is capped at 28 semantic evaluations and four path probes per scan;
@@ -354,3 +358,12 @@ artifact `build/libs/spmscavenger-1.9.4.jar`, SHA-256
 `4347449A866D88695E01E2A867C4467F1DB68A04C68B4DB034888740809C3552`, contains the SCR-2/R
 classes and excludes the test datapack. Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`; physical
 outcome remains open.
+
+SCR-2R2 static gates: 660 total tests pass with zero failures/errors/skips; focused `Shelter*` and
+rest-coordinator tests pass; `clean build` passes. Semantic evaluation remains capped at 28, door
+seeds consume at most four of those slots, path probes remain capped at four, discovered-door
+retention is capped at eight per scan, and lower-tier upgrade scans run no more often than every
+200 ticks. Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`; Minecraft physical behavior remains
+`UNVERIFIED` because no runtime launch was authorized for this implementation. Final remapped JAR:
+`build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`78A95368046A66C06FD67D7D842BB41D3524BECB43A00F738BE050F984744725`.

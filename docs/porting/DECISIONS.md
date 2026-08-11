@@ -1101,3 +1101,42 @@ Code/unit/clean-build evidence is recorded with the rebuilt artifact; runtime re
 Verification: 24 focused shelter tests and all 652 tests pass; `clean build` passes. Final remapped
 artifact `build/libs/spmscavenger-1.9.4.jar`, SHA-256
 `4347449A866D88695E01E2A867C4467F1DB68A04C68B4DB034888740809C3552`.
+
+### SCR-2R2 — structural satisfaction and condition-bound return
+
+The follow-up runtime report exposed three distinct semantic gaps: foliage and one-height
+obstructions could look like a room, generic standing admission required exact reach while beds
+allowed tolerance one, and `ARRIVED` meant historical arrival even after another Goal moved the
+mob away. Two viable repairs were considered. Block-ID blacklists were rejected because log cabins
+are legitimate and modded building blocks are open-ended. Freezing an arrived mob was rejected
+because it would suppress valid social/safety interactions. The selected repair derives bounded
+physical evidence and keeps the existing GoalSelector authority.
+
+Structural room walls require a non-leaf full collision boundary at both feet and head height;
+doors remain valid boundaries and logs are not excluded. Roof evidence records foliage separately,
+so leaves may provide porch/tree fallback but never room/deep-cover status. Up to four
+door-associated candidates share the unchanged 28-candidate shortlist; discovered door positions
+are capped at eight and path probes remain capped at four. Every candidate uses admission tolerance
+one, while generic settlement remains exact.
+
+A valid current interior is satisfied before remote generic search. A bed may replace it only when
+the already-created path contains at most two exposed/non-structurally-covered nodes. Lower-tier
+arrivals retain legal fallback but perform a 200-tick bounded upgrade check; only a strictly higher
+tier can atomically replace the current commitment, and failed replacement preserves old ownership.
+
+`ARRIVED` is now condition-bound. Benign physical displacement enters a separately bounded
+`RETURNING` phase under the same reservation. Its shelter rest claim stays live but is suspended,
+so the shared observer does not report REST while the mob is away; exact return resumes the same
+claim/commitment IDs. Combat and player orders still cancel. Post-GREEN review also prevented a
+timed-out claim from reopening every tick by limiting open/resume to actual arrival transitions.
+
+**Must happen:** a reachable house beats a nearer tree/eave; an already-safe interior stays; a
+friendly displacement returns to the same cell; log cabins remain valid. **Must not happen:** leaf
+canopy becomes a room, a bed pulls the mob across exposed ground, equal-tier fallback churns, or
+historical arrival suppresses return.
+
+Evidence: 660 tests pass with zero failures/errors/skips; focused shelter/rest tests and
+`clean build` pass. Remapped artifact `build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`78A95368046A66C06FD67D7D842BB41D3524BECB43A00F738BE050F984744725`, contains the repaired
+classes and excludes the runtime datapack. Static MAIBS is `PASS — BEHAVIORALLY_PLAUSIBLE`.
+Physical behavior remains `UNVERIFIED` until the SCR-2R2 runtime matrix is observed.

@@ -10,6 +10,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 /** Pure SCR-2 shortlist, semantic-tier, and ordering policy. */
 final class ShelterSelectionPolicy {
@@ -19,6 +21,7 @@ final class ShelterSelectionPolicy {
     static final int GENERIC_PER_BAND = 6;
     static final int MAX_GENERIC_CANDIDATES = DISTANCE_BANDS * GENERIC_PER_BAND;
     static final int MAX_BED_CANDIDATES = 4;
+    static final int MAX_DOOR_ASSOCIATED_CANDIDATES = 4;
     static final int MAX_SHORTLIST = MAX_GENERIC_CANDIDATES + MAX_BED_CANDIDATES;
     static final int MAX_PATH_PROBES = 4;
     static final int BOUNDARY_PROBE_DISTANCE = 5;
@@ -49,17 +52,34 @@ final class ShelterSelectionPolicy {
         }
     }
 
-    record Evidence(int horizontalBoundaries, int roofCoverage, int doorClearance) {
+    record Evidence(
+            int horizontalBoundaries,
+            int structuralRoofCoverage,
+            int foliageRoofCoverage,
+            int doorClearance) {
         Evidence {
             if (horizontalBoundaries < 0 || horizontalBoundaries > 4) {
                 throw new IllegalArgumentException("horizontalBoundaries must be 0..4");
             }
-            if (roofCoverage < 0 || roofCoverage > 5) {
-                throw new IllegalArgumentException("roofCoverage must be 0..5");
+            if (structuralRoofCoverage < 0 || structuralRoofCoverage > 5) {
+                throw new IllegalArgumentException("structuralRoofCoverage must be 0..5");
+            }
+            if (foliageRoofCoverage < 0 || foliageRoofCoverage > 5
+                    || structuralRoofCoverage + foliageRoofCoverage > 5) {
+                throw new IllegalArgumentException("combined roof coverage must be 0..5");
             }
             if (doorClearance < 0 || doorClearance > DOOR_PROBE_DISTANCE + 1) {
                 throw new IllegalArgumentException("doorClearance must be 0..5");
             }
+        }
+
+        /** Compatibility seam: older tests supplied total roof cover, all structural. */
+        Evidence(int horizontalBoundaries, int roofCoverage, int doorClearance) {
+            this(horizontalBoundaries, roofCoverage, 0, doorClearance);
+        }
+
+        int roofCoverage() {
+            return structuralRoofCoverage + foliageRoofCoverage;
         }
     }
 
@@ -79,6 +99,10 @@ final class ShelterSelectionPolicy {
 
         int used() {
             return used;
+        }
+
+        boolean exhausted() {
+            return used >= MAX_PATH_PROBES;
         }
     }
 
@@ -124,6 +148,8 @@ final class ShelterSelectionPolicy {
             .thenComparing(Comparator.comparingInt(
                     (RankedCandidate candidate) -> candidate.evidence().horizontalBoundaries()).reversed())
             .thenComparing(Comparator.comparingInt(
+                    (RankedCandidate candidate) -> candidate.evidence().structuralRoofCoverage()).reversed())
+            .thenComparing(Comparator.comparingInt(
                     (RankedCandidate candidate) -> candidate.evidence().roofCoverage()).reversed())
             .thenComparing(Comparator.comparingInt(
                     (RankedCandidate candidate) -> candidate.raw().blockLight()).reversed())
@@ -142,10 +168,10 @@ final class ShelterSelectionPolicy {
         if (evidence.doorClearance() <= 1) {
             return evidence.roofCoverage() >= 1 ? Tier.PORCH_OVERHANG : Tier.EXPOSED;
         }
-        if (evidence.horizontalBoundaries() >= 3 && evidence.roofCoverage() >= 3) {
+        if (evidence.horizontalBoundaries() >= 3 && evidence.structuralRoofCoverage() >= 3) {
             return Tier.INTERIOR_ROOM;
         }
-        if (evidence.horizontalBoundaries() >= 2 && evidence.roofCoverage() >= 4) {
+        if (evidence.horizontalBoundaries() >= 2 && evidence.structuralRoofCoverage() >= 4) {
             return Tier.DEEPLY_COVERED;
         }
         if (evidence.roofCoverage() >= 1) {
@@ -160,6 +186,13 @@ final class ShelterSelectionPolicy {
      */
     static List<RawCandidate> diverseShortlist(
             Collection<RawCandidate> candidates, double maxDistance) {
+        return diverseShortlist(candidates, maxDistance, List.of());
+    }
+
+    static List<RawCandidate> diverseShortlist(
+            Collection<RawCandidate> candidates,
+            double maxDistance,
+            Collection<BlockPos> doorPositions) {
         Map<BlockPos, RawCandidate> beds = new LinkedHashMap<>();
         Map<BucketKey, BucketRepresentatives> buckets = new HashMap<>();
         for (RawCandidate candidate : candidates) {
@@ -209,14 +242,97 @@ final class ShelterSelectionPolicy {
         int genericCount = result.size() - selectedBedCount;
         int fill = Math.min(MAX_GENERIC_CANDIDATES - genericCount, leftovers.size());
         result.addAll(leftovers.subList(0, fill));
+        List<RawCandidate> doorAssociated = doorAssociatedCandidates(candidates, doorPositions);
+        Set<BlockPos> present = new HashSet<>();
+        result.forEach(candidate -> present.add(candidate.standPos()));
+        for (RawCandidate doorCandidate : doorAssociated) {
+            if (!present.add(doorCandidate.standPos())) {
+                continue;
+            }
+            while (result.size() >= MAX_SHORTLIST) {
+                int removable = lastRemovableGenericIndex(result, doorAssociated);
+                if (removable < 0) {
+                    break;
+                }
+                present.remove(result.remove(removable).standPos());
+            }
+            if (result.size() < MAX_SHORTLIST) {
+                result.add(doorCandidate);
+            }
+        }
         if (result.size() > MAX_SHORTLIST) {
             return List.copyOf(result.subList(0, MAX_SHORTLIST));
         }
         return List.copyOf(result);
     }
 
+    private static List<RawCandidate> doorAssociatedCandidates(
+            Collection<RawCandidate> candidates, Collection<BlockPos> doorPositions) {
+        if (doorPositions.isEmpty()) {
+            return List.of();
+        }
+        Map<BucketKey, BucketRepresentatives> buckets = new HashMap<>();
+        for (RawCandidate candidate : candidates) {
+            if (candidate.bed() || doorAssociationDistance(candidate.standPos(), doorPositions) < 2
+                    || doorAssociationDistance(candidate.standPos(), doorPositions) > DOOR_PROBE_DISTANCE) {
+                continue;
+            }
+            buckets.compute(BucketKey.of(candidate.standPos()), (ignored, representatives) ->
+                    (representatives == null ? new BucketRepresentatives(null, null) : representatives)
+                            .add(candidate));
+        }
+        Map<BlockPos, RawCandidate> representatives = new LinkedHashMap<>();
+        for (BucketRepresentatives bucket : buckets.values()) {
+            representatives.put(bucket.enclosed().standPos(), bucket.enclosed());
+            representatives.put(bucket.open().standPos(), bucket.open());
+        }
+        return representatives.values().stream()
+                .sorted(Comparator
+                        .comparingInt((RawCandidate candidate) ->
+                                doorAssociationDistance(candidate.standPos(), doorPositions)).reversed()
+                        .thenComparing(CHEAP_ORDER))
+                .limit(MAX_DOOR_ASSOCIATED_CANDIDATES)
+                .toList();
+    }
+
+    private static int lastRemovableGenericIndex(
+            List<RawCandidate> result, List<RawCandidate> doorAssociated) {
+        Set<BlockPos> protectedPositions = new HashSet<>();
+        doorAssociated.forEach(candidate -> protectedPositions.add(candidate.standPos()));
+        for (int i = result.size() - 1; i >= 0; i--) {
+            RawCandidate candidate = result.get(i);
+            if (!candidate.bed() && !protectedPositions.contains(candidate.standPos())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static int doorAssociationDistance(BlockPos pos, Collection<BlockPos> doors) {
+        int best = Integer.MAX_VALUE;
+        for (BlockPos door : doors) {
+            if (Math.abs(pos.getY() - door.getY()) > 1) {
+                continue;
+            }
+            best = Math.min(best,
+                    Math.abs(pos.getX() - door.getX()) + Math.abs(pos.getZ() - door.getZ()));
+        }
+        return best;
+    }
+
     static List<RankedCandidate> rank(Collection<RankedCandidate> candidates) {
         return candidates.stream().sorted(SEMANTIC_ORDER).toList();
+    }
+
+    static boolean routeWithinExposureBudget(
+            Iterable<Boolean> structurallyProtectedNodes, int maxExposedNodes) {
+        int exposed = 0;
+        for (boolean structurallyProtected : structurallyProtectedNodes) {
+            if (!structurallyProtected && ++exposed > maxExposedNodes) {
+                return false;
+            }
+        }
+        return true;
     }
 
     static boolean arrivedAtStandingSite(BlockPos current, BlockPos destination) {

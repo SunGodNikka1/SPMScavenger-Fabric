@@ -39,6 +39,7 @@ public final class RestSessionCoordinator {
                 gameTime,
                 gameTime,
                 gameTime,
+                false,
                 Optional.empty());
         context.setRestClaim(Optional.of(claim));
         ExperienceEmitters.restSessionOpened(mob.getUUID(), claim, gameTime);
@@ -46,26 +47,58 @@ public final class RestSessionCoordinator {
     }
 
     public static Optional<RestSessionClaim> openShelterRecovery(
-            Mob mob, BlockPos anchor, RestAnchorType anchorType, long gameTime) {
+            Mob mob, UUID commitmentId, BlockPos anchor, RestAnchorType anchorType, long gameTime) {
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob);
-        if (context.hasLiveRestClaim()) {
-            return context.restClaim();
+        Optional<RestSessionClaim> existing = context.restClaim().filter(RestSessionClaim::isLive);
+        if (existing.isPresent() && existing.get().commitmentId().equals(commitmentId)) {
+            RestSessionClaim resumed = existing.get().resumed(gameTime);
+            context.setRestClaim(Optional.of(resumed));
+            return Optional.of(resumed);
+        }
+        if (existing.isPresent()) {
+            close(context, existing.get(), RestCloseReason.VALIDITY_LOST, gameTime);
         }
         UUID claimId = UUID.randomUUID();
         RestSessionClaim claim = new RestSessionClaim(
                 claimId,
                 Optional.empty(),
-                claimId,
+                commitmentId,
                 RestSourceKind.SHELTER_RECOVERY,
                 anchor,
                 anchorType,
                 gameTime,
                 gameTime,
                 gameTime,
+                false,
                 Optional.empty());
         context.setRestClaim(Optional.of(claim));
         ExperienceEmitters.restSessionOpened(mob.getUUID(), claim, gameTime);
         return Optional.of(claim);
+    }
+
+    public static void suspendShelterRecovery(Mob mob, UUID commitmentId, long gameTime) {
+        MobExperienceContext context = OpinionExperienceRegistry.find(mob.getUUID());
+        if (context == null) {
+            return;
+        }
+        context.restClaim()
+                .filter(RestSessionClaim::isLive)
+                .filter(claim -> claim.sourceKind() == RestSourceKind.SHELTER_RECOVERY)
+                .filter(claim -> claim.commitmentId().equals(commitmentId))
+                .ifPresent(claim -> context.setRestClaim(Optional.of(claim.suspended(gameTime))));
+    }
+
+    public static void closeShelterRecovery(
+            Mob mob, UUID commitmentId, RestCloseReason reason, long gameTime) {
+        MobExperienceContext context = OpinionExperienceRegistry.find(mob.getUUID());
+        if (context == null) {
+            return;
+        }
+        context.restClaim()
+                .filter(RestSessionClaim::isLive)
+                .filter(claim -> claim.sourceKind() == RestSourceKind.SHELTER_RECOVERY)
+                .filter(claim -> claim.commitmentId().equals(commitmentId))
+                .ifPresent(claim -> close(context, claim, reason, gameTime));
     }
 
     public static void validate(Mob mob, ActivityObservationService.Observation observation, long gameTime) {
@@ -117,13 +150,14 @@ public final class RestSessionCoordinator {
         if (mob.getTarget() != null) {
             return Optional.of(RestCloseReason.COMBAT);
         }
-        if (mandatoryAuthority(observation)) {
+        if (!claim.suspended() && mandatoryAuthority(observation)) {
             return Optional.of(RestCloseReason.MANDATORY_WORK);
         }
         if (gameTime - claim.arrivedAt() > RestSessionClaim.MAX_REST_TICKS) {
             return Optional.of(RestCloseReason.TIMEOUT);
         }
-        if (mob.blockPosition().distSqr(claim.anchor()) > RestSessionClaim.REST_RADIUS_SQR) {
+        if (!claim.suspended()
+                && mob.blockPosition().distSqr(claim.anchor()) > RestSessionClaim.REST_RADIUS_SQR) {
             return Optional.of(RestCloseReason.MOB_LEFT_RADIUS);
         }
         if (claim.anchorType() == RestAnchorType.CAMPFIRE && !campfireStillValid(mob.level(), claim.anchor())) {

@@ -45,6 +45,12 @@ public final class OpinionExperienceRegistry {
         return context != null && context.hasLiveRestClaim();
     }
 
+    /** Whether REST is physically active, excluding a resumable displaced shelter claim. */
+    public static boolean hasActiveRestClaim(UUID mobId) {
+        MobExperienceContext context = LIVE_CONTEXTS.get(mobId);
+        return context != null && context.hasActiveRestClaim();
+    }
+
     /**
      * Allocates or rehydrates the per-mob experience context. Use only on experience-producing paths
      * (episode emission, discretionary rest open, opinion learning).

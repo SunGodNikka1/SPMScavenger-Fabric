@@ -657,6 +657,134 @@ enclosure/light/distance. `SeekShelterGoal` no longer contains `ARRIVED_SQR`; no
 exact reserved-block equality. Twenty-four focused shelter tests, all 652 tests, and `clean build`
 pass. Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`; runtime remains `UNVERIFIED` for the repair.
 
+### SCR-2R2 — Structural Shelter Satisfaction & Return
+
+**Status:** `LOCKED / IMPLEMENTING`
+
+**Authorization:** user, 2026-08-11
+
+#### Runtime evidence and peer review
+
+`RUNTIME_CONFIRMED`: mobs can choose trees/roof panels while a house exists, generic shelter often
+fails to enter that house unless a bed is the target, and an inside mob may reopen the door and
+leave under another shelter cycle. Source confirms three coupled causes: generic path admission
+uses tolerance `0` while beds use `1`; `sleepInBeds=true` disables the only already-covered early
+return; and `ARRIVED` is irreversible even after a moving helper physically displaces the mob.
+
+The user peer review locks: logs remain valid structural wall material; leaves provide cover but
+never structural-wall evidence; a boundary requires feet-and-head continuity; a safe interior may
+upgrade only to a bed whose path stays protected; door seeds share the existing 28-candidate
+budget; admission tolerance is `1` while settlement remains exact; no SCR-3 memory.
+
+Three negative probes before implementation: no current-interior adoption/latch; no leaf-versus-
+structural cover classification; no door-associated shortlist quota.
+
+#### Behavioral Prediction (MAIBS-1)
+
+| Layer | Result |
+| --- | --- |
+| Intended behavior | House interior beats foliage/eaves; a mob already safely inside stays; short social displacement returns to the same nightly reservation |
+| Implemented mechanism before R2 | sky blockage is roof evidence; one obstruction at feet **or** head is a wall; global search still runs indoors with beds enabled; generic path admission is exact; `ARRIVED` survives displacement |
+| Predicted R2 behavior | full-height non-leaf boundaries and structural roof evidence produce interior tier; foliage/eaves remain fallback; current interior is satisfied before remote generic travel; protected local bed paths may upgrade; displaced arrival enters `RETURNING` and replans to the same anchor |
+| Failure/weirdness | tiny houses may have only porch-tier capacity; leaf-built decorative shelters are fallback; temporarily blocked return paths consume the existing bounded mission budget |
+| Confidence | old behavior `CODE + RUNTIME_CONFIRMED`; repaired behavior `GAME_MECHANICS_INFERRED` until runtime |
+
+Temporal trace:
+
+```text
+T0 outside: 28-slot shortlist (general + <=4 door-associated)
+→ structural interior > natural deep cover > foliage/eave fallback
+→ <=4 paths, admission tolerance 1
+→ exact reserved-cell arrival
+
+T0 already inside: classify current position
+→ same-protected-route bed available? upgrade
+→ otherwise adopt current position; no exterior generic search
+
+T+60 FriendlyGreet moves mob away
+→ ARRIVED condition becomes false
+→ RETURNING, same commitment/reservation, disposable fresh path
+→ exact anchor → ARRIVED again
+
+T+1200 no repeated global search or doorway churn while nightly shelter remains valid
+```
+
+Goal interaction: `SeekShelterGoal` remains priority 2/MOVE. Priority-1
+`DoorOperationGoal` is stationary finite suspension; priority-1 `FriendlyGreetGoal` owns MOVE+LOOK
+and can displace, so post-interruption physical anchor validation is mandatory. Combat/safety/
+commands retain their existing authority and cancellation semantics.
+
+#### Locked decisions and task
+
+1. Logs/full blocks count when both feet and head rays meet a continuous wall; leaves never count
+   as structural boundary. Nearby leaf canopy may provide fallback cover.
+2. Semantic evidence records structural roof versus foliage cover. Foliage-only cover cannot reach
+   `INTERIOR_ROOM` or `DEEPLY_COVERED`; structural walls/roof remain loader- and block-ID agnostic.
+3. `STRUCTURAL_INTERIOR` at the mob's current position is satisfaction/hysteresis: try only a
+   bounded bed upgrade whose admitted path remains protected, otherwise adopt current position
+   before remote generic candidates.
+4. Bed-route protection inspects the already-created bounded path; it never scans for a house/site
+   or forces chunks. A route that materially enters exposed space is not an upgrade.
+5. At most four door-associated candidates reserve slots inside the existing total semantic cap
+   of 28. `MAX_PATH_PROBES=4` remains unchanged.
+6. Every candidate uses admission tolerance `1`; generic completion still requires exact block
+   equality.
+7. `ShelterCommitment.State` gains `RETURNING`. `ARRIVED` means current physical satisfaction, not
+   historical success. Moving benign interruptions return to the same reservation; hard authority
+   retains cancel semantics.
+8. Shelter rest claims correlate to the actual shelter commitment ID. Return pauses/invalidates
+   the arrived condition without creating duplicate learning; exact re-arrival reopens/continues
+   condition-bound rest through an explicit coordinator seam.
+9. SCR-3 Known Shelter Memory remains deferred.
+
+Alternatives rejected: blanket leaf/log blacklist breaks log cabins; a numeric tree penalty can
+still be overwhelmed; freezing arrived mobs blocks legitimate social behavior; adding extra door
+candidates beyond 28 violates the agreed semantic budget; using bed reachability alone recreates
+cross-street nighttime migration.
+
+**Must happen:** house interior outranks reachable tree/eave fallback; an already-interior mob does
+not voluntarily leave for generic shelter; a local protected bed can upgrade; social displacement
+returns to the same reservation; generic standing admission through the door matches bed
+admission. **Must not happen:** logs are excluded, foliage becomes room walls, an exposed bed route
+pulls a safe mob outside, semantic candidates exceed 28, path probes exceed four, or historical
+arrival remains true while the mob is away.
+
+**Frontier before:** runtime falsified structural classification, generic admission parity, and
+arrival condition semantics. **Action:** user locked and authorized SCR-2R2. **Frontier after:**
+implementation and static validation are complete; runtime launch remains separately gated.
+
+#### SCR-2R2 implementation evidence — Agent_Codex
+
+**Date/session:** 2026-08-11
+**Contribution type:** IMPLEMENTATION / VALIDATION
+
+- `ShelterSelectionPolicy.Evidence` now separates structural roof and foliage roof evidence;
+  foliage-only sites cannot reach room/deep-cover tiers. Door-associated candidates use at most
+  four slots in the unchanged 28-candidate cap.
+- `SeekShelterGoal` requires feet-and-head structural boundaries, accepts full collision walls
+  including logs, excludes leaves from wall evidence, keeps at most eight discovered doors, and
+  uses tolerance `1` for all admission paths while retaining exact standing settlement.
+- A valid current interior is adopted before remote generic shelter. Bed upgrades from that state
+  are admitted only when their bounded path has at most two non-structurally-covered nodes.
+- `ShelterCommitment` adds condition-bound `RETURNING` with a separate 400-active/600-wall-clock/
+  three-path-failure return budget. The correlated shelter rest claim becomes live-but-suspended
+  while displaced and resumes under the same claim/commitment IDs at exact re-arrival.
+- Post-implementation review found two additional loops before handoff: calling the coordinator on
+  every arrived tick could reopen a timed-out rest episode, and an arrived fallback never searched
+  for a house upgrade. The first is prevented by opening/resuming only on an ARRIVED transition;
+  the second uses a 200-tick bounded scan that atomically replaces only with a strictly higher tier.
+  Failed replacement retains the current commitment and reservation.
+- Focused shelter/rest tests pass. Full suite: **660 tests, 0 failures, 0 errors, 0 skipped**.
+  `gradlew clean build` passes. Runtime physical behavior is `UNVERIFIED` because Minecraft was not
+  launched.
+
+**MAIBS post-implementation verdict:** `BEHAVIORALLY_PLAUSIBLE` / static PASS. Tree/eave fallback
+remains legal when no better site is reachable; safe interior cannot voluntarily downgrade;
+benign displacement returns; combat/order cancellation wins; all scans, path probes, return
+attempts, reservations, and retained door evidence remain bounded. The least-verified claim is
+vanilla navigation crossing real village door/roof geometry under the new tolerance and structural
+heuristics; falsification requires the SCR-2R2 runtime matrix.
+
 ---
 
 ## Topic: Missing AI behaviors
@@ -866,6 +994,7 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Codex | 2026-08-11 | Implemented `SCR-2R2`: structural-vs-foliage shelter semantics, current-interior hysteresis, protected bed upgrades, bounded door seeds, condition-bound `RETURNING`, correlated suspended rest claims, strictly-higher fallback upgrades, 660-test clean build, and post-GREEN MAIBS; runtime pending |
 | Agent_Codex | 2026-08-11 | Runtime feedback falsified SCR-2 doorstep completion; implemented `SCR-2R` door-depth ranking, door-adjacent tier cap, exact reserved-cell arrival, regression tests, 652-test clean build, and updated MAIBS/docs; runtime recheck pending |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-2`: bounded diverse shortlist, lexicographic interior tiers, four entity-ticking path probes, commitment-owned spacing reservations, physical occupancy admission, bounded failed-candidate backoff, expanded runtime datapack, and post-implementation MAIBS; later superseded in part by SCR-2R |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-1`: persistent bounded shelter commitment, suspend/cancel taxonomy through the shared observer, fresh-path resume, stay/authority invalidation, canonical bed claims, unload/death cleanup, 13 focused tests, 639-test clean build, runtime datapack, and post-GREEN MAIBS. Runtime remains pending before Task 42B |

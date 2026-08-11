@@ -4,6 +4,7 @@ import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.activity.ActivityObservationService;
 import com.noobk.spmscavenger.experience.RestAnchorType;
+import com.noobk.spmscavenger.experience.RestCloseReason;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -82,9 +83,13 @@ public class SeekShelterGoal extends Goal {
     private boolean executionRunning;
     private BlockPos rejectedDestination;
     private long rejectedUntilTick;
+    private long nextUpgradeScanAt;
 
     private static final int SCAN_INTERVAL = 40;
     private static final int SCAN_PHASE_SALT = 11;
+    private static final int UPGRADE_SCAN_INTERVAL = 200;
+    private static final int MAX_DISCOVERED_DOORS = 8;
+    private static final int MAX_EXPOSED_BED_PATH_NODES = 2;
     /** startSleeping teleports the mob onto the bed, so only allow it from touching distance. */
     private static final double BED_REACH_SQR = 6.0;
 
@@ -99,13 +104,14 @@ public class SeekShelterGoal extends Goal {
     public boolean canUse() {
         ScavengerConfig cfg = ScavengerConfig.get();
         if (!baseAuthorityAllows(cfg)) {
-            cancelCommitment(true);
+            cancelCommitment(true, baseAuthorityCloseReason());
             return false;
         }
         Level level = mob.level();
         if (commitment != null) {
+            reconcileArrivedCondition(level.getGameTime());
             if (!validCommitment(cfg, level) || commitment.approachBudgetExhausted(level.getGameTime())) {
-                cancelCommitment(true);
+                cancelCommitment(true, RestCloseReason.VALIDITY_LOST);
                 return false;
             }
             return true;
@@ -118,17 +124,20 @@ public class SeekShelterGoal extends Goal {
         if (sheltered && !cfg.sleepInBeds) {
             return false;
         }
-        return search(cfg);
+        return search(cfg, null);
     }
 
     @Override
     public boolean canContinueToUse() {
         ScavengerConfig cfg = ScavengerConfig.get();
-        if (!baseAuthorityAllows(cfg)
-                || commitment == null
+        if (!baseAuthorityAllows(cfg)) {
+            cancelCommitment(true, baseAuthorityCloseReason());
+            return false;
+        }
+        if (commitment == null
                 || !validCommitment(cfg, mob.level())
                 || commitment.approachBudgetExhausted(mob.level().getGameTime())) {
-            cancelCommitment(true);
+            cancelCommitment(true, RestCloseReason.VALIDITY_LOST);
             return false;
         }
         return true;
@@ -138,6 +147,7 @@ public class SeekShelterGoal extends Goal {
     public void start() {
         executionRunning = true;
         if (commitment != null) {
+            reconcileArrivedCondition(mob.level().getGameTime());
             commitment.activate();
             if (commitment.state() != ShelterCommitment.State.ARRIVED && !mob.isSleeping()) {
                 requestFreshPath();
@@ -161,6 +171,7 @@ public class SeekShelterGoal extends Goal {
         if (commitment == null || mob.isSleeping()) {
             return; // asleep: nothing to do until canContinueToUse says otherwise
         }
+        reconcileArrivedCondition(mob.level().getGameTime());
         commitment.recordActiveApproachTick();
         if (commitment.approachBudgetExhausted(mob.level().getGameTime())) {
             abandonCurrentDestination();
@@ -175,11 +186,28 @@ public class SeekShelterGoal extends Goal {
         BlockPos standPos = commitment.destination();
         if (bedPos == null
                 && ShelterSelectionPolicy.arrivedAtStandingSite(mob.blockPosition(), standPos)) {
+            boolean alreadyArrived = commitment.state() == ShelterCommitment.State.ARRIVED;
+            if (alreadyArrived
+                    && commitment.shelterTier().ordinal()
+                            < ShelterSelectionPolicy.Tier.INTERIOR_ROOM.ordinal()
+                    && mob.level().getGameTime() >= nextUpgradeScanAt) {
+                nextUpgradeScanAt = mob.level().getGameTime() + UPGRADE_SCAN_INTERVAL;
+                ShelterSelectionPolicy.Tier currentTier = commitment.shelterTier();
+                if (search(ScavengerConfig.get(), currentTier)) {
+                    commitment.activate();
+                    requestFreshPath();
+                    return;
+                }
+            }
             commitment.arrive();
-            if (!commitment.restClaimOpened()) {
+            if (!alreadyArrived) {
                 RestSessionCoordinator.openShelterRecovery(
-                        mob, standPos, RestAnchorType.SHELTER_STAND, mob.level().getGameTime());
-                commitment.markRestClaimOpened();
+                        mob, commitment.commitmentId(), standPos,
+                        RestAnchorType.SHELTER_STAND, mob.level().getGameTime());
+                if (!commitment.restClaimOpened()) {
+                    commitment.markRestClaimOpened();
+                }
+                nextUpgradeScanAt = mob.level().getGameTime() + UPGRADE_SCAN_INTERVAL;
             }
             mob.getNavigation().stop(); // arrived; wait out the night
             return;
@@ -202,9 +230,10 @@ public class SeekShelterGoal extends Goal {
             mob.getNavigation().stop();
             mob.startSleeping(bedPos);
             commitment.arrive();
+            RestSessionCoordinator.openShelterRecovery(
+                    mob, commitment.commitmentId(), bedPos,
+                    RestAnchorType.SHELTER_BED, mob.level().getGameTime());
             if (!commitment.restClaimOpened()) {
-                RestSessionCoordinator.openShelterRecovery(
-                        mob, bedPos, RestAnchorType.SHELTER_BED, mob.level().getGameTime());
                 commitment.markRestClaimOpened();
             }
         } else {
@@ -239,7 +268,8 @@ public class SeekShelterGoal extends Goal {
     // ---- Searching --------------------------------------------------------
 
     /** Picks the best reachable semantic shelter in range, or leaves the goal unused. */
-    private boolean search(ScavengerConfig cfg) {
+    private boolean search(
+            ScavengerConfig cfg, ShelterSelectionPolicy.Tier minimumTierExclusive) {
         Level level = mob.level();
         BlockPos origin = mob.blockPosition();
         int r = (int) cfg.shelterSearchRadius;
@@ -252,6 +282,7 @@ public class SeekShelterGoal extends Goal {
         }
 
         List<ShelterSelectionPolicy.RawCandidate> rawCandidates = new ArrayList<>();
+        List<BlockPos> discoveredDoors = new ArrayList<>(MAX_DISCOVERED_DOORS);
 
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
@@ -268,6 +299,9 @@ public class SeekShelterGoal extends Goal {
                         continue;
                     }
                     BlockState state = level.getBlockState(pos);
+                    if (state.getBlock() instanceof DoorBlock) {
+                        recordNearestDoor(discoveredDoors, pos, origin);
+                    }
                     double distance = Math.sqrt(pos.distSqr(origin));
 
                     boolean isBed = cfg.sleepInBeds && state.is(BlockTags.BEDS) && claimable(pos, state);
@@ -286,7 +320,7 @@ public class SeekShelterGoal extends Goal {
 
         List<ShelterSelectionPolicy.RankedCandidate> ranked = new ArrayList<>();
         for (ShelterSelectionPolicy.RawCandidate raw :
-                ShelterSelectionPolicy.diverseShortlist(rawCandidates, r)) {
+                ShelterSelectionPolicy.diverseShortlist(rawCandidates, r, discoveredDoors)) {
             ShelterSelectionPolicy.Evidence evidence = interiorEvidence(level, raw.standPos());
             ranked.add(new ShelterSelectionPolicy.RankedCandidate(
                     raw,
@@ -296,44 +330,100 @@ public class SeekShelterGoal extends Goal {
 
         ShelterSelectionPolicy.PathProbeBudget pathProbeBudget =
                 new ShelterSelectionPolicy.PathProbeBudget();
-        for (ShelterSelectionPolicy.RankedCandidate candidate : ShelterSelectionPolicy.rank(ranked)) {
-            ShelterSelectionPolicy.RawCandidate raw = candidate.raw();
-            if (candidate.tier() == ShelterSelectionPolicy.Tier.EXPOSED
-                    || occupied(raw.standPos())
-                    || !ShelterReservationRegistry.available(
-                            mob.getUUID(), level.dimension(), raw.standPos(),
-                            ShelterReservationRegistry.DEFAULT_SPACING_RADIUS, now)) {
+        List<ShelterSelectionPolicy.RankedCandidate> ordered = ShelterSelectionPolicy.rank(ranked);
+        ShelterSelectionPolicy.RawCandidate currentRaw = new ShelterSelectionPolicy.RawCandidate(
+                origin, null, solidNeighbours(level, origin),
+                level.getBrightness(LightLayer.BLOCK, origin), 0.0);
+        ShelterSelectionPolicy.Evidence currentEvidence = interiorEvidence(level, origin);
+        boolean currentlyInterior = standable(level, origin)
+                && safeForMob(origin)
+                && ShelterSelectionPolicy.classify(false, currentEvidence)
+                        == ShelterSelectionPolicy.Tier.INTERIOR_ROOM;
+
+        if (currentlyInterior && cfg.sleepInBeds) {
+            for (ShelterSelectionPolicy.RankedCandidate candidate : ordered) {
+                if (candidate.raw().bed()
+                        && tryAdopt(candidate, pathProbeBudget, true, now)) {
+                    return true;
+                }
+            }
+        }
+        if (currentlyInterior) {
+            ShelterSelectionPolicy.RankedCandidate current = new ShelterSelectionPolicy.RankedCandidate(
+                    currentRaw, ShelterSelectionPolicy.Tier.INTERIOR_ROOM, currentEvidence);
+            if (tryAdopt(current, pathProbeBudget, false, now)) {
+                return true;
+            }
+        }
+        for (ShelterSelectionPolicy.RankedCandidate candidate : ordered) {
+            if (minimumTierExclusive != null
+                    && candidate.tier().ordinal() <= minimumTierExclusive.ordinal()) {
                 continue;
             }
-            if (!pathProbeBudget.tryAcquire()) {
+            if (tryAdopt(candidate, pathProbeBudget, false, now)) {
+                return true;
+            }
+            if (pathProbeBudget.exhausted()) {
                 break;
             }
-            Path path = mob.getNavigation().createPath(raw.standPos(), raw.bed() ? 1 : 0);
-            if (path == null || !path.canReach() || !pathStaysEntityTicking(path)) {
-                candidateRejections.reject(raw.standPos(), now);
-                continue;
-            }
-
-            UUID commitmentId = UUID.randomUUID();
-            if (!ShelterReservationRegistry.reserve(
-                    mob.getUUID(), commitmentId, level.dimension(), raw.standPos(),
-                    ShelterReservationRegistry.DEFAULT_SPACING_RADIUS, now)) {
-                continue;
-            }
-            if (raw.bed() && !tryClaim(raw.bedPos(), mob.getUUID(), now)) {
-                ShelterReservationRegistry.release(mob.getUUID(), commitmentId);
-                continue;
-            }
-            commitment = new ShelterCommitment(
-                    commitmentId,
-                    raw.standPos(),
-                    raw.bedPos(),
-                    candidate.tier(),
-                    mob.getUUID(),
-                    now);
-            return true;
         }
         return false;
+    }
+
+    private boolean tryAdopt(
+            ShelterSelectionPolicy.RankedCandidate candidate,
+            ShelterSelectionPolicy.PathProbeBudget pathProbeBudget,
+            boolean requireProtectedRoute,
+            long now) {
+        Level level = mob.level();
+        ShelterSelectionPolicy.RawCandidate raw = candidate.raw();
+        if (candidate.tier() == ShelterSelectionPolicy.Tier.EXPOSED
+                || occupied(raw.standPos())
+                || !ShelterReservationRegistry.available(
+                        mob.getUUID(), level.dimension(), raw.standPos(),
+                        ShelterReservationRegistry.DEFAULT_SPACING_RADIUS, now)) {
+            return false;
+        }
+        boolean alreadyThere = ShelterSelectionPolicy.arrivedAtStandingSite(
+                mob.blockPosition(), raw.standPos());
+        if (!alreadyThere) {
+            if (!pathProbeBudget.tryAcquire()) {
+                return false;
+            }
+            Path path = mob.getNavigation().createPath(raw.standPos(), 1);
+            if (path == null || !path.canReach() || !pathStaysEntityTicking(path)) {
+                candidateRejections.reject(raw.standPos(), now);
+                return false;
+            }
+            if (requireProtectedRoute && !pathStaysStructurallyProtected(path)) {
+                return false;
+            }
+        }
+        UUID commitmentId = UUID.randomUUID();
+        boolean claimedBed = raw.bed() && tryClaim(raw.bedPos(), mob.getUUID(), now);
+        if (raw.bed() && !claimedBed) {
+            return false;
+        }
+        if (!ShelterReservationRegistry.reserve(
+                mob.getUUID(), commitmentId, level.dimension(), raw.standPos(),
+                ShelterReservationRegistry.DEFAULT_SPACING_RADIUS, now)) {
+            if (claimedBed) {
+                releaseBedClaim(raw.bedPos(), mob.getUUID());
+            }
+            return false;
+        }
+        ShelterCommitment previous = commitment;
+        ShelterCommitment replacement = new ShelterCommitment(
+                commitmentId, raw.standPos(), raw.bedPos(), candidate.tier(), mob.getUUID(), now);
+        if (previous != null) {
+            if (previous.restClaimOpened()) {
+                RestSessionCoordinator.closeShelterRecovery(
+                        mob, previous.commitmentId(), RestCloseReason.VALIDITY_LOST, now);
+            }
+            release(previous);
+        }
+        commitment = replacement;
+        return true;
     }
 
     /** Free bed, not already occupied and not being walked toward by another mob. */
@@ -394,13 +484,15 @@ public class SeekShelterGoal extends Goal {
 
     /** Entity unload, dimension transfer, and death invalidate intent as well as static ownership. */
     public void cancelForOwnerRemoval() {
-        cancelCommitment(false);
+        cancelCommitment(false, RestCloseReason.CHUNK_UNLOAD);
     }
 
     /** Shared observer seam: approach is safety work; arrival/sleep is an actual rest condition. */
     public boolean isRestingAtShelter() {
         return mob.isSleeping()
-                || (commitment != null && commitment.state() == ShelterCommitment.State.ARRIVED);
+                || (commitment != null
+                        && commitment.state() == ShelterCommitment.State.ARRIVED
+                        && atCommittedAnchor());
     }
 
     static int bedClaimCount() {
@@ -434,14 +526,19 @@ public class SeekShelterGoal extends Goal {
         if (commitment == null) {
             return;
         }
-        ShelterReservationRegistry.release(commitment.claimant(), commitment.commitmentId());
-        if (commitment.bedPos().isPresent()) {
-            BlockPos bedPos = commitment.bedPos().orElseThrow();
-            Claim claim = CLAIMS.get(bedPos);
-            // Only drop a claim this mob actually owns — another mob may have taken it after expiry.
-            if (claim != null && claim.mob().equals(commitment.claimant())) {
-                CLAIMS.remove(bedPos, claim);
-            }
+        release(commitment);
+    }
+
+    private static void release(ShelterCommitment owned) {
+        ShelterReservationRegistry.release(owned.claimant(), owned.commitmentId());
+        owned.bedPos().ifPresent(bedPos -> releaseBedClaim(bedPos, owned.claimant()));
+    }
+
+    private static void releaseBedClaim(BlockPos bedPos, UUID claimant) {
+        Claim claim = CLAIMS.get(bedPos);
+        // Only drop a claim this mob actually owns — another mob may have taken it after expiry.
+        if (claim != null && claim.mob().equals(claimant)) {
+            CLAIMS.remove(bedPos, claim);
         }
     }
 
@@ -454,12 +551,13 @@ public class SeekShelterGoal extends Goal {
         if (commitment == null || executionRunning) {
             return;
         }
+        reconcileArrivedCondition(mob.level().getGameTime());
         ScavengerConfig cfg = ScavengerConfig.get();
         if (!baseAuthorityAllows(cfg)
                 || !validCommitment(cfg, mob.level())
                 || ShelterInterruptionPolicy.decide(observation.activeClasses())
                         == ShelterInterruptionPolicy.Decision.CANCEL) {
-            cancelCommitment(true);
+            cancelCommitment(true, interruptionCloseReason(observation));
             return;
         }
         commitment.suspend();
@@ -532,12 +630,20 @@ public class SeekShelterGoal extends Goal {
             rejectedDestination = commitment.destination();
             rejectedUntilTick = mob.level().getGameTime() + CLAIM_TICKS;
         }
-        cancelCommitment(true);
+        cancelCommitment(true, RestCloseReason.VALIDITY_LOST);
     }
 
     private void cancelCommitment(boolean deferRescan) {
+        cancelCommitment(deferRescan, RestCloseReason.VALIDITY_LOST);
+    }
+
+    private void cancelCommitment(boolean deferRescan, RestCloseReason closeReason) {
         if (commitment == null) {
             return;
+        }
+        if (commitment.restClaimOpened()) {
+            RestSessionCoordinator.closeShelterRecovery(
+                    mob, commitment.commitmentId(), closeReason, mob.level().getGameTime());
         }
         if (mob.isSleeping()) {
             mob.stopSleeping();
@@ -595,13 +701,40 @@ public class SeekShelterGoal extends Goal {
                 boundaries++;
             }
         }
-        int roofCoverage = level.canSeeSky(pos) ? 0 : 1;
+        int structuralRoofCoverage = 0;
+        int foliageRoofCoverage = 0;
+        RoofEvidence centerRoof = roofEvidence(level, pos);
+        structuralRoofCoverage += centerRoof == RoofEvidence.STRUCTURAL ? 1 : 0;
+        foliageRoofCoverage += centerRoof == RoofEvidence.FOLIAGE ? 1 : 0;
         for (Direction direction : Direction.Plane.HORIZONTAL) {
-            if (!level.canSeeSky(pos.relative(direction))) {
-                roofCoverage++;
+            RoofEvidence roof = roofEvidence(level, pos.relative(direction));
+            structuralRoofCoverage += roof == RoofEvidence.STRUCTURAL ? 1 : 0;
+            foliageRoofCoverage += roof == RoofEvidence.FOLIAGE ? 1 : 0;
+        }
+        return new ShelterSelectionPolicy.Evidence(
+                boundaries, structuralRoofCoverage, foliageRoofCoverage, doorClearance(level, pos));
+    }
+
+    private enum RoofEvidence { NONE, FOLIAGE, STRUCTURAL }
+
+    private static RoofEvidence roofEvidence(Level level, BlockPos pos) {
+        if (level.canSeeSky(pos)) {
+            return RoofEvidence.NONE;
+        }
+        for (int height = 2; height <= 6; height++) {
+            BlockState state = level.getBlockState(pos.above(height));
+            if (state.isAir()) {
+                continue;
+            }
+            if (state.is(BlockTags.LEAVES)) {
+                return RoofEvidence.FOLIAGE;
+            }
+            BlockPos roofPos = pos.above(height);
+            if (!state.getCollisionShape(level, roofPos).isEmpty()) {
+                return RoofEvidence.STRUCTURAL;
             }
         }
-        return new ShelterSelectionPolicy.Evidence(boundaries, roofCoverage, doorClearance(level, pos));
+        return RoofEvidence.STRUCTURAL;
     }
 
     /** Manhattan clearance from a doorway, bounded so semantic evaluation stays cheap. */
@@ -630,15 +763,17 @@ public class SeekShelterGoal extends Goal {
             BlockState lowerState = level.getBlockState(lower);
             BlockPos upper = lower.above();
             BlockState upperState = level.getBlockState(upper);
-            if (isBoundary(level, lower, lowerState) || isBoundary(level, upper, upperState)) {
+            if (isStructuralBoundary(level, lower, lowerState)
+                    && isStructuralBoundary(level, upper, upperState)) {
                 return true;
             }
         }
         return false;
     }
 
-    private static boolean isBoundary(Level level, BlockPos pos, BlockState state) {
-        return state.getBlock() instanceof DoorBlock || state.isSolidRender(level, pos);
+    private static boolean isStructuralBoundary(Level level, BlockPos pos, BlockState state) {
+        return state.getBlock() instanceof DoorBlock
+                || (!state.is(BlockTags.LEAVES) && state.isCollisionShapeFullBlock(level, pos));
     }
 
     private boolean occupied(BlockPos pos) {
@@ -659,5 +794,84 @@ public class SeekShelterGoal extends Goal {
             }
         }
         return true;
+    }
+
+    private boolean pathStaysStructurallyProtected(Path path) {
+        List<Boolean> protectedNodes = new ArrayList<>(path.getNodeCount());
+        for (int i = 0; i < path.getNodeCount(); i++) {
+            protectedNodes.add(roofEvidence(mob.level(), path.getNode(i).asBlockPos())
+                    == RoofEvidence.STRUCTURAL);
+        }
+        return ShelterSelectionPolicy.routeWithinExposureBudget(
+                protectedNodes, MAX_EXPOSED_BED_PATH_NODES);
+    }
+
+    private boolean atCommittedAnchor() {
+        if (commitment == null) {
+            return false;
+        }
+        if (commitment.bedPos().isPresent()) {
+            return mob.isSleeping();
+        }
+        return ShelterSelectionPolicy.arrivedAtStandingSite(
+                mob.blockPosition(), commitment.destination());
+    }
+
+    private void reconcileArrivedCondition(long now) {
+        if (commitment != null
+                && commitment.state() == ShelterCommitment.State.ARRIVED
+                && !atCommittedAnchor()) {
+            commitment.beginReturning(now);
+            if (commitment.restClaimOpened()) {
+                RestSessionCoordinator.suspendShelterRecovery(mob, commitment.commitmentId(), now);
+            }
+        }
+    }
+
+    private static RestCloseReason interruptionCloseReason(
+            ActivityObservationService.Observation observation) {
+        if (observation.activeClasses().contains(
+                com.noobk.spmscavenger.activity.ActivityClass.MANDATORY_COMBAT)) {
+            return RestCloseReason.COMBAT;
+        }
+        if (observation.activeClasses().contains(
+                com.noobk.spmscavenger.activity.ActivityClass.MANDATORY_COMMAND)) {
+            return RestCloseReason.PLAYER_ORDER;
+        }
+        return RestCloseReason.MANDATORY_WORK;
+    }
+
+    private static void recordNearestDoor(
+            List<BlockPos> doors, BlockPos candidate, BlockPos origin) {
+        BlockPos immutable = candidate.immutable();
+        if (doors.contains(immutable)) {
+            return;
+        }
+        if (doors.size() < MAX_DISCOVERED_DOORS) {
+            doors.add(immutable);
+            return;
+        }
+        int farthestIndex = 0;
+        double farthestDistance = origin.distSqr(doors.getFirst());
+        for (int i = 1; i < doors.size(); i++) {
+            double distance = origin.distSqr(doors.get(i));
+            if (distance > farthestDistance) {
+                farthestDistance = distance;
+                farthestIndex = i;
+            }
+        }
+        if (origin.distSqr(immutable) < farthestDistance) {
+            doors.set(farthestIndex, immutable);
+        }
+    }
+
+    private RestCloseReason baseAuthorityCloseReason() {
+        if (mob.getTarget() != null || mob.hurtTime > 0) {
+            return RestCloseReason.COMBAT;
+        }
+        if (PlayerMobs.stayAnchorState(mob) != PlayerMobs.StayAnchorState.ABSENT) {
+            return RestCloseReason.PLAYER_ORDER;
+        }
+        return RestCloseReason.VALIDITY_LOST;
     }
 }
