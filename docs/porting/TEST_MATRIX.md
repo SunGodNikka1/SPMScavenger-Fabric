@@ -108,7 +108,7 @@ deny-tagged block, and fire beginning mid-recovery. Minecraft execution requires
 | Check | Must happen | Must not happen | Evidence |
 |---|---|---|---|
 | Dark-area readability | SPM decision glyphs use `LightTexture.FULL_BRIGHT`; secondary lines use `#E6E6E6` | World block light makes nominally white text nearly black | `DecisionReadoutContrastTest.darkWorldLightCannotDimDecisionText` and `primaryStaysWhiteAndSecondaryBecomesLighter` `CONFIRMED`; in-game visual result `UNVERIFIED` |
-| Backdrop contrast | See-through plate has at least 50% alpha and preserves any stronger host/user alpha | A faint 25% plate disappears against complex scenery, or a stronger plate is weakened | `backdropHasAtLeastHalfOpacityButNeverGetsWeaker` `CONFIRMED` |
+| Backdrop ownership | SPM/Minecraft's original plate and user opacity pass through unchanged | Scavenger forces a darker plate or ignores the user setting | `backdropRemainsOwnedByTheHostAndUserSetting` `CONFIRMED`; post-repair shader visual `UNVERIFIED` |
 | Optional-host safety | Client-only `@Pseudo` Mixin uses `require=0`; packaged injection targets only SPM's renderer | Dedicated-server classloading or absence of SPM prevents startup | Clean build/package inspection `CONFIRMED`; absent-host runtime bootstrap `UNVERIFIED` |
 | Scope boundary | Host visibility, Creative-only gate, 24-block range, focus behavior, text, position, and Goal authority remain host-owned | Scavenger displays labels through walls or changes AI while repairing contrast | Injection changes only draw arguments; static inspection `CONFIRMED` |
 

@@ -13,8 +13,6 @@ public final class DecisionReadoutContrast {
 
     public static final int HOST_SECONDARY_TEXT = 0xFFBFBFBF;
     public static final int LIGHT_SECONDARY_TEXT = 0xFFE6E6E6;
-    public static final int SEE_THROUGH_TEXT = 0x80FFFFFF;
-    public static final int MIN_BACKGROUND_ALPHA = 0x80;
 
     private DecisionReadoutContrast() {
     }
@@ -25,18 +23,13 @@ public final class DecisionReadoutContrast {
     }
 
     public static int textColor(int original, boolean seeThrough) {
-        if (seeThrough) {
-            return SEE_THROUGH_TEXT;
-        }
+        // The translucent pass and its user-controlled backdrop remain entirely host-owned.
+        if (seeThrough) return original;
         return original == HOST_SECONDARY_TEXT ? LIGHT_SECONDARY_TEXT : original;
     }
 
-    /** Raise a faint host plate to 50% opacity, but never darken a stronger user-selected plate. */
+    /** Never override SPM/Minecraft's user-controlled background plate. */
     public static int backgroundColor(int original, boolean seeThrough) {
-        if (!seeThrough) {
-            return original;
-        }
-        int alpha = Math.max((original >>> 24) & 0xFF, MIN_BACKGROUND_ALPHA);
-        return (alpha << 24) | (original & 0x00FFFFFF);
+        return original;
     }
 }

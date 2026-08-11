@@ -22,17 +22,15 @@ class DecisionReadoutContrastTest {
     }
 
     @Test
-    void backdropHasAtLeastHalfOpacityButNeverGetsWeaker() {
-        assertEquals(0x80000000, DecisionReadoutContrast.backgroundColor(0x40000000, true));
+    void backdropRemainsOwnedByTheHostAndUserSetting() {
+        assertEquals(0x40000000, DecisionReadoutContrast.backgroundColor(0x40000000, true));
         assertEquals(0xC0000000, DecisionReadoutContrast.backgroundColor(0xC0000000, true));
         assertEquals(0, DecisionReadoutContrast.backgroundColor(0, false));
     }
 
     @Test
-    void seeThroughPassIsReadableAndUnrelatedSolidColorsRemainOwnedByHost() {
-        assertEquals(
-                DecisionReadoutContrast.SEE_THROUGH_TEXT,
-                DecisionReadoutContrast.textColor(0x20FFFFFF, true));
+    void seeThroughAndUnrelatedSolidColorsRemainOwnedByHost() {
+        assertEquals(0x20FFFFFF, DecisionReadoutContrast.textColor(0x20FFFFFF, true));
         assertEquals(0xFF55AA55, DecisionReadoutContrast.textColor(0xFF55AA55, false));
     }
 }
