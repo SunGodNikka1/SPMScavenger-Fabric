@@ -23,13 +23,16 @@ public record MobExperienceSnapshot(
         int ticksSinceMeaningfulProgress,
         Map<ActivityKind, ActivityOpinionMemory.Snapshot> activityOpinions,
         Map<Long, Float> placePreferences,
+        Map<UUID, Float> entityPreferences,
         long parkedAtGameTime) {
 
     public MobExperienceSnapshot {
         Objects.requireNonNull(mobId, "mobId");
         Objects.requireNonNull(activityOpinions, "activityOpinions");
         Objects.requireNonNull(placePreferences, "placePreferences");
+        Objects.requireNonNull(entityPreferences, "entityPreferences");
         activityOpinions = Map.copyOf(activityOpinions);
         placePreferences = Map.copyOf(placePreferences);
+        entityPreferences = Map.copyOf(entityPreferences);
     }
 }

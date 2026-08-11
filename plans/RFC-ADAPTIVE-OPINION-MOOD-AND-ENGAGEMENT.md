@@ -8,14 +8,14 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
-| **Mode** | `VALIDATION` — static implementation complete; runtime frontier open |
-| **Status** | GAO-0 through GAO-5 + GAO-4.1 `IMPLEMENTED / STATIC VERIFIED` (548 tests at last green build); runtime `UNVERIFIED` |
+| **Mode** | `VALIDATION` — GAO-0…6 static complete; runtime reserved for `RUNTIME_QUESTION` only |
+| **Status** | GAO-0 through GAO-6 + GAO-4.1 + **RET-GAO-1** `IMPLEMENTED / STATIC ACCEPT` (569 tests); not a blanket runtime gate |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-10 (GAO-4.1 + GAO-5 + RT-GAO minimal static sanity) |
+| **Last update** | 2026-08-10 (Task 37: GAO-6 ENTITY bridge; Tasks 35–36 RET-GAO-1 + GAO-5B) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,10 +39,9 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** **RT-GAO-1** — full Minecraft runtime falsification of GAO-M1…M12 and
-**GAO-PARITY** (`opinion.enabled` off). Static **RT-GAO minimal** sanity (`RtGaoMinimalSanityTest`)
-passed; **GAO-THRESHOLD** static leg `CONFIRMED` via GAO-4.1 wiring; runtime threshold behavior
-`UNVERIFIED`. Next feature phase: **GAO-6** ENTITY bridge or expanded GAO-5 heading bias.
+**Nearest frontier:** **GAO-7** PersonalityModel — ENTITY bridge **static ACCEPT** (Task 37). Runtime is **not** the default validation gate;
+escalate only for `RUNTIME_QUESTION`s (navigation, SPM goal contention, modpack perf). See
+**PD-GAO-12** and Topic: Validation.
 
 ---
 
@@ -529,7 +528,7 @@ ExperienceEvent {
   float stressDelta;
   float noveltyDelta;
   Optional<ActivityKind> activity;   // ACTIVITY opinions only in GAO-2
-  Optional<BlockPos> place;          // GAO-5
+  Optional<BlockPos> place;          // GAO-5 — schema field; consumer is GAO-5B route ranker, not EXPLORE utility
   Optional<UUID> entity;             // GAO-6 — utility only, not relationship authority
 }
 ```
@@ -911,7 +910,7 @@ Behavior communicates state without chat bubbles:
 
 ## Topic: SPM compatibility bridge
 
-**Status:** `PROPOSED` — **non-negotiable gate**
+**Status:** `IMPLEMENTED` (GAO-6 MVP) — read-only bridge + supplemental memory; full SOCIAL discretionary scoring deferred
 
 ### SPM owns (do not duplicate)
 
@@ -925,6 +924,7 @@ Behavior communicates state without chat bubbles:
 - AffectiveState (boredom, engagement, stress, …)
 - `DiscretionaryActivityDirector`
 - `SPMOpinionBridge` — maps SPM social state → activity utility; **never** second permanent friendship counter
+  (**shipped as `SpmEntityOpinionBridge`** — read-only `feelingToward`; supplemental `EntityOpinionMemory`)
 
 ```text
 SPM feelingToward(Bob) + recent contextual experience
@@ -1181,7 +1181,7 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 through GAO-4 `IMPLEMENTED / STATIC VERIFIED`; **RT-GAO-1** is nearest frontier
+**Status:** GAO-0 through GAO-6 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-7+ open
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
@@ -1193,9 +1193,11 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-3** | `IdleOpportunityPolicy` | **IMPLEMENTED:** EXPLORE + REST utility scoring, normalized components, ranked `ScoringResult`, no execution | GAO-2, existing goals |
 | **GAO-4** | `DiscretionaryActivityDirector` | **IMPLEMENTED:** intent lifecycle, abstention, voluntary yield, consumer gates, trace, explore adoption control plane | GAO-3 |
 | **GAO-4.1** | PD-GAO-01 C threshold wiring | **IMPLEMENTED:** `ExploreIdleThresholdPolicy`, `ExploreReadinessThresholds`; wired in `ExplorationActivityGoal` + `ExploringGoal` | GAO-4, GAO-1 |
-| **RT-GAO-1** | Runtime validation matrix | **STATIC MINIMAL DONE** (`RtGaoMinimalSanityTest`); full GAO-M1…M12 probes require launch approval | GAO-4.1, GAO-5 |
-| **GAO-5** | PLACE / ENVIRONMENT opinions | **IMPLEMENTED (MVP):** `PlaceOpinionMemory`, `PlaceOpinionService`, EXPLORE utility term; mining terminals wired | GAO-4 |
-| **GAO-6** | ENTITY bridge | SPM `feelingToward` integration | GAO-4 |
+| **GAO-5** | PLACE memory + learning | **IMPLEMENTED:** `PlaceOpinionMemory`, `PlaceOpinionService`, mining terminal hooks | GAO-4 |
+| **GAO-5B** | PLACE destination ranking | **IMPLEMENTED:** `PlaceOpinionRouteRanker`; `ExploringGoal` route score; current-position PLACE removed from `ActivityUtilityScorer` | GAO-5, RET-GAO-1 |
+| **RET-GAO-1** | Registry lifetime | **IMPLEMENTED / STATIC ACCEPT:** live + frozen snapshot store (128 LRU + TTL sweep-on-park); `parkOnUnload`/`resumeOnLoad` | GAO-0c |
+| **RT-GAO-1** | Targeted runtime falsification | **NARROWED** — not a default feature gate; file `RUNTIME_QUESTION` probes only | PD-GAO-12 |
+| **GAO-6** | ENTITY bridge | **IMPLEMENTED:** `SpmEntityOpinionBridge`, `EntityOpinionMemory`, `EntityOpinionService`, `socialCompanionJoined` emitter; snapshot + death lifecycle | GAO-4, RET-GAO-1 |
 | **GAO-7** | PersonalityModel | Trait-weighted experience scaling | GAO-2 |
 | **GAO-8** | Observable expression | Movement/scan biases | GAO-4, deferred UX |
 
@@ -1387,6 +1389,7 @@ companion coordination—not competing activity semantics.
 | **PD-GAO-09** | `LOCKED` | Who may start discretionary Explore/Rest when `opinion.enabled`? | legacy `canUse` / **adopted intent only** | **`opinion.enabled=true`:** discretionary `CampfireGoal` REST and discretionary `ExploringGoal` expedition start require an **adopted** matching intent; **`opinion.enabled=false`:** legacy parity unchanged |
 | **PD-GAO-10** | `LOCKED (direction)` | Switch/hold policy | rescore every tick / **commitment + switch margin** | **Adoption-anchored minimum commitment** + meaningful switch margin before incumbent yields; exact ticks tuned in implementation |
 | **PD-GAO-11** | `LOCKED` | REST executor for discretionary choice | Campfire / SeekShelter / both | **Campfire + `RestSessionClaim` only** — `SeekShelterGoal` (p2 safety) is never the discretionary REST executor |
+| **PD-GAO-12** | `LOCKED` | When is runtime required vs static ACCEPT? | runtime default gate / static-first / hybrid | **Static-first:** `CODE + TESTS + MAIBS` → confident → **ACCEPT STATIC**; runtime only when uncertainty is Minecraft engine, SPM `GoalSelector`, mod interaction, or perf/heap — not utility arithmetic |
 
 #### PD-GAO-03 death semantics (`LOCKED` — GAO-2)
 
@@ -1422,8 +1425,40 @@ in-memory learning plus runtime death reset only.
 | **GAO-ATTRIBUTION** | Episode IDs and outcome classes prevent interrupt, command, frontier, and event-frequency mislearning |
 | **GAO-TRACE** | Bounded per-mob trace covers candidates/scores → intent → claim → yield/handoff → executor admission/start → exact terminal cause |
 | **MAIBS-1** | Multi-minute discretionary sessions look human-plausible (explore → rest → socialize → return) |
+| **AV-STATIC** | Utility math, parity paths, registry lifetime, and route-bias arithmetic provable from code + deterministic tests without launch |
 
-### MAIBS discretionary scenarios (`STATIC VERIFIED` where noted; runtime `UNVERIFIED`)
+### Static acceptance workflow (`LOCKED`, PD-GAO-12)
+
+```text
+CODE + TESTS + MAIBS
+        ↓
+Can behavior be determined confidently?
+       YES → ACCEPT STATIC
+       NO  → Is uncertainty caused by Minecraft / SPM / mod interaction?
+              YES → TARGETED RUNTIME TEST (narrow RUNTIME_QUESTION)
+              NO  → Improve code / static analysis / tests
+```
+
+**Static ACCEPT (`CONFIRMED` — Tasks 34–36, 556 tests):**
+
+| Claim | Evidence |
+| --- | --- |
+| GAO-PARITY paths | `OpinionFeatureGate`; opinion-off director/scorer; zero `PlaceOpinionRouteRanker` bias |
+| GAO-5B route arithmetic | `PlaceOpinionRouteRankerTest`; ±15 cap; -100 anti-fixation dominates in `ExploringGoal` scoring stack |
+| GAO-5A inversion removed | No current-position PLACE in `ActivityUtilityScorer.scoreExplore` |
+| RET-GAO-1 lifecycle | `OpinionExperienceRegistryRetentionTest`; `parkOnUnload`/`resumeOnLoad` wired in `SpmScavenger` |
+| PD-GAO-01 C threshold | `ExploreIdleThresholdPolicyTest`, `ExploreReadinessThresholds` |
+
+**Legitimate `RUNTIME_QUESTION`s (not checklist launches):**
+
+| Class | Example |
+| --- | --- |
+| Navigation engine | `PathNavigation.createPath` success/fail on real geometry |
+| SPM goal contention | Dynamic `GoalSelector` state another mod injects |
+| Physical AI sequences | Cave handoff, tunneling, descent interruption/rejoin |
+| Perf / heap | Modpack TPS, registry growth under real session churn |
+
+### MAIBS discretionary scenarios (`STATIC VERIFIED` where noted)
 
 | ID | Setup | Must happen | Must not |
 | --- | --- | --- | --- |
@@ -1432,7 +1467,7 @@ in-memory learning plus runtime death reset only.
 | **GAO-M3** | Safe night, campfire active, CONTENT | REST; boredom rises slowly | Instant expedition |
 | **GAO-M4** | 8 min straight `TrackedLocalWanderGoal` | Boredom → `DiscretionaryIntent(EXPLORE)` | Permanent wander loop |
 
-_Static note:_ director path `CONFIRMED` in unit tests; PD-GAO-01 C threshold modulation `UNVERIFIED`.
+_Static note:_ director path `CONFIRMED` in unit tests; PD-GAO-01 C threshold `STATIC VERIFIED` (`ExploreIdleThresholdPolicyTest`). Full minute-table plausibility is MAIBS `INFERRED`; not a default runtime gate per PD-GAO-12.
 | **GAO-M5** | Diamond NEED + cave handoff + high `Opinion(CAVE)` | Prefer explore handoff over tunnel when both legal | Clairvoyant ore scan |
 | **GAO-M6** | `DiscretionaryIntent(EXPLORE)` issued; combat target appears tick+1 | Intent invalidated; attack runs | Delayed explore after fight |
 | **GAO-M7** | Adopted REST intent reaches fire; `CampfireGoal` reaches 200-tick cap | Matching arrival-bound claim keeps REST active | Post-arrival mob immediately becomes bored/Explore |
@@ -1440,28 +1475,31 @@ _Static note:_ director path `CONFIRMED` in unit tests; PD-GAO-01 C threshold mo
 | **GAO-M9** | Explore route meets simulation frontier | Temporary confidence/cooldown only | Long-term dislike of exploration |
 | **GAO-M10** | Two mobs reach discretionary threshold on same tick | Deterministic staggering; reserve exclusive positions/targets, but permit explicit cooperative alignment | Accidental lockstep oscillation or both claim the same exclusive spot |
 | **GAO-M11** | Unknown Goal remains running without progress for minutes | Slow restlessness rises while scheduler remains occupied and non-preemptible; owning lifecycle controls release | Frozen affect or Opinion preempting unknown authority |
-| **GAO-M12** | REST selected, then entity unloads for days | Affect/opinion freeze; intent/claim are invalidated; current state is rescored on load | Ancient intent or stale campfire claim resurrects |
+| **GAO-M12** | REST selected, then entity unloads for days | Affect/opinion freeze; intent/claim invalidated; snapshot park on unload; rescored on load | Ancient intent or stale campfire claim resurrects |
 
-Runtime probes require separate Minecraft launch approval.
+Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manual reload adds confidence only; not required to accept feature per PD-GAO-12.
 
-### RT-GAO-1 — runtime validation frontier (`OPEN`)
+### RT-GAO-1 — targeted runtime (`NARROWED`, PD-GAO-12)
 
-**Status:** `OPEN` — static GAO-0…4 complete; no approved launch in this mission
+**Status:** `NARROWED` — not a blanket launch gate. File a `RUNTIME_QUESTION` with a single falsification probe when static evidence is insufficient.
 
-| Priority | Probe | Gate | Evidence class |
-| ---: | --- | --- | --- |
-| 1 | `opinion.enabled=false` — wander, explore readiness, mining, SPM social unchanged | **GAO-PARITY** | runtime log + observation |
-| 2 | `opinion.enabled=true` — bored mob adopts REST or EXPLORE; no follow/combat preemption | **GAO-M2**, **GAO-M6**, **GAO-HIERARCHY** | multi-minute session |
-| 3 | Campfire arrival → claim survives delivery stop → voluntary REST→EXPLORE handoff | **GAO-M7**, **GAO-REST-LIFECYCLE** | trace + observation |
-| 4 | Iron NEED active while `Opinion(MINING)` negative | **GAO-M1**, **GAO-COMPETENCE** | progression unchanged |
-| 5 | Config toggle / unload / reload | **GAO-M12**, PD-GAO-07 | freeze + invalidation |
+| Former probe | Static disposition | Runtime when |
+| --- | --- | --- |
+| GAO-PARITY (`opinion.enabled=false`) | **ACCEPT STATIC** — gated call graph + tests | SPM/mod interaction suspected |
+| GAO-5B place bias at equal routes | **ACCEPT STATIC** — arithmetic in `PlaceOpinionRouteRankerTest` | Mob fails to path away despite winning route (`RUNTIME_QUESTION`) |
+| RET-GAO-1 unload/reload | **ACCEPT STATIC** — registry tests + event wiring | Fabric lifecycle diverges from API contract (unlikely) |
+| GAO-M2/M6 combat hierarchy | Partial static; hierarchy code `CONFIRMED` | SPM goal injection changes live selector |
+| GAO-M7 REST lifecycle | Partial static; claim code `CONFIRMED` | Physical campfire arrival/delivery sequence |
+| GAO-M1 competence | Static policy `CONFIRMED` | Regression under real NEED + mining stack |
 
-**Pre-launch static gaps (optional, not blocking RT):**
+**Pre-launch static gaps (closed):**
 
 | Gap | Status |
 | --- | --- |
-| PD-GAO-01 C — boredom modulates `exploreIdleTicks` | **IMPLEMENTED** — GAO-4.1; max boredom @600 base → 375 ticks (`ExploreIdleThresholdPolicyTest`) |
-| GAO-THRESHOLD gate | **STATIC VERIFIED** — ranking + threshold wiring; runtime `UNVERIFIED` |
+| PD-GAO-01 C — boredom modulates `exploreIdleTicks` | **IMPLEMENTED** — GAO-4.1 |
+| GAO-5B heading consumer | **IMPLEMENTED** — expedition destination ranking |
+| RET-GAO-1 outer registry | **IMPLEMENTED** — bounded live + frozen store (Task 35) |
+| GAO-5A semantic inversion | **FIXED** — PLACE removed from EXPLORE utility (Task 36) |
 | Episode RET-1b tombstones | **IMPLEMENTED** — `EpisodeRetentionTest` |
 | Cold-path context allocation (PERF 0B) | **IMPLEMENTED** — task-31 |
 
@@ -1481,24 +1519,23 @@ Runtime probes require separate Minecraft launch approval.
 
 **Weirdness watch:** SPM `WaterAvoidingRandomStrollGoal` (pri 8) and addon `TrackedLocalWanderGoal` (pri 9) may alternate; both count as idle — boredom should not reset on handoff between them.
 
-### MAIBS post-implementation — GAO-4.1 + GAO-5 (`task-34-maibs-report.md`)
+### MAIBS post-implementation — GAO-4.1 + GAO-5 + RET-GAO-1 + GAO-5B (`task-34-maibs-report.md`, Tasks 35–36)
 
-**Date:** 2026-08-10 **Revised:** 2026-08-10 (peer review) **Type:** semantic-drift review (post task-34)
+**Date:** 2026-08-10 **Revised:** 2026-08-10 (Tasks 35–36; static acceptance per PD-GAO-12)
 
-**Gate result:** `CONDITIONAL — BEHAVIORALLY PLAUSIBLE, RET-1 BLOCKED` (runtime `UNVERIFIED`)
+**Gate result:** `STATIC ACCEPT` for core GA-OPINION discretionary slice; `RUNTIME_QUESTION` only for engine/SPM/perf
 
 | Finding | Classification |
 | --- | --- |
-| GAO-4.1 mechanics wired correctly; max boredom @600 base → 375 idle ticks | `CODE_CONFIRMED` — **PASS** |
+| GAO-4.1 mechanics wired; max boredom @600 base → 375 idle ticks | `CODE_CONFIRMED` — **PASS** |
 | GAO-4.1 weak in normal idle ramp (readiness ~30s; boredom intent ~3–4 min) | `CODE_CONFIRMED` — non-binding |
-| `exploreAdoptionReady` true at ~30s while director intent waits for boredom | `CODE_CONFIRMED` |
 | Inner `PlaceOpinionMemory` 32-chunk LRU | `CODE_CONFIRMED` — **PASS** |
-| Outer `OpinionExperienceRegistry.CONTEXTS` session-unbounded; `remove()` unwired | **`RET-1 FAIL`** |
-| GAO-5 current-chunk dislike **lowers EXPLORE** while mob still on site | **`ARCHITECTURE_DEFECT`** (avoidance semantics) |
-| No heading/route consumer for place memory | `PARTIAL` — GAO-5B deferred |
-| Mandatory mining not hooked to place memory | `INFERRED` |
+| Outer `OpinionExperienceRegistry` bounded live + frozen (128 LRU) | **`RET-1 PASS`** — Task 35 |
+| GAO-5A current-chunk PLACE in EXPLORE utility | **REMOVED** — Task 36 |
+| GAO-5B destination ranking (±15 vs -100 anti-fixation) | **`CODE_CONFIRMED` — PASS** |
+| `DescentHeadingPolicy` place tie-break | **DEFERRED** — documented in `PlaceOpinionRouteRanker` |
 
-**Fix order:** (1) `OpinionExperienceRegistry` lifetime, (2) GAO-5B heading consumer, (3) RT-GAO-1.
+**Fix order (completed):** (1) `OpinionExperienceRegistry` lifetime ✅ (2) GAO-5B heading consumer ✅ (3) RT-GAO-1 narrowed per PD-GAO-12 ✅
 
 **Updated GAO-M4 minute table (threshold leg now wired):**
 
@@ -1511,7 +1548,7 @@ Runtime probes require separate Minecraft launch approval.
 | 6–8 | Directed travel; novelty/engagement rise |
 | 9+ | Cooldown / return wander |
 
-**Must-not-happen (still):** Permanent wander with opinion on and rising boredom — falsify with RT-GAO-1 probe 2.
+**Must-not-happen (static):** Permanent wander because current-chunk PLACE lowers EXPLORE — **disproven** (PLACE removed from utility). Permanent wander from boredom/director failure remains a `RUNTIME_QUESTION` only if static path is challenged.
 
 ---
 
@@ -1567,6 +1604,7 @@ Runtime probes require separate Minecraft launch approval.
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-10 | Agent_Cursor | **Tasks 35–36 + PD-GAO-12.** RET-GAO-1 bounded registry; GAO-5B destination ranking; static acceptance workflow; RT-GAO-1 narrowed; 556 tests; MAIBS post-impl reconciled |
 | 2026-08-10 | Agent_Cursor | **GAO-4.1 + GAO-5 + RT-GAO minimal** — threshold wiring, PLACE opinion MVP, static sanity tests; 548 tests/clean build; runtime unverified |
 | 2026-08-10 | Agent_Cursor | **Post-GAO-4 continuation** — mode VALIDATION; RT-GAO-1 frontier; GAO-4.1 gap; GAO-5 planning topic |
 | 2026-08-09 | Agent_Cursor | **GAO-1 + PD-GAO-01…04 lock.** User locked product decisions; implemented `AffectiveState`, `AffectiveStateService`, `AffectiveRates`, `OpinionFeatureGate`, `opinion.enabled` config; wired 10-tick observation + `onAffectPulse`; freeze-on-unload (PD-GAO-07); scenario tests; full suite pass; no activity choice, OpinionMemory, or runtime launch |
@@ -2436,51 +2474,175 @@ GAO-4 static frontier closed — next evidence is runtime validation.
 **Experience substrate static frontier closed** — episode open/close boundaries, start-time ownership,
 and explore terminal ownership verified statically; runtime `UNVERIFIED`.
 
-**Not delivered:** runtime launch, disk persistence, ENTITY opinions, PersonalityModel,
-heading-specific GAO-5 route bias.
+**Not delivered:** disk persistence, ENTITY opinions, PersonalityModel,
+`DescentHeadingPolicy` place tie-break (deferred; primitive documented).
 
-**Frontier after:** **RT-GAO-1** full runtime matrix; optional GAO-6 ENTITY bridge.
+**Frontier after:** **GAO-6** ENTITY bridge or **GAO-7** PersonalityModel; runtime only on filed `RUNTIME_QUESTION`.
 
 ---
 
-## Topic: GAO-5 — PLACE opinion (`PLANNING`)
+## Topic: GAO-5 / GAO-5B — PLACE opinion (`IMPLEMENTED / STATIC ACCEPT`)
 
-**Status:** `IMPLEMENTED / STATIC VERIFIED` — MVP shipped 2026-08-10; runtime `UNVERIFIED`
+**Status:** `IMPLEMENTED / STATIC ACCEPT` — Tasks 34–36; 556 tests
 
-**Why now (B-24):** MI-14 Loop C (`SEARCH_BUDGET_EXHAUSTED` at an exhausted site) was deferred to
-"MiningMemory". GAO-5 is that consumer: learned place opinions that bias *whether to return* vs
-*seek a new heading*, without clairvoyant ore knowledge.
+**Why (B-24):** MI-14 Loop C (`SEARCH_BUDGET_EXHAUSTED`) deferred to place memory — learned opinions bias
+*where to go*, not mandatory admission.
 
-**Minimum viable GAO-5 (`PROPOSED`):**
+### GAO-5A — memory + learning (Task 34)
 
 ```text
-PlaceOpinionMemory (chunk or BlockPos anchor, bounded LRU)
+PlaceOpinionMemory (chunk LRU, max 32)
         ↑
-ExperienceEvent terminals: CAVE_FOUND, DEMAND_SATISFIED, SEARCH_BUDGET_EXHAUSTED, NO_PROGRESS
+PlaceOpinionService ← mining terminals (CAVE_FOUND, NO_PROGRESS, …)
         ↓
-Utility modifier on discretionary EXPLORE heading / MI re-descent admission (soft only)
+ExperienceEmitters.miningTerminal
 ```
 
-**Must happen:** Repeat `NO_PROGRESS` at same anchor reduces return utility; `CAVE_FOUND` increases it.
+**Delivered:** `PlaceOpinionMemory`, `PlaceOpinionService`, death clear via `OpinionExperienceRegistry.onDeath`.
 
-**Must not happen:** Place dislike vetoes mandatory `WorkDemandPolicy` or MI-14 assignment.
+**Removed (Task 36):** current-position `placeAnchor` in `ActivityUtilityScorer` — caused semantic inversion.
 
-**Delivered (static `CONFIRMED`):**
+### GAO-5B — destination ranking (Task 36)
 
-- `PlaceOpinionMemory` — chunk-keyed LRU (max 32), preference −100…+100
-- `PlaceOpinionService` — mining terminal deltas (`CAVE_FOUND` +18, `NO_PROGRESS` −14, …)
-- `ExperienceEmitters.miningTerminal` → place learning hook
-- `DiscretionaryScoringInput.placeAnchor` + `ActivityUtilityScorer` `PLACE_PREFERENCE` term
-- Death clears place memory via `OpinionExperienceRegistry.onDeath`
-- Tests: `PlaceOpinionMemoryTest`, `PlaceOpinionServiceTest`, `PlaceOpinionScoringTest`
+```text
+ExploringGoal route candidates (8)
+        ↓
+existing score (novelty, anti-fixation, interest)
+        +
+PlaceOpinionRouteRanker.routeBias(final waypoint)  →  ±15 max
+```
 
-**Deferred:** heading-specific explore route bias; MI re-descent admission modifier; disk persistence.
+**Route scoring stack (`CONFIRMED` — `ExploringGoal.createExpedition`):**
 
-**MAIBS (`CODE_CONFIRMED`, runtime `UNVERIFIED`):** Inner place LRU bounded; outer `CONTEXTS` map
-**RET-1 FAIL**. Current-chunk utility inverts avoidance semantics until GAO-5B. See
-`task-34-maibs-report.md`.
+| Term | Range |
+| --- | ---: |
+| Random variation | 0..19 |
+| Recent heading | −35 |
+| Recent visited region | −20 |
+| Recent expedition destination | **−100** |
+| PLACE opinion | **−15..+15** |
 
-**Depends on:** GAO-4 live; **RET-GAO-1** registry lifetime fix before GAO-5B; optional MI spatial anchor.
+Favorite place can win a tie; cannot overpower −100 anti-fixation.
+
+**Must happen:** Negative destination preference lowers that route's rank vs equal neutral candidate.
+
+**Must not happen:** PLACE vetoes mandatory work; lowers EXPLORE utility at current chunk; unbounded path probes.
+
+**Tests:** `PlaceOpinionMemoryTest`, `PlaceOpinionServiceTest`, `PlaceOpinionRouteRankerTest`.
+
+**Deferred:** `DescentHeadingPolicy` soft tie-break (same primitive); intermediate-waypoint dislike; disk persistence.
+
+---
+
+## Topic: RET-GAO-1 — registry lifetime (`IMPLEMENTED / STATIC ACCEPT`)
+
+**Status:** Task 35 — `STATIC ACCEPT`
+
+```text
+LIVE_CONTEXTS (loaded mob)
+        ↓ parkOnUnload
+prepareForUnloadPark() → MobExperienceSnapshot
+        ↓
+FrozenContextStore (max 128 LRU; TTL eligible on park sweep)
+        ↓ resumeOnLoad / contextFor
+rehydrated MobExperienceContext
+```
+
+**Ephemeral (discarded on park):** episodes, REST claims, director intent, tombstones.
+
+**Snapshot (survives ordinary unload):** affect, `OpinionMemory`, `PlaceOpinionMemory`, `EntityOpinionMemory` (session MVP).
+
+**Wiring:** `SpmScavenger` `ENTITY_UNLOAD` → `parkOnUnload`; `ENTITY_LOAD` → `resumeOnLoad`.
+
+**Tests:** `OpinionExperienceRegistryRetentionTest`.
+
+**Minor note:** `placeMemoryForRouteRanking()` may alloc empty `PlaceOpinionMemory` when no context — ephemeral, not RET-1.
+
+---
+
+---
+
+## Topic: GAO-6 — ENTITY bridge (`IMPLEMENTED / STATIC ACCEPT`)
+
+**Status:** Task 37 — `STATIC ACCEPT` — 569 tests
+
+```text
+PlayerMobs.feelingToward (read-only, SPM authority)
+        ↓
+SpmEntityOpinionBridge.feelingChannel / travelsTogether
+        ↓
+EntityOpinionMemory (supplemental LRU, max 16) ← EntityOpinionService
+        ↑
+ExperienceEmitters.socialCompanionJoined ← ExploringGoal.inviteCompanions
+```
+
+**Delivered:**
+
+- `SpmEntityOpinionBridge` — SPM 0–10 → opinion scale; mutual-above-neutral companion gate; `utilitySupplement` (±12 max, 75% SPM / 25% learned) for future SOCIAL scoring.
+- `EntityOpinionMemory` — bounded supplemental affinity; snapshot + death clear (mirrors PLACE).
+- First production `ExperienceEvent.entity` emitter: `SOCIAL_EXPEDITION` on companion invite (+8 learned delta).
+
+**Must happen:** SPM read-only; supplemental memory never overrides `feelingToward`.
+
+**Must not happen:** SPM ledger writes; entity opinion vetoes mandatory work; SOCIAL discretionary director in this slice.
+
+**Deferred:** `SOCIAL_INTERACTION` emitters (greet/follow); SOCIAL discretionary activity; runtime SPM reflection proof.
+
+**Tests:** `EntityOpinionMemoryTest`, `SpmEntityOpinionBridgeTest`, `EntityOpinionServiceTest`; retention test entity round-trip.
+
+### MAIBS-1 (post-impl, 2026-08-10)
+
+**Gate:** `CONDITIONAL — ACCEPTABLE_STEPPING_STONE` (movement/social invite loop) + **`ARCHITECTURE_DEFECT`** (episode ownership)
+
+**Physical loop (`CODE_CONFIRMED`):** GAO-6 does not change navigation, waypoint scoring, or companion lateral geometry. Companion invite still fires once at `PlanResult.READY`; eligibility still mutual-above-neutral SPM `feelingToward`. Player sees 0–4 parallel walkers on the same heading — same as pre-GAO-6 movement.
+
+**Semantic drift (`ARCHITECTURE_DEFECT`):** `socialCompanionJoined` reuses `expeditionEpisodeId` but `SOCIAL_EXPEDITION` is terminal (`EpisodeBoundaryPolicy`). First companion invite **closes** the expedition episode while the walk continues → `EXPEDITION_END` terminal learning/affect for that expedition is swallowed. Second+ companions still get `EntityOpinionService +8` (called outside pipeline) but not second affect pulses.
+
+**Dead path (`ACCEPTABLE_STEPPING_STONE`):** `utilitySupplement` has no production consumer — no discretionary SOCIAL scoring yet.
+
+**Runtime probes:** companion invite log; solo vs companion `OVERLAND_EXPLORATION` preference after completion; SPM `FollowLovedOneGoal` contention.
+
+Full trace: `task-37-report.md` MAIBS-1 section.
+
+**Frontier after:** **GAO-7** PersonalityModel; **episode-id fix** recommended before claiming full expedition learning parity with companions.
+
+---
+
+## Contribution — Agent_Cursor (Task 37 — GAO-6)
+
+**Agent:** Agent_Cursor **Date:** 2026-08-10 **Type:** `IMPLEMENTATION`
+
+**Delivered:** GAO-6 ENTITY bridge MVP — `SpmEntityOpinionBridge`, `EntityOpinionMemory`, `EntityOpinionService`, `socialCompanionJoined`, snapshot/death lifecycle, `ExploringGoal` wiring.
+
+**Evidence (`CONFIRMED`):** `.\gradlew.bat clean build` — BUILD SUCCESSFUL; 569 tests, 0 failures.
+
+**Not authorized:** commits; Minecraft launch.
+
+---
+
+## Contribution — Agent_Cursor (Tasks 35–36 + validation workflow)
+
+**Agent:** Agent_Cursor **Date:** 2026-08-10 **Type:** `PROGRESSIVE_CONTINUATION`
+
+**Frontier before:** RET-1 FAIL on outer registry; GAO-5A semantic inversion; RT-GAO-1 as default launch gate.
+
+**Evidence inspected (`CONFIRMED`):**
+
+- Task 35 — `OpinionExperienceRegistryRetentionTest`; `FrozenContextStore` 128 cap; `parkOnUnload`/`resumeOnLoad` in `SpmScavenger.java`
+- Task 36 — `PlaceOpinionRouteRanker`; PLACE removed from `ActivityUtilityScorer`; `PlaceOpinionRouteRankerTest`
+- `.\gradlew.bat clean build` — 556 tests, 0 failures
+- User validation policy — static-first; runtime only for `RUNTIME_QUESTION`
+
+**Delivered:**
+
+1. **RET-GAO-1** — bounded live + frozen snapshot lifecycle; MAIBS abandoned-episode policy on park.
+2. **GAO-5B** — destination route ranking; GAO-5A inversion removed.
+3. **PD-GAO-12** — static acceptance workflow locked; RT-GAO-1 narrowed.
+4. Phased table, validation topic, MAIBS post-impl section reconciled.
+
+**Frontier after:** **GAO-6** or **GAO-7** (product choice). No further Opinion features required for static ACCEPT of core discretionary slice.
+
+**Not authorized:** commits; blanket Minecraft launch.
 
 ---
 

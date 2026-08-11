@@ -5,8 +5,9 @@
 | Item | Status | Artifact |
 | --- | --- | --- |
 | **RT-MI-TS1** | Open — runtime falsification; launch not authorized | `task-33-brief.md` |
-| **GAO-5B** | **DONE** (static) — place opinion ranks expedition destinations; runtime `UNVERIFIED` | `task-36-report.md` |
-| **RT-GAO-1** | Open — full GAO runtime matrix; launch not authorized | `task-34-report.md` |
+| **GAO-6** | **DONE** (static) — SPM entity bridge + social expedition emitter; runtime `UNVERIFIED` | `task-37-report.md` |
+| **GAO-7** | Open — PersonalityModel | RFC phased table |
+| **RT-GAO-1** | **Narrowed** — static/MAIBS sufficient for parity, GAO-5B math, RET lifecycle; runtime only for `RUNTIME_QUESTION` (nav, SPM goal contention, perf) | RFC GAO validation topic |
 | **RET-GAO-1** | **DONE** (static) — bounded live + frozen snapshot store; runtime `UNVERIFIED` | `task-35-report.md` |
 
 ## Task ledger
@@ -41,6 +42,7 @@ Task 32: complete (PERF slice 4A; RFC closed)
 Task 34: complete with concerns — GAO-5 current-place inversion documented (548 tests)
 Task 35: complete — RET-GAO-1 bounded live/frozen registry; 553 tests
 Task 36: complete — GAO-5B destination route ranking; semantic inversion fixed (556 tests)
+Task 37: complete — GAO-6 ENTITY bridge + social expedition emitter (569 tests)
 
 Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 
@@ -51,8 +53,7 @@ Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 **Mining intelligence (MI):** MI-1 through MI-14C3-R1 static complete; tunnel executor shipped;
 **RT-MI-TS1** is the MI runtime frontier (`task-33-brief`).
 
-**GA-OPINION:** GAO-0 through GAO-5B + GAO-4.1 static verified (556 tests); **RET-1 PASS** (static);
-GAO-5 semantic inversion fixed via destination ranking.
+**GA-OPINION:** GAO-0 through GAO-6 + GAO-4.1 + RET-GAO-1 **static ACCEPT** (569 tests, MAIBS); runtime reserved for engine/SPM/perf `RUNTIME_QUESTION`s only — not a default feature gate.
 
 **PERF:** RFC closed (task 32); craft-table phased scan shipped.
 

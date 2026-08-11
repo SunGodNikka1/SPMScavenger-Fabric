@@ -55,4 +55,18 @@ Result: BUILD SUCCESSFUL — 556 tests, 0 failures
 
 ## Frontier
 
-**RT-GAO-1** — Minecraft falsification (launch approval required).
+**RT-GAO-1** — not a blanket launch gate. Use:
+
+```text
+CODE + TESTS + MAIBS
+        ↓
+Can behavior be determined confidently?
+       YES → ACCEPT STATIC
+       NO  → Is uncertainty Minecraft/SPM/mod interaction?
+              YES → TARGETED RUNTIME TEST
+              NO  → Improve code/static analysis
+```
+
+**GAO static ACCEPT** (`CONFIRMED` — 556 tests + source): GAO-PARITY paths, GAO-5B route bias arithmetic, inversion removed from `ActivityUtilityScorer`, RET-GAO-1 park/rehydrate lifecycle.
+
+**Legitimate `RUNTIME_QUESTION`s** (when filed): real `PathNavigation` outcomes, SPM `GoalSelector` contention, modpack perf/heap — not utility math.

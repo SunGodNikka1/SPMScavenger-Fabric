@@ -23,6 +23,7 @@ import com.noobk.spmscavenger.opinion.DiscretionaryAuthority;
 import com.noobk.spmscavenger.opinion.ExploreReadinessThresholds;
 import com.noobk.spmscavenger.opinion.IntentLifecycle;
 import com.noobk.spmscavenger.opinion.PlaceOpinionMemory;
+import com.noobk.spmscavenger.opinion.SpmEntityOpinionBridge;
 import com.noobk.spmscavenger.opinion.PlaceOpinionRouteRanker;
 import com.noobk.spmscavenger.mining.NaturalDescentExhaustionPolicy;
 import com.noobk.spmscavenger.mining.NaturalDescentSearchState;
@@ -400,6 +401,12 @@ public final class ExploringGoal extends Goal {
             if (companion.acceptCompanionInvitation(
                     expedition.headingX, expedition.headingZ, routeBudget,
                     ExplorationPolicy.companionLateralOffset(taken), now)) {
+                ExperienceEmitters.socialCompanionJoined(
+                        mob,
+                        other.getUUID(),
+                        expeditionEpisodeId(expedition),
+                        expedition.startedTick,
+                        now);
                 taken++;
             }
         }
@@ -417,10 +424,7 @@ public final class ExploringGoal extends Goal {
                 || PlayerMobs.stayAnchorState(other) != PlayerMobs.StayAnchorState.ABSENT) {
             return false;
         }
-        return ExplorationPolicy.travelsTogether(
-                PlayerMobs.feelingToward(mob, other),
-                PlayerMobs.feelingToward(other, mob),
-                PlayerMobs.neutralFeeling());
+        return SpmEntityOpinionBridge.travelsTogether(mob, other);
     }
 
     private static ExploringGoal exploringGoalOf(Mob other) {

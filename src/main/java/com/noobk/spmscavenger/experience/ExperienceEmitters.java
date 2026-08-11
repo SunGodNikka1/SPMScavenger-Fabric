@@ -4,6 +4,7 @@ import com.noobk.spmscavenger.mining.MiningProject;
 import com.noobk.spmscavenger.mining.MiningProjectEnd;
 import com.noobk.spmscavenger.mining.MiningProjectMode;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
+import com.noobk.spmscavenger.opinion.EntityOpinionService;
 import com.noobk.spmscavenger.opinion.PlaceOpinionService;
 import com.noobk.spmscavenger.progression.TaskLifecycle;
 import net.minecraft.core.BlockPos;
@@ -127,6 +128,32 @@ public final class ExperienceEmitters {
                 Optional.of(ActivityKind.REST),
                 Optional.of(claim.anchor()),
                 Optional.empty()));
+    }
+
+    public static void socialCompanionJoined(
+            Mob leader,
+            UUID companionId,
+            UUID expeditionEpisodeId,
+            long startedGameTime,
+            long gameTime) {
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(leader.getUUID());
+        context.ensureEpisode(
+                expeditionEpisodeId, startedGameTime, Optional.of(ActivityKind.OVERLAND_EXPLORATION));
+        pipeline(leader).accept(new ExperienceEvent(
+                ExperienceKind.SOCIAL_EXPEDITION,
+                gameTime,
+                expeditionEpisodeId,
+                OutcomeClass.VOLUNTARY_SUCCESS,
+                ExperienceCause.SOCIAL_COMPANION_INVITE,
+                0.15f,
+                -0.05f,
+                0.1f,
+                0.0f,
+                0.2f,
+                Optional.of(ActivityKind.SOCIALIZING),
+                Optional.of(leader.blockPosition()),
+                Optional.of(companionId)));
+        EntityOpinionService.applyCompanionInvite(context, companionId);
     }
 
     public static void restSessionClosed(

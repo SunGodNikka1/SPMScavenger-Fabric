@@ -113,6 +113,7 @@ public final class OpinionExperienceRegistry {
         if (context != null) {
             context.opinionMemory().onDeath();
             context.placeOpinionMemory().clear();
+            context.entityOpinionMemory().clear();
             return;
         }
         FROZEN_SNAPSHOTS.remove(mobId).ifPresent(snapshot -> {
@@ -120,6 +121,7 @@ public final class OpinionExperienceRegistry {
             scratch.restoreFromSnapshot(snapshot);
             scratch.opinionMemory().onDeath();
             scratch.placeOpinionMemory().clear();
+            scratch.entityOpinionMemory().clear();
             FROZEN_SNAPSHOTS.put(scratch.captureSnapshot(snapshot.parkedAtGameTime()));
         });
     }

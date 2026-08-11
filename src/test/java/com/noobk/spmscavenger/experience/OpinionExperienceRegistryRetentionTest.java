@@ -58,6 +58,8 @@ class OpinionExperienceRegistryRetentionTest {
                         10L),
                 100L);
         context.placeOpinionMemory().recordOutcome(0xBEEFL, 7f);
+        UUID entityId = UUID.randomUUID();
+        context.entityOpinionMemory().recordOutcome(entityId, 9f);
 
         OpinionExperienceRegistry.parkOnUnload(mobId, 100L);
         assertNull(OpinionExperienceRegistry.find(mobId), "live context discarded on park");
@@ -67,6 +69,7 @@ class OpinionExperienceRegistryRetentionTest {
 
         assertTrue(reloaded.opinionMemory().preference(ActivityKind.REST) > 0f);
         assertEquals(7f, reloaded.placeOpinionMemory().preference(0xBEEFL), 0.001f);
+        assertEquals(9f, reloaded.entityOpinionMemory().preference(entityId), 0.001f);
         assertEquals(0, reloaded.liveEpisodeCount(),
                 "suspended episodes must not survive park");
     }

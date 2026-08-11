@@ -5,6 +5,7 @@ import com.noobk.spmscavenger.opinion.DiscretionaryDirectorState;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.opinion.OpinionMemory;
 import com.noobk.spmscavenger.opinion.OpinionMemoryService;
+import com.noobk.spmscavenger.opinion.EntityOpinionMemory;
 import com.noobk.spmscavenger.opinion.PlaceOpinionMemory;
 
 import java.util.Collections;
@@ -27,6 +28,7 @@ public final class MobExperienceContext {
     private final AffectiveState affectiveState = new AffectiveState();
     private final OpinionMemory opinionMemory = new OpinionMemory();
     private final PlaceOpinionMemory placeOpinionMemory = new PlaceOpinionMemory();
+    private final EntityOpinionMemory entityOpinionMemory = new EntityOpinionMemory();
     private final DiscretionaryDirectorState discretionaryDirector = new DiscretionaryDirectorState();
     private final OpinionExperienceSinks sinks;
     private final EpisodeRoutingPipeline pipeline;
@@ -104,6 +106,10 @@ public final class MobExperienceContext {
 
     public PlaceOpinionMemory placeOpinionMemory() {
         return placeOpinionMemory;
+    }
+
+    public EntityOpinionMemory entityOpinionMemory() {
+        return entityOpinionMemory;
     }
 
     public DiscretionaryDirectorState discretionaryDirector() {
@@ -300,6 +306,7 @@ public final class MobExperienceContext {
                 affectiveState.ticksSinceMeaningfulProgress(),
                 opinionMemory.captureSnapshot(),
                 placeOpinionMemory.captureSnapshot(),
+                entityOpinionMemory.captureSnapshot(),
                 parkedAtGameTime);
     }
 
@@ -313,5 +320,6 @@ public final class MobExperienceContext {
                 snapshot.ticksSinceMeaningfulProgress());
         opinionMemory.restoreFromSnapshot(snapshot.activityOpinions());
         placeOpinionMemory.restoreFromSnapshot(snapshot.placePreferences());
+        entityOpinionMemory.restoreFromSnapshot(snapshot.entityPreferences());
     }
 }
