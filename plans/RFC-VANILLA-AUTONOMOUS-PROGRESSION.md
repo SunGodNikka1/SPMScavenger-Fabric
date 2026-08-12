@@ -8,8 +8,8 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Target progression** | **Vanilla Minecraft 1.21.1** survival (not a third-party tech mod) |
 | **Scope** | Autonomous progression architecture plus narrowly authorized repairs to existing survival executors |
-| **Mode** | `WORKING_FROM_PLAN` — Shelter Interior & Capacity Intelligence (`SCR-2`) authorized |
-| **Status** | `RESEARCHING`; `SCR-1 RUNTIME_CONFIRMED`; `SCR-2R IMPLEMENTED / STATIC VERIFIED / RUNTIME RECHECK PENDING`; `SCR-3 DEFERRED` |
+| **Mode** | `PLANNING` — `SCR-2R5` shelter authority envelope is locked and implementation-ready; implementation is not authorized |
+| **Status** | `RESEARCHING`; `SCR-1 RUNTIME_CONFIRMED`; `SCR-2R4 IMPLEMENTED / STATIC VERIFIED / RUNTIME RECHECK PENDING`; `SCR-2R5 LOCKED / UNAUTHORIZED`; `SCR-3 DEFERRED` |
 | **User constraint** | The RFC was originally design-only; the user has now separately authorized `SCR-1` and `SCR-2` implementation. Minecraft launches, commits, pushes, and `SCR-3` remain separately gated |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `progression/TaskLifecycle.java` |
 | **Owners** | User (product); architecture TBD |
@@ -887,6 +887,202 @@ host scheduler wrapper's `canUse`/`canContinueToUse`; it contains no navigation 
 Focused contracts and all 667 tests pass; `clean build` and remapped-JAR inspection pass. Artifact
 SHA-256: `0DF060DD6E1733A06ECB2DC172CBBF7F1C230954D612E883255D0D0BD3ED1E9D`.
 
+### SCR-2R5 — Shelter authority envelope
+
+**Status:** `LOCKED / IMPLEMENTATION-READY / UNAUTHORIZED`
+**Agent:** Agent_Codex
+**Contribution type:** `BRAINSTORM / REVIEW / MAIBS_STATIC`
+
+#### Observable problem and source correction
+
+The house-near-tree report raises a real generalization question, but `GatherResourcesGoal` is not
+the initiating preemptor in the current scheduler. `SeekShelterGoal` is priority 2 and owns `MOVE`;
+gather/craft/smelt are priority 3 and own `MOVE + LOOK`. Minecraft 1.21.1
+`WrappedGoal#canBeReplacedBy` allows replacement only by a strictly higher-priority number, so a
+running shelter goal prevents those chores. If Gather becomes visible after arrival, shelter first
+lost or invalidated its authority and Gather merely claimed the free slot.
+
+There is nevertheless a separate `CODE_CONFIRMED` semantic defect: `MoveHolderClassifier` converts
+an arrived `SeekShelterGoal` from `MANDATORY_SAFETY` to `REST`, while
+`DiscretionaryEligibility` does not block `REST`. `ActivityObservationService` already has the
+independent rest predicate supplied by the correlated shelter `RestSessionClaim`; scheduler
+authority does not need to be weakened to report affective rest.
+
+Three negative probes (`NOT FOUND`): no `ShelterNightAuthority` admission check in gather/craft/
+smelt; no shelter-specific mandatory block in the Opinion package; no central shelter activity
+admission policy outside the narrow door-operation Mixin. The current `latest.log` confirms
+`playermob 0.86.0` and `spmscavenger 1.9.4` loaded, but contains no `Seek shelter`, `Gather
+resources`, `Using door`, ARRIVED, or shelter-authority diagnostic lines. The exact Gather sequence
+therefore remains `RUNTIME_REPORTED / TRACE_UNVERIFIED`.
+
+#### Locked authority model
+
+```text
+IMMEDIATE PHYSICAL SURVIVAL / SELF-DEFENCE
+                    ↓
+EXPLICIT PLAYER AUTHORITY
+                    ↓
+ARRIVED NIGHT SHELTER HOLD
+                    ↓
+PROGRESSION / WORK
+                    ↓
+DISCRETIONARY OPINION
+```
+
+`REST` and `SHELTER_HOLD` are different semantic authorities:
+
+- discretionary campfire REST may voluntarily yield when Opinion selects Explore;
+- arrived nighttime shelter remains mandatory scheduler authority until dawn, invalidation, an
+  emergency, or a player command;
+- the observer may still report `resting=true` through the shelter rest claim, without classifying
+  the executor as discretionary `REST`.
+
+`MoveHolderClassifier` therefore reports an arrived `SeekShelterGoal` as the new blocking
+`ActivityClass.SHELTER_HOLD`; approach remains `MANDATORY_SAFETY`. `SHELTER_HOLD` is a scheduler
+occupant and blocks discretionary eligibility, but is deliberately not `ActivityClass.REST`.
+`Observation.resting()` remains independently true through the correlated rest claim. This is the
+locked D-GAO-043 separation between **what the mob is doing** and **whether that activity is
+providing rest**.
+
+Do not implement legality as `ActivityClass` alone. SPM's `SOCIAL_REFLEX` class contains both
+`SkepticalWatchGoal`, which stops and looks without travelling, and `FriendlyGreetGoal`, which owns
+`MOVE + LOOK` and may approach a friend or fetch a gift outside. The policy must consider semantic
+authority plus actual displacement/required flags.
+
+#### Candidate designs
+
+| Option | Benefit | Failure mode / cost | Verdict |
+| --- | --- | --- | --- |
+| Priority-only after SCR-2R4 | No new hooks; lower-priority work is already excluded while shelter genuinely runs | Does not fix `REST` authority semantics; known priority-1 social movement can still preempt; gives no explicit suppression reason | Rejected as incomplete |
+| Scatter `ShelterNightAuthority.holds()` through every Goal | Small individual edits | Brittle, duplicates policy, misses future/host goals, and invites inconsistent `canUse` vs `canContinueToUse` behavior | Rejected |
+| **Pure `ShelterDisplacementPolicy` + one shared addon admission guard + narrow optional SPM hooks for proven displacing host goals** | Central semantics, testable, preserves optional-host boundary, avoids a global scheduler patch | Must maintain the pinned host-goal map; unknown new high-priority host goals still fail safe and require review | **Recommended** |
+| Global `GoalSelector` interception or dynamically uninterruptible shelter | Broadest enforcement | Selector has no safe owner contract; risks blocking fire/powder-snow recovery, combat, or commands; invasive loader compatibility surface | Rejected unless targeted hooks prove insufficient |
+
+The locked physical policy is separate from `ActivityClass`. A centralized
+`ShelterActivityEnvelope` classifies an ephemeral candidate/existing occupant into immutable facts,
+then a pure `ShelterInterruptionPolicy` returns an execution effect. Mixins and addon Goal guards
+only delegate to that policy; they do not contain independent shelter rules. The policy needs four
+effects, because a temporary helper that preserves the commitment is not the same lifecycle as an
+emergency or command that cancels it:
+
+| Activity/mechanism | Shelter effect |
+| --- | --- |
+| fire, suffocation, drowning, powder-snow escape; attributable active combat/flee | `OVERRIDE_AND_CANCEL_OR_REVALIDATE` |
+| explicit player command / stay authority | `OVERRIDE_AND_CANCEL` |
+| carried-food `EatFoodGoal` (`LOOK` only), cosmetic gaze, flagless defence/readout, stationary wary watch | `ALLOW_IN_PLACE` |
+| finite required helper that temporarily owns a conflicting flag but must preserve shelter | `SUSPEND_AND_RESUME` |
+| moving greeting/fetch, follow, loot, crops, gather, craft, smelt, mining, torch trip, explore, wander | `BLOCK_WHILE_SHELTERED` |
+| SPM door operation after exact arrival | entity-side physical operation may finish; scheduler `MOVE` wrapper yields as in SCR-2R4 |
+
+This distinction is locked: `ALLOW_IN_PLACE` does not surrender shelter; `SUSPEND_AND_RESUME`
+keeps the same bounded commitment/reservation and creates a fresh disposable path afterward;
+`OVERRIDE_AND_CANCEL` releases autonomous shelter authority; `BLOCK_WHILE_SHELTERED` denies the
+candidate. No result changes Goal priorities.
+
+`mob.getTarget() != null` is not sufficient evidence for the first row. SPM's
+`HuntForFoodGoal` is a target-selector goal that assigns a passive animal while hungry, after which
+the ordinary priority-2 attack executor performs the hunt. Current `SeekShelterGoal` cancels for
+every non-null target, so a safe indoor mob can currently classify “hunt a cow” as combat and leave
+the house. Target provenance must therefore be separated at least into:
+
+- `IMMEDIATE_SELF_DEFENCE`: recently hurt / active attacker — override;
+- `HOSTILE_THREAT`: threat confirmed through a bounded, compatibility-aware predicate — override;
+- `PROACTIVE_AGGRESSION`: hated target merely noticed — remain sheltered by default;
+- `FOOD_HUNT`: passive animal target — blocked while arrived unless a separately designed
+  starvation emergency threshold explicitly authorizes it;
+- `DEFEND_LOVED_ONE`: product decision; recommended default is override only for a nearby active
+  attacker, not a distant chase outside the shelter site.
+
+**Locked gen-1 target rule:** immediate self-defence, a nearby attributable active threat, and an
+explicit player combat order may override. Proactive hunt/aggression may not. `UNKNOWN` target
+provenance fails safe for night shelter: it does not authorize voluntary displacement merely from
+`mob.getTarget() != null`; an independently confirmed immediate survival condition can still
+override. `DEFEND_LOVED_ONE` overrides only when the defended entity and active attacker are within
+the bounded nearby-threat envelope. Provenance must be derived from source/observable authority,
+not guessed solely from target entity class.
+
+#### Enforcement surface and scope guard
+
+- Reuse the existing `ActivityObservationService` scheduler scan; do not add a competing scan.
+- Scavenger-owned displacing Goals consult one shared envelope from both admission and continuation
+  seams. The rule is centralized even though the call sites are necessarily distributed.
+- Optional SPM hooks are narrow and evidence-led. The pinned priority map makes priority-1 moving
+  `FriendlyGreetGoal` the first voluntary-travel hook; stationary `SkepticalWatchGoal` remains
+  allowed. Lower-priority work appearing after arrival is treated as evidence that the hold was
+  already lost, not as proof it preempted priority-2 shelter.
+- Do not pre-emptively add Mixins for every host Goal. Add a bounded invariant/diagnostic for an
+  unexpected displacing owner during `SHELTER_HOLD`, then widen the pinned hook surface only from
+  code/runtime evidence.
+- Upgrade the hold registry from bare UUID membership to a bounded immutable snapshot containing
+  mob id, commitment id, anchor, and arrival tick. Release/refresh must be commitment-correlated so
+  an old lifecycle cannot release a newer hold. Existing death, unload, dimension-change, server
+  stop, dawn, and invalidation cleanup remain mandatory under RET-1.
+
+The universal fallback should use observable threat evidence (recent attacker, hostile marker where
+valid, distance/line-of-sight) and an optional pinned SPM reaction/source seam. It must not copy SPM
+target lists or assume all non-null targets are danger. This target-provenance repair is part of
+SCR-2R5, not an Opinion preference.
+
+“Indoor crafting” is deliberately not granted to the current `CraftTorchesGoal`: that executor can
+navigate to/place a crafting table and is not proven anchor-bounded. A future indoor activity must
+prove its entire route remains within the reserved shelter site before it is admitted.
+
+#### Behavioral prediction (MAIBS-1)
+
+| Layer | Result |
+| --- | --- |
+| Intended | Once physically settled, a mob stays sheltered until dawn unless survival, combat, or player authority legitimately overrides it |
+| Proposed mechanism | Preserve mandatory shelter classification; derive rest independently; reject new displacing chores/social trips during the arrived hold; retain existing commitment return semantics |
+| Predicted observable behavior | House near trees: `Seek shelter` remains the movement owner and no wood trip starts. Carried food/look behaviour can occur in place. At dawn the hold releases and ordinary work may start |
+| Failure/weirdness | over-broad class gate blocks harmless actions (`ARCHITECTURE_DEFECT`); emergency cannot preempt (`ARCHITECTURE_DEFECT`); a new unknown priority-1 host goal escapes the pinned hooks (`RUNTIME_QUESTION`); score shown for an illegal activity looks causal (`PRESENTATION_DEFECT`) |
+| Confidence | Scheduler and taxonomy defect `CODE_CONFIRMED`; exact observed Gather handoff and repaired physical behaviour `UNVERIFIED` |
+
+Temporal trace: `T0 exact arrival → mandatory hold`; `T+10 Gather sees nearby log but admission is
+denied`; `T+60 Opinion may update affect but receives no discretionary authority`; `T+200 carried
+food or harmless look may run without leaving`; `T+1200 hold still owns the night`; dawn or a valid
+override releases/cancels it exactly once and work becomes eligible again.
+
+#### Required scenarios and acceptance
+
+- house near tree: Gather must not start or pull the mob outside;
+- nearby chest/drop/crop/friend: loot, harvest, and moving greeting/follow must not displace an
+  arrived hold;
+- food already carried: eating may run because it owns `LOOK` only;
+- fire/powder snow/suffocation/combat: emergency authority must still take control;
+- hungry passive-animal target: shelter must not be cancelled merely because SPM populated
+  `mob.getTarget()`; carried food remains usable in place;
+- explicit player command: shelter releases rather than fighting the user;
+- benign door close: physical close completes without yielding the night to Idle/work;
+- dawn: the hold releases and previously blocked work may start normally;
+- Opinion strongly prefers Explore: no voluntary shelter yield is issued; future inspector reports
+  `suppressed: mandatory night shelter`, not a fabricated selected activity.
+- stationary `SkepticalWatchGoal` may look without surrendering shelter; moving
+  `FriendlyGreetGoal` is blocked while the hold exists;
+- a temporary resumable helper preserves the same commitment/failure budget, while an explicit
+  player command cancels rather than creating a suspend/reclaim loop;
+- an unexpected/unknown displacing host Goal is surfaced by the invariant and cannot silently turn
+  a hold into Idle.
+
+**Must happen:** mandatory shelter and affective rest are observed simultaneously as independent
+predicates, and arrived shelter blocks every new displacing non-authority activity. **Must not
+happen:** Opinion, boredom, nearby resources, social travel, or an activity's numeric utility grants
+permission to leave; emergency or player authority is blocked; policy is copied into a growing set
+of unrelated Goals; or a global GoalSelector Mixin is added without evidence that narrower hooks
+cannot enforce the pinned host surface.
+
+**Performance budget:** no new world scan or path probe. The pure guard is O(1) at existing
+`canUse`/`canContinueToUse` seams; the current 10-tick observer remains the single scheduler scan.
+At 100+ mobs, only runtime counters/heap sampling can confirm the actual overhead and retention
+bound.
+
+**Frontier before:** SCR-2R4 was statically accepted but the full legal envelope around an arrived
+hold was implicit and Opinion still observed that hold as discretionary REST. **Brainstorm and
+peer-review contribution:** corrected the root-cause model, separated semantic activity from
+physical displacement, added condition-aware target provenance and explicit suspend-vs-cancel
+lifecycle effects, compared enforcement designs, and locked the authority/displacement matrix plus
+MAIBS scenarios. **Frontier after:** SCR-2R5 is implementation-ready; the next action is explicit
+implementation authorization, not another design cycle. SCR-3 shelter memory remains deferred.
+
 ---
 
 ## Topic: Missing AI behaviors
@@ -1096,6 +1292,8 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Codex | 2026-08-11 | Locked `SCR-2R5` after user peer review: `SHELTER_HOLD` is mandatory observational authority, affective rest stays independent, and a centralized four-effect physical interruption policy distinguishes in-place, suspend/resume, override/cancel, and block. Locked conservative target provenance, bounded correlated hold snapshots, staged optional-host hooks, unchanged priorities, and implementation gates. No Java edit, test/build, runtime launch, commit, push, or PR |
+| Agent_Codex | 2026-08-11 | Proposed `SCR-2R5` shelter authority envelope: confirmed Gather is a downstream claimant rather than a valid p3 preemptor, found arrived shelter's `REST` taxonomy leak into Opinion eligibility, rejected class-only/global-selector enforcement, and defined a displacement-aware guard, alternatives, MAIBS matrix, and acceptance gates. No Java edits, tests/build, runtime launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Runtime feedback falsified post-arrival authority persistence; implemented `SCR-2R4` exact-arrival night authority and optional scheduler-only door wrapper yield, with lifecycle cleanup, tests, docs, and static MAIBS; repaired runtime pending |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-2R3`: structural identity independent of door depth, 10-tick bounded mid-route interior capture, optional stock-SPM busy/recovery door admission guard, 663-test clean build, package inspection, and static MAIBS; shared multi-mob passage hold deferred pending host contract |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-2R2`: structural-vs-foliage shelter semantics, current-interior hysteresis, protected bed upgrades, bounded door seeds, condition-bound `RETURNING`, correlated suspended rest claims, strictly-higher fallback upgrades, 660-test clean build, and post-GREEN MAIBS; runtime pending |

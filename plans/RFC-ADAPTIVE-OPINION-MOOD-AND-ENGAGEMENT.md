@@ -8,14 +8,14 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
-| **Mode** | `PROGRESSIVE_CONTINUATION` — PD-GAO-14 locked; GAO-8B Task 42B is dependency-ready but implementation is not yet authorized |
-| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1**; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT` (628 tests); Task 42B `READY / UNAUTHORIZED` |
+| **Mode** | `PROGRESSIVE_CONTINUATION` — cross-RFC shelter-authority semantics are locked; Task 42B waits for SCR-2R5 implementation evidence |
+| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1**; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT` (628 tests); Task 42B `READY / BLOCKED BY SCR-2R5` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-11 (PD-GAO-14 gen-1 Opinion inspector product contract locked; Task 42B dependency-ready) |
+| **Last update** | 2026-08-11 (D-GAO-043 locked: `SHELTER_HOLD` authority is independent from affective rest) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,9 +39,10 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** authorize and implement Task 42B under the locked PD-GAO-14 contract. No
-remaining design dependency blocks it. Runtime remains non-default under PD-GAO-12 and requires a
-named `RUNTIME_QUESTION` plus separate launch approval.
+**Nearest frontier:** implement cross-RFC `SCR-2R5` under separate authorization. Task 42B remains
+technically ready, but must not ship an inspector that can explain an arrived mandatory shelter
+hold as discretionary REST or imply that Opinion may yield it. Runtime remains non-default under
+PD-GAO-12 and requires a named `RUNTIME_QUESTION` plus separate launch approval.
 
 ---
 
@@ -386,6 +387,37 @@ IDLE (discretionary candidate only)
 **Must not happen:** Combat interrupted because `Opinion = bored of fighting`.
 
 Opinion matters when there is **freedom of choice**.
+
+### Nighttime shelter authority clarification — cross-RFC SCR-2R5
+
+**Status:** `LOCKED / D-GAO-043 / IMPLEMENTATION DEPENDS ON SCR-2R5`
+
+Current source dynamically reports an arrived `SeekShelterGoal` as `ActivityClass.REST`, even
+though the same observer already reports affective rest independently from the correlated shelter
+`RestSessionClaim`. Because `DiscretionaryEligibility` does not block `REST`, this contradicts the
+locked rule below that `SeekShelterGoal` is mandatory safety and is not the discretionary REST
+executor.
+
+Locked correction: approach remains `MANDATORY_SAFETY`; exact arrived nighttime authority becomes
+`ActivityClass.SHELTER_HOLD`; `Observation.resting=true` remains the independent affective signal.
+`SHELTER_HOLD` blocks discretionary eligibility and is not included by `ActivityClass.isRest()`.
+Only `CampfireGoal`'s `DISCRETIONARY_REST` authority may consume Opinion's REST→EXPLORE
+voluntary-yield request. `SHELTER_RECOVERY`/`SHELTER_HOLD` may not.
+
+`ActivityClass` expresses observational meaning only. Physical interruption is decided separately
+by the centralized cross-RFC shelter envelope: stationary helpers may run in place, finite required
+helpers may suspend/resume the same commitment, immediate danger or explicit player authority may
+override, and voluntary displacement is blocked. Opinion evaluates preferences only after this
+legal envelope and never supplies shelter override authority.
+
+The mandatory test must use real authority provenance rather than the current generic
+`combatTarget = mob.getTarget() != null`: SPM also assigns passive animals as targets for
+`HuntForFoodGoal`, so a non-null target can mean proactive food acquisition rather than immediate
+danger. Opinion remains downstream of the resolved legal envelope either way.
+
+The inspector should normally show `suppressed: mandatory night shelter`. It should not compute or
+display an illegal candidate as though it were a causal selection; any future counterfactual score
+must be explicitly labelled non-causal and calculated by a side-effect-free diagnostic path.
 
 ---
 
@@ -1416,7 +1448,7 @@ runtime/performance remain `UNVERIFIED` because no Minecraft launch or profiler 
 
 | Field | Contract |
 | --- | --- |
-| Dependencies | GAO-0 through GAO-9 and RET-GAO-1 complete; Task 42A static-accepted; D-GAO-039/040 and PD-GAO-14 locked |
+| Dependencies | GAO-0 through GAO-9 and RET-GAO-1 complete; Task 42A static-accepted; D-GAO-039/040 and PD-GAO-14 locked; D-GAO-043 shelter-authority semantics reviewed before causal UI handoff |
 | Scope | Pure immutable `OpinionReadoutSnapshot`; plain-language explanation projection over Task 42A evidence; non-allocating factory; bounded request/response payload; addon-owned client screen/keybind; focused tests; documentation |
 | Constraints | Stock/optional SPM; configurable inspect key; crosshair-targeted PlayerMob; Creative OR operator access; no host-screen or objective-billboard mutation; no state allocation/write; manual refresh only; common APIs expose no client types; access/range/live target validated server-side; strictly read-only |
 | Must happen | A permitted player can answer what/why/alternative/handoff/outcome/learning from captured evidence, inspect raw values secondarily, and manually refresh |
@@ -1699,7 +1731,7 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 through GAO-9 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT`; Task 42B `DEPENDENCY-READY / UNAUTHORIZED`
+**Status:** GAO-0 through GAO-9 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT`; Task 42B `DEPENDENCY-READY / BLOCKED BY SCR-2R5 IMPLEMENTATION`
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
@@ -1718,7 +1750,7 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-6** | ENTITY bridge | **CLOSED:** `SpmEntityOpinionBridge`, `EntityOpinionMemory`, GAO-6R `SocialExperienceEpisodes` | GAO-4, RET-GAO-1 |
 | **GAO-7** | PersonalityModel | **CLOSED / STATIC ACCEPT:** immutable six-trait model; SPM-host anchors + deterministic UUID latent traits; bounded subjective learning at the single normalized seam; snapshot lifecycle; 581-test clean build | GAO-2, GAO-6 |
 | **GAO-8A** | Passive physical expression | **CLOSED / STATIC ACCEPT:** bounded scheduler-owned LOOK expression; Task 40; 593 tests | GAO-0, GAO-1, GAO-6, GAO-7 |
-| **GAO-8B** | Understandable Opinion inspection | **PARTIAL / READY:** Task 42A structured causal trace is statically accepted; PD-GAO-14 is locked; Task 42B addon-owned on-demand explanation UI awaits implementation authorization | GAO-0 through GAO-9, RET-GAO-1, Task 42A, D-GAO-039/040, PD-GAO-14 |
+| **GAO-8B** | Understandable Opinion inspection | **PARTIAL / BLOCKED:** Task 42A structured causal trace is statically accepted; PD-GAO-14 and D-GAO-043 are locked; Task 42B addon-owned on-demand explanation UI waits for SCR-2R5 implementation evidence so shelter causality is truthful | GAO-0 through GAO-9, RET-GAO-1, Task 42A, D-GAO-039/040/043, PD-GAO-14, SCR-2R5 |
 | **GAO-9** | Overland environment affinity | **CLOSED / STATIC ACCEPT:** finite multi-label context, completion-only normalized learning, enum-bounded snapshot memory, and ±10 valid-route ranking; PROJECT memory superseded; 618 tests | GAO-0c, GAO-2, GAO-5B, RET-GAO-1 |
 
 ### GAO-0b implementation task (`IMPLEMENTED / STATIC VERIFIED`)
@@ -2144,6 +2176,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 | D-GAO-040 | GAO-8B uses a bounded server-validated common DTO and addon-owned screen; no client type in common API and no host UI/billboard mutation | `LOCKED` | PD-GAO-14 resolved entry/access/refresh/authority contract |
 | D-GAO-041 | Explanation evidence is captured at decision time in one structured record and carried through intent/handoff/terminal/learning receipt; never reconstructed from later state | `IMPLEMENTED / STATIC ACCEPT` | Task 42A; 628 tests + clean build |
 | D-GAO-042 | Trace retention is bounded by whole decisions with explicit current suppression disposition; no partial-chain eviction or authority side effect | `IMPLEMENTED / STATIC ACCEPT` | Task 42A; active-origin retention test + RET-1 static review |
+| D-GAO-043 | Arrived nighttime shelter is `SHELTER_HOLD` mandatory authority while affective rest is an independent observation; only discretionary campfire REST may yield to Opinion; physical displacement legality is decided by the separate centralized shelter envelope | `LOCKED` | Cross-RFC `SCR-2R5`; current dynamic `ActivityClass.REST` mapping conflicts with the existing SeekShelter exclusion |
 
 ---
 
@@ -2151,6 +2184,8 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-11 | Agent_Codex | **D-GAO-043 locked with SCR-2R5.** Accepted the user's two-layer correction: arrived SeekShelter becomes blocking `SHELTER_HOLD`, rest remains an independent affective predicate, and ActivityClass does not decide physical displacement. Locked a centralized four-effect interruption envelope and blocked Task 42B until implementation evidence prevents false shelter causality. No Java edit, test/build, runtime launch, commit, push, or PR |
+| 2026-08-11 | Agent_Codex | **D-GAO-043 proposed from shelter runtime follow-up.** Confirmed the observer currently weakens arrived SeekShelter from mandatory safety to `REST` even though a shelter rest claim already provides the affective predicate; proposed independent authority/rest semantics and blocked Task 42B from presenting false shelter causality until review. Full enforcement design lives in vanilla progression `SCR-2R5`; no Java edit, test/build, runtime launch, commit, push, or PR |
 | 2026-08-11 | Agent_Codex | **PD-GAO-14 locked.** Selected a configurable Inspect Opinion key targeting a PlayerMob, a Scavenger-owned screen, server-authoritative Creative-or-operator access, one immutable bounded snapshot per open/manual refresh, and a strictly read-only surface. Locked D-GAO-039/040 and advanced Task 42B to dependency-ready; implementation remains unauthorized. No Java edit, tests/build, runtime launch, commit, push, or PR |
 | 2026-08-11 | Agent_Codex | **Task 42A causal trace implemented.** Replaced the loose event ring with 24 whole structured decisions; added separate monotonic decision identity carried by intents; full candidate components, structured suppression/disposition/cause, lifecycle transitions, and actual terminal learning receipts; protected live origins during eviction. Focused tests, 628-test full suite, clean build, JAR inspection, RET-1/static MAIBS pass. Task 42B remains blocked by PD-GAO-14. No Minecraft launch, commit, push, or PR |
 | 2026-08-10 | Agent_Codex | **GAO-8B understandability review.** User defined the product as “make the AI understandable.” Static trace audit found GAO-8B-B1: score/select precede new intent identity, can inherit an incumbent id, discard most utility components into strings, and use an event rather than decision bound; existing tests do not prove complete causal correlation. Locked PD-GAO-15 direction; proposed D-GAO-041/042 and split Task 42A causal trace repair from Task 42B UI. No Java edit, test/build, runtime launch, commit, push, or PR |
