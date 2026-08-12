@@ -1106,6 +1106,27 @@ The next shelter frontier is an approved runtime falsification of the occupied-b
 passive-hunt, interruption/return, danger, and command scenarios. SCR-3 shelter memory remains
 deferred.
 
+#### Runtime follow-up — Shelter Commitment Authority Continuity
+
+**Status:** `IMPLEMENTED / STATIC ACCEPT / RUNTIME UNVERIFIED`
+
+The reported Gather/Seek switching exposed a lifecycle boundary left outside SCR-2R5: the shared
+envelope began at `ARRIVED`, while a path-probed, reserved shelter approach was already authoritative
+work. The corrected registry now follows the commitment through `APPROACHING → SETTLED` and
+`SETTLED → RETURNING → SETTLED`; only explicit cancellation removes it. This is not a priority
+change and not a Gather-specific veto. It prevents every voluntary displacing executor from
+claiming a transient approach/suspension gap while preserving door helpers through the existing
+`isSettled()` distinction.
+
+MAIBS prediction: `T0 Gather running`; dusk shelter scan adopts a reachable house and publishes
+`APPROACHING`; Gather continuation fails; `T+door` finite door ownership suspends navigation but
+does not remove the commitment/envelope; helper ends and SeekShelter recomputes a path; exact
+arrival publishes `SETTLED`; no Gather/Seek oscillation occurs. Genuine invalidity or bounded path
+failure cancels authority and permits normal work again. Runtime falsification remains required
+with a hash-matched artifact because the triggering session's loaded JAR could not be recovered.
+Focused tests and the full 677-test clean build pass; artifact SHA-256 is
+`913C2F65192E8EF9937BBD7A93452ECE3F149584192B151612D0B33323892F38`.
+
 ---
 
 ## Topic: Missing AI behaviors
@@ -1315,6 +1336,7 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Codex | 2026-08-11 | Runtime report exposed a pre-arrival authority gap after SCR-2R5; implemented Shelter Commitment Authority Continuity so a path-probed/reserved commitment owns the voluntary-travel envelope through APPROACHING, SETTLED, and RETURNING. Gather/Craft/Smelt cannot seize finite interruption gaps; door helpers remain available outside SETTLED. All 677 tests and clean build pass; artifact `913C2F...F38`; runtime remains unverified. No Minecraft launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-2R5` + D-GAO-043 semantic seam: mandatory `SHELTER_HOLD`, independent affective rest, centralized displacement envelope, conservative target provenance, commitment-correlated SETTLED/RETURNING authority, and optional pinned host travel/combat guards. Post-GREEN MAIBS found and repaired RETURNING suppressing its required door wrapper. All 676 tests and clean build pass; runtime remains unverified. No Minecraft launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Locked `SCR-2R5` after user peer review: `SHELTER_HOLD` is mandatory observational authority, affective rest stays independent, and a centralized four-effect physical interruption policy distinguishes in-place, suspend/resume, override/cancel, and block. Locked conservative target provenance, bounded correlated hold snapshots, staged optional-host hooks, unchanged priorities, and implementation gates. No Java edit, test/build, runtime launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Proposed `SCR-2R5` shelter authority envelope: confirmed Gather is a downstream claimant rather than a valid p3 preemptor, found arrived shelter's `REST` taxonomy leak into Opinion eligibility, rejected class-only/global-selector enforcement, and defined a displacement-aware guard, alternatives, MAIBS matrix, and acceptance gates. No Java edits, tests/build, runtime launch, commit, push, or PR |

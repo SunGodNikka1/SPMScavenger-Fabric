@@ -1264,3 +1264,41 @@ Evidence: 676 tests pass with no failures/errors; `clean build` passes. Remapped
 correlated hold, threat policy, and optional host Mixins. Static MAIBS found and repaired the
 SETTLED-vs-RETURNING door deadlock. Final static gate is `PASS — BEHAVIORALLY_PLAUSIBLE`; runtime
 physical behavior, optional-Mixin application, and heap trend remain `UNVERIFIED`.
+
+### Shelter Commitment Authority Continuity — close the Gather/Seek approach gap
+
+Fresh user runtime evidence reported repeated `Gather Resources` / `Seek shelter` switching after
+SCR-2R5. The log confirms `spmscavenger 1.9.4` and SPM 0.86.0 loaded but contains no objective or
+shelter-transition diagnostics. Artifact identity is `UNVERIFIED`: three negative provenance
+probes found no Scavenger-named JAR, no JAR whose `fabric.mod.json` declares `spmscavenger`, and no
+nested Scavenger JAR in the instance's visible `mods` tree. The game may have loaded a subsequently
+removed binary, so runtime attribution to the current source cannot be claimed.
+
+Source review nevertheless found a real authority gap. `ShelterNightAuthority` began only at exact
+arrival. A reachable, reserved shelter commitment in `PENDING`, `ACTIVE`, or `SUSPENDED` therefore
+had no shared displacement envelope. A finite door/helper interruption or admission/resume timing
+gap could expose MOVE to Gather/Craft/Smelt; priority-2 SeekShelter would then reclaim it, producing
+the visible lower-priority-work/shelter churn even though Gather cannot directly preempt a running
+shelter Goal.
+
+Alternatives considered: increasing SeekShelter priority was rejected because it would hide the
+lifecycle defect and threaten legitimate safety/command ordering; adding a Gather-only condition
+was rejected because Craft/Smelt/mining/exploration and host travel could exploit the same gap. The
+selected repair makes the existing commitment-correlated authority continuous across
+`APPROACHING`, `SETTLED`, and `RETURNING`. It begins only after a candidate passed bounded path
+probing and reservation, and is released by the existing cancellation/owner-removal paths. Door
+helpers remain allowed unless physically settled; all voluntary displacement is denied throughout
+the live commitment.
+
+**Must happen:** once a reachable shelter candidate is adopted, an existing or newly eligible
+Gather Resources goal yields and cannot restart during finite shelter interruptions; SeekShelter
+continues toward the same bounded commitment. **Must not happen:** a mere scan candidate creates
+authority, door opening is suppressed during approach/return, failed/cancelled shelter retains an
+entry, or Goal priorities change.
+
+Static MAIBS: `BEHAVIORALLY_PLAUSIBLE`. Code/focused tests confirm the phase transition and O(1)
+guard. The full 677-test suite and `clean build` pass with zero failures/errors/skips; the remapped
+JAR packages the changed authority/guard/goal classes at
+`build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`913C2F65192E8EF9937BBD7A93452ECE3F149584192B151612D0B33323892F38`. A fresh runtime run with
+that hash-matched JAR remains required to upgrade the physical result from `UNVERIFIED`.

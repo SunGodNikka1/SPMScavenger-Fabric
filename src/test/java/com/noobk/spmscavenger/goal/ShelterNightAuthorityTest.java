@@ -28,10 +28,29 @@ class ShelterNightAuthorityTest {
         ShelterNightAuthority.Hold hold = ShelterNightAuthority.hold(MOB).orElseThrow();
         assertEquals(CURRENT, hold.commitmentId());
         assertEquals(ANCHOR, hold.anchor());
-        assertEquals(42L, hold.arrivedAt());
+        assertEquals(42L, hold.phaseStartedAt());
         assertEquals(ShelterNightAuthority.Phase.SETTLED, hold.phase());
         assertTrue(ShelterNightAuthority.isSettled(MOB));
         assertEquals(1, ShelterNightAuthority.size());
+    }
+
+    @Test
+    void adoptedApproachAlreadyOwnsTheVoluntaryTravelEnvelope() {
+        ShelterNightAuthority.beginApproach(MOB, CURRENT, ANCHOR, 31L);
+
+        assertTrue(ShelterNightAuthority.holds(MOB),
+                "a committed approach must not expose Gather/Craft/Smelt admission");
+        assertFalse(ShelterNightAuthority.isSettled(MOB),
+                "approach authority is not a false claim of physical arrival");
+        ShelterNightAuthority.Hold hold = ShelterNightAuthority.hold(MOB).orElseThrow();
+        assertEquals(ShelterNightAuthority.Phase.APPROACHING, hold.phase());
+        assertEquals(31L, hold.phaseStartedAt());
+        assertFalse(ShelterActivityEnvelope.permitsVoluntaryDisplacement(MOB),
+                "Gather Resources must not start in an adopted shelter approach gap");
+
+        ShelterNightAuthority.acquire(MOB, CURRENT, ANCHOR, 42L);
+        assertEquals(ShelterNightAuthority.Phase.SETTLED,
+                ShelterNightAuthority.hold(MOB).orElseThrow().phase());
     }
 
     @Test

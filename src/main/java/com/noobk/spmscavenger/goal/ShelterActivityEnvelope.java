@@ -3,6 +3,8 @@ package com.noobk.spmscavenger.goal;
 import com.noobk.spmscavenger.activity.ActivityClass;
 import net.minecraft.world.entity.Mob;
 
+import java.util.UUID;
+
 /**
  * SCR-2R5 shared O(1) admission seam for activities that could physically leave an arrived
  * nighttime shelter. It performs no scan, navigation, pathing, or state mutation.
@@ -14,7 +16,12 @@ public final class ShelterActivityEnvelope {
 
     /** Scavenger work/exploration executors are voluntary and physically displacing. */
     public static boolean permitsVoluntaryDisplacement(Mob mob) {
-        return !ShelterNightAuthority.holds(mob.getUUID());
+        return permitsVoluntaryDisplacement(mob.getUUID());
+    }
+
+    /** Pure correlation seam used by policy tests and non-entity adapters. */
+    static boolean permitsVoluntaryDisplacement(UUID mobId) {
+        return !ShelterNightAuthority.holds(mobId);
     }
 
     /** Optional host adapters delegate here rather than owning policy in their Mixins. */

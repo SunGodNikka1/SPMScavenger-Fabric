@@ -358,6 +358,7 @@ outcomes remain `UNVERIFIED`.
 | SCR-2R5 work envelope | House near logs, drops, crops, furnace, campfire and dark torch site | Settled/returning authority blocks all voluntary displacing addon and pinned host executors until dawn | Temporary ownership gap becomes Gather/Idle/Explore/loot/follow travel | Shared guard/Mixin/full-suite `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2R5 temporary resume | Settled mob is benignly displaced and needs a closed door to return | Hold becomes RETURNING, same commitment/reservation survives, door helper may operate, exact arrival restores SETTLED | Hold releases to work, or retained hold suppresses the needed door helper | Phase/correlation/door-contract tests + post-GREEN MAIBS `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2R5 target provenance | Safe sheltered hungry mob targets cow; separate runs use recent attacker, nearby visible hostile, and player attack order | Cow/unknown target stays sheltered; attributable danger/order overrides | Every non-null target is treated as emergency, or real self-defence is blocked | Pure provenance tests and pinned SPM HuntForFood source `CODE_CONFIRMED`; modded-hostile compatibility runtime `UNVERIFIED` |
+| Shelter commitment authority continuity | Gather is active at dusk; SeekShelter adopts a reachable reserved house, then a finite door/helper interruption occurs before arrival | Authority phase is `APPROACHING`; Gather yields and cannot restart; door helper runs; same commitment resumes and becomes `SETTLED` | Work and shelter alternate because authority exists only after arrival, or approach authority suppresses the door needed to enter | User runtime report + authority/guard focused tests `CODE_CONFIRMED`; tested artifact identity and repaired runtime `UNVERIFIED` |
 
 Static gates after SCR-2R: 24 focused `Shelter*Test` tests and the full 652-test suite pass with zero failures,
 errors, or skips. Selection is capped at 28 semantic evaluations and four path probes per scan;
@@ -399,3 +400,11 @@ probe, or activity-selection rule was added. Static MAIBS: `PASS — BEHAVIORALL
 repairing the discovered RETURNING/door-wrapper deadlock. Runtime behavior, optional-host Mixin
 application, and RET-1 heap trend remain `UNVERIFIED`. Final remapped JAR SHA-256:
 `53475CCC0B2025012572492C07443E6609C070BFA61A52F284D499DA6C01BF48`.
+
+Shelter Commitment Authority Continuity follow-up: the registry now publishes an `APPROACHING`
+phase immediately after successful path admission plus reservation, then transitions to `SETTLED`
+or `RETURNING`. The same O(1) envelope therefore covers the complete live commitment rather than
+only post-arrival state. Runtime confirmation requires installing and hashing the fresh final JAR;
+the binary used for the triggering session could not be recovered from the instance after launch.
+All 677 tests and `clean build` pass with zero failures/errors/skips. Final remapped JAR SHA-256:
+`913C2F65192E8EF9937BBD7A93452ECE3F149584192B151612D0B33323892F38`.

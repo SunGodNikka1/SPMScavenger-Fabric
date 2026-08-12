@@ -433,6 +433,13 @@ public class SeekShelterGoal extends Goal {
             release(previous);
         }
         commitment = replacement;
+        // Shelter has already spent its bounded path probe and reserved this destination. Publish
+        // authority at adoption, not only at arrival: otherwise a finite door/helper interruption
+        // exposes a lower-priority Gather/Craft/Smelt slot until SeekShelter starts again, producing
+        // visible work -> shelter -> work churn. Door helpers remain allowed while APPROACHING;
+        // voluntary travel does not.
+        ShelterNightAuthority.beginApproach(
+                mob.getUUID(), commitmentId, raw.standPos(), now);
         return true;
     }
 
