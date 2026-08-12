@@ -66,6 +66,9 @@ public class PlaceTorchGoal extends Goal {
 
     @Override
     public boolean canUse() {
+        if (!ShelterActivityEnvelope.permitsVoluntaryDisplacement(mob)) {
+            return false;
+        }
         ScavengerConfig cfg = ScavengerConfig.get();
         if (!cfg.enabled || !cfg.placeTorches) {
             return false;
@@ -91,7 +94,8 @@ public class PlaceTorchGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return target != null && approachTicks < MAX_APPROACH_TICKS && torchSlot() >= 0;
+        return ShelterActivityEnvelope.permitsVoluntaryDisplacement(mob)
+                && target != null && approachTicks < MAX_APPROACH_TICKS && torchSlot() >= 0;
     }
 
     @Override

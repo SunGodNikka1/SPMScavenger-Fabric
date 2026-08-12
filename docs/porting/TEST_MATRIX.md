@@ -353,7 +353,11 @@ outcomes remain `UNVERIFIED`.
 | SCR-2R3 tiny interior | One-room village house where usable cells are within one block of the door | Full structural evidence remains `INTERIOR_ROOM`; deeper equal-tier cells still rank first | Door clearance converts a real tiny room to porch | Policy tests `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2R3 mid-route capture | Lower-tier tree/eave commitment crosses a structural room | At most every 10 ticks, current room atomically replaces old trip and reaches ARRIVED; navigation stops | Mob walks back outside to complete the worse destination or loses old ownership if capture fails | Policy/source-contract/full-suite `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2R4 arrived house hold | Door-closing mob reaches exact interior settlement, then SPM starts its close-behind operation | Actual door action finishes without the scheduler wrapper evicting ARRIVED shelter; `Seek shelter` keeps MOVE until dawn | `Idle`/wander gains MOVE, mob exits, or the door helper is suppressed during approach | User reproduced pre-fix loop; authority/Mixin/full-suite `CODE_CONFIRMED`; repaired runtime `UNVERIFIED` |
-| SCR-2R4 authority release | Arrived shelter is displaced, canceled by dawn/combat/command, unloaded, killed, or server stops | UUID hold releases before RETURNING/cleanup; normal door operation and higher authority resume | Stale hold suppresses SPM door scheduling after shelter no longer owns the night | Registry lifecycle/unit/source-contract `CODE_CONFIRMED`; runtime/heap trend `UNVERIFIED` |
+| SCR-2R4 authority release | Arrived shelter is displaced, canceled by dawn/combat/command, unloaded, killed, or server stops | R5 supersedes displacement release: RETURNING retains the night hold but permits the door wrapper; actual cancellation and owner removal release | Stale hold suppresses SPM door scheduling after shelter no longer owns the night | R5 registry lifecycle/unit/source-contract `CODE_CONFIRMED`; runtime/heap trend `UNVERIFIED` |
+| SCR-2R5 semantic authority | Arrived shelter with active rest claim and Opinion strongly preferring Explore | Observer reports `SHELTER_HOLD` and `resting=true`; discretionary eligibility is denied | Arrived shelter reports optional `REST` or issues voluntary Explore yield | Taxonomy/observer/eligibility tests `CODE_CONFIRMED`; runtime inspector `UNVERIFIED` |
+| SCR-2R5 work envelope | House near logs, drops, crops, furnace, campfire and dark torch site | Settled/returning authority blocks all voluntary displacing addon and pinned host executors until dawn | Temporary ownership gap becomes Gather/Idle/Explore/loot/follow travel | Shared guard/Mixin/full-suite `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-2R5 temporary resume | Settled mob is benignly displaced and needs a closed door to return | Hold becomes RETURNING, same commitment/reservation survives, door helper may operate, exact arrival restores SETTLED | Hold releases to work, or retained hold suppresses the needed door helper | Phase/correlation/door-contract tests + post-GREEN MAIBS `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-2R5 target provenance | Safe sheltered hungry mob targets cow; separate runs use recent attacker, nearby visible hostile, and player attack order | Cow/unknown target stays sheltered; attributable danger/order overrides | Every non-null target is treated as emergency, or real self-defence is blocked | Pure provenance tests and pinned SPM HuntForFood source `CODE_CONFIRMED`; modded-hostile compatibility runtime `UNVERIFIED` |
 
 Static gates after SCR-2R: 24 focused `Shelter*Test` tests and the full 652-test suite pass with zero failures,
 errors, or skips. Selection is capped at 28 semantic evaluations and four path probes per scan;
@@ -387,3 +391,11 @@ classes or runtime datapack, and retains optional-host `@Pseudo` / `require=0` f
 MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`; the arrived-house/close-behind physical loop remains
 runtime `UNVERIFIED`. Final remapped JAR SHA-256:
 `0DF060DD6E1733A06ECB2DC172CBBF7F1C230954D612E883255D0D0BD3ED1E9D`.
+
+SCR-2R5 static gates: 676 tests pass with zero failures/errors and `clean build` passes. Final JAR
+packages `ShelterActivityEnvelope`, correlated `ShelterNightAuthority` phases,
+`ShelterThreatPolicy`, and optional host travel/combat Mixins. No Goal priority, world scan, path
+probe, or activity-selection rule was added. Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE` after
+repairing the discovered RETURNING/door-wrapper deadlock. Runtime behavior, optional-host Mixin
+application, and RET-1 heap trend remain `UNVERIFIED`. Final remapped JAR SHA-256:
+`53475CCC0B2025012572492C07443E6609C070BFA61A52F284D499DA6C01BF48`.

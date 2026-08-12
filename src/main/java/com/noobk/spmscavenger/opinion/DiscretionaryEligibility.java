@@ -45,6 +45,7 @@ public final class DiscretionaryEligibility {
     private static boolean blocksDiscretionaryChoice(ActivityClass activity) {
         return switch (activity) {
             case MANDATORY_SAFETY,
+                    SHELTER_HOLD,
                     MANDATORY_COMMAND,
                     MANDATORY_COMBAT,
                     MANDATORY_SURVIVAL,

@@ -76,6 +76,9 @@ public class CampfireGoal extends Goal {
 
     @Override
     public boolean canUse() {
+        if (!ShelterActivityEnvelope.permitsVoluntaryDisplacement(mob)) {
+            return false;
+        }
         ScavengerConfig cfg = ScavengerConfig.get();
         if (!cfg.enabled || !cfg.campfire) {
             return false;
@@ -110,6 +113,9 @@ public class CampfireGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
+        if (!ShelterActivityEnvelope.permitsVoluntaryDisplacement(mob)) {
+            return false;
+        }
         if (DiscretionaryAuthority.mustYieldDiscretionaryRest(mob.getUUID())) {
             UUID restIntentId = DiscretionaryAuthority.runningRestIntentId(mob.getUUID());
             if (restIntentId != null) {

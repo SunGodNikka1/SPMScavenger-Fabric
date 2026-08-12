@@ -27,6 +27,8 @@ public enum ActivityClass {
     MAINTENANCE,
     REST_APPROACH,
     REST,
+    /** Mandatory arrived nighttime shelter; affective rest is observed independently. */
+    SHELTER_HOLD,
     EXPEDITION,
     PASSIVE_OBSERVER,
     UNKNOWN_ACTIVE;

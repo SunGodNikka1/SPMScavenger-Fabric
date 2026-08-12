@@ -27,6 +27,11 @@ public final class TrackedLocalWanderGoal extends WaterAvoidingRandomStrollGoal 
     }
 
     @Override
+    public boolean canUse() {
+        return ShelterActivityEnvelope.permitsVoluntaryDisplacement(mob) && super.canUse();
+    }
+
+    @Override
     public void start() {
         startX = mob.getX();
         startZ = mob.getZ();
@@ -40,6 +45,9 @@ public final class TrackedLocalWanderGoal extends WaterAvoidingRandomStrollGoal 
 
     @Override
     public boolean canContinueToUse() {
+        if (!ShelterActivityEnvelope.permitsVoluntaryDisplacement(mob)) {
+            return false;
+        }
         if (DiscretionaryAuthority.mustYieldWander(mob.getUUID())) {
             return false;
         }

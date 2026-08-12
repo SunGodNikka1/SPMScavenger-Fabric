@@ -11,6 +11,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ActivityObservationServiceTest {
 
     @Test
+    void mandatoryShelterCanProvideRestWithoutBecomingDiscretionaryRest() {
+        var observation = ActivityObservationService.summarize(
+                List.of(ActivityClass.SHELTER_HOLD), true);
+
+        assertTrue(observation.resting());
+        assertTrue(observation.meaningfulWorkForExpedition());
+        assertTrue(observation.schedulerOccupied());
+        assertFalse(observation.discretionaryIdleCandidate());
+        assertFalse(observation.activeClasses().contains(ActivityClass.REST));
+    }
+
+    @Test
     void pureLocalWanderingAndLookNoiseRemainIdle() {
         var observation = ActivityObservationService.summarize(List.of(
                 ActivityClass.IDLE_CANDIDATE,

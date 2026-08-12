@@ -7,6 +7,7 @@ import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.npc.InventoryCarrier;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 
 /**
  * Identifies Social Player Mobs at runtime <b>without compiling against it</b>.
@@ -39,6 +40,9 @@ public final class PlayerMobs {
 
     /** Result of reading SPM's persistent stay-near order through its public accessor. */
     public enum StayAnchorState { ABSENT, PRESENT, UNAVAILABLE }
+
+    /** Read-only provenance for SPM's transient explicit attack order. */
+    public enum AttackOrderState { ABSENT, PRESENT, UNAVAILABLE }
 
     /** GAO-7 read-only snapshot of SPM's two persisted disposition dimensions. */
     public record Disposition(int fightFlight, int friendliness) {}
@@ -93,6 +97,9 @@ public final class PlayerMobs {
     private static Method getStayAnchor;
     private static boolean stayAnchorResolved;
     private static boolean warnedStayAnchor;
+    private static Field attackOrder;
+    private static boolean attackOrderResolved;
+    private static boolean warnedAttackOrder;
     private static Method fightFlight;
     private static Method friendliness;
     private static boolean dispositionResolved;
@@ -315,6 +322,59 @@ public final class PlayerMobs {
                 "[spmscavenger] PlayerMob.getStayAnchor is unavailable; exploration disabled "
                         + "so it cannot conflict with persistent stay-near orders. This mod likely "
                         + "needs an update.", cause);
+    }
+
+    /**
+     * Whether the current target is pinned by SPM's explicit player-issued attack order. The
+     * source field is transient and private in v0.86.0, so this optional compatibility read fails
+     * closed: an unknown target never gains permission to abandon nighttime shelter.
+     */
+    public static AttackOrderState attackOrderState(Mob mob) {
+        if (!isPlayerMob(mob)) {
+            return AttackOrderState.UNAVAILABLE;
+        }
+        Field field = attackOrderField();
+        if (field == null) {
+            return AttackOrderState.UNAVAILABLE;
+        }
+        try {
+            return field.get(mob) == null ? AttackOrderState.ABSENT : AttackOrderState.PRESENT;
+        } catch (IllegalAccessException | RuntimeException e) {
+            attackOrder = null;
+            attackOrderResolved = true;
+            warnAttackOrderUnavailable(e);
+            return AttackOrderState.UNAVAILABLE;
+        }
+    }
+
+    private static synchronized Field attackOrderField() {
+        if (attackOrderResolved) {
+            return attackOrder;
+        }
+        attackOrderResolved = true;
+        Class<? extends PathfinderMob> type = playerMobClass();
+        if (type == null) {
+            return null;
+        }
+        try {
+            attackOrder = type.getDeclaredField("attackOrder");
+            attackOrder.setAccessible(true);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            attackOrder = null;
+            warnAttackOrderUnavailable(e);
+        }
+        return attackOrder;
+    }
+
+    private static void warnAttackOrderUnavailable(Throwable cause) {
+        if (warnedAttackOrder) {
+            return;
+        }
+        warnedAttackOrder = true;
+        SpmScavenger.LOGGER.warn(
+                "[spmscavenger] PlayerMob attack-order provenance is unavailable; unknown targets "
+                        + "cannot override arrived night shelter. This mod likely needs an update.",
+                cause);
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.mining;
 
+import com.noobk.spmscavenger.goal.ShelterActivityEnvelope;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -14,6 +15,9 @@ public final class MiningExecutionGuard {
 
     /** Shared policy for {@code canUse} and {@code canContinueToUse}. */
     public static boolean permits(Mob mob, Goal self, MiningGoalKind kind) {
+        if (!ShelterActivityEnvelope.permitsVoluntaryDisplacement(mob)) {
+            return false;
+        }
         if (!(mob.level() instanceof ServerLevel level)) {
             return true;
         }

@@ -47,7 +47,7 @@ public abstract class DoorOperationShelterHoldMixin {
     private void spmscavenger$preserveArrivedShelterAuthority(
             CallbackInfoReturnable<Boolean> cir) {
         Mob mob = spmscavenger$mob(this);
-        if (mob != null && ShelterNightAuthority.holds(mob.getUUID())) {
+        if (mob != null && ShelterNightAuthority.isSettled(mob.getUUID())) {
             cir.setReturnValue(false);
         }
     }

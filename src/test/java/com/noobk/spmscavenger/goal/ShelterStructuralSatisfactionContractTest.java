@@ -48,7 +48,11 @@ class ShelterStructuralSatisfactionContractTest {
         assertTrue(commitment.contains("RETURNING"));
         assertTrue(commitment.contains("returnActiveTicks"));
         assertTrue(commitment.contains("returnPathFailures"));
-        assertTrue(source.contains("ShelterNightAuthority.release(mob.getUUID())"));
+        int reconcile = source.indexOf("private void reconcileArrivedCondition");
+        int nextMethod = source.indexOf("private static RestCloseReason", reconcile);
+        assertFalse(source.substring(reconcile, nextMethod)
+                        .contains("ShelterNightAuthority.release"),
+                "Temporary displacement must retain the hold until return or explicit cancellation");
     }
 
     @Test
@@ -60,7 +64,7 @@ class ShelterStructuralSatisfactionContractTest {
         assertTrue(source.contains("shouldCaptureCurrentInterior("));
         assertTrue(source.contains("tryAdopt(current, new ShelterSelectionPolicy.PathProbeBudget()"));
         assertTrue(source.contains("commitment.arrive()"));
-        assertTrue(source.contains("ShelterNightAuthority.acquire(mob.getUUID())"));
+        assertTrue(source.contains("ShelterNightAuthority.acquire("));
         assertTrue(source.contains("mob.getNavigation().stop()"));
     }
 
@@ -71,7 +75,7 @@ class ShelterStructuralSatisfactionContractTest {
         int assigned = source.indexOf("commitment = replacement", replacement);
         String transaction = source.substring(replacement, assigned);
 
-        assertTrue(transaction.contains("ShelterNightAuthority.release(mob.getUUID())"));
+        assertTrue(transaction.contains("ShelterNightAuthority.release(mob.getUUID(), previous.commitmentId())"));
         assertFalse(transaction.contains("ShelterNightAuthority.acquire"),
                 "Replacement selection must not acquire arrival authority before physical arrival");
     }

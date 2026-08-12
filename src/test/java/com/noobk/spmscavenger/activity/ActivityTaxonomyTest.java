@@ -18,6 +18,8 @@ import net.minecraft.world.entity.ai.goal.Goal;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** GAO-0 taxonomy coverage without constructing world-bound Goal implementations. */
 class ActivityTaxonomyTest {
@@ -51,6 +53,12 @@ class ActivityTaxonomyTest {
         assertClass(ActivityClass.PASSIVE_HELPER, PlayerMobDoorGoal.class);
         assertClass(ActivityClass.SOCIAL_REFLEX, DoorOperationGoal.class);
         assertClass(ActivityClass.UNKNOWN_ACTIVE, CompletelyUnknownGoal.class);
+    }
+
+    @Test
+    void shelterHoldIsSchedulerAuthorityButNotDiscretionaryRest() {
+        assertFalse(ActivityClass.SHELTER_HOLD.isRest());
+        assertTrue(ActivityClass.SHELTER_HOLD.isSchedulerOccupant());
     }
 
     private static void assertClass(ActivityClass expected, Class<? extends Goal> goalType) {

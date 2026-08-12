@@ -8,8 +8,8 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
-| **Mode** | `PROGRESSIVE_CONTINUATION` — cross-RFC shelter-authority semantics are locked; Task 42B waits for SCR-2R5 implementation evidence |
-| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1**; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT` (628 tests); Task 42B `READY / BLOCKED BY SCR-2R5` |
+| **Mode** | `PROGRESSIVE_CONTINUATION` — cross-RFC shelter-authority semantics are implemented; Task 42B is dependency-ready but unauthorized |
+| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1**; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT`; D-GAO-043 `IMPLEMENTED / STATIC ACCEPT`; Task 42B `DEPENDENCY-READY / UNAUTHORIZED` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
@@ -39,10 +39,10 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** implement cross-RFC `SCR-2R5` under separate authorization. Task 42B remains
-technically ready, but must not ship an inspector that can explain an arrived mandatory shelter
-hold as discretionary REST or imply that Opinion may yield it. Runtime remains non-default under
-PD-GAO-12 and requires a named `RUNTIME_QUESTION` plus separate launch approval.
+**Nearest frontier:** Task 42B's addon-owned on-demand inspector is dependency-ready but remains
+unauthorized. D-GAO-043 now supplies truthful `SHELTER_HOLD + resting` evidence, so the UI no longer
+depends on a false discretionary-REST model. Runtime remains non-default under PD-GAO-12 and
+requires a named `RUNTIME_QUESTION` plus separate launch approval.
 
 ---
 
@@ -390,7 +390,7 @@ Opinion matters when there is **freedom of choice**.
 
 ### Nighttime shelter authority clarification — cross-RFC SCR-2R5
 
-**Status:** `LOCKED / D-GAO-043 / IMPLEMENTATION DEPENDS ON SCR-2R5`
+**Status:** `IMPLEMENTED / STATIC ACCEPT / D-GAO-043`
 
 Current source dynamically reports an arrived `SeekShelterGoal` as `ActivityClass.REST`, even
 though the same observer already reports affective rest independently from the correlated shelter
@@ -1731,7 +1731,7 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 through GAO-9 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT`; Task 42B `DEPENDENCY-READY / BLOCKED BY SCR-2R5 IMPLEMENTATION`
+**Status:** GAO-0 through GAO-9 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT`; D-GAO-043 `IMPLEMENTED / STATIC ACCEPT`; Task 42B `DEPENDENCY-READY / UNAUTHORIZED`
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
@@ -1750,7 +1750,7 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-6** | ENTITY bridge | **CLOSED:** `SpmEntityOpinionBridge`, `EntityOpinionMemory`, GAO-6R `SocialExperienceEpisodes` | GAO-4, RET-GAO-1 |
 | **GAO-7** | PersonalityModel | **CLOSED / STATIC ACCEPT:** immutable six-trait model; SPM-host anchors + deterministic UUID latent traits; bounded subjective learning at the single normalized seam; snapshot lifecycle; 581-test clean build | GAO-2, GAO-6 |
 | **GAO-8A** | Passive physical expression | **CLOSED / STATIC ACCEPT:** bounded scheduler-owned LOOK expression; Task 40; 593 tests | GAO-0, GAO-1, GAO-6, GAO-7 |
-| **GAO-8B** | Understandable Opinion inspection | **PARTIAL / BLOCKED:** Task 42A structured causal trace is statically accepted; PD-GAO-14 and D-GAO-043 are locked; Task 42B addon-owned on-demand explanation UI waits for SCR-2R5 implementation evidence so shelter causality is truthful | GAO-0 through GAO-9, RET-GAO-1, Task 42A, D-GAO-039/040/043, PD-GAO-14, SCR-2R5 |
+| **GAO-8B** | Understandable Opinion inspection | **PARTIAL / READY:** Task 42A structured causal trace and D-GAO-043 shelter semantics are statically accepted; PD-GAO-14 is locked; Task 42B addon-owned on-demand explanation UI awaits implementation authorization | GAO-0 through GAO-9, RET-GAO-1, Task 42A, D-GAO-039/040/043, PD-GAO-14, SCR-2R5 |
 | **GAO-9** | Overland environment affinity | **CLOSED / STATIC ACCEPT:** finite multi-label context, completion-only normalized learning, enum-bounded snapshot memory, and ±10 valid-route ranking; PROJECT memory superseded; 618 tests | GAO-0c, GAO-2, GAO-5B, RET-GAO-1 |
 
 ### GAO-0b implementation task (`IMPLEMENTED / STATIC VERIFIED`)
@@ -2176,7 +2176,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 | D-GAO-040 | GAO-8B uses a bounded server-validated common DTO and addon-owned screen; no client type in common API and no host UI/billboard mutation | `LOCKED` | PD-GAO-14 resolved entry/access/refresh/authority contract |
 | D-GAO-041 | Explanation evidence is captured at decision time in one structured record and carried through intent/handoff/terminal/learning receipt; never reconstructed from later state | `IMPLEMENTED / STATIC ACCEPT` | Task 42A; 628 tests + clean build |
 | D-GAO-042 | Trace retention is bounded by whole decisions with explicit current suppression disposition; no partial-chain eviction or authority side effect | `IMPLEMENTED / STATIC ACCEPT` | Task 42A; active-origin retention test + RET-1 static review |
-| D-GAO-043 | Arrived nighttime shelter is `SHELTER_HOLD` mandatory authority while affective rest is an independent observation; only discretionary campfire REST may yield to Opinion; physical displacement legality is decided by the separate centralized shelter envelope | `LOCKED` | Cross-RFC `SCR-2R5`; current dynamic `ActivityClass.REST` mapping conflicts with the existing SeekShelter exclusion |
+| D-GAO-043 | Arrived nighttime shelter is `SHELTER_HOLD` mandatory authority while affective rest is an independent observation; only discretionary campfire REST may yield to Opinion; physical displacement legality is decided by the separate centralized shelter envelope | `IMPLEMENTED / STATIC ACCEPT` | Cross-RFC `SCR-2R5`; taxonomy/observer/eligibility tests; 676-test clean build |
 
 ---
 
@@ -2184,6 +2184,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-11 | Agent_Codex | **D-GAO-043 implemented with SCR-2R5.** Added truthful mandatory `SHELTER_HOLD` while shelter rest remains an independent claim, blocked discretionary eligibility, preserved campfire `REST`, and integrated the physical authority envelope. All 676 tests and clean build pass; Task 42B is dependency-ready again. Runtime remains unverified; no launch, commit, push, or PR |
 | 2026-08-11 | Agent_Codex | **D-GAO-043 locked with SCR-2R5.** Accepted the user's two-layer correction: arrived SeekShelter becomes blocking `SHELTER_HOLD`, rest remains an independent affective predicate, and ActivityClass does not decide physical displacement. Locked a centralized four-effect interruption envelope and blocked Task 42B until implementation evidence prevents false shelter causality. No Java edit, test/build, runtime launch, commit, push, or PR |
 | 2026-08-11 | Agent_Codex | **D-GAO-043 proposed from shelter runtime follow-up.** Confirmed the observer currently weakens arrived SeekShelter from mandatory safety to `REST` even though a shelter rest claim already provides the affective predicate; proposed independent authority/rest semantics and blocked Task 42B from presenting false shelter causality until review. Full enforcement design lives in vanilla progression `SCR-2R5`; no Java edit, test/build, runtime launch, commit, push, or PR |
 | 2026-08-11 | Agent_Codex | **PD-GAO-14 locked.** Selected a configurable Inspect Opinion key targeting a PlayerMob, a Scavenger-owned screen, server-authoritative Creative-or-operator access, one immutable bounded snapshot per open/manual refresh, and a strictly read-only surface. Locked D-GAO-039/040 and advanced Task 42B to dependency-ready; implementation remains unauthorized. No Java edit, tests/build, runtime launch, commit, push, or PR |

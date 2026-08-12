@@ -8,8 +8,8 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Target progression** | **Vanilla Minecraft 1.21.1** survival (not a third-party tech mod) |
 | **Scope** | Autonomous progression architecture plus narrowly authorized repairs to existing survival executors |
-| **Mode** | `PLANNING` — `SCR-2R5` shelter authority envelope is locked and implementation-ready; implementation is not authorized |
-| **Status** | `RESEARCHING`; `SCR-1 RUNTIME_CONFIRMED`; `SCR-2R4 IMPLEMENTED / STATIC VERIFIED / RUNTIME RECHECK PENDING`; `SCR-2R5 LOCKED / UNAUTHORIZED`; `SCR-3 DEFERRED` |
+| **Mode** | `WORKING_FROM_PLAN` — `SCR-2R5` implemented and statically accepted; runtime confirmation remains separate |
+| **Status** | `RESEARCHING`; `SCR-1 RUNTIME_CONFIRMED`; `SCR-2R4 SUPERSEDED IN PART BY SCR-2R5`; `SCR-2R5 IMPLEMENTED / STATIC ACCEPT / RUNTIME UNVERIFIED`; `SCR-3 DEFERRED` |
 | **User constraint** | The RFC was originally design-only; the user has now separately authorized `SCR-1` and `SCR-2` implementation. Minecraft launches, commits, pushes, and `SCR-3` remain separately gated |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `progression/TaskLifecycle.java` |
 | **Owners** | User (product); architecture TBD |
@@ -889,7 +889,7 @@ SHA-256: `0DF060DD6E1733A06ECB2DC172CBBF7F1C230954D612E883255D0D0BD3ED1E9D`.
 
 ### SCR-2R5 — Shelter authority envelope
 
-**Status:** `LOCKED / IMPLEMENTATION-READY / UNAUTHORIZED`
+**Status:** `IMPLEMENTED / STATIC ACCEPT / RUNTIME UNVERIFIED`
 **Agent:** Agent_Codex
 **Contribution type:** `BRAINSTORM / REVIEW / MAIBS_STATIC`
 
@@ -1075,13 +1075,36 @@ cannot enforce the pinned host surface.
 At 100+ mobs, only runtime counters/heap sampling can confirm the actual overhead and retention
 bound.
 
+#### Implementation and validation evidence
+
+Implemented the locked two-layer contract without changing priorities or adding a scheduler/world
+scan. `SHELTER_HOLD` now blocks Opinion while the correlated claim independently reports rest.
+`ShelterActivityEnvelope` guards Scavenger-owned displacement and the pinned optional SPM travel/
+combat surface. `ShelterThreatPolicy` preserves passive/unknown targets and recognizes recent
+self-defence, nearby visible vanilla enemies, and explicit SPM attack orders. The loaded-mob hold
+registry now stores commitment-correlated immutable snapshots with `SETTLED`/`RETURNING` phase and
+production cleanup.
+
+Post-GREEN MAIBS found a cross-layer defect: retaining the hold during `RETURNING` initially caused
+the R4 door Mixin to suppress the finite door wrapper needed for re-entry. The final implementation
+uses `holds()` for the night work envelope but `isSettled()` for door-wrapper suppression. Thus
+RETURNING blocks work while allowing the helper required to reach the same anchor.
+
+Focused tests, all 676 tests, and `clean build` pass. The remapped JAR contains the policy, hold,
+threat, and optional host Mixin classes, contains no SPM classes, and has SHA-256
+`53475CCC0B2025012572492C07443E6609C070BFA61A52F284D499DA6C01BF48`. Static MAIBS is
+`PASS — BEHAVIORALLY_PLAUSIBLE`; physical nighttime behavior, optional-Mixin application, modded
+hostile recognition, and RET-1 heap trend remain runtime `UNVERIFIED`.
+
 **Frontier before:** SCR-2R4 was statically accepted but the full legal envelope around an arrived
 hold was implicit and Opinion still observed that hold as discretionary REST. **Brainstorm and
 peer-review contribution:** corrected the root-cause model, separated semantic activity from
 physical displacement, added condition-aware target provenance and explicit suspend-vs-cancel
 lifecycle effects, compared enforcement designs, and locked the authority/displacement matrix plus
-MAIBS scenarios. **Frontier after:** SCR-2R5 is implementation-ready; the next action is explicit
-implementation authorization, not another design cycle. SCR-3 shelter memory remains deferred.
+MAIBS scenarios. **Frontier after:** SCR-2R5 and D-GAO-043 are implemented and statically accepted.
+The next shelter frontier is an approved runtime falsification of the occupied-bed/house-near-tree,
+passive-hunt, interruption/return, danger, and command scenarios. SCR-3 shelter memory remains
+deferred.
 
 ---
 
@@ -1292,6 +1315,7 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Codex | 2026-08-11 | Implemented `SCR-2R5` + D-GAO-043 semantic seam: mandatory `SHELTER_HOLD`, independent affective rest, centralized displacement envelope, conservative target provenance, commitment-correlated SETTLED/RETURNING authority, and optional pinned host travel/combat guards. Post-GREEN MAIBS found and repaired RETURNING suppressing its required door wrapper. All 676 tests and clean build pass; runtime remains unverified. No Minecraft launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Locked `SCR-2R5` after user peer review: `SHELTER_HOLD` is mandatory observational authority, affective rest stays independent, and a centralized four-effect physical interruption policy distinguishes in-place, suspend/resume, override/cancel, and block. Locked conservative target provenance, bounded correlated hold snapshots, staged optional-host hooks, unchanged priorities, and implementation gates. No Java edit, test/build, runtime launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Proposed `SCR-2R5` shelter authority envelope: confirmed Gather is a downstream claimant rather than a valid p3 preemptor, found arrived shelter's `REST` taxonomy leak into Opinion eligibility, rejected class-only/global-selector enforcement, and defined a displacement-aware guard, alternatives, MAIBS matrix, and acceptance gates. No Java edits, tests/build, runtime launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Runtime feedback falsified post-arrival authority persistence; implemented `SCR-2R4` exact-arrival night authority and optional scheduler-only door wrapper yield, with lifecycle cleanup, tests, docs, and static MAIBS; repaired runtime pending |

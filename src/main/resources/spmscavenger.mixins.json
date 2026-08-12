@@ -7,7 +7,9 @@
     "MobGoalSelectorAccessor",
     "ObjectiveReadoutMixin",
     "PlayerMobDoorGoalBusyMixin",
-    "DoorOperationShelterHoldMixin"
+    "DoorOperationShelterHoldMixin",
+    "FriendlyGreetShelterHoldMixin",
+    "WeaponAttackShelterHoldMixin"
   ],
   "client": [
     "PlayerMobRendererReadoutMixin"

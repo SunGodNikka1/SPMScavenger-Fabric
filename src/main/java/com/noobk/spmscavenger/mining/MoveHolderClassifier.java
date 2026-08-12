@@ -50,7 +50,7 @@ public final class MoveHolderClassifier {
         ActivityClass base = staticActivityClass(goal.getClass());
         if (goal instanceof SeekShelterGoal shelterGoal) {
             return shelterGoal.isRestingAtShelter()
-                    ? ActivityClass.REST
+                    ? ActivityClass.SHELTER_HOLD
                     : base;
         }
         if (goal instanceof ExploringGoal) {
@@ -180,6 +180,8 @@ public final class MoveHolderClassifier {
         ActivityClass activity = activityClass(goal, mob, store, mobId, now);
         switch (activity) {
             case MANDATORY_SAFETY:
+                return MoveHolderClassification.PROTECTED_SAFETY_RECOVERY;
+            case SHELTER_HOLD:
                 return MoveHolderClassification.PROTECTED_SAFETY_RECOVERY;
             case MANDATORY_COMMAND:
                 return MoveHolderClassification.PROTECTED_PLAYER_ORDER;

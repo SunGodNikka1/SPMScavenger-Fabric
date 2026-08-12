@@ -1223,3 +1223,44 @@ errors, or skips; `clean build` passes. The remapped artifact contains the optio
 authority class, contains no SPM classes or runtime datapack, and has SHA-256
 `0DF060DD6E1733A06ECB2DC172CBBF7F1C230954D612E883255D0D0BD3ED1E9D`. Static MAIBS is
 `PASS — BEHAVIORALLY_PLAUSIBLE`; repaired physical behavior remains `UNVERIFIED`.
+
+### SCR-2R5 — shelter authority envelope and truthful Opinion semantics
+
+Runtime follow-up showed that once arrived shelter temporarily lost `MOVE`, lower-priority work
+could claim the gap even though it could not directly preempt priority-2 shelter. Separately, the
+shared observer classified an arrived mandatory shelter as discretionary `REST`, allowing Opinion
+to reason about yielding a safety hold. A third source defect treated every non-null target as
+combat, including SPM's passive-animal `HuntForFoodGoal` target.
+
+The selected repair separates three dimensions. `ActivityClass.SHELTER_HOLD` is mandatory
+observational authority; the correlated rest claim independently supplies `resting=true`; and a
+central `ShelterActivityEnvelope` decides physical displacement. Its four effects are in-place,
+suspend/resume, override/cancel, and block. Scavenger work, torch placement, campfire travel,
+wandering, exploration, mining, and crafting consult the shared O(1) guard at admission and
+continuation. Optional `@Pseudo` host hooks cover the pinned displacing SPM surface and delegate to
+the same policy rather than duplicating rules.
+
+Target provenance is conservative: recent self-defence, a nearby visible vanilla hostile, or an
+explicit SPM attack order overrides. Passive hunts, proactive/unknown targets, and distant/hidden
+targets do not manufacture permission to leave. This intentionally yields a compatibility-safe
+false negative for an unrecognized modded hostile until it attacks; copying SPM target tables or
+treating all targets as danger was rejected.
+
+The hold registry is keyed by loaded mob UUID and stores immutable commitment-correlated data.
+`RETURNING` retains night authority so work cannot seize the gap, but is distinct from `SETTLED`:
+the R4 door-wrapper suppression applies only while settled, allowing the finite door helper needed
+to re-enter. Stale commitment release cannot remove a newer hold. Unload, death, server stop,
+replacement, dawn, command, and invalidation retain production cleanup.
+
+**Must happen:** settled or returning shelter blocks voluntary displacement while in-place eating/
+looking remains possible; temporary helpers resume the same commitment; danger/commands override;
+Opinion observes `SHELTER_HOLD + resting` rather than optional `REST`. **Must not happen:** a cow
+target cancels shelter, an old commitment releases a new hold, RETURNING suppresses its needed door
+operation, priorities change, or a second scheduler/world scan is introduced.
+
+Evidence: 676 tests pass with no failures/errors; `clean build` passes. Remapped artifact
+`build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`53475CCC0B2025012572492C07443E6609C070BFA61A52F284D499DA6C01BF48`, packages the shared policy,
+correlated hold, threat policy, and optional host Mixins. Static MAIBS found and repaired the
+SETTLED-vs-RETURNING door deadlock. Final static gate is `PASS — BEHAVIORALLY_PLAUSIBLE`; runtime
+physical behavior, optional-Mixin application, and heap trend remain `UNVERIFIED`.

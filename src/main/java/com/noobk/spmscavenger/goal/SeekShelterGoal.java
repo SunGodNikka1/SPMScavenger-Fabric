@@ -425,7 +425,7 @@ public class SeekShelterGoal extends Goal {
             // not follow the replacement into APPROACH, where SPM may legitimately need MOVE for
             // another door operation. Failed adoption never reaches this point, so the old hold is
             // preserved unless the replacement transaction has already acquired its reservation.
-            ShelterNightAuthority.release(mob.getUUID());
+            ShelterNightAuthority.release(mob.getUUID(), previous.commitmentId());
             if (previous.restClaimOpened()) {
                 RestSessionCoordinator.closeShelterRecovery(
                         mob, previous.commitmentId(), RestCloseReason.VALIDITY_LOST, now);
@@ -527,7 +527,7 @@ public class SeekShelterGoal extends Goal {
     public static void onEntityUnload(UUID mobId) {
         CLAIMS.entrySet().removeIf(entry -> entry.getValue().mob().equals(mobId));
         ShelterReservationRegistry.releaseOwner(mobId);
-        ShelterNightAuthority.release(mobId);
+        ShelterNightAuthority.releaseOwner(mobId);
     }
 
     /** Death has the same ownership semantics as unload, but remains explicit for auditability. */
@@ -608,8 +608,8 @@ public class SeekShelterGoal extends Goal {
         ScavengerConfig cfg = ScavengerConfig.get();
         if (!baseAuthorityAllows(cfg)
                 || !validCommitment(cfg, mob.level())
-                || ShelterInterruptionPolicy.decide(observation.activeClasses())
-                        == ShelterInterruptionPolicy.Decision.CANCEL) {
+                || ShelterInterruptionPolicy.decideInterruptedExecution(observation.activeClasses())
+                        == ShelterInterruptionPolicy.Decision.OVERRIDE_AND_CANCEL) {
             cancelCommitment(true, interruptionCloseReason(observation));
             return;
         }
@@ -620,8 +620,7 @@ public class SeekShelterGoal extends Goal {
         return cfg.enabled
                 && cfg.seekShelter
                 && shelterTime(mob.level())
-                && mob.getTarget() == null
-                && mob.hurtTime <= 0
+                && !ShelterThreatPolicy.overridesShelter(mob)
                 && PlayerMobs.stayAnchorState(mob) == PlayerMobs.StayAnchorState.ABSENT;
     }
 
@@ -694,7 +693,7 @@ public class SeekShelterGoal extends Goal {
         if (commitment == null) {
             return;
         }
-        ShelterNightAuthority.release(mob.getUUID());
+        ShelterNightAuthority.release(mob.getUUID(), commitment.commitmentId());
         if (commitment.restClaimOpened()) {
             RestSessionCoordinator.closeShelterRecovery(
                     mob, commitment.commitmentId(), closeReason, mob.level().getGameTime());
@@ -877,15 +876,19 @@ public class SeekShelterGoal extends Goal {
             return;
         }
         commitment.arrive();
-        ShelterNightAuthority.acquire(mob.getUUID());
+        ShelterNightAuthority.acquire(
+                mob.getUUID(),
+                commitment.commitmentId(),
+                commitment.destination(),
+                mob.level().getGameTime());
     }
 
     private void reconcileArrivedCondition(long now) {
         if (commitment != null
                 && commitment.state() == ShelterCommitment.State.ARRIVED
                 && !atCommittedAnchor()) {
-            ShelterNightAuthority.release(mob.getUUID());
             commitment.beginReturning(now);
+            ShelterNightAuthority.markReturning(mob.getUUID(), commitment.commitmentId());
             if (commitment.restClaimOpened()) {
                 RestSessionCoordinator.suspendShelterRecovery(mob, commitment.commitmentId(), now);
             }
@@ -930,7 +933,7 @@ public class SeekShelterGoal extends Goal {
     }
 
     private RestCloseReason baseAuthorityCloseReason() {
-        if (mob.getTarget() != null || mob.hurtTime > 0) {
+        if (ShelterThreatPolicy.overridesShelter(mob)) {
             return RestCloseReason.COMBAT;
         }
         if (PlayerMobs.stayAnchorState(mob) != PlayerMobs.StayAnchorState.ABSENT) {

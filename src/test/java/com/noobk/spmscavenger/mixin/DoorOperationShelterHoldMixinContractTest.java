@@ -20,7 +20,7 @@ class DoorOperationShelterHoldMixinContractTest {
         assertTrue(source.contains("games.brennan.playermob.entity.goal.DoorOperationGoal"));
         assertTrue(source.contains("method = {\"canUse\", \"canContinueToUse\"}"));
         assertTrue(source.contains("require = 0"));
-        assertTrue(source.contains("ShelterNightAuthority.holds(mob.getUUID())"));
+        assertTrue(source.contains("ShelterNightAuthority.isSettled(mob.getUUID())"));
         assertTrue(config.contains("DoorOperationShelterHoldMixin"));
 
         assertFalse(source.contains("beginDoorOperation"),
