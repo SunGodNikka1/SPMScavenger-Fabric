@@ -5,7 +5,6 @@ import com.noobk.spmscavenger.opinion.readout.OpinionInspectPermissions;
 import com.noobk.spmscavenger.opinion.readout.OpinionInspectRejectReason;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutSnapshot;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutSnapshots;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -19,8 +18,7 @@ public final class OpinionInspectNetworking {
     }
 
     public static void registerServer() {
-        PayloadTypeRegistry.playC2S().register(OpinionInspectPayloads.Request.TYPE, OpinionInspectPayloads.Request.CODEC);
-        PayloadTypeRegistry.playS2C().register(OpinionInspectPayloads.Response.TYPE, OpinionInspectPayloads.Response.CODEC);
+        OpinionInspectPayloads.registerPayloadTypes();
 
         ServerPlayNetworking.registerGlobalReceiver(
                 OpinionInspectPayloads.Request.TYPE,

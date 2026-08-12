@@ -33,6 +33,8 @@ public record OpinionReadoutSnapshot(
         boolean resting,
         Optional<OpinionShelterHoldView> shelterHold,
         String incumbentActivity,
+        String currentIntentActivity,
+        String currentIntentLifecycle,
         String restAuthorityPhase,
         String currentDisposition,
         List<OpinionReadoutDecisionView> recentDecisions) {
@@ -51,6 +53,8 @@ public record OpinionReadoutSnapshot(
         environmentPreferences = Map.copyOf(environmentPreferences);
         Objects.requireNonNull(shelterHold, "shelterHold");
         incumbentActivity = incumbentActivity == null ? "" : incumbentActivity;
+        currentIntentActivity = currentIntentActivity == null ? "" : currentIntentActivity;
+        currentIntentLifecycle = currentIntentLifecycle == null ? "" : currentIntentLifecycle;
         restAuthorityPhase = restAuthorityPhase == null ? "" : restAuthorityPhase;
         currentDisposition = currentDisposition == null ? "" : currentDisposition;
         recentDecisions = List.copyOf(recentDecisions);

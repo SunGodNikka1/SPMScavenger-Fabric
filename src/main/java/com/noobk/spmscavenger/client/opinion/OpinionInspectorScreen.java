@@ -15,6 +15,11 @@ public final class OpinionInspectorScreen extends Screen {
 
     private static final int LINE_HEIGHT = 10;
     private static final int PADDING = 8;
+    /** Left-side panel width cap — keeps the inspected mob visible on the right. */
+    private static final int PANEL_MAX_WIDTH = 400;
+    /** ARGB translucent dark fill; no blur, world stays sharp behind the panel. */
+    private static final int PANEL_COLOR = 0xB0101010;
+    private static final int PANEL_EDGE_COLOR = 0xFF404040;
 
     private OpinionReadoutSnapshot snapshot;
     private final List<String> bodyLines = new ArrayList<>();
@@ -55,9 +60,14 @@ public final class OpinionInspectorScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        renderInspectorPanel(graphics);
+    }
+
+    @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 6, 0xFFFFFF);
+        graphics.drawString(this.font, this.title, PADDING, 6, 0xFFFFFF);
         int y = PADDING + 14;
         int maxY = this.height - 36;
         int index = 0;
@@ -72,6 +82,16 @@ public final class OpinionInspectorScreen extends Screen {
             y += LINE_HEIGHT;
         }
         super.render(graphics, mouseX, mouseY, partialTick);
+    }
+
+    private void renderInspectorPanel(GuiGraphics graphics) {
+        int panelWidth = panelWidth();
+        graphics.fill(0, 0, panelWidth, this.height, PANEL_COLOR);
+        graphics.fill(panelWidth - 1, 0, panelWidth, this.height, PANEL_EDGE_COLOR);
+    }
+
+    private int panelWidth() {
+        return Math.min(PANEL_MAX_WIDTH, Math.max(220, this.width / 2));
     }
 
     @Override
@@ -97,7 +117,21 @@ public final class OpinionInspectorScreen extends Screen {
                 + " satisfaction=" + snapshot.satisfaction());
         bodyLines.add("stress=" + snapshot.stress()
                 + " novelty=" + snapshot.novelty()
-                + " frozen=" + snapshot.frozen());
+                + " frozen=" + snapshot.frozen()
+                + " ticksSinceProgress=" + snapshot.ticksSinceMeaningfulProgress());
+        bodyLines.add("");
+        bodyLines.add("— Director layers —");
+        if (!snapshot.incumbentActivity().isBlank()) {
+            bodyLines.add("incumbent=" + snapshot.incumbentActivity());
+        }
+        if (!snapshot.currentIntentActivity().isBlank()) {
+            bodyLines.add("intent=" + snapshot.currentIntentActivity()
+                    + " (" + snapshot.currentIntentLifecycle() + ")");
+        }
+        bodyLines.add("latestDecisionDisposition=" + snapshot.currentDisposition()
+                + " restPhase=" + snapshot.restAuthorityPhase());
+        bodyLines.add("placePreferences=" + snapshot.placePreferenceCount()
+                + " entityPreferences=" + snapshot.entityPreferenceCount());
         bodyLines.add("");
         bodyLines.add("— Personality —");
         var p = snapshot.personality();
@@ -108,9 +142,7 @@ public final class OpinionInspectorScreen extends Screen {
                 + " materialism=" + p.materialism()
                 + " adventure=" + p.adventurousness());
         bodyLines.add("");
-        bodyLines.add("resting=" + snapshot.resting()
-                + " disposition=" + snapshot.currentDisposition()
-                + " restPhase=" + snapshot.restAuthorityPhase());
+        bodyLines.add("resting=" + snapshot.resting());
         snapshot.shelterHold().ifPresent(hold -> bodyLines.add(
                 "shelter=" + hold.phase() + " @ "
                         + hold.anchorX() + "," + hold.anchorY() + "," + hold.anchorZ()));

@@ -44,6 +44,8 @@ public final class OpinionReadoutSnapshots {
                 "",
                 "",
                 "",
+                "",
+                "",
                 List.of());
     }
 
@@ -54,7 +56,6 @@ public final class OpinionReadoutSnapshots {
             MobExperienceContext context) {
         AffectiveState affect = context.affectiveState();
         Optional<ShelterNightAuthority.Hold> shelter = ShelterNightAuthority.hold(context.mobId());
-        boolean counterfactual = shelter.isPresent();
         Optional<OpinionDecisionTrace.Decision> latest =
                 OpinionReadoutExplanation.latestDecision(context);
         List<String> summary = OpinionReadoutExplanation.buildSummary(context, shelter, latest);
@@ -89,9 +90,11 @@ public final class OpinionReadoutSnapshots {
                 context.hasLiveRestClaim(),
                 OpinionReadoutExplanation.shelterView(context.mobId()),
                 context.discretionaryDirector().incumbentActivity().map(Enum::name).orElse(""),
+                context.discretionaryDirector().intent().map(i -> i.activity().name()).orElse(""),
+                context.discretionaryDirector().intent().map(i -> i.lifecycle().name()).orElse(""),
                 context.discretionaryDirector().restAuthorityPhase().name(),
                 OpinionReadoutExplanation.currentDisposition(context),
-                OpinionReadoutExplanation.recentDecisions(context, counterfactual));
+                OpinionReadoutExplanation.recentDecisions(context));
     }
 
     public static Optional<OpinionReadoutSnapshot> captureIfPresent(

@@ -11,6 +11,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,6 +28,18 @@ public final class OpinionInspectPayloads {
             ResourceLocation.fromNamespaceAndPath(SpmScavenger.MOD_ID, "opinion_inspect_response");
 
     private OpinionInspectPayloads() {
+    }
+
+    private static boolean payloadTypesRegistered;
+
+    /** Registers play payload types once per JVM (common init runs on integrated client and dedicated server). */
+    public static void registerPayloadTypes() {
+        if (payloadTypesRegistered) {
+            return;
+        }
+        payloadTypesRegistered = true;
+        PayloadTypeRegistry.playC2S().register(Request.TYPE, Request.CODEC);
+        PayloadTypeRegistry.playS2C().register(Response.TYPE, Response.CODEC);
     }
 
     public record Request(long requestId, int entityId) implements CustomPacketPayload {
@@ -118,6 +131,8 @@ public final class OpinionInspectPayloads {
                 buf.writeBoolean(false);
             }
             buf.writeUtf(snapshot.incumbentActivity());
+            buf.writeUtf(snapshot.currentIntentActivity());
+            buf.writeUtf(snapshot.currentIntentLifecycle());
             buf.writeUtf(snapshot.restAuthorityPhase());
             buf.writeUtf(snapshot.currentDisposition());
             writeDecisions(buf, snapshot.recentDecisions());
@@ -157,6 +172,8 @@ public final class OpinionInspectPayloads {
                             buf.readUtf()))
                     : Optional.empty();
             String incumbent = buf.readUtf();
+            String intentActivity = buf.readUtf();
+            String intentLifecycle = buf.readUtf();
             String restPhase = buf.readUtf();
             String disposition = buf.readUtf();
             List<OpinionReadoutDecisionView> decisions = readDecisions(buf);
@@ -181,6 +198,8 @@ public final class OpinionInspectPayloads {
                     resting,
                     shelter,
                     incumbent,
+                    intentActivity,
+                    intentLifecycle,
                     restPhase,
                     disposition,
                     decisions);

@@ -33,11 +33,12 @@ public final class OpinionReadoutExplanation {
         List<String> lines = new ArrayList<>();
         if (shelterHold.isPresent()) {
             ShelterNightAuthority.Hold hold = shelterHold.get();
-            lines.add("Doing: Seeking night shelter (mandatory)");
+            lines.add(shelterDoingLine(hold.phase()));
             lines.add("Because: Dusk shelter authority is active — not a discretionary mood choice");
             lines.add("Held by: SHELTER_HOLD / " + hold.phase());
             lines.add("Resting: "
                     + (context.hasLiveRestClaim() ? "yes (independent affective claim)" : "no"));
+            appendDirectorLayers(lines, context);
             latestDecision.ifPresent(decision -> appendMandatorySuppression(lines, decision));
             return List.copyOf(lines);
         }
@@ -48,13 +49,20 @@ public final class OpinionReadoutExplanation {
         if (context.hasLiveRestClaim()) {
             lines.add("Resting: yes (affective rest claim is live)");
         }
-        context.discretionaryDirector().incumbentActivity().ifPresent(activity ->
-                lines.add("Incumbent activity: " + activity.name()));
+        appendDirectorLayers(lines, context);
         return List.copyOf(lines);
     }
 
-    public static OpinionReadoutDecisionView projectDecision(
-            OpinionDecisionTrace.Decision decision, boolean counterfactualOnly) {
+    /**
+     * Counterfactual evaluations are recorded at decision time — never inferred from current shelter
+     * or other live authority that could rewrite older causal history (D-GAO-041 / D-GAO-044).
+     */
+    public static boolean isCounterfactualEvaluation(OpinionDecisionTrace.Decision decision) {
+        return decision.disposition() == OpinionDecisionTrace.DecisionDisposition.MANDATORY_AUTHORITY;
+    }
+
+    public static OpinionReadoutDecisionView projectDecision(OpinionDecisionTrace.Decision decision) {
+        boolean counterfactualOnly = isCounterfactualEvaluation(decision);
         List<String> candidates = new ArrayList<>();
         for (OpinionDecisionTrace.Candidate candidate : decision.candidates()) {
             if (candidates.size() >= OpinionReadoutDecisionView.MAX_CANDIDATE_LINES) {
@@ -94,10 +102,26 @@ public final class OpinionReadoutExplanation {
                 decision.disposition().name(),
                 decision.dispositionCause().name(),
                 selected,
-                explainDisposition(decision, counterfactualOnly),
+                explainDisposition(decision),
                 candidates,
                 transitions,
                 counterfactualOnly);
+    }
+
+    private static void appendDirectorLayers(List<String> lines, MobExperienceContext context) {
+        context.discretionaryDirector().incumbentActivity().ifPresent(activity ->
+                lines.add("Director incumbent: " + activity.name()));
+        context.discretionaryDirector().intent().ifPresent(intent ->
+                lines.add("Director intent: " + intent.activity().name()
+                        + " (" + intent.lifecycle() + ")"));
+    }
+
+    private static String shelterDoingLine(ShelterNightAuthority.Phase phase) {
+        return switch (phase) {
+            case APPROACHING -> "Doing: Seeking night shelter (mandatory)";
+            case SETTLED -> "Doing: Holding night shelter (mandatory)";
+            case RETURNING -> "Doing: Returning to night shelter (mandatory)";
+        };
     }
 
     private static void appendMandatorySuppression(
@@ -119,9 +143,8 @@ public final class OpinionReadoutExplanation {
             MobExperienceContext context,
             OpinionDecisionTrace.Decision decision) {
         lines.add("Doing: " + describeDoing(decision));
-        lines.add("Because: " + explainDisposition(decision, false));
-        context.discretionaryDirector().intent().ifPresent(intent ->
-                lines.add("Intent: " + intent.activity().name() + " (" + intent.lifecycle() + ")"));
+        lines.add("Because: " + explainDisposition(decision));
+        appendDirectorLayers(lines, context);
         decision.transitions().stream()
                 .filter(t -> t.stage() == OpinionDecisionTrace.Stage.TERMINAL)
                 .reduce((first, second) -> second)
@@ -144,10 +167,9 @@ public final class OpinionReadoutExplanation {
         };
     }
 
-    private static String explainDisposition(
-            OpinionDecisionTrace.Decision decision, boolean counterfactualOnly) {
-        if (counterfactualOnly) {
-            return "Counterfactual scores only — not causal while mandatory shelter is active";
+    private static String explainDisposition(OpinionDecisionTrace.Decision decision) {
+        if (isCounterfactualEvaluation(decision)) {
+            return "Mandatory authority blocked discretionary scheduling — scores are diagnostic only";
         }
         return switch (decision.disposition()) {
             case INTENT_ISSUED -> "Highest utility candidate issued to the director";
@@ -212,13 +234,12 @@ public final class OpinionReadoutExplanation {
                 hold.commitmentId().toString()));
     }
 
-    public static List<OpinionReadoutDecisionView> recentDecisions(
-            MobExperienceContext context, boolean counterfactualOnly) {
+    public static List<OpinionReadoutDecisionView> recentDecisions(MobExperienceContext context) {
         List<OpinionDecisionTrace.Decision> all = context.discretionaryDirector().trace().snapshot();
         int start = Math.max(0, all.size() - OpinionReadoutSnapshot.MAX_DECISIONS);
         List<OpinionReadoutDecisionView> out = new ArrayList<>();
         for (int i = start; i < all.size(); i++) {
-            out.add(projectDecision(all.get(i), counterfactualOnly));
+            out.add(projectDecision(all.get(i)));
         }
         return List.copyOf(out);
     }
