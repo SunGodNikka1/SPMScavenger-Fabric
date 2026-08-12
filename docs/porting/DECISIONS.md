@@ -1183,3 +1183,43 @@ failures/errors/skips; `clean build` and final-JAR Mixin inspection pass. Artifa
 `DE8516AF3D52A1AD4D2E00713A61A28D28F89B4AB3A692451DF021FD1436DC7D`. Static MAIBS is
 `PASS — BEHAVIORALLY_PLAUSIBLE`; physical behavior and optional-host Mixin application remain
 `UNVERIFIED` until a fresh Minecraft run/log proves them.
+
+### SCR-2R4 — arrived shelter owns the night across door closure
+
+Fresh runtime evidence falsified SCR-2R3's assumption that preserving the commitment alone was
+enough: house users reached `ARRIVED`, then a close-behind door operation removed
+`SeekShelterGoal` from MOVE, the readout became `Idle`, and ordinary wandering carried them back
+outside. Tree shelters did not invoke the door helper and retained `Seek shelter`, isolating the
+defect to post-arrival scheduler authority rather than selection or path reachability. The current
+Prism log confirms Scavenger 1.9.4 and SPM are loaded; it contains no shelter transition diagnostics,
+so the exact old transition remains user-runtime-confirmed rather than log-attributed.
+
+Three repairs were considered. Making `SeekShelterGoal` globally non-interruptible was rejected
+because it would block combat, player orders, and environmental escape. Cancelling idle/wander after
+the fact was rejected because it hides the lost authority and can create goal churn. The selected
+repair publishes a bounded loaded-mob `ShelterNightAuthority` only on exact physical arrival and
+suppresses SPM's scheduler-only `DoorOperationGoal` while that authority is live. SPM's
+`PlayerMobEntity.tickDoorOperation()` still owns and performs the actual look, swing, and deferred
+door state change, so doors can close without evicting the stationary shelter hold. Approach-time
+opening remains unchanged because the authority does not exist before arrival.
+
+The authority is keyed by mob UUID, bounded by loaded mobs with a live ARRIVED commitment, and is
+released on displacement/RETURNING, cancellation/dawn/combat/command, unload, death, and server
+stop. The optional common-side `@Pseudo` Mixin uses `require=0` and warn-once stock fallback when
+SPM changes or is absent.
+
+Post-build MAIBS also caught an arrived fallback-upgrade edge: replacing a settled tree/eave with a
+better destination initially retained the old hold during the new approach, which could suppress a
+door the upgrade needed. The final transaction releases the old hold only after replacement
+reservation succeeds; the replacement reacquires it only on exact physical arrival.
+
+**Must happen:** after entering and settling inside a house, close-behind finishes while the mob
+continues showing/obeying `Seek shelter` until dawn. **Must not happen:** the repair suppresses door
+operations while approaching, directly changes a door, blocks combat/commands, or leaks night-hold
+entries after displacement/unload/server stop.
+
+Evidence: focused lifecycle/Mixin contracts pass; the full suite passes 667/667 with zero failures,
+errors, or skips; `clean build` passes. The remapped artifact contains the optional Mixin and
+authority class, contains no SPM classes or runtime datapack, and has SHA-256
+`0DF060DD6E1733A06ECB2DC172CBBF7F1C230954D612E883255D0D0BD3ED1E9D`. Static MAIBS is
+`PASS — BEHAVIORALLY_PLAUSIBLE`; repaired physical behavior remains `UNVERIFIED`.

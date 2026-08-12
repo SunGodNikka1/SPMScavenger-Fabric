@@ -49,6 +49,8 @@ authority must cancel autonomous shelter.
 | SCR-2R3-A | Use the occupied-bed house with a door-closing PlayerMob; observe repeated passage attempts | A busy close/recovery blocks the false open start; once free, the door visibly responds and the mob crosses | `Using door` repeatedly appears while the door never responds |
 | SCR-2R3-B | Reduce the house so its only valid standing cell is one block inside the door | The cell remains structural interior and the mob stays | Tiny interior is demoted to porch solely by door distance |
 | SCR-2R3-C | Give the mob a lower-tier exterior commitment whose route passes through the house | Within 10 ticks of entering, it captures/reserves its current interior and stops | It exits again to complete the tree/eave trip |
+| SCR-2R4-A | Use a door-closing mob in `occupied_bed`; wait until it reaches exact interior ARRIVED and closes behind itself | The door visibly closes while `Seek shelter` remains the owning objective through the night | Readout becomes `Idle`, wandering starts, or the mob exits and re-enters |
+| SCR-2R4-B | After SCR-2R4-A settles, trigger combat or set dawn | Combat/dawn releases the night hold and the appropriate higher authority may move the mob | Arrived shelter blocks combat/command/dawn cleanup or leaves door scheduling suppressed afterward |
 
 For the combat negative case, spawn or lure a hostile that gives the PlayerMob an active combat
 target during the door interruption. Combat must win; the old shelter commitment must not resume.

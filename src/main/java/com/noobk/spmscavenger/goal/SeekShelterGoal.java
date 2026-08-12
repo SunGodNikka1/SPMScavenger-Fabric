@@ -204,7 +204,7 @@ public class SeekShelterGoal extends Goal {
                     return;
                 }
             }
-            commitment.arrive();
+            markArrived();
             if (!alreadyArrived) {
                 RestSessionCoordinator.openShelterRecovery(
                         mob, commitment.commitmentId(), standPos,
@@ -234,7 +234,7 @@ public class SeekShelterGoal extends Goal {
                 && ownsLiveClaim(commitment, mob.level().getGameTime())) {
             mob.getNavigation().stop();
             mob.startSleeping(bedPos);
-            commitment.arrive();
+            markArrived();
             RestSessionCoordinator.openShelterRecovery(
                     mob, commitment.commitmentId(), bedPos,
                     RestAnchorType.SHELTER_BED, mob.level().getGameTime());
@@ -421,6 +421,11 @@ public class SeekShelterGoal extends Goal {
         ShelterCommitment replacement = new ShelterCommitment(
                 commitmentId, raw.standPos(), raw.bedPos(), candidate.tier(), mob.getUUID(), now);
         if (previous != null) {
+            // An arrived fallback may upgrade to a better shelter. Its stationary night hold must
+            // not follow the replacement into APPROACH, where SPM may legitimately need MOVE for
+            // another door operation. Failed adoption never reaches this point, so the old hold is
+            // preserved unless the replacement transaction has already acquired its reservation.
+            ShelterNightAuthority.release(mob.getUUID());
             if (previous.restClaimOpened()) {
                 RestSessionCoordinator.closeShelterRecovery(
                         mob, previous.commitmentId(), RestCloseReason.VALIDITY_LOST, now);
@@ -462,7 +467,7 @@ public class SeekShelterGoal extends Goal {
             return false;
         }
         commitment.activate();
-        commitment.arrive();
+        markArrived();
         RestSessionCoordinator.openShelterRecovery(
                 mob, commitment.commitmentId(), currentPos,
                 RestAnchorType.SHELTER_STAND, now);
@@ -515,12 +520,14 @@ public class SeekShelterGoal extends Goal {
     public static void shutdownServerState() {
         CLAIMS.clear();
         ShelterReservationRegistry.shutdownServerState();
+        ShelterNightAuthority.clear();
     }
 
     /** Release claims when Minecraft removes the owning entity without a final Goal stop tick. */
     public static void onEntityUnload(UUID mobId) {
         CLAIMS.entrySet().removeIf(entry -> entry.getValue().mob().equals(mobId));
         ShelterReservationRegistry.releaseOwner(mobId);
+        ShelterNightAuthority.release(mobId);
     }
 
     /** Death has the same ownership semantics as unload, but remains explicit for auditability. */
@@ -687,6 +694,7 @@ public class SeekShelterGoal extends Goal {
         if (commitment == null) {
             return;
         }
+        ShelterNightAuthority.release(mob.getUUID());
         if (commitment.restClaimOpened()) {
             RestSessionCoordinator.closeShelterRecovery(
                     mob, commitment.commitmentId(), closeReason, mob.level().getGameTime());
@@ -863,10 +871,20 @@ public class SeekShelterGoal extends Goal {
                 mob.blockPosition(), commitment.destination());
     }
 
+    /** Exact physical settlement, not selection or path admission, acquires the night hold. */
+    private void markArrived() {
+        if (commitment == null) {
+            return;
+        }
+        commitment.arrive();
+        ShelterNightAuthority.acquire(mob.getUUID());
+    }
+
     private void reconcileArrivedCondition(long now) {
         if (commitment != null
                 && commitment.state() == ShelterCommitment.State.ARRIVED
                 && !atCommittedAnchor()) {
+            ShelterNightAuthority.release(mob.getUUID());
             commitment.beginReturning(now);
             if (commitment.restClaimOpened()) {
                 RestSessionCoordinator.suspendShelterRecovery(mob, commitment.commitmentId(), now);

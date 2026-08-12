@@ -6,7 +6,8 @@
   "mixins": [
     "MobGoalSelectorAccessor",
     "ObjectiveReadoutMixin",
-    "PlayerMobDoorGoalBusyMixin"
+    "PlayerMobDoorGoalBusyMixin",
+    "DoorOperationShelterHoldMixin"
   ],
   "client": [
     "PlayerMobRendererReadoutMixin"

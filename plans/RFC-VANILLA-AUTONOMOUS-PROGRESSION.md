@@ -850,6 +850,43 @@ common-side `PlayerMobDoorGoalBusyMixin` is `@Pseudo`, `require=0`, reads host b
 and never toggles a door. Full suite: 663/663 passing; `clean build` and packaged-Mixin inspection
 pass. Static MAIBS: `BEHAVIORALLY_PLAUSIBLE`. Runtime: `UNVERIFIED`.
 
+### SCR-2R4 — Arrived shelter night authority
+
+**Status:** `IMPLEMENTED / STATIC VERIFIED / RUNTIME REPAIR PENDING`
+**Agent:** Agent_Codex
+**Contribution type:** RUNTIME REVIEW / DESIGN / IMPLEMENTATION
+
+User runtime observation split the behavior cleanly: tree shelter retains `Seek shelter`, while a
+house user reaches ARRIVED, invokes SPM's close-behind action, becomes `Idle`, wanders out, and seeks
+again. This falsifies the earlier assumption that persistent commitment state automatically implies
+persistent GoalSelector authority.
+
+**Decision:** publish an ephemeral UUID-keyed night hold only at exact physical ARRIVED. While that
+hold exists, an optional `@Pseudo` Mixin makes SPM's `DoorOperationGoal` scheduler wrapper yield;
+SPM's entity-side `tickDoorOperation()` continues the physical look/swing/open-or-close action.
+Approach has no hold, so required door opening still preempts movement normally. Displacement,
+cancel/dawn/combat/command, unload/death, and server stop release the hold.
+
+Post-build MAIBS found and repaired one semantic transfer bug: an ARRIVED lower-tier fallback that
+adopted an upgrade could carry its hold into the replacement approach and suppress a legitimately
+needed door operation. Successful replacement now releases the old hold after reservation commits;
+failed adoption preserves it, and the new destination reacquires only on exact arrival.
+
+**Rejected:** make shelter uninterruptible (breaks safety/commands); suppress idle/wander instead
+(masks the ownership defect and can churn); reimplement door action in Scavenger (duplicate owner).
+
+**MAIBS prediction:** house arrival → acquire hold → close request arms → entity performs door
+action without taking MOVE from shelter → exact anchor remains occupied → `Seek shelter` continues
+until dawn. Combat/command still makes `baseAuthorityAllows` false and cancels/releases before those
+goals own movement. Least-verified claim: optional host injection and the physical close animation in
+the user's full modpack remain runtime `UNVERIFIED`.
+
+**Implementation evidence:** UUID authority opens only through `markArrived()` and releases through
+RETURNING/cancel/unload/death/server-stop paths. `DoorOperationShelterHoldMixin` intercepts only the
+host scheduler wrapper's `canUse`/`canContinueToUse`; it contains no navigation or door mutation.
+Focused contracts and all 667 tests pass; `clean build` and remapped-JAR inspection pass. Artifact
+SHA-256: `0DF060DD6E1733A06ECB2DC172CBBF7F1C230954D612E883255D0D0BD3ED1E9D`.
+
 ---
 
 ## Topic: Missing AI behaviors
@@ -1059,6 +1096,7 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Codex | 2026-08-11 | Runtime feedback falsified post-arrival authority persistence; implemented `SCR-2R4` exact-arrival night authority and optional scheduler-only door wrapper yield, with lifecycle cleanup, tests, docs, and static MAIBS; repaired runtime pending |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-2R3`: structural identity independent of door depth, 10-tick bounded mid-route interior capture, optional stock-SPM busy/recovery door admission guard, 663-test clean build, package inspection, and static MAIBS; shared multi-mob passage hold deferred pending host contract |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-2R2`: structural-vs-foliage shelter semantics, current-interior hysteresis, protected bed upgrades, bounded door seeds, condition-bound `RETURNING`, correlated suspended rest claims, strictly-higher fallback upgrades, 660-test clean build, and post-GREEN MAIBS; runtime pending |
 | Agent_Codex | 2026-08-11 | Runtime feedback falsified SCR-2 doorstep completion; implemented `SCR-2R` door-depth ranking, then-current door-adjacent tier cap, exact reserved-cell arrival, regression tests, 652-test clean build, and updated MAIBS/docs; SCR-2R3 later superseded only the tier cap |

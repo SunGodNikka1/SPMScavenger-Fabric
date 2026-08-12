@@ -48,6 +48,7 @@ class ShelterStructuralSatisfactionContractTest {
         assertTrue(commitment.contains("RETURNING"));
         assertTrue(commitment.contains("returnActiveTicks"));
         assertTrue(commitment.contains("returnPathFailures"));
+        assertTrue(source.contains("ShelterNightAuthority.release(mob.getUUID())"));
     }
 
     @Test
@@ -59,7 +60,20 @@ class ShelterStructuralSatisfactionContractTest {
         assertTrue(source.contains("shouldCaptureCurrentInterior("));
         assertTrue(source.contains("tryAdopt(current, new ShelterSelectionPolicy.PathProbeBudget()"));
         assertTrue(source.contains("commitment.arrive()"));
+        assertTrue(source.contains("ShelterNightAuthority.acquire(mob.getUUID())"));
         assertTrue(source.contains("mob.getNavigation().stop()"));
+    }
+
+    @Test
+    void replacingAnArrivedFallbackReleasesItsHoldBeforeTheNewApproach() throws Exception {
+        String source = seekShelterSource();
+        int replacement = source.indexOf("ShelterCommitment replacement");
+        int assigned = source.indexOf("commitment = replacement", replacement);
+        String transaction = source.substring(replacement, assigned);
+
+        assertTrue(transaction.contains("ShelterNightAuthority.release(mob.getUUID())"));
+        assertFalse(transaction.contains("ShelterNightAuthority.acquire"),
+                "Replacement selection must not acquire arrival authority before physical arrival");
     }
 
     private static String seekShelterSource() throws Exception {
