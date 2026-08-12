@@ -24,10 +24,14 @@ class PlayerMobDoorGoalBusyMixinContractTest {
         assertTrue(source.contains("getMethod(\"isRecovering\")"));
         assertTrue(source.contains("cir.setReturnValue(false)"));
         assertTrue(source.contains("DoorPassagePolicy.admitOpenEpisode"));
-        assertTrue(source.contains("DoorPassagePolicy.unchangedEncounter"));
+        assertTrue(source.contains("DoorPassagePolicy.EncounterKey"));
+        assertTrue(source.contains("DoorPassagePolicy.approachSide"));
+        assertTrue(source.contains("DoorPassagePolicy.separated"));
+        assertTrue(source.contains("DoorPassagePolicy.nextGeneration"));
         assertTrue(source.contains("spmscavenger$pauseCrossingClockDuringOperation"));
         assertTrue(source.contains("DoorPassagePolicy.closeAfterEpisode"));
-        assertTrue(source.contains("spmscavenger$lastEpisodePath"));
+        assertFalse(source.contains("import net.minecraft.world.level.pathfinder.Path"));
+        assertFalse(source.contains("getNavigation().getPath()"));
         assertTrue(source.contains("stock SPM behavior retained"));
         assertFalse(source.contains("DoorObstruction"));
         assertFalse(source.contains("setOpen("));

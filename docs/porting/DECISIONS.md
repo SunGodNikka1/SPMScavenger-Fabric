@@ -1339,3 +1339,30 @@ door-position episodes. External door changes and the physical optional-Mixin re
 fresh runtime test. All 680 tests pass with zero failures/errors/skips; `clean build` and remapped
 JAR package inspection pass. Artifact `build/libs/spmscavenger-1.9.4.jar`, SHA-256
 `253B5E840CA886B6F3B7744A2942234F79D9659C941B1AFE1EC26F7E199AC221`.
+
+#### Physical encounter identity correction
+
+Post-implementation review rejected exact navigation `Path` object identity as the definition of
+"same encounter": vanilla may replace/recompute a path while the mob is still interacting with
+the same physical doorway. The selected identity is now per-goal and fixed-size:
+`mob UUID + door BlockPos + initial approach side + wrapping encounter generation`. A navigation
+replan cannot create a new episode. The encounter clears after the mob moves more than 2.5
+horizontal blocks from the door or encounters a different door; a completed crossing cannot
+immediately reopen the same door. An incomplete encounter permits at most two OPEN attempts (the
+initial attempt plus one recovery after an external close), preventing indefinite retry.
+
+Alternatives: exact `Path` identity was rejected because replanning creates false new encounters;
+a time-only cooldown was rejected because it can suppress a legitimate later traversal or simply
+re-enable the same loop when time expires. The selected physical key can conservatively suppress a
+same-door U-turn inside the 2.5-block boundary; that bounded tradeoff is preferable to reopen spam
+and remains a runtime tuning question. Approach-side diagonal jitter cannot create a generation.
+
+**Must happen:** replacing a navigation path at the same physical door does not re-arm OPEN.
+**Must not happen:** `Path` identity, an unbounded history map, or unlimited attempts define the
+episode. RET-1 passes statically because state is a fixed set of fields owned by the goal instance;
+there is no collection or minted-key retention surface.
+
+Static MAIBS remains `PASS — BEHAVIORALLY_PLAUSIBLE`; physical multi-mob/external-door behavior is
+`UNVERIFIED`. All 681 tests and `clean build` pass. The remapped artifact packages the policy,
+encounter record, and optional Mixin. SHA-256:
+`DB403E27F418303E3D800495C055477D32E02FC50828AA1848C5731ABE9187CF`.

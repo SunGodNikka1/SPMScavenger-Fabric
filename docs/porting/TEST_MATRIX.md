@@ -362,13 +362,14 @@ outcomes remain `UNVERIFIED`.
 | SPM door passage — already open | Active navigation path/horizontal collision latches a wooden door whose OPEN property is already true | Stock navigation continues with no new deliberate OPEN episode or `Using door` animation | Idempotent OPEN runs for ten ticks and stops movement while changing no block | Pinned SPM/vanilla bytecode + pure/Mixin contract `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 | SPM door passage — crossing clock | Closer starts a deliberate 10-tick OPEN operation with a 20-tick passage budget | Operation ticks do not decrement passage budget; navigation receives the complete bounded crossing window afterward | Half the budget expires while MOVE is deliberately stopped | Source/timing audit + Mixin contract `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 | SPM door passage — terminal semantics | Door opens but mob does not cross before bounded timeout; separate scenario crosses door plane | Timeout leaves door open for path/repath recovery; actual crossing permits at most one close-behind | Timeout closes in front and manufactures reopen loop, or close happens without passage | Pure policy/Mixin contract/MAIBS `CODE_CONFIRMED`; physical runtime `UNVERIFIED` |
+| SPM door passage — physical encounter identity | Navigation replaces its `Path` while the same mob remains at the same door and approach side | Replan remains the same encounter; completed encounter cannot reopen; incomplete encounter gets at most one recovery retry; physical separation/new door creates a generation | Exact `Path` identity treats a replan as a fresh OPEN episode or retry remains unbounded | Pure identity/retry/wrapping-generation tests + Mixin source contract `CODE_CONFIRMED`; runtime U-turn/multi-mob behavior `UNVERIFIED` |
 
-SPM Door Passage Episode static gates: all 680 tests pass with zero failures/errors/skips and
+SPM Door Passage Episode static gates: all 681 tests pass with zero failures/errors/skips and
 `clean build` passes. The remapped JAR packages `DoorPassagePolicy` and the optional
 `PlayerMobDoorGoalBusyMixin`; bytecode inspection confirms the protected vanilla door fields and
-mapped path/door calls are present. Runtime Mixin application and physical crossing remain
+physical encounter policy are present without a navigation-`Path` lookup. Runtime Mixin application and physical crossing remain
 `UNVERIFIED`. Final remapped JAR SHA-256:
-`253B5E840CA886B6F3B7744A2942234F79D9659C941B1AFE1EC26F7E199AC221`.
+`DB403E27F418303E3D800495C055477D32E02FC50828AA1848C5731ABE9187CF`.
 
 Static gates after SCR-2R: 24 focused `Shelter*Test` tests and the full 652-test suite pass with zero failures,
 errors, or skips. Selection is capped at 28 semantic evaluations and four path probes per scan;

@@ -5,7 +5,6 @@ import com.noobk.spmscavenger.goal.DoorPassagePolicy;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.DoorInteractGoal;
-import net.minecraft.world.level.pathfinder.Path;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -62,16 +61,16 @@ public abstract class PlayerMobDoorGoalBusyMixin extends DoorInteractGoal {
     private boolean spmscavenger$crossed;
 
     @Unique
-    private BlockPos spmscavenger$lastEpisodeDoor;
+    private DoorPassagePolicy.EncounterKey spmscavenger$encounter;
 
     @Unique
-    private Path spmscavenger$lastEpisodePath;
+    private int spmscavenger$encounterGeneration;
 
     @Unique
-    private boolean spmscavenger$lastDoorOpen;
+    private int spmscavenger$encounterAttempts;
 
     @Unique
-    private boolean spmscavenger$lastEpisodeCrossed;
+    private boolean spmscavenger$encounterCompleted;
 
     /**
      * SPM's flagless passage Goal must not report a successful start while the entity will reject
@@ -79,6 +78,7 @@ public abstract class PlayerMobDoorGoalBusyMixin extends DoorInteractGoal {
      */
     @Inject(method = "canUse", at = @At("HEAD"), cancellable = true, require = 0)
     private void spmscavenger$rejectBusyDoorRequest(CallbackInfoReturnable<Boolean> cir) {
+        spmscavenger$resetEncounterAfterSeparation();
         if (spmscavenger$isBusy(this)) {
             cir.setReturnValue(false);
         }
@@ -86,8 +86,9 @@ public abstract class PlayerMobDoorGoalBusyMixin extends DoorInteractGoal {
 
     /**
      * Vanilla may latch a wooden door that is already open. Starting SPM's deliberate OPEN in that
-     * state produces a ten-tick no-op animation and stops navigation. The same unchanged door/path
-     * encounter is also held after an aborted episode; a different path or door may try normally.
+     * state produces a ten-tick no-op animation and stops navigation. Physical encounter identity
+     * deliberately ignores disposable Path instances: a replan at the same door and approach side
+     * remains the same bounded episode until the mob separates from the doorway.
      */
     @Inject(method = "canUse", at = @At("RETURN"), cancellable = true, require = 0)
     private void spmscavenger$rejectEmptyOrDuplicateEpisode(
@@ -96,14 +97,25 @@ public abstract class PlayerMobDoorGoalBusyMixin extends DoorInteractGoal {
             return;
         }
         boolean alreadyOpen = this.isOpen();
-        Path currentPath = this.mob.getNavigation().getPath();
-        boolean sameDoorAndPath = this.doorPos.equals(spmscavenger$lastEpisodeDoor)
-                && currentPath == spmscavenger$lastEpisodePath;
-        boolean unchangedEncounter = DoorPassagePolicy.unchangedEncounter(
-                sameDoorAndPath,
-                spmscavenger$lastEpisodeCrossed,
-                alreadyOpen != spmscavenger$lastDoorOpen);
-        if (!DoorPassagePolicy.admitOpenEpisode(alreadyOpen, unchangedEncounter)) {
+        DoorPassagePolicy.ApproachSide currentSide = DoorPassagePolicy.approachSide(
+                this.doorPos, this.mob.getX(), this.mob.getZ());
+        boolean sameDoor = DoorPassagePolicy.sameDoor(
+                spmscavenger$encounter, this.mob.getUUID(), this.doorPos);
+        if (!sameDoor) {
+            spmscavenger$encounterGeneration = DoorPassagePolicy.nextGeneration(
+                    spmscavenger$encounterGeneration);
+            spmscavenger$encounter = DoorPassagePolicy.key(
+                    this.mob.getUUID(), this.doorPos, this.mob.getX(), this.mob.getZ(),
+                    spmscavenger$encounterGeneration);
+            spmscavenger$encounterAttempts = 0;
+            spmscavenger$encounterCompleted = false;
+        }
+        boolean sameApproachSide = spmscavenger$encounter.approachSide() == currentSide;
+        if (!DoorPassagePolicy.admitOpenEpisode(
+                alreadyOpen,
+                spmscavenger$encounterCompleted,
+                sameApproachSide,
+                spmscavenger$encounterAttempts)) {
             cir.setReturnValue(false);
         }
     }
@@ -119,6 +131,7 @@ public abstract class PlayerMobDoorGoalBusyMixin extends DoorInteractGoal {
         spmscavenger$startDoorDx = (float) (this.doorPos.getX() + 0.5D - this.mob.getX());
         spmscavenger$startDoorDz = (float) (this.doorPos.getZ() + 0.5D - this.mob.getZ());
         spmscavenger$crossed = false;
+        spmscavenger$encounterAttempts++;
     }
 
     /** Door-operation animation owns MOVE, so no physical crossing time may be charged to it. */
@@ -149,15 +162,23 @@ public abstract class PlayerMobDoorGoalBusyMixin extends DoorInteractGoal {
     @Inject(method = "stop", at = @At("HEAD"), cancellable = true, require = 0)
     private void spmscavenger$finishPassageEpisode(CallbackInfo ci) {
         if (spmscavenger$episodeDoor != null) {
-            spmscavenger$lastEpisodeDoor = spmscavenger$episodeDoor;
-            spmscavenger$lastEpisodePath = this.mob.getNavigation().getPath();
-            spmscavenger$lastDoorOpen = this.isOpen();
-            spmscavenger$lastEpisodeCrossed = spmscavenger$crossed;
+            spmscavenger$encounterCompleted |= spmscavenger$crossed;
         }
         if (!DoorPassagePolicy.closeAfterEpisode(spmscavenger$crossed)) {
             ci.cancel();
         }
         spmscavenger$episodeDoor = null;
+    }
+
+    @Unique
+    private void spmscavenger$resetEncounterAfterSeparation() {
+        if (!DoorPassagePolicy.separated(
+                spmscavenger$encounter, this.mob.getX(), this.mob.getZ())) {
+            return;
+        }
+        spmscavenger$encounter = null;
+        spmscavenger$encounterAttempts = 0;
+        spmscavenger$encounterCompleted = false;
     }
 
     @Unique

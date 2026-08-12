@@ -1162,7 +1162,7 @@ Locked behavior:
 3. A closer schedules CLOSE only after vanilla's inherited `passed` state proves actual passage.
    Timeout before passage leaves the door open for navigation/repath recovery.
 4. The same door encounter cannot immediately re-admit after completion; it clears after the mob
-   leaves vanilla's 2.25-square interaction neighbourhood. A different door remains eligible.
+   moves more than 2.5 horizontal blocks from the door center. A different door remains eligible.
 
 Behavioral prediction: closed path door → one OPENING window → budget-preserving CROSSING → actual
 plane crossing → at most one CLOSING window → DONE. On bounded failure: ABORT without close, so the
@@ -1175,13 +1175,16 @@ closes only after crossing. **Must not happen:** an already-open latched door cr
 `Using door` animation, timeout closes a door in front of the mob, the addon operates doors itself,
 or absence/change of SPM crashes startup.
 
-**Implementation evidence:** the optional host Mixin now correlates a door/path episode, rejects
+**Implementation evidence:** the optional host Mixin now correlates a physical doorway episode, rejects
 already-open no-op OPEN admissions, pauses the host tick during `isOperatingDoor()`, mirrors
 vanilla's door-plane crossing calculation, cancels close-before-pass, and prevents close-behind
-from immediately reclassifying the same door/path as a fresh episode. Pure policy and Mixin
-contracts plus the full 680-test suite pass; `clean build` and remapped bytecode/package inspection
-pass. Artifact SHA-256:
-`253B5E840CA886B6F3B7744A2942234F79D9659C941B1AFE1EC26F7E199AC221`. Runtime remains unverified.
+from immediately reclassifying the same physical door encounter as fresh. Review rejected exact
+`Path` object identity because replanning is disposable navigation state. The fixed-size identity
+is now mob UUID + door position + initial approach side + wrapping generation; separation beyond
+2.5 horizontal blocks or a different door admits a new generation, while an incomplete encounter
+has at most two OPEN attempts. Pure policy and Mixin contracts plus the full 681-test suite pass;
+`clean build` and remapped bytecode/package inspection pass. Artifact SHA-256:
+`DB403E27F418303E3D800495C055477D32E02FC50828AA1848C5731ABE9187CF`. Runtime remains unverified.
 
 ---
 
@@ -1392,6 +1395,7 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Codex | 2026-08-12 | Replaced fragile SPM door `Path`-object encounter identity with fixed-size physical identity (mob UUID, door position, initial approach side, wrapping generation), 2.5-block separation reset, and two-attempt bound. Added replan/separation/side/generation tests; 681 tests and clean build pass; artifact `DB403E...7CF`; runtime remains unverified. No Minecraft launch, commit, push, or PR |
 | Agent_Codex | 2026-08-12 | Implemented the SPM Door Passage Episode Repair: reject already-open/no-op OPEN, pause crossing budget during deliberate operation, close only after observed passage, and correlate same door/path completion to prevent immediate reopen. All 680 tests and clean build pass; artifact `253B5E...C221`; runtime remains unverified. No Minecraft launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Runtime report exposed a pre-arrival authority gap after SCR-2R5; implemented Shelter Commitment Authority Continuity so a path-probed/reserved commitment owns the voluntary-travel envelope through APPROACHING, SETTLED, and RETURNING. Gather/Craft/Smelt cannot seize finite interruption gaps; door helpers remain available outside SETTLED. All 677 tests and clean build pass; artifact `913C2F...F38`; runtime remains unverified. No Minecraft launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-2R5` + D-GAO-043 semantic seam: mandatory `SHELTER_HOLD`, independent affective rest, centralized displacement envelope, conservative target provenance, commitment-correlated SETTLED/RETURNING authority, and optional pinned host travel/combat guards. Post-GREEN MAIBS found and repaired RETURNING suppressing its required door wrapper. All 676 tests and clean build pass; runtime remains unverified. No Minecraft launch, commit, push, or PR |
