@@ -54,7 +54,9 @@ public final class OpinionDecisionTrace {
         BELOW_ACTIVATION_THRESHOLD,
         COMMITMENT_HOLD,
         SWITCH_MARGIN_HOLD,
-        EXISTING_INTENT_RETAINED,
+        PENDING_INTENT_RETAINED,
+        ADOPTED_INTENT_RETAINED,
+        RUNNING_INTENT_RETAINED,
         INTENT_ISSUED
     }
 
@@ -63,12 +65,14 @@ public final class OpinionDecisionTrace {
             DiscretionaryActivity activity,
             ActivityUtilityBreakdown breakdown,
             CandidateState state,
-            SuppressionReason suppressionReason) {
+            SuppressionReason suppressionReason,
+            String suppressionDetail) {
 
         public Candidate {
             Objects.requireNonNull(activity, "activity");
             Objects.requireNonNull(state, "state");
             Objects.requireNonNull(suppressionReason, "suppressionReason");
+            suppressionDetail = suppressionDetail == null ? "" : suppressionDetail;
             if (breakdown != null && breakdown.activity() != activity) {
                 throw new IllegalArgumentException("breakdown activity does not match candidate");
             }
@@ -86,14 +90,22 @@ public final class OpinionDecisionTrace {
         public static Candidate eligible(ActivityUtilityBreakdown breakdown) {
             Objects.requireNonNull(breakdown, "breakdown");
             return new Candidate(
-                    breakdown.activity(), breakdown, CandidateState.ELIGIBLE, SuppressionReason.NONE);
+                    breakdown.activity(), breakdown, CandidateState.ELIGIBLE, SuppressionReason.NONE, "");
         }
 
         public static Candidate suppressed(
                 DiscretionaryActivity activity,
                 ActivityUtilityBreakdown breakdown,
                 SuppressionReason reason) {
-            return new Candidate(activity, breakdown, CandidateState.SUPPRESSED, reason);
+            return suppressed(activity, breakdown, reason, "");
+        }
+
+        public static Candidate suppressed(
+                DiscretionaryActivity activity,
+                ActivityUtilityBreakdown breakdown,
+                SuppressionReason reason,
+                String suppressionDetail) {
+            return new Candidate(activity, breakdown, CandidateState.SUPPRESSED, reason, suppressionDetail);
         }
     }
 

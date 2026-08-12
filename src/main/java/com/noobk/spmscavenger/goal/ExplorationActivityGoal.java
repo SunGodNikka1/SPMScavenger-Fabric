@@ -7,6 +7,7 @@ import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.opinion.AffectiveStateService;
 import com.noobk.spmscavenger.opinion.DiscretionaryActivityDirector;
 import com.noobk.spmscavenger.opinion.DiscretionaryAvailability;
+import com.noobk.spmscavenger.opinion.ExploreReadinessSnapshot;
 import com.noobk.spmscavenger.opinion.ExploreReadinessThresholds;
 import com.noobk.spmscavenger.opinion.PassiveExpressionService;
 import com.noobk.spmscavenger.ToolTier;
@@ -140,15 +141,27 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         DiscretionaryAvailability availability = new DiscretionaryAvailability(cfg.exploring, cfg.campfire);
         long now = mob.level().getGameTime();
         int idleTicks = ExploreReadinessThresholds.idleTicks(cfg, mob.getUUID());
+        int tripThreshold = cfg.exploreLocalTripsThreshold;
         boolean exploreAdoptionReady = readiness.eligibleForNewExpedition(
-                now, cfg.exploreLocalTripsThreshold, idleTicks);
+                now, tripThreshold, idleTicks);
+        ExploreReadinessSnapshot exploreSnapshot = ExploreReadinessSnapshot.of(
+                readiness.idleWorkTicks(),
+                idleTicks,
+                readiness.successfulLocalTrips(),
+                tripThreshold,
+                now,
+                readiness.cooldownUntilTick(),
+                readiness.hasDescentPressure(),
+                exploreAdoptionReady,
+                readiness.formatAdoptionBlocker(now, tripThreshold, idleTicks));
         DiscretionaryActivityDirector.tick(
                 mob.getUUID(),
                 now,
                 observation,
                 availability,
                 mob.getTarget() != null,
-                exploreAdoptionReady);
+                exploreAdoptionReady,
+                java.util.Optional.of(exploreSnapshot));
 
         boolean mayCreateWork = permitsNewMiningWork(cfg.enabled, allowNewMiningWork);
         if (mayCreateWork) {

@@ -4,6 +4,7 @@ import com.noobk.spmscavenger.activity.ActivityObservationService;
 import com.noobk.spmscavenger.experience.MobExperienceContext;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -20,6 +21,17 @@ public final class DiscretionaryActivityDirector {
             DiscretionaryAvailability availability,
             boolean combatTarget,
             boolean exploreAdoptionReady) {
+        tick(mobId, gameTime, observation, availability, combatTarget, exploreAdoptionReady, Optional.empty());
+    }
+
+    public static void tick(
+            UUID mobId,
+            long gameTime,
+            ActivityObservationService.Observation observation,
+            DiscretionaryAvailability availability,
+            boolean combatTarget,
+            boolean exploreAdoptionReady,
+            Optional<ExploreReadinessSnapshot> exploreReadiness) {
         if (!OpinionFeatureGate.isEnabled()) {
             MobExperienceContext existing = OpinionExperienceRegistry.find(mobId);
             if (existing == null) {
@@ -37,7 +49,8 @@ public final class DiscretionaryActivityDirector {
                             availability,
                             false,
                             false),
-                    exploreAdoptionReady));
+                    exploreAdoptionReady,
+                    exploreReadiness));
             return;
         }
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
@@ -55,7 +68,8 @@ public final class DiscretionaryActivityDirector {
                 combatTarget,
                 observation,
                 scoringInput,
-                exploreAdoptionReady));
+                exploreAdoptionReady,
+                exploreReadiness));
     }
 
     public static DiscretionaryDirectorState stateFor(UUID mobId) {

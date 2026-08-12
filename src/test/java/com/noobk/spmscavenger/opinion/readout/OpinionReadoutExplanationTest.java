@@ -4,6 +4,8 @@ import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 import com.noobk.spmscavenger.goal.ShelterNightAuthority;
 import com.noobk.spmscavenger.opinion.ActivityUtilityBreakdown;
 import com.noobk.spmscavenger.opinion.DiscretionaryActivity;
+import com.noobk.spmscavenger.opinion.DiscretionaryActivity;
+import com.noobk.spmscavenger.opinion.IntentLifecycle;
 import com.noobk.spmscavenger.opinion.OpinionDecisionTrace;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import net.minecraft.core.BlockPos;
@@ -99,5 +101,46 @@ class OpinionReadoutExplanationTest {
         assertEquals(2, decisions.size());
         assertFalse(decisions.getFirst().counterfactualOnly(), "daytime EXPLORE stays causal");
         assertTrue(decisions.getLast().counterfactualOnly(), "shelter-blocked eval is non-causal");
+    }
+
+    @Test
+    void pendingRestSummaryDoesNotClaimPursuingOrIncumbentRetention() {
+        UUID mob = UUID.randomUUID();
+        var context = OpinionExperienceRegistry.contextFor(mob);
+        OpinionDecisionTrace trace = context.discretionaryDirector().trace();
+        ActivityUtilityBreakdown rest = ActivityUtilityBreakdown.rest(
+                1f, 2f, 3f, 4f, 5f, 6f, 7f, -1f);
+        long decisionId = trace.beginDecision(
+                10L,
+                List.of(
+                        OpinionDecisionTrace.Candidate.suppressed(
+                                DiscretionaryActivity.EXPLORE,
+                                null,
+                                OpinionDecisionTrace.SuppressionReason.EXPLORE_ADOPTION_NOT_READY,
+                                "idleTicks 0/120"),
+                        OpinionDecisionTrace.Candidate.eligible(rest)));
+        trace.conclude(
+                decisionId,
+                OpinionDecisionTrace.DecisionDisposition.PENDING_INTENT_RETAINED,
+                DiscretionaryActivity.REST,
+                true);
+        context.discretionaryDirector().pendingIntent(); // not seeded — summary still from decision
+
+        List<String> summary = OpinionReadoutExplanation.buildSummary(
+                context,
+                Optional.empty(),
+                OpinionReadoutExplanation.latestDecision(context));
+
+        long directorIntentLines = summary.stream()
+                .filter(line -> line.startsWith("Director pending:")
+                        || line.startsWith("Director running:")
+                        || line.startsWith("Director incumbent:"))
+                .count();
+        assertEquals(0, directorIntentLines, "no duplicate director layer lines without live director state");
+        assertTrue(summary.stream().anyMatch(line -> line.startsWith("Desired activity: REST")));
+        assertFalse(summary.stream().anyMatch(line -> line.contains("Pursuing")));
+        assertFalse(summary.stream().anyMatch(line -> line.contains("Incumbent intent retained")));
+        assertTrue(summary.stream().anyMatch(line -> line.contains("Pending intent retained")));
+        assertTrue(summary.stream().anyMatch(line -> line.contains("Explore blocked:")));
     }
 }

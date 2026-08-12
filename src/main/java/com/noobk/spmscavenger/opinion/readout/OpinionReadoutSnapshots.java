@@ -6,6 +6,7 @@ import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 import com.noobk.spmscavenger.goal.ShelterNightAuthority;
 import com.noobk.spmscavenger.opinion.AffectiveState;
 import com.noobk.spmscavenger.opinion.OpinionDecisionTrace;
+import com.noobk.spmscavenger.opinion.ExploreReadinessSnapshot;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.opinion.PersonalityModel;
 
@@ -46,6 +47,7 @@ public final class OpinionReadoutSnapshots {
                 "",
                 "",
                 "",
+                ExploreReadinessSnapshot.empty(),
                 List.of());
     }
 
@@ -94,6 +96,7 @@ public final class OpinionReadoutSnapshots {
                 context.discretionaryDirector().intent().map(i -> i.lifecycle().name()).orElse(""),
                 context.discretionaryDirector().restAuthorityPhase().name(),
                 OpinionReadoutExplanation.currentDisposition(context),
+                context.discretionaryDirector().lastExploreReadiness(),
                 OpinionReadoutExplanation.recentDecisions(context));
     }
 

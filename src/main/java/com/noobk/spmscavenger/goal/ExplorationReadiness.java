@@ -54,6 +54,40 @@ public final class ExplorationReadiness {
                 || idleWorkTicks >= Math.max(1, idleTickThreshold));
     }
 
+    /** Plain-language blocker detail for inspector readout (GAO-8B causal truth). */
+    public String formatAdoptionBlocker(long now, int localTripThreshold, int idleTickThreshold) {
+        if (eligibleForNewExpedition(now, localTripThreshold, idleTickThreshold)) {
+            return "ready";
+        }
+        StringBuilder detail = new StringBuilder();
+        if (now < cooldownUntilTick) {
+            detail.append("cooldown ").append(cooldownUntilTick - now).append(" ticks remaining");
+        }
+        if (!descentPressure) {
+            appendClause(detail, "no descent pressure");
+        }
+        int tripNeed = Math.max(1, localTripThreshold);
+        if (successfulLocalTrips < tripNeed) {
+            appendClause(detail, "localTrips " + successfulLocalTrips + "/" + tripNeed);
+        }
+        int idleNeed = Math.max(1, idleTickThreshold);
+        if (idleWorkTicks < idleNeed) {
+            appendClause(detail, "idleTicks " + idleWorkTicks + "/" + idleNeed);
+        }
+        return detail.isEmpty() ? "not ready" : detail.toString();
+    }
+
+    long cooldownUntilTick() {
+        return cooldownUntilTick;
+    }
+
+    private static void appendClause(StringBuilder detail, String clause) {
+        if (!detail.isEmpty()) {
+            detail.append("; ");
+        }
+        detail.append(clause);
+    }
+
     /**
      * Consumes the readiness that unlocked an expedition.
      *

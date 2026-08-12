@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.client.opinion;
 
+import com.noobk.spmscavenger.opinion.ExploreReadinessSnapshot;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutDecisionView;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutSnapshot;
 import net.minecraft.client.gui.GuiGraphics;
@@ -153,6 +154,19 @@ public final class OpinionInspectorScreen extends Screen {
         }
         bodyLines.add("latestDecisionDisposition=" + snapshot.currentDisposition()
                 + " restPhase=" + snapshot.restAuthorityPhase());
+        ExploreReadinessSnapshot explore = snapshot.exploreReadiness();
+        if (!explore.isEmpty()) {
+            bodyLines.add("exploreIdleTicks=" + explore.idleWorkTicks()
+                    + "/" + explore.idleTickThreshold()
+                    + " localTrips=" + explore.successfulLocalTrips()
+                    + "/" + explore.localTripThreshold()
+                    + " cooldownRemaining=" + explore.cooldownRemainingTicks()
+                    + " descentPressure=" + explore.descentPressure()
+                    + " adoptionReady=" + explore.adoptionReady());
+            if (!explore.blockerDetail().isBlank()) {
+                bodyLines.add("exploreBlocker=" + explore.blockerDetail());
+            }
+        }
         bodyLines.add("placePreferences=" + snapshot.placePreferenceCount()
                 + " entityPreferences=" + snapshot.entityPreferenceCount());
         bodyLines.add("");

@@ -337,6 +337,22 @@ class DiscretionaryActivityDirectorTest {
     }
 
     @Test
+    void pendingIntentRetentionUsesPendingDispositionNotIncumbent() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
+        director.tick(tick(10L, idleObservation(), true));
+        assertEquals(IntentLifecycle.PENDING, director.pendingIntent().orElseThrow().lifecycle());
+
+        director.tick(tick(20L, idleObservation(), true));
+
+        OpinionDecisionTrace.Decision decision = director.trace().snapshot().getLast();
+        assertEquals(
+                OpinionDecisionTrace.DecisionDisposition.PENDING_INTENT_RETAINED,
+                decision.disposition());
+        assertTrue(director.incumbentActivity().isEmpty());
+    }
+
+    @Test
     void exploreAdoptionGateRecordsSuppressionWithoutDiscardingItsScore() {
         seedOpinions(55f, 5f, 11f, 4f);
         neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
@@ -371,7 +387,8 @@ class DiscretionaryActivityDirectorTest {
                         DiscretionaryAvailability.none(),
                         true,
                         true),
-                true);
+                true,
+                java.util.Optional.empty());
 
         director.tick(input);
 
@@ -503,7 +520,8 @@ class DiscretionaryActivityDirectorTest {
                         DiscretionaryAvailability.bothPresent(),
                         eligible,
                         true),
-                exploreAdoptionReady);
+                exploreAdoptionReady,
+                java.util.Optional.empty());
     }
 
     private static ActivityObservationService.Observation idleObservation() {

@@ -79,4 +79,16 @@ class ExplorationReadinessTest {
         }
         assertTrue(readiness.eligibleForNewExpedition(500, 2, 600), "and it re-arms once the cooldown expires");
     }
+
+    @Test
+    void formatAdoptionBlockerExplainsEachGate() {
+        ExplorationReadiness readiness = new ExplorationReadiness();
+        readiness.consume(500);
+        readiness.recordIdleTicks(40);
+
+        String blocker = readiness.formatAdoptionBlocker(100, 2, 600);
+        assertTrue(blocker.contains("cooldown"));
+        assertTrue(blocker.contains("localTrips 0/2"));
+        assertTrue(blocker.contains("idleTicks 40/600"));
+    }
 }

@@ -5,7 +5,11 @@ import com.noobk.spmscavenger.experience.MobExperienceContext;
 import com.noobk.spmscavenger.goal.ShelterNightAuthority;
 import com.noobk.spmscavenger.opinion.ActivityOpinionMemory;
 import com.noobk.spmscavenger.opinion.DiscretionaryActivity;
+import com.noobk.spmscavenger.opinion.DiscretionaryDirectorConstants;
+import com.noobk.spmscavenger.opinion.DiscretionaryIntent;
 import com.noobk.spmscavenger.opinion.EnvironmentKind;
+import com.noobk.spmscavenger.opinion.ExploreReadinessSnapshot;
+import com.noobk.spmscavenger.opinion.ExploreReadinessSnapshot;
 import com.noobk.spmscavenger.opinion.OpinionDecisionTrace;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.opinion.PersonalityModel;
@@ -44,12 +48,12 @@ public final class OpinionReadoutExplanation {
         }
 
         latestDecision.ifPresentOrElse(
-                decision -> appendDecisionSummary(lines, context, decision),
-                () -> lines.add("Doing: No recent discretionary evaluation recorded"));
-        if (context.hasLiveRestClaim()) {
-            lines.add("Resting: yes (affective rest claim is live)");
-        }
+                decision -> appendOpinionChoiceSummary(lines, context, decision),
+                () -> lines.add("Desired activity: none recorded"));
         appendDirectorLayers(lines, context);
+        appendExecutionState(lines, context);
+        appendExploreReadiness(lines, context);
+        lines.add("Resting: " + (context.hasLiveRestClaim() ? "yes (affective rest claim is live)" : "no"));
         return List.copyOf(lines);
     }
 
@@ -77,8 +81,11 @@ public final class OpinionReadoutExplanation {
                         + " boredom=" + format(b.boredomFit())
                         + " stress=" + format(b.stressFit()));
             } else {
+                String detail = candidate.suppressionDetail();
                 candidates.add(candidate.activity().name()
-                        + " suppressed (" + candidate.suppressionReason() + ")");
+                        + " suppressed (" + candidate.suppressionReason()
+                        + (detail.isBlank() ? "" : " — " + detail)
+                        + ")");
             }
         }
 
@@ -111,8 +118,11 @@ public final class OpinionReadoutExplanation {
     private static void appendDirectorLayers(List<String> lines, MobExperienceContext context) {
         context.discretionaryDirector().incumbentActivity().ifPresent(activity ->
                 lines.add("Director incumbent: " + activity.name()));
-        context.discretionaryDirector().intent().ifPresent(intent ->
-                lines.add("Director intent: " + intent.activity().name()
+        context.discretionaryDirector().pendingIntent().ifPresent(intent ->
+                lines.add("Director pending: " + intent.activity().name()
+                        + " (" + intent.lifecycle() + ")"));
+        context.discretionaryDirector().runningIntent().ifPresent(intent ->
+                lines.add("Director running: " + intent.activity().name()
                         + " (" + intent.lifecycle() + ")"));
     }
 
@@ -138,13 +148,23 @@ public final class OpinionReadoutExplanation {
                                 + " would have ranked highest but mandatory shelter blocks discretionary work"));
     }
 
-    private static void appendDecisionSummary(
+    private static void appendOpinionChoiceSummary(
             List<String> lines,
             MobExperienceContext context,
             OpinionDecisionTrace.Decision decision) {
-        lines.add("Doing: " + describeDoing(decision));
+        if (isCounterfactualEvaluation(decision)) {
+            lines.add("Desired activity: blocked by mandatory authority");
+            lines.add("Because: " + explainDisposition(decision));
+            appendMandatorySuppression(lines, decision);
+            return;
+        }
+
+        String desired = decision.selectedActivity() == null
+                ? "none"
+                : decision.selectedActivity().name();
+        lines.add("Desired activity: " + desired);
         lines.add("Because: " + explainDisposition(decision));
-        appendDirectorLayers(lines, context);
+        appendSelectionRationale(lines, decision);
         decision.transitions().stream()
                 .filter(t -> t.stage() == OpinionDecisionTrace.Stage.TERMINAL)
                 .reduce((first, second) -> second)
@@ -152,19 +172,67 @@ public final class OpinionReadoutExplanation {
                         "Last outcome: " + terminal.lifecycle() + " — " + terminal.detail()));
     }
 
-    private static String describeDoing(OpinionDecisionTrace.Decision decision) {
-        return switch (decision.disposition()) {
-            case INTENT_ISSUED, EXISTING_INTENT_RETAINED -> decision.selectedActivity() == null
-                    ? "Issued discretionary intent"
-                    : "Pursuing " + decision.selectedActivity().name();
-            case MANDATORY_AUTHORITY -> "Held by mandatory authority";
-            case COMMITMENT_HOLD, SWITCH_MARGIN_HOLD -> "Holding current commitment";
-            case BELOW_ACTIVATION_THRESHOLD -> "No activity above activation threshold";
-            case NO_CANDIDATES -> "No eligible discretionary candidates";
-            case OPINION_DISABLED -> "Opinion disabled";
-            case FROZEN -> "Opinion frozen";
-            case EVALUATING -> "Evaluating";
-        };
+    private static void appendSelectionRationale(
+            List<String> lines, OpinionDecisionTrace.Decision decision) {
+        for (OpinionDecisionTrace.Candidate candidate : decision.candidates()) {
+            if (candidate.activity() == DiscretionaryActivity.EXPLORE
+                    && candidate.state() == OpinionDecisionTrace.CandidateState.SUPPRESSED) {
+                String detail = candidate.suppressionDetail();
+                lines.add("Explore blocked: " + candidate.suppressionReason()
+                        + (detail.isBlank() ? "" : " — " + detail));
+            }
+        }
+        decision.candidates().stream()
+                .filter(candidate -> candidate.state() == OpinionDecisionTrace.CandidateState.ELIGIBLE
+                        && candidate.activity() == decision.selectedActivity()
+                        && candidate.breakdown() != null)
+                .findFirst()
+                .ifPresent(winner -> lines.add(
+                        "Selected utility: " + format(winner.breakdown().total())));
+    }
+
+    private static void appendExecutionState(List<String> lines, MobExperienceContext context) {
+        var director = context.discretionaryDirector();
+        if (director.incumbentActivity().isPresent()) {
+            lines.add("Execution: " + director.incumbentActivity().get().name()
+                    + " is the adopted incumbent");
+            return;
+        }
+        Optional<DiscretionaryIntent> pending = director.pendingIntent();
+        if (pending.isPresent()) {
+            DiscretionaryIntent intent = pending.get();
+            long ttlRemaining = Math.max(
+                    0L,
+                    DiscretionaryDirectorConstants.PENDING_INTENT_TTL_TICKS
+                            - (director.lastGameTime() - intent.issuedAtTick()));
+            lines.add("Execution: no executor has adopted " + intent.activity().name() + " yet");
+            lines.add("Pending TTL: ~" + ttlRemaining + " ticks remaining");
+            return;
+        }
+        if (director.runningIntent().isPresent()) {
+            DiscretionaryIntent running = director.runningIntent().get();
+            lines.add("Execution: " + running.activity().name()
+                    + " adopted (" + running.lifecycle() + ") but no incumbent recorded yet");
+            return;
+        }
+        lines.add("Execution: no discretionary activity adopted yet");
+    }
+
+    private static void appendExploreReadiness(List<String> lines, MobExperienceContext context) {
+        ExploreReadinessSnapshot readiness = context.discretionaryDirector().lastExploreReadiness();
+        if (readiness.isEmpty()) {
+            return;
+        }
+        lines.add("Explore readiness: idleTicks="
+                + readiness.idleWorkTicks() + "/" + readiness.idleTickThreshold()
+                + " localTrips=" + readiness.successfulLocalTrips()
+                + "/" + readiness.localTripThreshold()
+                + " cooldownRemaining=" + readiness.cooldownRemainingTicks()
+                + " descentPressure=" + readiness.descentPressure()
+                + " adoptionReady=" + readiness.adoptionReady());
+        if (!readiness.adoptionReady() && !readiness.blockerDetail().isBlank()) {
+            lines.add("Explore blocker: " + readiness.blockerDetail());
+        }
     }
 
     private static String explainDisposition(OpinionDecisionTrace.Decision decision) {
@@ -172,8 +240,10 @@ public final class OpinionReadoutExplanation {
             return "Mandatory authority blocked discretionary scheduling — scores are diagnostic only";
         }
         return switch (decision.disposition()) {
-            case INTENT_ISSUED -> "Highest utility candidate issued to the director";
-            case EXISTING_INTENT_RETAINED -> "Incumbent intent retained";
+            case INTENT_ISSUED -> "Highest utility candidate issued to the director as a new pending intent";
+            case PENDING_INTENT_RETAINED -> "Pending intent retained — waiting for executor adoption";
+            case ADOPTED_INTENT_RETAINED -> "Adopted intent retained — executor delivery in progress";
+            case RUNNING_INTENT_RETAINED -> "Running intent retained — incumbent activity continues";
             case MANDATORY_AUTHORITY -> "Mandatory authority blocked discretionary scheduling";
             case COMMITMENT_HOLD -> "Commitment hold prevented a switch";
             case SWITCH_MARGIN_HOLD -> "Switch margin not met";

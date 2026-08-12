@@ -20,6 +20,8 @@ public final class DiscretionaryDirectorState {
     private RestAuthorityPhase restAuthorityPhase = RestAuthorityPhase.NONE;
     private boolean restYieldRequested;
     private boolean exploreYieldRequested;
+    private long lastGameTime;
+    private ExploreReadinessSnapshot lastExploreReadiness = ExploreReadinessSnapshot.empty();
     private final OpinionDecisionTrace trace = new OpinionDecisionTrace();
 
     public Optional<DiscretionaryIntent> intent() {
@@ -57,8 +59,18 @@ public final class DiscretionaryDirectorState {
         return restAuthorityPhase;
     }
 
+    public long lastGameTime() {
+        return lastGameTime;
+    }
+
+    public ExploreReadinessSnapshot lastExploreReadiness() {
+        return lastExploreReadiness;
+    }
+
     public void tick(DirectorTickInput input) {
         Objects.requireNonNull(input, "input");
+        lastGameTime = input.gameTime();
+        lastExploreReadiness = input.exploreReadiness().orElse(ExploreReadinessSnapshot.empty());
         restYieldRequested = false;
         exploreYieldRequested = false;
 
@@ -172,7 +184,7 @@ public final class DiscretionaryDirectorState {
             }
             trace.conclude(
                     decisionId,
-                    OpinionDecisionTrace.DecisionDisposition.EXISTING_INTENT_RETAINED,
+                    retainedDisposition(existing),
                     winner,
                     true);
         }
@@ -423,10 +435,27 @@ public final class DiscretionaryDirectorState {
         }
     }
 
+    private static OpinionDecisionTrace.DecisionDisposition retainedDisposition(
+            DiscretionaryIntent existing) {
+        if (existing == null) {
+            return OpinionDecisionTrace.DecisionDisposition.PENDING_INTENT_RETAINED;
+        }
+        return switch (existing.lifecycle()) {
+            case PENDING -> OpinionDecisionTrace.DecisionDisposition.PENDING_INTENT_RETAINED;
+            case ADOPTED -> OpinionDecisionTrace.DecisionDisposition.ADOPTED_INTENT_RETAINED;
+            case RUNNING -> OpinionDecisionTrace.DecisionDisposition.RUNNING_INTENT_RETAINED;
+            default -> OpinionDecisionTrace.DecisionDisposition.PENDING_INTENT_RETAINED;
+        };
+    }
+
     private static ScoringEvaluation evaluateCandidates(DirectorTickInput input) {
         Optional<ScoringResult> raw = IdleOpportunityPolicy.score(input.scoringInput());
         java.util.List<OpinionDecisionTrace.Candidate> candidates = new java.util.ArrayList<>();
         java.util.List<ActivityUtilityBreakdown> eligible = new java.util.ArrayList<>();
+        String exploreBlocker = input.exploreReadiness()
+                .map(ExploreReadinessSnapshot::blockerDetail)
+                .filter(detail -> !detail.isBlank())
+                .orElse("");
 
         for (DiscretionaryActivity activity : DiscretionaryActivity.values()) {
             ActivityUtilityBreakdown breakdown = raw.stream()
@@ -448,7 +477,8 @@ public final class DiscretionaryDirectorState {
                 candidates.add(OpinionDecisionTrace.Candidate.suppressed(
                         activity,
                         breakdown,
-                        OpinionDecisionTrace.SuppressionReason.EXPLORE_ADOPTION_NOT_READY));
+                        OpinionDecisionTrace.SuppressionReason.EXPLORE_ADOPTION_NOT_READY,
+                        exploreBlocker));
             } else if (breakdown != null) {
                 candidates.add(OpinionDecisionTrace.Candidate.eligible(breakdown));
                 eligible.add(breakdown);
@@ -561,6 +591,8 @@ public final class DiscretionaryDirectorState {
         restAuthorityPhase = RestAuthorityPhase.NONE;
         restYieldRequested = false;
         exploreYieldRequested = false;
+        lastGameTime = 0L;
+        lastExploreReadiness = ExploreReadinessSnapshot.empty();
         trace.clear();
     }
 

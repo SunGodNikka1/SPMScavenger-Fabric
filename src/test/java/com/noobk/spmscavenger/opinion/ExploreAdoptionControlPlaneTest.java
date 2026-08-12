@@ -93,7 +93,8 @@ class ExploreAdoptionControlPlaneTest {
                         DiscretionaryAvailability.bothPresent(),
                         true,
                         true),
-                exploreAdoptionReady);
+                exploreAdoptionReady,
+                java.util.Optional.empty());
     }
 
     private void seedHighBoredomExploreWinner() {

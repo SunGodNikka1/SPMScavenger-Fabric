@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.network;
 
 import com.noobk.spmscavenger.SpmScavenger;
+import com.noobk.spmscavenger.opinion.ExploreReadinessSnapshot;
 import com.noobk.spmscavenger.opinion.PersonalityModel;
 import com.noobk.spmscavenger.opinion.readout.OpinionInspectRejectReason;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutDecisionView;
@@ -135,6 +136,7 @@ public final class OpinionInspectPayloads {
             buf.writeUtf(snapshot.currentIntentLifecycle());
             buf.writeUtf(snapshot.restAuthorityPhase());
             buf.writeUtf(snapshot.currentDisposition());
+            writeExploreReadiness(buf, snapshot.exploreReadiness());
             writeDecisions(buf, snapshot.recentDecisions());
         }
 
@@ -176,6 +178,7 @@ public final class OpinionInspectPayloads {
             String intentLifecycle = buf.readUtf();
             String restPhase = buf.readUtf();
             String disposition = buf.readUtf();
+            ExploreReadinessSnapshot exploreReadiness = readExploreReadiness(buf);
             List<OpinionReadoutDecisionView> decisions = readDecisions(buf);
             return new OpinionReadoutSnapshot(
                     requestId,
@@ -202,7 +205,38 @@ public final class OpinionInspectPayloads {
                     intentLifecycle,
                     restPhase,
                     disposition,
+                    exploreReadiness,
                     decisions);
+        }
+
+        private static void writeExploreReadiness(FriendlyByteBuf buf, ExploreReadinessSnapshot readiness) {
+            buf.writeBoolean(!readiness.isEmpty());
+            if (readiness.isEmpty()) {
+                return;
+            }
+            buf.writeVarInt(readiness.idleWorkTicks());
+            buf.writeVarInt(readiness.idleTickThreshold());
+            buf.writeVarInt(readiness.successfulLocalTrips());
+            buf.writeVarInt(readiness.localTripThreshold());
+            buf.writeVarLong(readiness.cooldownRemainingTicks());
+            buf.writeBoolean(readiness.descentPressure());
+            buf.writeBoolean(readiness.adoptionReady());
+            buf.writeUtf(readiness.blockerDetail());
+        }
+
+        private static ExploreReadinessSnapshot readExploreReadiness(FriendlyByteBuf buf) {
+            if (!buf.readBoolean()) {
+                return ExploreReadinessSnapshot.empty();
+            }
+            return new ExploreReadinessSnapshot(
+                    buf.readVarInt(),
+                    buf.readVarInt(),
+                    buf.readVarInt(),
+                    buf.readVarInt(),
+                    buf.readVarLong(),
+                    buf.readBoolean(),
+                    buf.readBoolean(),
+                    buf.readUtf());
         }
 
         private static void writeStringList(FriendlyByteBuf buf, List<String> lines, int max) {
