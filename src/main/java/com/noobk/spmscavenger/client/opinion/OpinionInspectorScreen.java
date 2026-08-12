@@ -4,8 +4,10 @@ import com.noobk.spmscavenger.opinion.readout.OpinionReadoutDecisionView;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutSnapshot;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,8 +15,9 @@ import java.util.List;
 /** GAO-8B Task 42B — addon-owned read-only inspector (PD-GAO-15). */
 public final class OpinionInspectorScreen extends Screen {
 
-    private static final int LINE_HEIGHT = 10;
     private static final int PADDING = 8;
+    private static final int BUTTON_WIDTH = 72;
+    private static final int BUTTON_GAP = 4;
     /** Left-side panel width cap — keeps the inspected mob visible on the right. */
     private static final int PANEL_MAX_WIDTH = 400;
     /** ARGB translucent dark fill; no blur, world stays sharp behind the panel. */
@@ -23,7 +26,7 @@ public final class OpinionInspectorScreen extends Screen {
 
     private OpinionReadoutSnapshot snapshot;
     private final List<String> bodyLines = new ArrayList<>();
-    private int scrollOffset;
+    private SelectableReadoutBox textBox;
 
     public OpinionInspectorScreen(OpinionReadoutSnapshot snapshot) {
         super(Component.literal("Inspect Opinion — " + snapshot.mobDisplayName()));
@@ -38,18 +41,38 @@ public final class OpinionInspectorScreen extends Screen {
     public void applySnapshot(OpinionReadoutSnapshot updated) {
         this.snapshot = updated;
         rebuildBody();
+        if (textBox != null) {
+            textBox.setValue(readoutText());
+        }
     }
 
     @Override
     protected void init() {
-        int buttonWidth = 80;
+        int panelWidth = panelWidth();
+        int textTop = 20;
+        int textHeight = Math.max(40, this.height - 52);
+        textBox = new SelectableReadoutBox(
+                this.font,
+                PADDING,
+                textTop,
+                panelWidth - PADDING * 2,
+                textHeight,
+                readoutText());
+        addRenderableWidget(textBox);
+
         int y = this.height - 24;
+        int x = PADDING;
+        addRenderableWidget(Button.builder(Component.literal("Copy"), button -> copyReadoutToClipboard())
+                .bounds(x, y, BUTTON_WIDTH, 20)
+                .build());
+        x += BUTTON_WIDTH + BUTTON_GAP;
         addRenderableWidget(Button.builder(Component.literal("Refresh"), button ->
                 OpinionInspectClient.refreshFromScreen(this))
-                .bounds(this.width / 2 - buttonWidth - 4, y, buttonWidth, 20)
+                .bounds(x, y, BUTTON_WIDTH, 20)
                 .build());
+        x += BUTTON_WIDTH + BUTTON_GAP;
         addRenderableWidget(Button.builder(Component.literal("Close"), button -> onClose())
-                .bounds(this.width / 2 + 4, y, buttonWidth, 20)
+                .bounds(x, y, BUTTON_WIDTH, 20)
                 .build());
     }
 
@@ -68,20 +91,32 @@ public final class OpinionInspectorScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics, mouseX, mouseY, partialTick);
         graphics.drawString(this.font, this.title, PADDING, 6, 0xFFFFFF);
-        int y = PADDING + 14;
-        int maxY = this.height - 36;
-        int index = 0;
-        for (String line : bodyLines) {
-            if (index++ < scrollOffset) {
-                continue;
-            }
-            if (y > maxY) {
-                break;
-            }
-            graphics.drawString(this.font, line, PADDING, y, 0xE0E0E0);
-            y += LINE_HEIGHT;
-        }
         super.render(graphics, mouseX, mouseY, partialTick);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (Screen.hasControlDown() && keyCode == GLFW.GLFW_KEY_C) {
+            copyReadoutToClipboard();
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean isPauseScreen() {
+        return false;
+    }
+
+    private void copyReadoutToClipboard() {
+        if (this.minecraft == null) {
+            return;
+        }
+        this.minecraft.keyboardHandler.setClipboard(readoutText());
+    }
+
+    private String readoutText() {
+        return String.join("\n", bodyLines);
     }
 
     private void renderInspectorPanel(GuiGraphics graphics) {
@@ -94,20 +129,8 @@ public final class OpinionInspectorScreen extends Screen {
         return Math.min(PANEL_MAX_WIDTH, Math.max(220, this.width / 2));
     }
 
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        scrollOffset = Math.max(0, scrollOffset - (int) scrollY);
-        return true;
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
-    }
-
     private void rebuildBody() {
         bodyLines.clear();
-        scrollOffset = 0;
         bodyLines.add("Status: " + snapshot.status());
         bodyLines.addAll(snapshot.summaryLines());
         bodyLines.add("");
@@ -167,6 +190,41 @@ public final class OpinionInspectorScreen extends Screen {
             bodyLines.add("  " + decision.explanation());
             decision.candidateLines().forEach(line -> bodyLines.add("  cand: " + line));
             decision.transitionLines().forEach(line -> bodyLines.add("  tx: " + line));
+        }
+    }
+
+    /**
+     * Read-only {@link MultiLineEditBox} — supports click/drag selection and Ctrl+C, but blocks edits.
+     */
+    private static final class SelectableReadoutBox extends MultiLineEditBox {
+
+        SelectableReadoutBox(
+                net.minecraft.client.gui.Font font,
+                int x,
+                int y,
+                int width,
+                int height,
+                String value) {
+            super(font, x, y, width, height, Component.empty(), Component.empty());
+            setValue(value);
+        }
+
+        @Override
+        public boolean charTyped(char codePoint, int modifiers) {
+            return false;
+        }
+
+        @Override
+        public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+            if (Screen.hasControlDown()) {
+                if (keyCode == GLFW.GLFW_KEY_V || keyCode == GLFW.GLFW_KEY_X) {
+                    return false;
+                }
+            }
+            if (keyCode == GLFW.GLFW_KEY_BACKSPACE || keyCode == GLFW.GLFW_KEY_DELETE) {
+                return false;
+            }
+            return super.keyPressed(keyCode, scanCode, modifiers);
         }
     }
 }

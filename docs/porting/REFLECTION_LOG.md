@@ -698,3 +698,79 @@ legal font draw matrix as a complete MVP. The user’s screenshots falsified eac
 - **Shared guidance updated:** rendering/shader reference and Gate 5.5 only; no unrelated rules or
   wrappers were rewritten.
 - **Constraints:** no Minecraft launch, commit, push, or PR was performed by Codex.
+
+---
+
+## 2026-08-12 — GAO-8B Opinion inspector (Task 42B) + post-ship fixes
+
+**Gate PREFL-1.** Incremental reflection on Task 42B implementation and the follow-up fixes
+(causal labeling, shelter copy, duplicate payload registration, no-blur panel, copy/select UI).
+Does not audit unrelated Scavenger AI or parity work.
+
+### Scope and evidence
+
+| Field | Result |
+| --- | --- |
+| Project | `SPMScavenger-1.21.1-Fabric` v1.9.4 |
+| Task | GAO-8B — Opinion readout inspector (key O, Creative/op, server-validated DTO) |
+| Starting state | RFC D-GAO-044 locked; no inspector UI or networking |
+| Final state | Read-only inspector with selectable text, Copy button, translucent left panel; tests + build pass |
+| Systems changed | `opinion/readout/*`, `network/OpinionInspect*`, `client/opinion/*`, RFC Task 42B row |
+| Build evidence | `.\gradlew.bat clean build` — BUILD SUCCESSFUL (2026-08-12); all tests pass |
+| Runtime evidence | User reported integrated-client crash (duplicate payload registration) — fixed; blur fix and shelter copy validated in play — `RUNTIME_CONFIRMED` for those fixes. Full inspector parity (RQ-GAO-SHELTER-01) remains `UNVERIFIED` |
+
+### Reconstruction
+
+| Stage | Action | Result | Confidence |
+| --- | --- | --- | --- |
+| Core readout | `OpinionReadoutSnapshots.capture` via `OpinionExperienceRegistry.find` only; bounded DTO + explanation projector | Static tests pass; no `contextFor` on readout path | `CONFIRMED` (code + tests) |
+| Networking | Request/response payloads; server handler with permission + range checks | Compiles; idempotent `registerPayloadTypes()` after crash fix | `CONFIRMED` (build); runtime send/receive `INFERRED` without fresh launch |
+| Client UI v1 | `drawString` scroll list + Refresh/Close | Readable but not selectable; `renderBackground` blurred world | `RUNTIME_CONFIRMED` blur complaint |
+| Causal labeling fix | Per-decision `counterfactualOnly` when `disposition == MANDATORY_AUTHORITY`, not global shelter flag | `OpinionReadoutExplanationTest` | `CONFIRMED` |
+| Shelter / director copy | Phase strings (APPROACHING/SETTLED/RETURNING); incumbent, intent, preference counts, `ticksSinceMeaningfulProgress` | Tests + user review | `CONFIRMED` static |
+| Crash fix | Client `onInitializeClient` stopped registering payload types; common init registers once with guard | User crash log matched duplicate registration | `RUNTIME_CONFIRMED` |
+| Panel fix | Override `renderBackground` — translucent fill, no `super.renderBackground()` | User-requested; world visible on right | `RUNTIME_CONFIRMED` (user) |
+| Copy/select UI | `SelectableReadoutBox` (`MultiLineEditBox` read-only) + Copy button + Ctrl+C | Build pass; selection/copy not runtime-probed this session | `CONFIRMED` compile; selection UX `UNVERIFIED` |
+
+### Errors and self-inflicted mistakes
+
+1. **Global counterfactual flag** — `capture()` set `counterfactual = shelter.isPresent()`, marking every recent decision non-causal during shelter. User correctly flagged that shelter is mandatory authority, not a blanket “ignore all decisions” switch. Fix: per-decision disposition check (D-GAO-044).
+2. **Duplicate payload registration on integrated client** — Both `onInitialize` and `onInitializeClient` called `PayloadTypeRegistry.register`. Fabric throws on second register. Fix: single idempotent `registerPayloadTypes()` on common init; client only registers S2C receiver.
+3. **Menu blur on in-world overlay** — Default `Screen.renderBackground` is wrong for a live-world debug panel. Fix: custom translucent panel without calling super.
+4. **Non-selectable diagnostic text** — `drawString` lines cannot be highlighted for paste. Fix: read-only `MultiLineEditBox` subclass blocking edits but allowing selection and Ctrl+C.
+
+### Breakthroughs and patterns
+
+| Pattern | Classification | When to use | When not to use |
+| --- | --- | --- | --- |
+| Fabric custom payload types register exactly once per type id; guard integrated client double-init | `STRONGLY_SUPPORTED` | Any mod registering C2S/S2C payloads on both common and client entrypoints | Dedicated server-only mods with no client entrypoint |
+| In-world debug overlays: skip `super.renderBackground()` | `STRONGLY_SUPPORTED` | Inspectors/HUDs that must keep the world visible | Full-menu screens that should dim/blur |
+| Read-only `MultiLineEditBox` for diagnostic copy | `EXPERIMENTAL` | Long plain-text readouts needing select/copy | Rich formatting, clickable links, or edit-in-place |
+| Per-record causal flags, not global mode flags | `PROVEN` (this domain) | Decision logs where one authority mode does not invalidate unrelated history | N/A when the mode truly suppresses all downstream evaluation |
+
+### Lesson-to-instruction mapping
+
+| Lesson | Target | Promotion |
+| --- | --- | --- |
+| Idempotent Fabric payload registration | Project `PORTING_GUIDE.md` networking note if absent | `PROJECT_SPECIFIC` unless second mod hits same bug |
+| No blur for in-world inspector panels | Aligns with Gate 5.1 backdrop intent | `CLARIFIES_EXISTING` — no new gate |
+| `find` not `contextFor` on readout | Already locked D-GAO-039 | `STRENGTHENS_EXISTING` |
+| MultiLineEditBox read-only subclass | — | `EXPERIMENTAL` — keep in project until second use |
+
+No shared skill edits this session; promotion bar not met for repo-wide mandatory rules beyond existing Gate 5.1 / AV-1 guidance.
+
+### Rejected shortcuts
+
+| Proposal | Reason |
+| --- | --- |
+| Copy-only button without selectable widget | User asked for highlight/select, not just bulk copy |
+| `EditBox` single-line | Insufficient for multi-section decision log |
+| Re-register payloads on client “for safety” | Causes integrated-client crash; receiver-only on client is correct |
+
+### Handoff
+
+- **Artifact:** `build/libs/spmscavenger-1.9.4.jar` after `clean build` (2026-08-12).
+- **Inspector UX:** Click/drag in text area to select; **Copy** button or **Ctrl+C** copies full readout; **Refresh** re-requests server snapshot; world stays visible right of panel.
+- **Still unverified:** RQ-GAO-SHELTER-01 runtime shelter hold behavior; executor/Goal layer in inspector (user noted as future); MultiLineEditBox selection on all platforms/GUI scales.
+- **Next if continuing:** Runtime probe shelter mandatory hold + discretionary REST side-by-side; optional executor intent line in readout DTO.
+- **Constraints:** No commit, push, or Minecraft launch in this reflection session.
