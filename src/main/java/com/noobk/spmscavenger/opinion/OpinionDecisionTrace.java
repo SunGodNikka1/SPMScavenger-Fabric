@@ -57,6 +57,8 @@ public final class OpinionDecisionTrace {
         PENDING_INTENT_RETAINED,
         ADOPTED_INTENT_RETAINED,
         RUNNING_INTENT_RETAINED,
+        /** Director invariant violated — see transition detail; intent was re-issued as repair. */
+        DIRECTOR_INCONSISTENCY,
         INTENT_ISSUED
     }
 

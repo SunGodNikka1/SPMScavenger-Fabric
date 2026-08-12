@@ -21,6 +21,13 @@ public final class DiscretionaryDirectorState {
     private boolean restYieldRequested;
     private boolean exploreYieldRequested;
     private long lastGameTime;
+    /**
+     * Last-tick explore adoption diagnostics for inspector readout only.
+     *
+     * <p>Do not extend this with {@code lastRestReadiness}, {@code lastSocialReadiness}, etc. —
+     * candidate {@code suppressionDetail} is the scalable direction for per-activity diagnostics
+     * (GAO-10).
+     */
     private ExploreReadinessSnapshot lastExploreReadiness = ExploreReadinessSnapshot.empty();
     private final OpinionDecisionTrace trace = new OpinionDecisionTrace();
 
@@ -179,14 +186,30 @@ public final class DiscretionaryDirectorState {
                     false);
         } else {
             DiscretionaryIntent existing = activeIntentFor(winner);
-            if (existing != null) {
-                trace.attachIntent(decisionId, existing.intentId());
+            if (existing == null) {
+                recoverRetainedIntentInvariantViolation(
+                        decisionId,
+                        winner,
+                        top.total(),
+                        runnerUp,
+                        input.gameTime(),
+                        "needsPendingIssue=false but activeIntentFor returned null");
+            } else {
+                Optional<OpinionDecisionTrace.DecisionDisposition> retained =
+                        retainedDisposition(existing);
+                if (retained.isEmpty()) {
+                    recoverRetainedIntentInvariantViolation(
+                            decisionId,
+                            winner,
+                            top.total(),
+                            runnerUp,
+                            input.gameTime(),
+                            "active intent lifecycle not retainable: " + existing.lifecycle());
+                } else {
+                    trace.attachIntent(decisionId, existing.intentId());
+                    trace.conclude(decisionId, retained.get(), winner, true);
+                }
             }
-            trace.conclude(
-                    decisionId,
-                    retainedDisposition(existing),
-                    winner,
-                    true);
         }
 
         updateYieldRequests(winner, top.total(), scoring, input.gameTime());
@@ -435,17 +458,42 @@ public final class DiscretionaryDirectorState {
         }
     }
 
-    private static OpinionDecisionTrace.DecisionDisposition retainedDisposition(
+    private static Optional<OpinionDecisionTrace.DecisionDisposition> retainedDisposition(
             DiscretionaryIntent existing) {
-        if (existing == null) {
-            return OpinionDecisionTrace.DecisionDisposition.PENDING_INTENT_RETAINED;
-        }
         return switch (existing.lifecycle()) {
-            case PENDING -> OpinionDecisionTrace.DecisionDisposition.PENDING_INTENT_RETAINED;
-            case ADOPTED -> OpinionDecisionTrace.DecisionDisposition.ADOPTED_INTENT_RETAINED;
-            case RUNNING -> OpinionDecisionTrace.DecisionDisposition.RUNNING_INTENT_RETAINED;
-            default -> OpinionDecisionTrace.DecisionDisposition.PENDING_INTENT_RETAINED;
+            case PENDING -> Optional.of(OpinionDecisionTrace.DecisionDisposition.PENDING_INTENT_RETAINED);
+            case ADOPTED -> Optional.of(OpinionDecisionTrace.DecisionDisposition.ADOPTED_INTENT_RETAINED);
+            case RUNNING -> Optional.of(OpinionDecisionTrace.DecisionDisposition.RUNNING_INTENT_RETAINED);
+            default -> Optional.empty();
         };
+    }
+
+    /**
+     * Records an explicit director invariant failure and re-issues pending intent so the mob is not
+     * left without authority. Never masquerades as {@code PENDING_INTENT_RETAINED}.
+     */
+    private void recoverRetainedIntentInvariantViolation(
+            long decisionId,
+            DiscretionaryActivity winner,
+            float utility,
+            float runnerUp,
+            long gameTime,
+            String detail) {
+        trace.transition(
+                decisionId,
+                gameTime,
+                OpinionDecisionTrace.Stage.SELECT,
+                null,
+                winner,
+                null,
+                InvalidationCause.NONE,
+                "DIRECTOR_INCONSISTENCY: " + detail);
+        issuePending(decisionId, winner, utility, runnerUp, gameTime);
+        trace.conclude(
+                decisionId,
+                OpinionDecisionTrace.DecisionDisposition.DIRECTOR_INCONSISTENCY,
+                winner,
+                false);
     }
 
     private static ScoringEvaluation evaluateCandidates(DirectorTickInput input) {

@@ -244,6 +244,8 @@ public final class OpinionReadoutExplanation {
             case PENDING_INTENT_RETAINED -> "Pending intent retained — waiting for executor adoption";
             case ADOPTED_INTENT_RETAINED -> "Adopted intent retained — executor delivery in progress";
             case RUNNING_INTENT_RETAINED -> "Running intent retained — incumbent activity continues";
+            case DIRECTOR_INCONSISTENCY ->
+                    "Director invariant violated — pending intent re-issued; see transition detail";
             case MANDATORY_AUTHORITY -> "Mandatory authority blocked discretionary scheduling";
             case COMMITMENT_HOLD -> "Commitment hold prevented a switch";
             case SWITCH_MARGIN_HOLD -> "Switch margin not met";
