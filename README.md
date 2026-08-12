@@ -175,11 +175,11 @@ The installable artifact is written to:
 build/libs/spmscavenger-1.9.4.jar
 ```
 
-The latest verified clean build completed with **677 tests, zero failures, zero errors, and zero
+The latest verified clean build completed with **680 tests, zero failures, zero errors, and zero
 skips**. Its SHA-256 was:
 
 ```text
-913C2F65192E8EF9937BBD7A93452ECE3F149584192B151612D0B33323892F38
+253B5E840CA886B6F3B7744A2942234F79D9659C941B1AFE1EC26F7E199AC221
 ```
 
 That hash changes whenever source or packaged resources change.

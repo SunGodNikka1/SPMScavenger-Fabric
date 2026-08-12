@@ -1127,6 +1127,62 @@ with a hash-matched artifact because the triggering session's loaded JAR could n
 Focused tests and the full 677-test clean build pass; artifact SHA-256 is
 `913C2F65192E8EF9937BBD7A93452ECE3F149584192B151612D0B33323892F38`.
 
+#### Runtime follow-up — SPM Door Passage Episode Repair
+
+**Status:** `IMPLEMENTING / RUNTIME REPORTED / SOURCE CONFIRMED`
+
+The current source already closes the pre-arrival work gap by publishing `APPROACHING` authority
+after successful path admission and reservation. A separate runtime report remains: `Using door`
+repeats even while the latched door is open, and some passages close before the mob crosses.
+
+Pinned SPM v0.86.0 source at revision `4b80b5e849ccabd69e7c9c2f44dc25f7233c7796` confirms:
+
+- `PlayerMobDoorGoal.canUse()` delegates to vanilla and does not reject an already-open latched
+  door;
+- `start()` always requests deliberate OPEN;
+- `tick()` spends the 20-tick crossing timer while the entity's 10-tick deliberate operation has
+  stopped navigation;
+- `stop()` requests CLOSE for every closer, including timeout before inherited `passed=true`;
+- `DoorObstruction.setOpen(..., true)` is idempotent, so a repeated OPEN episode can animate and
+  display `Using door` while physically doing nothing.
+
+Options considered:
+
+| Option | Benefit | Risk/cost | Decision |
+| --- | --- | --- | --- |
+| Replace SPM's complete door Goal/state machine | Full explicit ownership | Large host fork surface, duplicates vanilla path-door detection, fragile across SPM updates | Rejected |
+| Increase close timeout only | Small patch | Still admits already-open no-op episodes and still closes un-crossed doors | Rejected |
+| **Narrow optional lifecycle Mixin** | Preserves vanilla detection and SPM animation while repairing admission/timer/terminal semantics | Private host fields/accessors are pinned to SPM 0.86.0; optional fallback needs package/runtime checks | Selected |
+
+Locked behavior:
+
+1. After vanilla `canUse()` latches a door, an already-open door does not start another OPEN
+   episode; navigation simply continues.
+2. The crossing budget does not decrease while `PlayerMobEntity.isOperatingDoor()` is true.
+3. A closer schedules CLOSE only after vanilla's inherited `passed` state proves actual passage.
+   Timeout before passage leaves the door open for navigation/repath recovery.
+4. The same door encounter cannot immediately re-admit after completion; it clears after the mob
+   leaves vanilla's 2.25-square interaction neighbourhood. A different door remains eligible.
+
+Behavioral prediction: closed path door → one OPENING window → budget-preserving CROSSING → actual
+plane crossing → at most one CLOSING window → DONE. On bounded failure: ABORT without close, so the
+next physical state is an open traversable door rather than close/reopen oscillation. Double doors
+remain two door positions/episodes; externally closed doors and modded door implementations require
+runtime falsification.
+
+**Must happen:** a closer receives the full crossing budget after the deliberate opening pause and
+closes only after crossing. **Must not happen:** an already-open latched door creates a no-op
+`Using door` animation, timeout closes a door in front of the mob, the addon operates doors itself,
+or absence/change of SPM crashes startup.
+
+**Implementation evidence:** the optional host Mixin now correlates a door/path episode, rejects
+already-open no-op OPEN admissions, pauses the host tick during `isOperatingDoor()`, mirrors
+vanilla's door-plane crossing calculation, cancels close-before-pass, and prevents close-behind
+from immediately reclassifying the same door/path as a fresh episode. Pure policy and Mixin
+contracts plus the full 680-test suite pass; `clean build` and remapped bytecode/package inspection
+pass. Artifact SHA-256:
+`253B5E840CA886B6F3B7744A2942234F79D9659C941B1AFE1EC26F7E199AC221`. Runtime remains unverified.
+
 ---
 
 ## Topic: Missing AI behaviors
@@ -1336,6 +1392,7 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Codex | 2026-08-12 | Implemented the SPM Door Passage Episode Repair: reject already-open/no-op OPEN, pause crossing budget during deliberate operation, close only after observed passage, and correlate same door/path completion to prevent immediate reopen. All 680 tests and clean build pass; artifact `253B5E...C221`; runtime remains unverified. No Minecraft launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Runtime report exposed a pre-arrival authority gap after SCR-2R5; implemented Shelter Commitment Authority Continuity so a path-probed/reserved commitment owns the voluntary-travel envelope through APPROACHING, SETTLED, and RETURNING. Gather/Craft/Smelt cannot seize finite interruption gaps; door helpers remain available outside SETTLED. All 677 tests and clean build pass; artifact `913C2F...F38`; runtime remains unverified. No Minecraft launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-2R5` + D-GAO-043 semantic seam: mandatory `SHELTER_HOLD`, independent affective rest, centralized displacement envelope, conservative target provenance, commitment-correlated SETTLED/RETURNING authority, and optional pinned host travel/combat guards. Post-GREEN MAIBS found and repaired RETURNING suppressing its required door wrapper. All 676 tests and clean build pass; runtime remains unverified. No Minecraft launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Locked `SCR-2R5` after user peer review: `SHELTER_HOLD` is mandatory observational authority, affective rest stays independent, and a centralized four-effect physical interruption policy distinguishes in-place, suspend/resume, override/cancel, and block. Locked conservative target provenance, bounded correlated hold snapshots, staged optional-host hooks, unchanged priorities, and implementation gates. No Java edit, test/build, runtime launch, commit, push, or PR |

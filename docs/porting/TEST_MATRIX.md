@@ -359,6 +359,16 @@ outcomes remain `UNVERIFIED`.
 | SCR-2R5 temporary resume | Settled mob is benignly displaced and needs a closed door to return | Hold becomes RETURNING, same commitment/reservation survives, door helper may operate, exact arrival restores SETTLED | Hold releases to work, or retained hold suppresses the needed door helper | Phase/correlation/door-contract tests + post-GREEN MAIBS `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2R5 target provenance | Safe sheltered hungry mob targets cow; separate runs use recent attacker, nearby visible hostile, and player attack order | Cow/unknown target stays sheltered; attributable danger/order overrides | Every non-null target is treated as emergency, or real self-defence is blocked | Pure provenance tests and pinned SPM HuntForFood source `CODE_CONFIRMED`; modded-hostile compatibility runtime `UNVERIFIED` |
 | Shelter commitment authority continuity | Gather is active at dusk; SeekShelter adopts a reachable reserved house, then a finite door/helper interruption occurs before arrival | Authority phase is `APPROACHING`; Gather yields and cannot restart; door helper runs; same commitment resumes and becomes `SETTLED` | Work and shelter alternate because authority exists only after arrival, or approach authority suppresses the door needed to enter | User runtime report + authority/guard focused tests `CODE_CONFIRMED`; tested artifact identity and repaired runtime `UNVERIFIED` |
+| SPM door passage — already open | Active navigation path/horizontal collision latches a wooden door whose OPEN property is already true | Stock navigation continues with no new deliberate OPEN episode or `Using door` animation | Idempotent OPEN runs for ten ticks and stops movement while changing no block | Pinned SPM/vanilla bytecode + pure/Mixin contract `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| SPM door passage — crossing clock | Closer starts a deliberate 10-tick OPEN operation with a 20-tick passage budget | Operation ticks do not decrement passage budget; navigation receives the complete bounded crossing window afterward | Half the budget expires while MOVE is deliberately stopped | Source/timing audit + Mixin contract `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| SPM door passage — terminal semantics | Door opens but mob does not cross before bounded timeout; separate scenario crosses door plane | Timeout leaves door open for path/repath recovery; actual crossing permits at most one close-behind | Timeout closes in front and manufactures reopen loop, or close happens without passage | Pure policy/Mixin contract/MAIBS `CODE_CONFIRMED`; physical runtime `UNVERIFIED` |
+
+SPM Door Passage Episode static gates: all 680 tests pass with zero failures/errors/skips and
+`clean build` passes. The remapped JAR packages `DoorPassagePolicy` and the optional
+`PlayerMobDoorGoalBusyMixin`; bytecode inspection confirms the protected vanilla door fields and
+mapped path/door calls are present. Runtime Mixin application and physical crossing remain
+`UNVERIFIED`. Final remapped JAR SHA-256:
+`253B5E840CA886B6F3B7744A2942234F79D9659C941B1AFE1EC26F7E199AC221`.
 
 Static gates after SCR-2R: 24 focused `Shelter*Test` tests and the full 652-test suite pass with zero failures,
 errors, or skips. Selection is capped at 28 semantic evaluations and four path probes per scan;

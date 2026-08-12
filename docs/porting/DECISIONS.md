@@ -1302,3 +1302,40 @@ JAR packages the changed authority/guard/goal classes at
 `build/libs/spmscavenger-1.9.4.jar`, SHA-256
 `913C2F65192E8EF9937BBD7A93452ECE3F149584192B151612D0B33323892F38`. A fresh runtime run with
 that hash-matched JAR remains required to upgrade the physical result from `UNVERIFIED`.
+
+### SPM Door Passage Episode Repair — no-op OPEN and premature CLOSE loop
+
+The latest runtime log at
+`D:\PrismLauncher\instances\Essentially Optimized (FPS)\minecraft\logs\latest.log`
+(2026-08-12 00:06 PDT) confirms SPM 0.86.0 and Scavenger 1.9.4 loaded without a reported door-Mixin
+application failure, but contains no objective transition/door diagnostics. The repeated `Using
+door` symptom is therefore user-runtime-confirmed; exact per-episode transitions remain
+`TRACE_UNVERIFIED`.
+
+Pinned SPM source revision `4b80b5e849ccabd69e7c9c2f44dc25f7233c7796` confirms four causal
+facts. `PlayerMobDoorGoal.canUse()` admits an already-open latched door; `start()` always requests
+OPEN; its 20-tick `forgetTime` decreases during the entity's 10-tick deliberate operation while
+`DoorOperationGoal` stops navigation; and `stop()` requests CLOSE for a closer even when timeout,
+not physical passage, ended the goal. Since `DoorObstruction.setOpen(..., true)` is idempotent, an
+already-open admission displays/animates `Using door` but changes no block. A timeout CLOSE can then
+put the same obstruction back in front of the mob and manufacture another OPEN episode.
+
+Alternatives considered: replacing SPM's complete door Goal was rejected as a broad host fork that
+duplicates vanilla path-door detection; merely increasing the timeout was rejected because it does
+not remove no-op OPEN or close-before-pass semantics. The selected optional Mixin preserves host
+door discovery and mutation while applying a bounded episode policy: already-open/unchanged
+encounters are rejected, the crossing clock pauses during `isOperatingDoor()`, vanilla-equivalent
+door-plane crossing is observed, and CLOSE is allowed only after crossing. Timeout before crossing
+leaves the door open for navigation/repath. Per-goal fields are bounded one-to-one with loaded
+PlayerMobs and need no static retention/eviction surface.
+
+**Must happen:** one closed path door produces one deliberate OPEN, a full post-animation crossing
+window, physical passage, and at most one close-behind. **Must not happen:** an open door creates a
+no-op `Using door`, operation ticks consume crossing time, timeout closes in front of the mob, the
+addon directly mutates a door, or absent/changed SPM becomes a required dependency.
+
+Static MAIBS result: `PASS — BEHAVIORALLY_PLAUSIBLE`. Double doors intentionally remain separate
+door-position episodes. External door changes and the physical optional-Mixin result require a
+fresh runtime test. All 680 tests pass with zero failures/errors/skips; `clean build` and remapped
+JAR package inspection pass. Artifact `build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`253B5E840CA886B6F3B7744A2942234F79D9659C941B1AFE1EC26F7E199AC221`.

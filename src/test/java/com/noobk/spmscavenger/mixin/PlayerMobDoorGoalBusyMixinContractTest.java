@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PlayerMobDoorGoalBusyMixinContractTest {
 
     @Test
-    void optionalGuardOnlySuppressesHostCanUseWhileDoorOperationIsBusy() throws Exception {
+    void optionalGuardRepairsOneBoundedDoorPassageWithoutOperatingDoors() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/com/noobk/spmscavenger/mixin/PlayerMobDoorGoalBusyMixin.java"));
         String config = Files.readString(Path.of("src/main/resources/spmscavenger.mixins.json"));
@@ -23,6 +23,11 @@ class PlayerMobDoorGoalBusyMixinContractTest {
         assertTrue(source.contains("getMethod(\"isOperatingDoor\")"));
         assertTrue(source.contains("getMethod(\"isRecovering\")"));
         assertTrue(source.contains("cir.setReturnValue(false)"));
+        assertTrue(source.contains("DoorPassagePolicy.admitOpenEpisode"));
+        assertTrue(source.contains("DoorPassagePolicy.unchangedEncounter"));
+        assertTrue(source.contains("spmscavenger$pauseCrossingClockDuringOperation"));
+        assertTrue(source.contains("DoorPassagePolicy.closeAfterEpisode"));
+        assertTrue(source.contains("spmscavenger$lastEpisodePath"));
         assertTrue(source.contains("stock SPM behavior retained"));
         assertFalse(source.contains("DoorObstruction"));
         assertFalse(source.contains("setOpen("));
