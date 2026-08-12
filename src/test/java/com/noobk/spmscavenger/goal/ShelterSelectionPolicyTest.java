@@ -40,10 +40,15 @@ class ShelterSelectionPolicyTest {
     }
 
     @Test
-    void doorwayAdjacencyCannotMasqueradeAsInterior() {
-        assertEquals(ShelterSelectionPolicy.Tier.PORCH_OVERHANG,
+    void doorwayAdjacencyAffectsSettlementDepthButNotStructuralInteriorIdentity() {
+        assertEquals(ShelterSelectionPolicy.Tier.INTERIOR_ROOM,
                 ShelterSelectionPolicy.classify(
                         false, new ShelterSelectionPolicy.Evidence(4, 5, 1)));
+        ShelterSelectionPolicy.RankedCandidate doorway = ranked(
+                2, ShelterSelectionPolicy.Tier.INTERIOR_ROOM, 4, 5, 1, 12);
+        ShelterSelectionPolicy.RankedCandidate deeper = ranked(
+                5, ShelterSelectionPolicy.Tier.INTERIOR_ROOM, 4, 5, 4, 8);
+        assertEquals(deeper, ShelterSelectionPolicy.rank(List.of(doorway, deeper)).getFirst());
     }
 
     @Test
@@ -148,6 +153,22 @@ class ShelterSelectionPolicyTest {
                 List.of(true, true, false, false, true), 2));
         assertFalse(ShelterSelectionPolicy.routeWithinExposureBudget(
                 List.of(true, false, false, false, true), 2));
+    }
+
+    @Test
+    void midRouteCaptureOnlyUpgradesLowerShelterToStructuralInterior() {
+        assertTrue(ShelterSelectionPolicy.shouldCaptureCurrentInterior(
+                ShelterSelectionPolicy.Tier.PORCH_OVERHANG,
+                ShelterSelectionPolicy.Tier.INTERIOR_ROOM));
+        assertTrue(ShelterSelectionPolicy.shouldCaptureCurrentInterior(
+                ShelterSelectionPolicy.Tier.DEEPLY_COVERED,
+                ShelterSelectionPolicy.Tier.INTERIOR_ROOM));
+        assertFalse(ShelterSelectionPolicy.shouldCaptureCurrentInterior(
+                ShelterSelectionPolicy.Tier.INTERIOR_ROOM,
+                ShelterSelectionPolicy.Tier.INTERIOR_ROOM));
+        assertFalse(ShelterSelectionPolicy.shouldCaptureCurrentInterior(
+                ShelterSelectionPolicy.Tier.USABLE_BED,
+                ShelterSelectionPolicy.Tier.INTERIOR_ROOM));
     }
 
     private static ShelterSelectionPolicy.RankedCandidate ranked(

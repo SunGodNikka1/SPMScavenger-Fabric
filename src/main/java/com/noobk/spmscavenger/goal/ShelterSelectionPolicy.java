@@ -165,9 +165,6 @@ final class ShelterSelectionPolicy {
         if (usableBed) {
             return Tier.USABLE_BED;
         }
-        if (evidence.doorClearance() <= 1) {
-            return evidence.roofCoverage() >= 1 ? Tier.PORCH_OVERHANG : Tier.EXPOSED;
-        }
         if (evidence.horizontalBoundaries() >= 3 && evidence.structuralRoofCoverage() >= 3) {
             return Tier.INTERIOR_ROOM;
         }
@@ -322,6 +319,11 @@ final class ShelterSelectionPolicy {
 
     static List<RankedCandidate> rank(Collection<RankedCandidate> candidates) {
         return candidates.stream().sorted(SEMANTIC_ORDER).toList();
+    }
+
+    static boolean shouldCaptureCurrentInterior(Tier commitmentTier, Tier currentTier) {
+        return currentTier == Tier.INTERIOR_ROOM
+                && commitmentTier.ordinal() < Tier.INTERIOR_ROOM.ordinal();
     }
 
     static boolean routeWithinExposureBudget(

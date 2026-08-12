@@ -785,6 +785,71 @@ attempts, reservations, and retained door evidence remain bounded. The least-ver
 vanilla navigation crossing real village door/roof geometry under the new tolerance and structural
 heuristics; falsification requires the SCR-2R2 runtime matrix.
 
+### SCR-2R3 — Interior Capture and Door Operation Arbitration
+
+**Status:** `IMPLEMENTED / STATIC VERIFIED`
+**Agent:** Agent_Codex
+**Contribution type:** RESEARCH / DESIGN / IMPLEMENTATION
+
+Runtime feedback after SCR-2R2 reports repeated `Using door` with no door response and mobs leaving
+after physically entering a house. Pinned SPM v0.86.0 source at `4b80b5e849` confirms that
+`PlayerMobDoorGoal.canUse()` checks only `isHoldingDoorsClosed()`, while `start()` calls
+`beginDoorOperation()` and its private `armDoorOperation()` silently refuses when another operation
+is active. A new OPEN attempt can therefore appear to start while a pending CLOSE owns the entity;
+the request is discarded, the close completes, and the flagless passage Goal waits at a closed
+door. Both SPM door goals report `Using door`, so the readout cannot distinguish the phases.
+
+Scavenger also checks current-interior satisfaction only during `search()`. An ACTIVE commitment to
+a tree/eave may physically cross a valid room and continue back outside toward its old destination.
+Finally, `classify()` currently converts any door-adjacent covered cell to `PORCH_OVERHANG` before
+structural evidence is considered. In a one-room village house, every usable interior cell may be
+door-adjacent, defeating the current-interior latch.
+
+Three negative probes: no `isOperatingDoor()` guard in SPM `PlayerMobDoorGoal.canUse()`; no
+mid-route current-position interior capture in `SeekShelterGoal.tick()`; no separation between
+semantic interior classification and door-depth settlement quality in `ShelterSelectionPolicy`.
+The available project `run/logs/latest.log` is from Scavenger 1.9.2 and contains no door diagnostic,
+so the new runtime report is user evidence but the exact frequency remains unmeasured.
+
+#### Behavioral Prediction (MAIBS-1)
+
+| Layer | Result |
+| --- | --- |
+| Intended behavior | Door requests never lie about starting; entering a structurally better room captures it instead of completing a worse exterior trip |
+| Current mechanism | busy door request is dropped; door-adjacent room may be demoted to porch; existing commitment ignores better shelter crossed en route |
+| Predicted repair | optional host Mixin refuses the flagless passage Goal while SPM is already operating a door; structural tier ignores door distance but ranking still prefers depth; lower-tier ACTIVE/RETURNING travel atomically adopts the current interior and stops |
+| Weirdness | tiny rooms may settle near the door when no deeper cell exists (`ACCEPTABLE`); several mobs may still close between passages (`RUNTIME_QUESTION`); an invalid current reservation can make capture retain the old trip (`BOUNDED_FALLBACK`) |
+| Confidence | causes `CODE_CONFIRMED`; physical repair `GAME_MECHANICS_INFERRED` until runtime |
+
+Temporal trace: `T0 CLOSE busy → OPEN canUse=false → operation finishes → next evaluation arms OPEN`
+instead of losing it. `T+10 lower-tier travel enters structural room → current evidence outranks
+commitment → reserve/replace atomically → exact ARRIVED → navigation stops`. `T+200/T+1200 the
+current interior remains latched; only protected bed or explicit higher authority can move it.
+
+Options: (A) patch SPM source directly—rejected by the stock-host/licence boundary; (B) optional
+`@Pseudo` addon Mixin guarding only the pinned public methods—selected, absent/changed host falls
+back without startup failure; (C) build a second door controller/shared registry—deferred because
+SPM owns door identity/action and the addon lacks a proven durable passage-intent contract.
+
+**Must happen:** a busy CLOSE prevents a false OPEN start; after it clears, normal SPM door logic may
+retry; a lower-tier shelter trip that enters a structural room captures that current cell; tiny
+door-adjacent structural interiors remain interiors. **Must not happen:** Scavenger directly opens
+doors, copies SPM code, adds a second door Goal, makes SPM mandatory, lets door distance erase real
+room structure, or leaves an old exterior reservation alive after successful capture.
+
+**Scope:** SCR-2R3 plus the narrow optional SPM busy guard. Shared multi-mob door passage holding is
+separately deferred pending a host/upstream door-operation request contract. SCR-3 memory remains
+out of scope.
+
+#### Implementation evidence — Agent_Codex
+
+`ShelterSelectionPolicy` now classifies structural enclosure before treating door depth as a
+within-tier ranking dimension. `SeekShelterGoal` checks lower-tier travel every ten ticks and uses
+the existing atomic `tryAdopt()` transaction to capture its current structural interior. The new
+common-side `PlayerMobDoorGoalBusyMixin` is `@Pseudo`, `require=0`, reads host busy/recovery state,
+and never toggles a door. Full suite: 663/663 passing; `clean build` and packaged-Mixin inspection
+pass. Static MAIBS: `BEHAVIORALLY_PLAUSIBLE`. Runtime: `UNVERIFIED`.
+
 ---
 
 ## Topic: Missing AI behaviors
@@ -994,8 +1059,9 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Codex | 2026-08-11 | Implemented `SCR-2R3`: structural identity independent of door depth, 10-tick bounded mid-route interior capture, optional stock-SPM busy/recovery door admission guard, 663-test clean build, package inspection, and static MAIBS; shared multi-mob passage hold deferred pending host contract |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-2R2`: structural-vs-foliage shelter semantics, current-interior hysteresis, protected bed upgrades, bounded door seeds, condition-bound `RETURNING`, correlated suspended rest claims, strictly-higher fallback upgrades, 660-test clean build, and post-GREEN MAIBS; runtime pending |
-| Agent_Codex | 2026-08-11 | Runtime feedback falsified SCR-2 doorstep completion; implemented `SCR-2R` door-depth ranking, door-adjacent tier cap, exact reserved-cell arrival, regression tests, 652-test clean build, and updated MAIBS/docs; runtime recheck pending |
+| Agent_Codex | 2026-08-11 | Runtime feedback falsified SCR-2 doorstep completion; implemented `SCR-2R` door-depth ranking, then-current door-adjacent tier cap, exact reserved-cell arrival, regression tests, 652-test clean build, and updated MAIBS/docs; SCR-2R3 later superseded only the tier cap |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-2`: bounded diverse shortlist, lexicographic interior tiers, four entity-ticking path probes, commitment-owned spacing reservations, physical occupancy admission, bounded failed-candidate backoff, expanded runtime datapack, and post-implementation MAIBS; later superseded in part by SCR-2R |
 | Agent_Codex | 2026-08-11 | Implemented `SCR-1`: persistent bounded shelter commitment, suspend/cancel taxonomy through the shared observer, fresh-path resume, stay/authority invalidation, canonical bed claims, unload/death cleanup, 13 focused tests, 639-test clean build, runtime datapack, and post-GREEN MAIBS. Runtime remains pending before Task 42B |
 | Agent_Cursor | 2026-08-08 | Initial RFC from SPM v0.86.0 source audit + scavenger codebase; user requested design-only (no mod) |

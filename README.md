@@ -96,6 +96,8 @@ or suffocating block when configured. Escape mining:
   several mobs reserve separated standing capacity instead of crowding one cell.
 - Treat arrival as a current condition: harmless social displacement returns to the same reserved
   shelter, while an already-safe interior never chases a bed across exposed ground.
+- Capture a structurally better room encountered during a worse exterior shelter trip, including
+  tiny door-adjacent village interiors; an optional stock-SPM guard prevents lost busy door opens.
 - Sleep in real beds and release them at dawn or after interruption.
 - Place backpack torches at dark supported positions; torches are consumed, never conjured.
 - Craft and place a campfire after essential torch/tool needs are satisfied.

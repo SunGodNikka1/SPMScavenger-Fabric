@@ -1092,6 +1092,10 @@ candidates, ranks deeper generic cells first within the same semantic tier, caps
 cell at porch tier, and requires `mob.blockPosition()` to equal the reserved standing block before
 opening the rest session. Door operation and closure remain owned by SPM and unchanged.
 
+**Superseded in part by SCR-2R3:** door clearance remains a within-tier settlement-depth signal,
+but no longer caps a fully structural cell at porch tier. The cap made tiny village-house interiors
+impossible to recognize. Exact arrival and deeper-cell preference remain active.
+
 **Must happen:** a mob with reachable deeper room capacity continues moving after crossing the
 door and settles on its reservation. **Must not happen:** the block adjacent to a door becomes
 `INTERIOR_ROOM`, the old two-block tolerance marks arrival, or tiny houses lose porch fallback.
@@ -1140,3 +1144,42 @@ Evidence: 660 tests pass with zero failures/errors/skips; focused shelter/rest t
 `78A95368046A66C06FD67D7D842BB41D3524BECB43A00F738BE050F984744725`, contains the repaired
 classes and excludes the runtime datapack. Static MAIBS is `PASS — BEHAVIORALLY_PLAUSIBLE`.
 Physical behavior remains `UNVERIFIED` until the SCR-2R2 runtime matrix is observed.
+
+### SCR-2R3 — interior capture and optional SPM busy-door guard
+
+User runtime feedback showed `Using door` repeating without a responding door and mobs leaving a
+house after successfully entering it. The pinned SPM v0.86.0 reference (`4b80b5e849`) confirms the
+host race: `PlayerMobDoorGoal.canUse()` does not check `isOperatingDoor()`, but its later
+`beginDoorOperation()` silently returns when `armDoorOperation()` sees an existing operation or
+train recovery. A flagless passage Goal can therefore look active after its OPEN request was lost.
+
+Directly patching or redistributing SPM was rejected by the stock-host and PolyForm Shield boundary.
+Giving Scavenger a second door Goal/controller was rejected because SPM already owns door detection,
+action timing, animation, and close personality. The selected compatibility repair is a common-side
+optional `@Pseudo` Mixin on the host passage Goal's `canUse()`. It reflectively reads only public
+`isOperatingDoor()` and `isRecovering()` and refuses admission while either host blocker is true.
+`@Pseudo` plus `require=0` makes absence/non-application non-fatal, while warn-once reflective
+fallback retains stock behavior if the inspected public host shape changes. Because the global
+Mixin configuration is required, absence of SPM is only statically supported until an absent-host
+runtime bootstrap confirms the loader skips the pseudo target. It does not coalesce or operate
+doors. A shared multi-mob passage hold remains
+deferred pending a real host contract carrying door identity and crossing intent.
+
+Scavenger now separates structural identity from settlement quality: door clearance still ranks a
+deeper equal-tier cell first, but can no longer erase full room evidence in tiny houses. During an
+ACTIVE/RETURNING lower-tier trip, a cheap current-position check runs at most every ten ticks. If
+the mob physically enters `INTERIOR_ROOM`, atomic reservation/adoption replaces the old exterior
+commitment, opens the correlated rest claim, marks ARRIVED, and stops navigation. Failed capture
+leaves the old commitment intact.
+
+**Must happen:** busy door state prevents a false passage start, tiny structural interiors remain
+interiors, and entering a room captures it rather than walking back outside. **Must not happen:**
+SPM source/classes ship in the addon, Scavenger toggles doors, absent/changed SPM crashes startup,
+or a failed interior reservation destroys the old trip.
+
+Evidence: pinned source and three negative probes are recorded in the RFC. 663 tests pass with zero
+failures/errors/skips; `clean build` and final-JAR Mixin inspection pass. Artifact
+`build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`DE8516AF3D52A1AD4D2E00713A61A28D28F89B4AB3A692451DF021FD1436DC7D`. Static MAIBS is
+`PASS — BEHAVIORALLY_PLAUSIBLE`; physical behavior and optional-host Mixin application remain
+`UNVERIFIED` until a fresh Minecraft run/log proves them.

@@ -84,10 +84,12 @@ public class SeekShelterGoal extends Goal {
     private BlockPos rejectedDestination;
     private long rejectedUntilTick;
     private long nextUpgradeScanAt;
+    private long nextInteriorCaptureCheckAt;
 
     private static final int SCAN_INTERVAL = 40;
     private static final int SCAN_PHASE_SALT = 11;
     private static final int UPGRADE_SCAN_INTERVAL = 200;
+    private static final int INTERIOR_CAPTURE_INTERVAL = 10;
     private static final int MAX_DISCOVERED_DOORS = 8;
     private static final int MAX_EXPOSED_BED_PATH_NODES = 2;
     /** startSleeping teleports the mob onto the bed, so only allow it from touching distance. */
@@ -172,6 +174,9 @@ public class SeekShelterGoal extends Goal {
             return; // asleep: nothing to do until canContinueToUse says otherwise
         }
         reconcileArrivedCondition(mob.level().getGameTime());
+        if (captureCurrentInterior(mob.level().getGameTime())) {
+            return;
+        }
         commitment.recordActiveApproachTick();
         if (commitment.approachBudgetExhausted(mob.level().getGameTime())) {
             abandonCurrentDestination();
@@ -423,6 +428,47 @@ public class SeekShelterGoal extends Goal {
             release(previous);
         }
         commitment = replacement;
+        return true;
+    }
+
+    private boolean captureCurrentInterior(long now) {
+        if (commitment == null
+                || mob.isSleeping()
+                || commitment.shelterTier().ordinal()
+                        >= ShelterSelectionPolicy.Tier.INTERIOR_ROOM.ordinal()
+                || now < nextInteriorCaptureCheckAt) {
+            return false;
+        }
+        nextInteriorCaptureCheckAt = now + INTERIOR_CAPTURE_INTERVAL;
+        BlockPos currentPos = mob.blockPosition();
+        if (!standable(mob.level(), currentPos) || !safeForMob(currentPos)) {
+            return false;
+        }
+        ShelterSelectionPolicy.Evidence evidence = interiorEvidence(mob.level(), currentPos);
+        ShelterSelectionPolicy.Tier currentTier = ShelterSelectionPolicy.classify(false, evidence);
+        if (!ShelterSelectionPolicy.shouldCaptureCurrentInterior(
+                commitment.shelterTier(), currentTier)) {
+            return false;
+        }
+        ShelterSelectionPolicy.RawCandidate raw = new ShelterSelectionPolicy.RawCandidate(
+                currentPos,
+                null,
+                solidNeighbours(mob.level(), currentPos),
+                mob.level().getBrightness(LightLayer.BLOCK, currentPos),
+                0.0);
+        ShelterSelectionPolicy.RankedCandidate current = new ShelterSelectionPolicy.RankedCandidate(
+                raw, currentTier, evidence);
+        if (!tryAdopt(current, new ShelterSelectionPolicy.PathProbeBudget(), false, now)) {
+            return false;
+        }
+        commitment.activate();
+        commitment.arrive();
+        RestSessionCoordinator.openShelterRecovery(
+                mob, commitment.commitmentId(), currentPos,
+                RestAnchorType.SHELTER_STAND, now);
+        commitment.markRestClaimOpened();
+        nextUpgradeScanAt = now + UPGRADE_SCAN_INTERVAL;
+        mob.getNavigation().stop();
         return true;
     }
 

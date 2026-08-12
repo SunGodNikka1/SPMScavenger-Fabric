@@ -344,11 +344,14 @@ outcomes remain `UNVERIFIED`.
 | SCR-2C over capacity | `spm_shelter:scenario/over_capacity` | Interior capacity fills before separated lower-tier fallback | Porch displaces available room capacity or all mobs converge | Policy static `CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2D unreachable leaders | Four highest-tier paths fail | At most four probes now; later scans skip recent failures and advance | Same four positions suppress fallback forever | Rejection-ledger unit/static `CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2E lifecycle | Suspend, dawn, unload, death, server stop, expiry | Matching commitment retains/refreshes then conditionally releases its reservation | Old commitment releases newer ownership or static map grows forever | Unit/static `CONFIRMED`; heap trend `UNVERIFIED` |
-| SCR-2R doorway depth | Closed-door house with deeper free room cells | After crossing, mob continues to the exact deeper reservation | Door-adjacent cell ranks as interior or two-block arrival tolerance completes at threshold | User reproduced old failure; policy/contract tests `CONFIRMED`; repaired runtime `UNVERIFIED` |
+| SCR-2R doorway depth | Closed-door house with deeper free room cells | After crossing, within-tier depth prefers the exact deeper reservation | Distance beats deeper equal-tier cells or two-block arrival tolerance completes at threshold; SCR-2R3 supersedes the old door-adjacent semantic demotion | User reproduced old failure; policy/contract tests `CONFIRMED`; repaired runtime `UNVERIFIED` |
 | SCR-2R2 structural evidence | House plus nearer tree/eave; log-walled variant | Full-height non-leaf walls and structural roof classify the house above foliage fallback; logs remain eligible | Leaves create room walls or a blanket log blacklist breaks cabins | Policy + source-contract tests `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2R2 current satisfaction | Mob begins in a valid room with a free bed across exposed ground | Current interior is adopted; only a bed route with at most two exposed nodes may upgrade it | Global shelter scan makes the mob leave a safe house | Route-budget/policy/source-contract tests `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2R2 return | Arrived standing shelter, then benign moving social interruption | Rest becomes inactive-but-live; same commitment/reservation enters bounded `RETURNING` and resumes on exact re-arrival | Sticky historical arrival, duplicate rest opening, or reset/unbounded return budget | Commitment/rest/source-contract tests `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 | SCR-2R2 fallback upgrade | Mob arrives at tree/eave/deep-cover fallback; better tier later becomes reachable | Every 200 ticks at most, only a strictly higher tier can atomically replace the fallback | Per-tick scan, equal-tier churn, or losing the old reservation when replacement fails | Static call-path + contract test `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-2R3 busy door request | SPM CLOSE operation is active when its flagless passage Goal detects a closed door/path | Optional host guard refuses the false start; after busy/recovery clears, stock SPM may retry normally | OPEN is silently discarded while objective still says `Using door`; addon opens/closes doors itself | Pinned SPM `4b80b5e849` source + optional-Mixin contract/package inspection `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-2R3 tiny interior | One-room village house where usable cells are within one block of the door | Full structural evidence remains `INTERIOR_ROOM`; deeper equal-tier cells still rank first | Door clearance converts a real tiny room to porch | Policy tests `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| SCR-2R3 mid-route capture | Lower-tier tree/eave commitment crosses a structural room | At most every 10 ticks, current room atomically replaces old trip and reaches ARRIVED; navigation stops | Mob walks back outside to complete the worse destination or loses old ownership if capture fails | Policy/source-contract/full-suite `CODE_CONFIRMED`; runtime `UNVERIFIED` |
 
 Static gates after SCR-2R: 24 focused `Shelter*Test` tests and the full 652-test suite pass with zero failures,
 errors, or skips. Selection is capped at 28 semantic evaluations and four path probes per scan;
@@ -367,3 +370,11 @@ retention is capped at eight per scan, and lower-tier upgrade scans run no more 
 `UNVERIFIED` because no runtime launch was authorized for this implementation. Final remapped JAR:
 `build/libs/spmscavenger-1.9.4.jar`, SHA-256
 `78A95368046A66C06FD67D7D842BB41D3524BECB43A00F738BE050F984744725`.
+
+SCR-2R3 static gates: 663 tests pass with zero failures/errors/skips and `clean build` passes. Final
+JAR packages `PlayerMobDoorGoalBusyMixin` in the common optional-host Mixin list, uses `@Pseudo`
+and `require=0`, and contains no SPM classes or test datapack. Absent-host and changed-host startup
+remain runtime `UNVERIFIED`. The guard observes only SPM's public
+`isOperatingDoor()` / `isRecovering()` state and never operates a door. Static MAIBS:
+`PASS — BEHAVIORALLY_PLAUSIBLE`; runtime remains `UNVERIFIED`. Final remapped JAR SHA-256:
+`DE8516AF3D52A1AD4D2E00713A61A28D28F89B4AB3A692451DF021FD1436DC7D`.

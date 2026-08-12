@@ -50,6 +50,18 @@ class ShelterStructuralSatisfactionContractTest {
         assertTrue(commitment.contains("returnPathFailures"));
     }
 
+    @Test
+    void activeLowerTierTravelCapturesCurrentInteriorAtomically() throws Exception {
+        String source = seekShelterSource();
+
+        assertTrue(source.contains("captureCurrentInterior(mob.level().getGameTime())"));
+        assertTrue(source.contains("INTERIOR_CAPTURE_INTERVAL = 10"));
+        assertTrue(source.contains("shouldCaptureCurrentInterior("));
+        assertTrue(source.contains("tryAdopt(current, new ShelterSelectionPolicy.PathProbeBudget()"));
+        assertTrue(source.contains("commitment.arrive()"));
+        assertTrue(source.contains("mob.getNavigation().stop()"));
+    }
+
     private static String seekShelterSource() throws Exception {
         return Files.readString(Path.of(
                 "src/main/java/com/noobk/spmscavenger/goal/SeekShelterGoal.java"));

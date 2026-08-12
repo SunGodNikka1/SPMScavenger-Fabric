@@ -46,6 +46,9 @@ authority must cancel autonomous shelter.
 | SCR-2R2-C | After standing shelter reaches `ARRIVED`, trigger a friendly greeting that moves it away | The claim suspends, the same commitment enters `RETURNING`, and the mob returns to the exact reserved cell | Historical `ARRIVED` remains sticky or a new shelter is selected after the greeting |
 | SCR-2R2-D | Put a free bed in a second house across at least three sky-exposed path nodes | A mob already safe in the first interior refuses that bed upgrade | Bed tier overrides terrain safety and pulls the mob outside |
 | SCR-2R2-E | Let a mob settle under a tree/eave, then make a valid house interior reachable | The bounded 200-tick upgrade check replaces the fallback only with a strictly higher tier | Equal-tier target churn or a new scan every tick |
+| SCR-2R3-A | Use the occupied-bed house with a door-closing PlayerMob; observe repeated passage attempts | A busy close/recovery blocks the false open start; once free, the door visibly responds and the mob crosses | `Using door` repeatedly appears while the door never responds |
+| SCR-2R3-B | Reduce the house so its only valid standing cell is one block inside the door | The cell remains structural interior and the mob stays | Tiny interior is demoted to porch solely by door distance |
+| SCR-2R3-C | Give the mob a lower-tier exterior commitment whose route passes through the house | Within 10 ticks of entering, it captures/reserves its current interior and stops | It exits again to complete the tree/eave trip |
 
 For the combat negative case, spawn or lure a hostile that gives the PlayerMob an active combat
 target during the door interruption. Combat must win; the old shelter commitment must not resume.
