@@ -23,6 +23,19 @@ final class PhasedScanClock {
         this.phase = phaseFor(entityId, interval, goalSalt);
     }
 
+    /** Read-only probe for admission checks — does not consume the scan slot. */
+    boolean isDue(long gameTick) {
+        return gameTick >= dueTick(gameTick);
+    }
+
+    long ticksUntilDue(long gameTick) {
+        return Math.max(0L, dueTick(gameTick) - gameTick);
+    }
+
+    private long dueTick(long gameTick) {
+        return nextTick == UNINITIALIZED ? atOrAfter(gameTick) : nextTick;
+    }
+
     /** Claims this scan turn once; a late poll still succeeds instead of losing the phase forever. */
     boolean claim(long gameTick) {
         if (nextTick == UNINITIALIZED) {

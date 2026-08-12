@@ -353,6 +353,35 @@ class DiscretionaryActivityDirectorTest {
     }
 
     @Test
+    void restAdoptionGateRecordsSuppressionWithoutDiscardingItsScore() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
+
+        director.tick(tick(
+                10L,
+                idleObservation(),
+                true,
+                false,
+                ActivityAdmissions.of(
+                        ActivityAdmission.blocked(
+                                true, ActivityAdoptionBlocker.EXPLORE_NOT_READY, "test"),
+                        ActivityAdmission.blocked(
+                                true, ActivityAdoptionBlocker.NO_CAMPFIRE_ITEM, "test-not-ready"))));
+
+        OpinionDecisionTrace.Decision decision = director.trace().snapshot().getLast();
+        OpinionDecisionTrace.Candidate rest = decision.candidates().stream()
+                .filter(candidate -> candidate.activity() == DiscretionaryActivity.REST)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(OpinionDecisionTrace.CandidateState.SUPPRESSED, rest.state());
+        assertEquals(
+                OpinionDecisionTrace.SuppressionReason.ADOPTION_NOT_READY,
+                rest.suppressionReason());
+        assertTrue(rest.suppressionDetail().contains("NO_CAMPFIRE_ITEM"));
+        assertTrue(director.intent().isEmpty());
+    }
+
+    @Test
     void exploreAdoptionGateRecordsSuppressionWithoutDiscardingItsScore() {
         seedOpinions(55f, 5f, 11f, 4f);
         neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
@@ -366,7 +395,7 @@ class DiscretionaryActivityDirectorTest {
                 .orElseThrow();
         assertEquals(OpinionDecisionTrace.CandidateState.SUPPRESSED, explore.state());
         assertEquals(
-                OpinionDecisionTrace.SuppressionReason.EXPLORE_ADOPTION_NOT_READY,
+                OpinionDecisionTrace.SuppressionReason.ADOPTION_NOT_READY,
                 explore.suppressionReason());
         assertTrue(explore.breakdown().total() > 0f);
         assertEquals(DiscretionaryActivity.REST, decision.selectedActivity());
@@ -387,8 +416,7 @@ class DiscretionaryActivityDirectorTest {
                         DiscretionaryAvailability.none(),
                         true,
                         true),
-                true,
-                java.util.Optional.empty());
+                TestActivityAdmissions.bothReady());
 
         director.tick(input);
 
@@ -405,13 +433,13 @@ class DiscretionaryActivityDirectorTest {
         seedOpinions(55f, 5f, 11f, 4f);
         neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
         DiscretionaryActivityDirector.tick(
-                MOB, 10L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true);
+                MOB, 10L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, TestActivityAdmissions.bothReady());
         UUID staleId = director.intent().get().intentId();
         assertTrue(director.intent().isPresent());
 
         OpinionFeatureGate.testOverride = false;
         DiscretionaryActivityDirector.tick(
-                MOB, 20L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true);
+                MOB, 20L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, TestActivityAdmissions.bothReady());
 
         assertTrue(director.intent().isEmpty());
         assertTrue(hasTerminalDetail("OPINION_DISABLED"));
@@ -419,7 +447,7 @@ class DiscretionaryActivityDirectorTest {
 
         OpinionFeatureGate.testOverride = true;
         DiscretionaryActivityDirector.tick(
-                MOB, 30L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, true);
+                MOB, 30L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, TestActivityAdmissions.bothReady());
 
         assertTrue(director.intent().isPresent());
         assertFalse(staleId.equals(director.intent().get().intentId()));
@@ -490,7 +518,7 @@ class DiscretionaryActivityDirectorTest {
     }
 
     private DirectorTickInput tick(long gameTime, ActivityObservationService.Observation observation, boolean eligible) {
-        return tick(gameTime, observation, eligible, false, true);
+        return tick(gameTime, observation, eligible, false, TestActivityAdmissions.bothReady());
     }
 
     private DirectorTickInput tick(
@@ -498,7 +526,7 @@ class DiscretionaryActivityDirectorTest {
             ActivityObservationService.Observation observation,
             boolean eligible,
             boolean combat) {
-        return tick(gameTime, observation, eligible, combat, true);
+        return tick(gameTime, observation, eligible, combat, TestActivityAdmissions.bothReady());
     }
 
     private DirectorTickInput tick(
@@ -506,7 +534,7 @@ class DiscretionaryActivityDirectorTest {
             ActivityObservationService.Observation observation,
             boolean eligible,
             boolean combat,
-            boolean exploreAdoptionReady) {
+            ActivityAdmissions admissions) {
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(MOB);
         return new DirectorTickInput(
                 gameTime,
@@ -520,8 +548,16 @@ class DiscretionaryActivityDirectorTest {
                         DiscretionaryAvailability.bothPresent(),
                         eligible,
                         true),
-                exploreAdoptionReady,
-                java.util.Optional.empty());
+                admissions);
+    }
+
+    private DirectorTickInput tick(
+            long gameTime,
+            ActivityObservationService.Observation observation,
+            boolean eligible,
+            boolean combat,
+            boolean exploreReady) {
+        return tick(gameTime, observation, eligible, combat, TestActivityAdmissions.exploreReady(exploreReady));
     }
 
     private static ActivityObservationService.Observation idleObservation() {

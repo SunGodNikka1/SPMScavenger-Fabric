@@ -1,6 +1,6 @@
 package com.noobk.spmscavenger.client.opinion;
 
-import com.noobk.spmscavenger.opinion.ExploreReadinessSnapshot;
+import com.noobk.spmscavenger.opinion.readout.ActivityAdmissionView;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutDecisionView;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutSnapshot;
 import net.minecraft.client.gui.GuiGraphics;
@@ -154,18 +154,19 @@ public final class OpinionInspectorScreen extends Screen {
         }
         bodyLines.add("latestDecisionDisposition=" + snapshot.currentDisposition()
                 + " restPhase=" + snapshot.restAuthorityPhase());
-        ExploreReadinessSnapshot explore = snapshot.exploreReadiness();
+        ActivityAdmissionView explore = snapshot.exploreAdmission();
+        ActivityAdmissionView rest = snapshot.restAdmission();
         if (!explore.isEmpty()) {
-            bodyLines.add("exploreIdleTicks=" + explore.idleWorkTicks()
-                    + "/" + explore.idleTickThreshold()
-                    + " localTrips=" + explore.successfulLocalTrips()
-                    + "/" + explore.localTripThreshold()
-                    + " cooldownRemaining=" + explore.cooldownRemainingTicks()
-                    + " descentPressure=" + explore.descentPressure()
-                    + " adoptionReady=" + explore.adoptionReady());
-            if (!explore.blockerDetail().isBlank()) {
-                bodyLines.add("exploreBlocker=" + explore.blockerDetail());
-            }
+            bodyLines.add("exploreAdmission: installed=" + explore.executorPresent()
+                    + " adoptable=" + explore.adoptionReady()
+                    + " blocker=" + explore.blocker()
+                    + (explore.detail().isBlank() ? "" : " (" + explore.detail() + ")"));
+        }
+        if (!rest.isEmpty()) {
+            bodyLines.add("restAdmission: installed=" + rest.executorPresent()
+                    + " adoptable=" + rest.adoptionReady()
+                    + " blocker=" + rest.blocker()
+                    + (rest.detail().isBlank() ? "" : " (" + rest.detail() + ")"));
         }
         bodyLines.add("placePreferences=" + snapshot.placePreferenceCount()
                 + " entityPreferences=" + snapshot.entityPreferenceCount());

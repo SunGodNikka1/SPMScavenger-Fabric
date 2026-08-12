@@ -5,9 +5,12 @@ import com.noobk.spmscavenger.DescentPressurePolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.opinion.AffectiveStateService;
+import com.noobk.spmscavenger.opinion.ActivityAdmission;
+import com.noobk.spmscavenger.opinion.ActivityAdmissions;
 import com.noobk.spmscavenger.opinion.DiscretionaryActivityDirector;
+import com.noobk.spmscavenger.opinion.DiscretionaryActivity;
 import com.noobk.spmscavenger.opinion.DiscretionaryAvailability;
-import com.noobk.spmscavenger.opinion.ExploreReadinessSnapshot;
+import com.noobk.spmscavenger.opinion.ExploreAdmission;
 import com.noobk.spmscavenger.opinion.ExploreReadinessThresholds;
 import com.noobk.spmscavenger.opinion.PassiveExpressionService;
 import com.noobk.spmscavenger.ToolTier;
@@ -54,10 +57,12 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
     private final boolean allowNewMiningWork;
     @Nullable
     private final SeekShelterGoal shelterGoal;
+    @Nullable
+    private final CampfireGoal campfireGoal;
 
     public ExplorationActivityGoal(
             PathfinderMob mob, GoalSelector selector, ExplorationReadiness readiness) {
-        this(mob, selector, readiness, true, null);
+        this(mob, selector, readiness, true, null, null);
     }
 
     public ExplorationActivityGoal(
@@ -65,7 +70,7 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
             GoalSelector selector,
             ExplorationReadiness readiness,
             boolean allowNewMiningWork) {
-        this(mob, selector, readiness, allowNewMiningWork, null);
+        this(mob, selector, readiness, allowNewMiningWork, null, null);
     }
 
     public ExplorationActivityGoal(
@@ -74,12 +79,23 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
             ExplorationReadiness readiness,
             boolean allowNewMiningWork,
             @Nullable SeekShelterGoal shelterGoal) {
+        this(mob, selector, readiness, allowNewMiningWork, shelterGoal, null);
+    }
+
+    public ExplorationActivityGoal(
+            PathfinderMob mob,
+            GoalSelector selector,
+            ExplorationReadiness readiness,
+            boolean allowNewMiningWork,
+            @Nullable SeekShelterGoal shelterGoal,
+            @Nullable CampfireGoal campfireGoal) {
         super(mob);
         this.mob = mob;
         this.selector = selector;
         this.readiness = readiness;
         this.allowNewMiningWork = allowNewMiningWork;
         this.shelterGoal = shelterGoal;
+        this.campfireGoal = campfireGoal;
         setFlags(EnumSet.noneOf(Flag.class));
     }
 
@@ -142,26 +158,23 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         long now = mob.level().getGameTime();
         int idleTicks = ExploreReadinessThresholds.idleTicks(cfg, mob.getUUID());
         int tripThreshold = cfg.exploreLocalTripsThreshold;
-        boolean exploreAdoptionReady = readiness.eligibleForNewExpedition(
-                now, tripThreshold, idleTicks);
-        ExploreReadinessSnapshot exploreSnapshot = ExploreReadinessSnapshot.of(
-                readiness.idleWorkTicks(),
-                idleTicks,
-                readiness.successfulLocalTrips(),
-                tripThreshold,
+        ActivityAdmission exploreAdmission = ExploreAdmission.inspect(
+                availability.hasExecutor(DiscretionaryActivity.EXPLORE),
+                readiness,
                 now,
-                readiness.cooldownUntilTick(),
-                readiness.hasDescentPressure(),
-                exploreAdoptionReady,
-                readiness.formatAdoptionBlocker(now, tripThreshold, idleTicks));
+                tripThreshold,
+                idleTicks);
+        ActivityAdmission restAdmission = campfireGoal == null
+                ? ActivityAdmission.executorAbsent()
+                : campfireGoal.inspectAdmission(now);
+        ActivityAdmissions admissions = ActivityAdmissions.of(exploreAdmission, restAdmission);
         DiscretionaryActivityDirector.tick(
                 mob.getUUID(),
                 now,
                 observation,
                 availability,
                 mob.getTarget() != null,
-                exploreAdoptionReady,
-                java.util.Optional.of(exploreSnapshot));
+                admissions);
 
         boolean mayCreateWork = permitsNewMiningWork(cfg.enabled, allowNewMiningWork);
         if (mayCreateWork) {

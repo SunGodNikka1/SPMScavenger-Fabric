@@ -4,12 +4,13 @@ import com.noobk.spmscavenger.experience.ActivityKind;
 import com.noobk.spmscavenger.experience.MobExperienceContext;
 import com.noobk.spmscavenger.goal.ShelterNightAuthority;
 import com.noobk.spmscavenger.opinion.ActivityOpinionMemory;
+import com.noobk.spmscavenger.opinion.ActivityAdoptionBlocker;
 import com.noobk.spmscavenger.opinion.DiscretionaryActivity;
 import com.noobk.spmscavenger.opinion.DiscretionaryDirectorConstants;
 import com.noobk.spmscavenger.opinion.DiscretionaryIntent;
 import com.noobk.spmscavenger.opinion.EnvironmentKind;
-import com.noobk.spmscavenger.opinion.ExploreReadinessSnapshot;
-import com.noobk.spmscavenger.opinion.ExploreReadinessSnapshot;
+import com.noobk.spmscavenger.opinion.ActivityAdmission;
+import com.noobk.spmscavenger.opinion.ActivityAdmissions;
 import com.noobk.spmscavenger.opinion.OpinionDecisionTrace;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.opinion.PersonalityModel;
@@ -52,7 +53,7 @@ public final class OpinionReadoutExplanation {
                 () -> lines.add("Desired activity: none recorded"));
         appendDirectorLayers(lines, context);
         appendExecutionState(lines, context);
-        appendExploreReadiness(lines, context);
+        appendAdmissions(lines, context);
         lines.add("Resting: " + (context.hasLiveRestClaim() ? "yes (affective rest claim is live)" : "no"));
         return List.copyOf(lines);
     }
@@ -175,12 +176,12 @@ public final class OpinionReadoutExplanation {
     private static void appendSelectionRationale(
             List<String> lines, OpinionDecisionTrace.Decision decision) {
         for (OpinionDecisionTrace.Candidate candidate : decision.candidates()) {
-            if (candidate.activity() == DiscretionaryActivity.EXPLORE
-                    && candidate.state() == OpinionDecisionTrace.CandidateState.SUPPRESSED) {
-                String detail = candidate.suppressionDetail();
-                lines.add("Explore blocked: " + candidate.suppressionReason()
-                        + (detail.isBlank() ? "" : " — " + detail));
+            if (candidate.state() != OpinionDecisionTrace.CandidateState.SUPPRESSED) {
+                continue;
             }
+            String detail = candidate.suppressionDetail();
+            lines.add(candidate.activity().name() + " blocked: " + candidate.suppressionReason()
+                    + (detail.isBlank() ? "" : " — " + detail));
         }
         decision.candidates().stream()
                 .filter(candidate -> candidate.state() == OpinionDecisionTrace.CandidateState.ELIGIBLE
@@ -218,21 +219,23 @@ public final class OpinionReadoutExplanation {
         lines.add("Execution: no discretionary activity adopted yet");
     }
 
-    private static void appendExploreReadiness(List<String> lines, MobExperienceContext context) {
-        ExploreReadinessSnapshot readiness = context.discretionaryDirector().lastExploreReadiness();
-        if (readiness.isEmpty()) {
+    private static void appendAdmissions(List<String> lines, MobExperienceContext context) {
+        ActivityAdmissions admissions = context.discretionaryDirector().lastAdmissions();
+        appendAdmissionLine(lines, DiscretionaryActivity.EXPLORE, admissions.explore());
+        appendAdmissionLine(lines, DiscretionaryActivity.REST, admissions.rest());
+    }
+
+    private static void appendAdmissionLine(
+            List<String> lines, DiscretionaryActivity activity, ActivityAdmission admission) {
+        if (!admission.executorPresent() && admission.blocker() == ActivityAdoptionBlocker.EXECUTOR_DISABLED) {
+            lines.add(activity.name() + " admission: executor not installed");
             return;
         }
-        lines.add("Explore readiness: idleTicks="
-                + readiness.idleWorkTicks() + "/" + readiness.idleTickThreshold()
-                + " localTrips=" + readiness.successfulLocalTrips()
-                + "/" + readiness.localTripThreshold()
-                + " cooldownRemaining=" + readiness.cooldownRemainingTicks()
-                + " descentPressure=" + readiness.descentPressure()
-                + " adoptionReady=" + readiness.adoptionReady());
-        if (!readiness.adoptionReady() && !readiness.blockerDetail().isBlank()) {
-            lines.add("Explore blocker: " + readiness.blockerDetail());
-        }
+        lines.add(activity.name() + " admission: installed="
+                + admission.executorPresent()
+                + " adoptable=" + admission.adoptionReady()
+                + " blocker=" + admission.blocker().name()
+                + (admission.detail().isBlank() ? "" : " (" + admission.detail() + ")"));
     }
 
     private static String explainDisposition(OpinionDecisionTrace.Decision decision) {

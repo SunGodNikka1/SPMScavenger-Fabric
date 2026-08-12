@@ -116,7 +116,7 @@ class OpinionReadoutExplanationTest {
                         OpinionDecisionTrace.Candidate.suppressed(
                                 DiscretionaryActivity.EXPLORE,
                                 null,
-                                OpinionDecisionTrace.SuppressionReason.EXPLORE_ADOPTION_NOT_READY,
+                                OpinionDecisionTrace.SuppressionReason.ADOPTION_NOT_READY,
                                 "idleTicks 0/120"),
                         OpinionDecisionTrace.Candidate.eligible(rest)));
         trace.conclude(
@@ -141,6 +141,6 @@ class OpinionReadoutExplanationTest {
         assertFalse(summary.stream().anyMatch(line -> line.contains("Pursuing")));
         assertFalse(summary.stream().anyMatch(line -> line.contains("Incumbent intent retained")));
         assertTrue(summary.stream().anyMatch(line -> line.contains("Pending intent retained")));
-        assertTrue(summary.stream().anyMatch(line -> line.contains("Explore blocked:")));
+        assertTrue(summary.stream().anyMatch(line -> line.contains("EXPLORE blocked:")));
     }
 }

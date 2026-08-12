@@ -1,8 +1,8 @@
 package com.noobk.spmscavenger.network;
 
 import com.noobk.spmscavenger.SpmScavenger;
-import com.noobk.spmscavenger.opinion.ExploreReadinessSnapshot;
 import com.noobk.spmscavenger.opinion.PersonalityModel;
+import com.noobk.spmscavenger.opinion.readout.ActivityAdmissionView;
 import com.noobk.spmscavenger.opinion.readout.OpinionInspectRejectReason;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutDecisionView;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutSnapshot;
@@ -136,7 +136,8 @@ public final class OpinionInspectPayloads {
             buf.writeUtf(snapshot.currentIntentLifecycle());
             buf.writeUtf(snapshot.restAuthorityPhase());
             buf.writeUtf(snapshot.currentDisposition());
-            writeExploreReadiness(buf, snapshot.exploreReadiness());
+            writeAdmission(buf, snapshot.exploreAdmission());
+            writeAdmission(buf, snapshot.restAdmission());
             writeDecisions(buf, snapshot.recentDecisions());
         }
 
@@ -178,7 +179,8 @@ public final class OpinionInspectPayloads {
             String intentLifecycle = buf.readUtf();
             String restPhase = buf.readUtf();
             String disposition = buf.readUtf();
-            ExploreReadinessSnapshot exploreReadiness = readExploreReadiness(buf);
+            ActivityAdmissionView exploreAdmission = readAdmission(buf);
+            ActivityAdmissionView restAdmission = readAdmission(buf);
             List<OpinionReadoutDecisionView> decisions = readDecisions(buf);
             return new OpinionReadoutSnapshot(
                     requestId,
@@ -205,37 +207,30 @@ public final class OpinionInspectPayloads {
                     intentLifecycle,
                     restPhase,
                     disposition,
-                    exploreReadiness,
+                    exploreAdmission,
+                    restAdmission,
                     decisions);
         }
 
-        private static void writeExploreReadiness(FriendlyByteBuf buf, ExploreReadinessSnapshot readiness) {
-            buf.writeBoolean(!readiness.isEmpty());
-            if (readiness.isEmpty()) {
+        private static void writeAdmission(FriendlyByteBuf buf, ActivityAdmissionView admission) {
+            buf.writeBoolean(!admission.isEmpty());
+            if (admission.isEmpty()) {
                 return;
             }
-            buf.writeVarInt(readiness.idleWorkTicks());
-            buf.writeVarInt(readiness.idleTickThreshold());
-            buf.writeVarInt(readiness.successfulLocalTrips());
-            buf.writeVarInt(readiness.localTripThreshold());
-            buf.writeVarLong(readiness.cooldownRemainingTicks());
-            buf.writeBoolean(readiness.descentPressure());
-            buf.writeBoolean(readiness.adoptionReady());
-            buf.writeUtf(readiness.blockerDetail());
+            buf.writeBoolean(admission.executorPresent());
+            buf.writeBoolean(admission.adoptionReady());
+            buf.writeUtf(admission.blocker());
+            buf.writeUtf(admission.detail());
         }
 
-        private static ExploreReadinessSnapshot readExploreReadiness(FriendlyByteBuf buf) {
+        private static ActivityAdmissionView readAdmission(FriendlyByteBuf buf) {
             if (!buf.readBoolean()) {
-                return ExploreReadinessSnapshot.empty();
+                return ActivityAdmissionView.empty();
             }
-            return new ExploreReadinessSnapshot(
-                    buf.readVarInt(),
-                    buf.readVarInt(),
-                    buf.readVarInt(),
-                    buf.readVarInt(),
-                    buf.readVarLong(),
+            return new ActivityAdmissionView(
                     buf.readBoolean(),
                     buf.readBoolean(),
+                    buf.readUtf(),
                     buf.readUtf());
         }
 

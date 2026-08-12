@@ -158,7 +158,8 @@ public class SpmScavenger implements ModInitializer {
         SeekShelterGoal shelterGoal = new SeekShelterGoal(mob, 1.0);
         selector.addGoal(2, shelterGoal);
         selector.addGoal(4, new PlaceTorchGoal(mob, 1.0));
-        selector.addGoal(7, new CampfireGoal(mob, 0.9));
+        CampfireGoal campfireGoal = new CampfireGoal(mob, 0.9);
+        selector.addGoal(7, campfireGoal);
         selector.addGoal(PassiveExpressionGoal.PRIORITY, new PassiveExpressionGoal(mob));
         // Flagless, so it decorates whatever another goal is already driving.
         selector.addGoal(9, new AnticsGoal(mob));
@@ -166,7 +167,7 @@ public class SpmScavenger implements ModInitializer {
         selector.addGoal(3, new GatherResourcesGoal(mob, 0.9));
         // Level with craft/gather so charcoal/iron jobs are not starved by idle stroll.
         selector.addGoal(3, new SmeltAtFurnaceGoal(mob, 1.0));
-        installExploration(mob, selector, shelterGoal);
+        installExploration(mob, selector, shelterGoal, campfireGoal);
     }
 
     private static void installLeaseCleanupOnly(Mob mob, GoalSelector selector) {
@@ -175,11 +176,11 @@ public class SpmScavenger implements ModInitializer {
         }
         ExplorationReadiness readiness = new ExplorationReadiness();
         selector.addGoal(9, new ExplorationActivityGoal(
-                pathfinderMob, selector, readiness, false));
+                pathfinderMob, selector, readiness, false, null, null));
     }
 
     private static void installExploration(
-            Mob mob, GoalSelector selector, SeekShelterGoal shelterGoal) {
+            Mob mob, GoalSelector selector, SeekShelterGoal shelterGoal, @org.jetbrains.annotations.Nullable CampfireGoal campfireGoal) {
         if (!(mob instanceof PathfinderMob pathfinderMob)) {
             return;
         }
@@ -188,7 +189,7 @@ public class SpmScavenger implements ModInitializer {
 
         if (!SpmScavengerInstallPolicy.installsMiningExecutors(cfg)) {
             selector.addGoal(9, new ExplorationActivityGoal(
-                    pathfinderMob, selector, readiness, false, shelterGoal));
+                    pathfinderMob, selector, readiness, false, shelterGoal, campfireGoal));
             return;
         }
 
@@ -205,7 +206,7 @@ public class SpmScavenger implements ModInitializer {
                 // Preserve the compatibility fail-closed behavior while keeping persisted lease cleanup
                 // alive. An unknown host stroll shape must not accidentally authorize mining work.
                 selector.addGoal(9, new ExplorationActivityGoal(
-                        pathfinderMob, selector, readiness, false, shelterGoal));
+                        pathfinderMob, selector, readiness, false, shelterGoal, campfireGoal));
                 if (!warnedStrollShape) {
                     warnedStrollShape = true;
                     LOGGER.warn("[spmscavenger] PlayerMob idle stroll shape changed; exploration left "
@@ -229,7 +230,7 @@ public class SpmScavenger implements ModInitializer {
         }
         // Flagless observer; staggered internally and treats every unknown goal as meaningful work.
         selector.addGoal(9, new ExplorationActivityGoal(
-                pathfinderMob, selector, readiness, true, shelterGoal));
+                pathfinderMob, selector, readiness, true, shelterGoal, campfireGoal));
     }
 
     /**

@@ -3,6 +3,7 @@ package com.noobk.spmscavenger.goal;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
+import com.noobk.spmscavenger.opinion.ActivityAdmission;
 import com.noobk.spmscavenger.opinion.DiscretionaryAuthority;
 import com.noobk.spmscavenger.opinion.IntentLifecycle;
 import net.minecraft.core.BlockPos;
@@ -16,7 +17,6 @@ import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.EnumSet;
 import java.util.UUID;
@@ -60,18 +60,22 @@ public class CampfireGoal extends Goal {
     private int placeTicks;
     private boolean restClaimOpened;
 
-    private static final int SCAN_INTERVAL = 100;
-    private static final int SCAN_PHASE_SALT = 37;
     private static final int MAX_APPROACH_TICKS = 200;
-    private static final int SEARCH_RADIUS = 16;
-    private static final double ARRIVED_SQR = 4.0;
     private static final int PLACE_TICKS = 20;
 
     public CampfireGoal(Mob mob, double speed) {
         this.mob = mob;
         this.speed = speed;
-        this.scanClock = new PhasedScanClock(mob.getId(), SCAN_INTERVAL, SCAN_PHASE_SALT);
+        this.scanClock = new PhasedScanClock(
+                mob.getId(),
+                RestCampfireFeasibility.SCAN_INTERVAL,
+                RestCampfireFeasibility.SCAN_PHASE_SALT);
         setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
+    }
+
+    /** GAO-4R — decision-time admission without calling {@link #canUse()}. */
+    public ActivityAdmission inspectAdmission(long gameTime) {
+        return RestExecutorAdmission.inspect(mob, gameTime, scanClock, firePos, idlePos);
     }
 
     @Override
@@ -94,21 +98,19 @@ public class CampfireGoal extends Goal {
             return false;
         }
         Level level = mob.level();
-        firePos = findCampfire(level);
+        firePos = RestCampfireFeasibility.findCampfire(level, mob.blockPosition());
 
         if (firePos == null) {
-            // Nothing to gather around. Put one down if it is carrying one.
-            if (!carriesCampfire()) {
+            if (!RestCampfireFeasibility.carriesCampfire(mob)) {
                 return false;
             }
             return true;
         }
-        idlePos = spotBeside(level, firePos);
+        idlePos = RestCampfireFeasibility.spotBeside(level, firePos);
         if (idlePos == null) {
             return false;
         }
-        // Already sitting at the fire — nothing to walk to.
-        return mob.blockPosition().distSqr(idlePos) > ARRIVED_SQR;
+        return mob.blockPosition().distSqr(idlePos) > RestCampfireFeasibility.ARRIVED_SQR;
     }
 
     @Override
@@ -127,7 +129,7 @@ public class CampfireGoal extends Goal {
         return ScavengerConfig.get().campfire
                 && mob.getTarget() == null
                 && approachTicks < MAX_APPROACH_TICKS
-                && (firePos != null || carriesCampfire());
+                && (firePos != null || RestCampfireFeasibility.carriesCampfire(mob));
     }
 
     @Override
@@ -187,14 +189,14 @@ public class CampfireGoal extends Goal {
         mob.getLookControl().setLookAt(
                 firePos.getX() + 0.5, firePos.getY() + 0.5, firePos.getZ() + 0.5);
 
-        if (mob.blockPosition().distSqr(idlePos) <= ARRIVED_SQR) {
+        if (mob.blockPosition().distSqr(idlePos) <= RestCampfireFeasibility.ARRIVED_SQR) {
             if (!restClaimOpened) {
                 RestSessionCoordinator.openCampfireRest(
                         mob, firePos, idlePos, level.getGameTime());
                 restClaimOpened = true;
                 DiscretionaryAuthority.onRestClaimOpened(mob.getUUID(), level.getGameTime());
             }
-            mob.getNavigation().stop();   // arrived — stand and watch the fire
+            mob.getNavigation().stop();
             return;
         }
         if (mob.getNavigation().isDone()) {
@@ -202,10 +204,8 @@ public class CampfireGoal extends Goal {
         }
     }
 
-    // ---- Placement --------------------------------------------------------
-
     private void placeCampfire(Level level) {
-        if (!level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+        if (!RestCampfireFeasibility.canPlaceCampfire(level)) {
             stop();
             return;
         }
@@ -214,7 +214,7 @@ public class CampfireGoal extends Goal {
             stop();
             return;
         }
-        BlockPos spot = spotBeside(level, mob.blockPosition());
+        BlockPos spot = RestCampfireFeasibility.spotBeside(level, mob.blockPosition());
         if (spot == null) {
             stop();
             return;
@@ -230,65 +230,10 @@ public class CampfireGoal extends Goal {
                 level.setBlock(spot, Blocks.CAMPFIRE.defaultBlockState(), Block.UPDATE_ALL);
                 mob.swing(InteractionHand.MAIN_HAND);
                 firePos = spot;
-                idlePos = spotBeside(level, spot);
+                idlePos = RestCampfireFeasibility.spotBeside(level, spot);
                 return;
             }
         }
         stop();
-    }
-
-    private boolean carriesCampfire() {
-        Container backpack = PlayerMobs.backpack(mob);
-        if (backpack == null) {
-            return false;
-        }
-        for (int i = 0; i < backpack.getContainerSize(); i++) {
-            ItemStack stack = backpack.getItem(i);
-            if (stack.is(Items.CAMPFIRE)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private BlockPos findCampfire(Level level) {
-        BlockPos origin = mob.blockPosition();
-        BlockPos best = null;
-        double bestDist = Double.MAX_VALUE;
-        for (int dx = -SEARCH_RADIUS; dx <= SEARCH_RADIUS; dx++) {
-            for (int dz = -SEARCH_RADIUS; dz <= SEARCH_RADIUS; dz++) {
-                for (int dy = -4; dy <= 4; dy++) {
-                    BlockPos pos = origin.offset(dx, dy, dz);
-                    if (!level.getBlockState(pos).is(Blocks.CAMPFIRE)) {
-                        continue;
-                    }
-                    double dist = pos.distSqr(origin);
-                    if (dist < bestDist) {
-                        bestDist = dist;
-                        best = pos.immutable();
-                    }
-                }
-            }
-        }
-        return best;
-    }
-
-    /** A standable neighbour — never the fire's own block, which would cook the mob. */
-    private static BlockPos spotBeside(Level level, BlockPos centre) {
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                if (dx == 0 && dz == 0) {
-                    continue;
-                }
-                BlockPos pos = centre.offset(dx, 0, dz);
-                BlockState below = level.getBlockState(pos.below());
-                if (level.getBlockState(pos).isAir()
-                        && level.getBlockState(pos.above()).isAir()
-                        && below.isSolidRender(level, pos.below())) {
-                    return pos.immutable();
-                }
-            }
-        }
-        return null;
     }
 }

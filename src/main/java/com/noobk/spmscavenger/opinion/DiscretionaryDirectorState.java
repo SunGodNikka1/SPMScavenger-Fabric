@@ -22,13 +22,12 @@ public final class DiscretionaryDirectorState {
     private boolean exploreYieldRequested;
     private long lastGameTime;
     /**
-     * Last-tick explore adoption diagnostics for inspector readout only.
+     * GAO-4R — last-tick adoption diagnostics for inspector readout only.
      *
-     * <p>Do not extend this with {@code lastRestReadiness}, {@code lastSocialReadiness}, etc. —
-     * candidate {@code suppressionDetail} is the scalable direction for per-activity diagnostics
-     * (GAO-10).
+     * <p>Do not extend with per-subsystem fields; candidate {@code suppressionDetail} is the scalable
+     * direction for GAO-10+.
      */
-    private ExploreReadinessSnapshot lastExploreReadiness = ExploreReadinessSnapshot.empty();
+    private ActivityAdmissions lastAdmissions = ActivityAdmissions.unavailable();
     private final OpinionDecisionTrace trace = new OpinionDecisionTrace();
 
     public Optional<DiscretionaryIntent> intent() {
@@ -70,14 +69,14 @@ public final class DiscretionaryDirectorState {
         return lastGameTime;
     }
 
-    public ExploreReadinessSnapshot lastExploreReadiness() {
-        return lastExploreReadiness;
+    public ActivityAdmissions lastAdmissions() {
+        return lastAdmissions;
     }
 
     public void tick(DirectorTickInput input) {
         Objects.requireNonNull(input, "input");
         lastGameTime = input.gameTime();
-        lastExploreReadiness = input.exploreReadiness().orElse(ExploreReadinessSnapshot.empty());
+        lastAdmissions = input.admissions();
         restYieldRequested = false;
         exploreYieldRequested = false;
 
@@ -500,10 +499,6 @@ public final class DiscretionaryDirectorState {
         Optional<ScoringResult> raw = IdleOpportunityPolicy.score(input.scoringInput());
         java.util.List<OpinionDecisionTrace.Candidate> candidates = new java.util.ArrayList<>();
         java.util.List<ActivityUtilityBreakdown> eligible = new java.util.ArrayList<>();
-        String exploreBlocker = input.exploreReadiness()
-                .map(ExploreReadinessSnapshot::blockerDetail)
-                .filter(detail -> !detail.isBlank())
-                .orElse("");
 
         for (DiscretionaryActivity activity : DiscretionaryActivity.values()) {
             ActivityUtilityBreakdown breakdown = raw.stream()
@@ -511,7 +506,8 @@ public final class DiscretionaryDirectorState {
                     .filter(candidate -> candidate.activity() == activity)
                     .findFirst()
                     .orElse(null);
-            if (!input.scoringInput().availability().hasExecutor(activity)) {
+            ActivityAdmission admission = input.admissions().forActivity(activity);
+            if (!admission.executorPresent()) {
                 candidates.add(OpinionDecisionTrace.Candidate.suppressed(
                         activity,
                         null,
@@ -521,12 +517,12 @@ public final class DiscretionaryDirectorState {
                         activity,
                         breakdown,
                         OpinionDecisionTrace.SuppressionReason.DISCRETIONARY_CONTEXT_BLOCKED));
-            } else if (activity == DiscretionaryActivity.EXPLORE && !input.exploreAdoptionReady()) {
+            } else if (!admission.adoptionReady()) {
                 candidates.add(OpinionDecisionTrace.Candidate.suppressed(
                         activity,
                         breakdown,
-                        OpinionDecisionTrace.SuppressionReason.EXPLORE_ADOPTION_NOT_READY,
-                        exploreBlocker));
+                        OpinionDecisionTrace.SuppressionReason.ADOPTION_NOT_READY,
+                        admission.suppressionDetail()));
             } else if (breakdown != null) {
                 candidates.add(OpinionDecisionTrace.Candidate.eligible(breakdown));
                 eligible.add(breakdown);
@@ -640,7 +636,7 @@ public final class DiscretionaryDirectorState {
         restYieldRequested = false;
         exploreYieldRequested = false;
         lastGameTime = 0L;
-        lastExploreReadiness = ExploreReadinessSnapshot.empty();
+        lastAdmissions = ActivityAdmissions.unavailable();
         trace.clear();
     }
 

@@ -41,7 +41,7 @@ public final class OpinionDecisionTrace {
     public enum SuppressionReason {
         NONE,
         EXECUTOR_UNAVAILABLE,
-        EXPLORE_ADOPTION_NOT_READY,
+        ADOPTION_NOT_READY,
         DISCRETIONARY_CONTEXT_BLOCKED
     }
 

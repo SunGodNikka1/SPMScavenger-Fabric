@@ -1,7 +1,6 @@
 package com.noobk.spmscavenger.opinion.readout;
 
 import com.noobk.spmscavenger.opinion.PersonalityModel;
-import com.noobk.spmscavenger.opinion.ExploreReadinessSnapshot;
 
 import java.util.List;
 import java.util.Map;
@@ -38,7 +37,8 @@ public record OpinionReadoutSnapshot(
         String currentIntentLifecycle,
         String restAuthorityPhase,
         String currentDisposition,
-        ExploreReadinessSnapshot exploreReadiness,
+        ActivityAdmissionView exploreAdmission,
+        ActivityAdmissionView restAdmission,
         List<OpinionReadoutDecisionView> recentDecisions) {
 
     public static final int MAX_SUMMARY_LINES = 20;
@@ -59,9 +59,10 @@ public record OpinionReadoutSnapshot(
         currentIntentLifecycle = currentIntentLifecycle == null ? "" : currentIntentLifecycle;
         restAuthorityPhase = restAuthorityPhase == null ? "" : restAuthorityPhase;
         currentDisposition = currentDisposition == null ? "" : currentDisposition;
-        exploreReadiness = exploreReadiness == null
-                ? ExploreReadinessSnapshot.empty()
-                : exploreReadiness;
+        exploreAdmission = exploreAdmission == null
+                ? ActivityAdmissionView.empty()
+                : exploreAdmission;
+        restAdmission = restAdmission == null ? ActivityAdmissionView.empty() : restAdmission;
         recentDecisions = List.copyOf(recentDecisions);
     }
 }
