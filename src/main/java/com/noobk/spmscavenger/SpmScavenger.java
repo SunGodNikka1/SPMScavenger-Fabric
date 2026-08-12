@@ -3,6 +3,7 @@ package com.noobk.spmscavenger;
 import com.noobk.spmscavenger.compat.SpmCombatChaseSpeed;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
+import com.noobk.spmscavenger.network.OpinionInspectNetworking;
 import com.noobk.spmscavenger.goal.AnticsGoal;
 import com.noobk.spmscavenger.goal.PassiveExpressionGoal;
 import com.noobk.spmscavenger.goal.CampfireGoal;
@@ -84,6 +85,7 @@ public class SpmScavenger implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        OpinionInspectNetworking.registerServer();
         ScavengerConfig cfg = ScavengerConfig.get();
 
         switch (PlayerMobs.state()) {

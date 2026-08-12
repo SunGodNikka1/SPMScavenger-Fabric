@@ -1,5 +1,7 @@
 package com.noobk.spmscavenger.client;
 
+import com.noobk.spmscavenger.client.opinion.OpinionInspectClientNetworking;
+import com.noobk.spmscavenger.client.opinion.OpinionInspectKeybinds;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
@@ -9,6 +11,8 @@ public final class SpmScavengerClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        OpinionInspectKeybinds.register();
+        OpinionInspectClientNetworking.registerClient();
         WorldRenderEvents.START.register(context -> {
             // Iris can run a nested shadow-world render. Its projection must never replace the
             // main camera snapshot later used for the post-HUD billboard.
