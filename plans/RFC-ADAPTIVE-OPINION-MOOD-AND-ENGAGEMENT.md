@@ -2951,6 +2951,82 @@ known about the seam's viability yet. 44A must be re-run against `spmscavenger-1
 
 ---
 
+## Topic: Task 44B — SocialIntent + bounded target resolver (`STATIC` complete)
+
+Scope held: no utility, no target substitution, no start/stop binding, no learning, no Inspector, no
+`DISCRETIONARY_SOCIAL` classification. A structural scope guard asserts each of those absences.
+
+### The rule the runtime data forced
+
+```
+admission pulse exists   ≠   social target available
+```
+
+98.4% of observed pulses carried `targetFound=false`, so treating pulse presence as availability
+would be wrong ~62 times in 63. And a pulse that *did* find somebody describes a moment up to
+`PULSE_LIFETIME_TICKS` old — in that window the target can move, die, turn hostile, unload, or change
+dimension. **Evidence that an action was recently possible is not authority to perform it now.**
+
+### Design correction from the artifact (`CONFIRMED`, bytecode)
+
+I was about to write a target scan. SPM already ships one:
+
+| Member | Purity | Role |
+| --- | --- | --- |
+| `reactionToward(LivingEntity) → Reaction` | 0 `putfield`/`putstatic` | the host's own greet predicate |
+| `nearestWhereReaction(Reaction, double)` | 0 `putfield`/`putstatic` | the host's own bounded search |
+
+So the resolver **mirrors SPM's predicate instead of re-deriving one from `feelingToward`
+thresholds** (SPM-0 level 3 beats a number we invent) and **calls SPM's own search instead of adding
+a second one** (SPM-2). `Reaction.GREET` is read from SPM's enum at runtime, never copied — a copied
+ordinal is a hardcode with a delayed fuse. Both were proven pure only after my first purity check
+returned a false negative: a broken `awk` filter made `grep -c` count empty input as `0`. Same class
+as the `range + 6.0` transcription error, caught this time because the number looked too convenient.
+
+### Shape
+
+```
+recent host admission evidence   (supplies SPM's own acquisition radius — we never choose one)
+  + SPM's bounded search         (gives identity; the pulse flag never could)
+  + current relationship legality
+  + alive / loaded / same level / in range
+        ↓
+  SocialIntent(targetId)         — re-validated against live state at adoption
+```
+
+`SocialTargetLegality.check(…)` is a **pure function over primitives**, applied in exactly one place
+so resolution and re-validation cannot drift — guarded by a test, with a negative control: adding a
+second application turns the build red. Sharing a constant is not sharing a boundary; this project
+already paid for that once.
+
+`SocialIntent` carries a **UUID, never an entity reference** — an unloaded entity still answers
+`getX()`, so a reference lets stale state read as current. It also rejects a non-positive radius and
+evidence that postdates the intent.
+
+### Findings worth keeping
+
+- `NaN` distance rejects, because the bound is written `!(d <= r)`; `d > r` would have let an
+  unmeasurable distance through. Tested.
+- My own first draft contained `admissionAlreadyChecked || true` — an always-true term hardcoding
+  the very check it pretended to parameterise. Repaired before tests.
+- The first scope guard failed on the seam mixin's **javadoc**, which correctly states it creates no
+  `SocialIntent`. A structural test that reads prose as code punishes accurate documentation; it now
+  strips comments first.
+
+14 new tests, 779 total.
+
+### Still open, deliberately
+
+- **Case B `UNVERIFIED`** — shelter suppression is not a 44B blocker but blocks Opinion-owned SOCIAL
+  execution relying on the shelter hook.
+- **D-GAO-053 rework** — immediately before executor binding: `FriendlyGreet` with no exact binding
+  is `SOCIAL_REFLEX`; only binding to *this exact active* intent makes it `DISCRETIONARY_SOCIAL`.
+  "A `SocialIntent` exists" must never be sufficient, or the causal-attribution bug returns.
+- `PULSE_LIFETIME_TICKS = 40` **unchanged**. Tuning timing before a real SOCIAL candidate can produce
+  stale-positive decisions would be guessing.
+
+---
+
 ## Topic: Hard architectural rules
 
 | ID | Rule |
@@ -3485,6 +3561,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-13 | User + Agent_Claude | **Task 44B — `SocialIntent` + bounded target resolver, `STATIC` complete (779 tests).** Encodes the runtime rule *admission pulse ≠ social target*: 98.4% of pulses had no target, and even a positive one is up to 40 ticks stale, so the resolver re-runs the host's search for **identity** and re-validates at adoption. **Design correction from bytecode:** SPM already ships `reactionToward` and `nearestWhereReaction`, both `CONFIRMED` pure, so we mirror its predicate and reuse its search rather than deriving thresholds from `feelingToward` (SPM-0/SPM-2); `Reaction.GREET` read at runtime, never copied; acquisition radius taken from the host's own pulse. `SocialTargetLegality` is pure and applied in exactly **one** place, guarded with a negative control, because sharing a constant is not sharing a boundary. `SocialIntent` holds a UUID, not a reference. Self-caught: a false-negative purity check from a broken filter, an always-true `|| true` term, and a scope guard that failed on correct javadoc. Scope held — no utility, binding, substitution, learning, classification or Inspector |
 | 2026-08-13 | User + Agent_Claude | **Task 44A CLOSED — `RUNTIME_CONFIRMED`.** 9 804 pulses across 132 mobs in ~24 s: cases A, C, D, E confirmed; **0** `MOB_UNRESOLVED`, **0** injector errors, and `released` == distinct entities exactly, which is a `RUNTIME_CONFIRMED` RET-1a bound rather than merely case D. **Case B stays `UNVERIFIED`** — shelter was never staged, and a sheltered mob is indistinguishable from one on cooldown or in combat since all three produce no pulse; HEAD-before-INVOKE remains `INFERRED` from bytecode position and must be proven before SOCIAL relies on shelter suppressing an adopted greet. **Design finding:** the pulse is ~21/tick and **98.4% carry `targetFound=false`**, so pulse presence is nearly always true and must not be read as 'a greet is available' — only the host's `eligibleTargetFound` discriminates. Temporary diagnostics removed. 765 tests. GAO-10 SOCIAL implementation is unblocked |
 | 2026-08-13 | User + Agent_Claude | **44A run 2: naming fix `RUNTIME_CONFIRMED` working, second silent defect unmasked.** Stack shows `GoalSelector.method_6275` → `FriendlyGreetGoal.method_6264` → our `handler$…$holdShelterDuringMovingGreeting` — the handlers execute inside SPM for the first time. They immediately hit `IllegalClassLoadError`: `OptionalGoalMobResolver` was a plain helper inside the mixin-owned package, which compiles, packages and class-loads fine and throws only when an injected handler calls it (`Ticking entity` crash 1 s after join). Moved to `compat`; new gate `MixinPackagePurityTest` + negative control. **Two silent failures, the second masked by the first** — fixing #1 is what revealed #2, and no green build or clean log could have shown either. 765 tests. Seam still unproven: cases A–E not yet reached |
 | 2026-08-13 | User + Agent_Claude | **Task 44A runtime: FAILED, and it caught a shipped defect.** Zero seam pulses in a 6-minute Prism session with dozens of live PlayerMobs and no error of any kind. Root cause `CONFIRMED` from the shipped artifact: SPM is distributed remapped to intermediary, so its `Goal` overrides are `method_6264`/`method_6266`/etc. and **no readable `canUse` exists on any of its 14 goal classes**. Our `remap = false` (correct) left `method = "canUse"` unremapped; it matched nothing and `require = 0` silenced it. **Four shipped features were inert too** — FriendlyGreet/WeaponAttack/DoorOperation shelter holds and PlayerMobDoorGoalBusy; only the two mixins targeting SPM's *own* methods (`describe`, `renderObjectiveReadout`) ever worked. All ten injectors now carry both spellings, verified in the packaged jar, with mapping read from the build's own `mappings-base.tiny` (`tick` is `method_6268`, `stop` is `method_6270` — invertible by guessing). New build gate `SpmGoalMixinNamingTest` + negative control. 763 tests. Social Approach fallback **not** triggered: the seam is still untested |

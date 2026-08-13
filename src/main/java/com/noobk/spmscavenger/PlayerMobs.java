@@ -384,4 +384,115 @@ public final class PlayerMobs {
     public static Container backpack(Mob mob) {
         return mob instanceof InventoryCarrier carrier ? carrier.getInventory() : null;
     }
+
+    private static final String REACTION_CLASS = "games.brennan.playermob.entity.Reaction";
+
+    private static Method reactionToward;
+    private static Method nearestWhereReaction;
+    private static Object greetReaction;
+    private static boolean greetResolved;
+    private static boolean warnedGreet;
+
+    /**
+     * Task 44B - whether SPM itself currently reacts to {@code other} with GREET.
+     *
+     * <p>This is SPM's own predicate, mirrored rather than re-derived. The tempting alternative -
+     * comparing {@link #feelingToward} against some threshold of ours - would silently disagree with
+     * the host the moment SPM changed how a reaction is computed, and we would be inventing a
+     * friendship rule inside somebody else's social model (Gate SPM-0: express the rule at the
+     * highest level that works; the consuming mod's own predicate outranks anything we could derive
+     * from item or number thresholds).
+     *
+     * <p>{@code reactionToward} is verified side-effect-free in {@code playermob-0.86.0} bytecode
+     * (0 {@code putfield}/{@code putstatic}), so asking does not change the answer (D-GAO-057).
+     *
+     * @return {@code TRUE}/{@code FALSE} when SPM answered, {@code null} when the relationship is
+     *     unreadable. Callers must treat {@code null} as "not eligible", never as "probably fine".
+     */
+    public static Boolean greetsToward(Mob self, LivingEntity other) {
+        if (other == null || !isPlayerMob(self)) {
+            return null;
+        }
+        if (!resolveGreet()) {
+            return null;
+        }
+        try {
+            return greetReaction.equals(reactionToward.invoke(self, other));
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            failGreet(e);
+            return null;
+        }
+    }
+
+    /**
+     * Task 44B - SPM's own bounded nearest-greet-eligible search.
+     *
+     * <p>Deliberately not our own scan. SPM already owns this question and answers it with the same
+     * call {@code FriendlyGreetGoal.canUse} uses, so a target we find is a target the host would
+     * also have found (Gate SPM-2: never add a second implementation of something the target mod
+     * already does). Verified pure in the pinned artifact.
+     *
+     * <p>The caller supplies {@code range} rather than this class choosing one - the only correct
+     * value is the one the host itself just used, which arrives on the admission pulse. Copying
+     * SPM's radius into our source would be a constant with a delayed fuse.
+     *
+     * @return the entity SPM would greet, or {@code null} for "none" and for "unreadable" alike -
+     *     both mean no social target exists as far as this addon is concerned.
+     */
+    public static LivingEntity nearestGreetTarget(Mob self, double range) {
+        if (!isPlayerMob(self) || range <= 0.0D || !resolveGreet()) {
+            return null;
+        }
+        try {
+            Object found = nearestWhereReaction.invoke(self, greetReaction, range);
+            return found instanceof LivingEntity living ? living : null;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            failGreet(e);
+            return null;
+        }
+    }
+
+    /** Whether SPM's greet relationship API is readable at all. */
+    public static boolean greetRelationsAvailable() {
+        return resolveGreet();
+    }
+
+    private static synchronized boolean resolveGreet() {
+        if (greetResolved) {
+            return greetReaction != null;
+        }
+        greetResolved = true;
+        Class<? extends PathfinderMob> type = playerMobClass();
+        if (type == null) {
+            return false;
+        }
+        try {
+            Class<?> reaction = Class.forName(REACTION_CLASS, false, type.getClassLoader());
+            // Read GREET from SPM's own enum at runtime. Its identity belongs to SPM; a copied
+            // ordinal or name-matched local enum would drift the moment they reorder it.
+            greetReaction = Enum.valueOf(reaction.asSubclass(Enum.class), "GREET");
+            reactionToward = type.getMethod("reactionToward", LivingEntity.class);
+            nearestWhereReaction =
+                    type.getMethod("nearestWhereReaction", reaction, double.class);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            failGreet(e);
+            return false;
+        }
+        return true;
+    }
+
+    private static void failGreet(Throwable cause) {
+        greetReaction = null;
+        reactionToward = null;
+        nearestWhereReaction = null;
+        greetResolved = true;
+        if (warnedGreet) {
+            return;
+        }
+        warnedGreet = true;
+        SpmScavenger.LOGGER.warn(
+                "[spmscavenger] PlayerMob greet relations are unavailable; Opinion will not form "
+                        + "social intents. Degraded, not broken - every other activity is "
+                        + "unaffected. This mod likely needs an update.", cause);
+    }
 }
