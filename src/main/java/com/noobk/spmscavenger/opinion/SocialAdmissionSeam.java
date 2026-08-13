@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.opinion;
 
+import com.noobk.spmscavenger.SpmScavenger;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -63,9 +64,14 @@ public final class SocialAdmissionSeam {
         if (mob == null) {
             return;
         }
-        WINDOWS.put(
-                mob.getUUID(),
-                new AdmissionWindow(mob.level().getGameTime(), range, eligibleTargetFound));
+        long now = mob.level().getGameTime();
+        WINDOWS.put(mob.getUUID(), new AdmissionWindow(now, range, eligibleTargetFound));
+        // TEMPORARY - Task 44A seam proof only. Positive evidence that the @Redirect executed:
+        // with require = 0 a non-applying mixin is silent, so absence of injector errors is not
+        // proof of application. REMOVE once 44A is closed; do not build UI for a seam test.
+        SpmScavenger.LOGGER.info(
+                "[spmscavenger][44A] admission-seam entity={} tick={} range={} targetFound={}",
+                mob.getId(), now, range, eligibleTargetFound);
     }
 
     /** Non-allocating: never creates an experience context for a mob that has none. */
@@ -90,8 +96,17 @@ public final class SocialAdmissionSeam {
      * produced a pulse.
      */
     public static void release(UUID mobId) {
-        if (mobId != null) {
-            WINDOWS.remove(mobId);
+        if (mobId == null) {
+            return;
+        }
+        AdmissionWindow removed = WINDOWS.remove(mobId);
+        if (removed != null) {
+            // TEMPORARY - Task 44A case D. Also the marker that separates scenario runs: clearing
+            // before case B is what makes "no new pulse" unambiguous rather than a stale pulse
+            // from case A still being fresh.
+            SpmScavenger.LOGGER.info(
+                    "[spmscavenger][44A] admission-seam released mob={} observedAtTick={}",
+                    mobId, removed.observedAtTick());
         }
     }
 
