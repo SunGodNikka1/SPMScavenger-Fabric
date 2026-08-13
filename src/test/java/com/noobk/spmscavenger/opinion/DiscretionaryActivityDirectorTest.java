@@ -17,6 +17,8 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DiscretionaryActivityDirectorTest {
@@ -698,5 +700,107 @@ class DiscretionaryActivityDirectorTest {
         director.yieldRequest().ifPresent(fresh -> assertNotEquals(
                 first.requestedAt(), fresh.requestedAt(),
                 "a re-authorized switch starts a NEW bounded transaction, not a revival"));
+    }
+
+    // ---- Task 43 item 8: the trace explains WHY, not just what ----
+
+    /**
+     * {@code RUNNING_INTENT_RETAINED} says what happened. This asserts the decision records why it
+     * was legal: not adoptable, but a continuable incumbent, so it competed on its real utility.
+     */
+    @Test
+    void task43_traceExplainsWhyANonAdoptableIncumbentCompeted() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.EXPLORE, 30f, 0L);
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(new DirectorTickInput(
+                now, true, false, false, idleObservation(),
+                new DiscretionaryScoringInput(
+                        OpinionExperienceRegistry.contextFor(MOB).affectiveState(),
+                        OpinionExperienceRegistry.contextFor(MOB).opinionMemory(),
+                        DiscretionaryAvailability.bothPresent(), true, true),
+                ActivityAdmissions.of(
+                        ActivityAdmission.blocked(
+                                true, ActivityAdoptionBlocker.SCAN_COOLDOWN, "adoption cooldown"),
+                        ActivityAdmission.ready(true)),
+                ActivityContinuations.of(
+                        ActivityContinuation.valid(), ActivityContinuation.notRunning())));
+
+        OpinionDecisionTrace.Candidate explore = director.trace().snapshot().stream()
+                .flatMap(decision -> decision.candidates().stream())
+                .filter(candidate -> candidate.activity() == DiscretionaryActivity.EXPLORE)
+                .reduce((first, second) -> second)
+                .orElseThrow();
+
+        ExecutionEvidence evidence = explore.execution();
+        assertNotNull(evidence, "the decision must carry its own execution evidence");
+        assertTrue(evidence.executorPresent());
+        assertFalse(evidence.adoptionReady(), "a new expedition could not have begun");
+        assertEquals(ActivityAdoptionBlocker.SCAN_COOLDOWN, evidence.adoptionBlocker());
+        assertTrue(evidence.continuable(), "but the running one was fine");
+        assertTrue(evidence.isRetainedDespiteBlockedAdoption(),
+                "which is exactly why it stayed in the comparison - reconstructing this later from "
+                        + "current admission state would answer a different question");
+    }
+
+    @Test
+    void task43_yieldTransactionIsRecordedAsTwoPhases() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 20f, 0L);
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(now, idleObservation(), true));
+        YieldEvent requested = director.trace().lastYieldEvent().orElseThrow();
+
+        assertEquals(YieldEvent.Phase.REQUESTED, requested.phase());
+        assertEquals(DiscretionaryActivity.REST, requested.incumbentActivity());
+        assertEquals(DiscretionaryActivity.EXPLORE, requested.challengerActivity());
+        assertNull(requested.outcome(), "a request has not ended");
+
+        UUID restIntentId = director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow();
+        director.acknowledgeYield(restIntentId, DiscretionaryActivity.REST, now + 34L);
+
+        YieldEvent ended = director.trace().lastYieldEvent().orElseThrow();
+        assertEquals(YieldEvent.Phase.ENDED, ended.phase());
+        assertEquals(DiscretionaryDirectorState.YieldOutcome.ACKNOWLEDGED, ended.outcome());
+        assertEquals(requested.originDecisionId(), ended.originDecisionId(),
+                "same transaction, so the same cause");
+        assertEquals(34L, ended.durationTicks());
+    }
+
+    /** No fabricated phase: acknowledgement completes the transaction atomically today. */
+    @Test
+    void task43_thereIsNoAcknowledgedButIncompletePhase() {
+        for (YieldEvent.Phase phase : YieldEvent.Phase.values()) {
+            assertNotEquals("COMPLETED", phase.name(),
+                    "acknowledgeYield validates, marks, terminalizes and finishes in one call - "
+                            + "emitting ACKNOWLEDGED then COMPLETED would invent a transition that "
+                            + "does not exist to make the readout look richer");
+        }
+        assertEquals(2, YieldEvent.Phase.values().length);
+    }
+
+    @Test
+    void task43_everyEndingIsRecordedWithItsRealCause() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 20f, 0L);
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(now, idleObservation(), true));
+        assertTrue(director.yieldRequest().isPresent());
+
+        // Combat is mandatory authority: it ends the negotiation, it does not decline it.
+        director.tick(tick(now + 10L, idleObservation(), true, true));
+
+        YieldEvent ended = director.trace().lastYieldEvent().orElseThrow();
+        assertEquals(YieldEvent.Phase.ENDED, ended.phase());
+        assertEquals(DiscretionaryDirectorState.YieldOutcome.MANDATORY_INVALIDATION,
+                ended.outcome(),
+                "not STALE - the incumbent vanished BECAUSE combat invalidated it, and naming the "
+                        + "symptom instead of the cause is what the single seam prevents");
     }
 }

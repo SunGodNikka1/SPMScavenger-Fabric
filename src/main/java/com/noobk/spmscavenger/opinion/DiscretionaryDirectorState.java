@@ -92,6 +92,7 @@ public final class DiscretionaryDirectorState {
             return;
         }
         yieldRequest = YieldRequest.of(runningIntent, challenger, decisionId, now);
+        trace.recordYieldEvent(YieldEvent.requested(yieldRequest, now));
     }
 
     /**
@@ -147,6 +148,10 @@ public final class DiscretionaryDirectorState {
         yieldRequest = null;
         lastYieldOutcome = outcome;
         lastYieldOutcomeAt = gameTime;
+        // Emitted from the ending request itself, so the historical evidence is the transaction and
+        // lastYieldOutcome stays what it was meant to be - inspector convenience, not the source of
+        // truth. One seam means one emission point that cannot drift.
+        trace.recordYieldEvent(YieldEvent.ended(ending, outcome, gameTime));
         return java.util.Optional.of(ending);
     }
 
@@ -732,30 +737,41 @@ public final class DiscretionaryDirectorState {
                     .findFirst()
                     .orElse(null);
             ActivityAdmission admission = input.admissions().forActivity(activity);
+            ActivityContinuation continuation = input.continuations().forActivity(activity);
+            boolean isIncumbent = incumbent == activity;
+            boolean retained = !admission.adoptionReady()
+                    && retainsIncumbent(input, incumbent, activity);
+            ExecutionEvidence evidence =
+                    ExecutionEvidence.of(admission, continuation, isIncumbent, retained);
             if (!admission.executorPresent()) {
                 candidates.add(OpinionDecisionTrace.Candidate.suppressed(
                         activity,
                         null,
-                        OpinionDecisionTrace.SuppressionReason.EXECUTOR_UNAVAILABLE));
+                        OpinionDecisionTrace.SuppressionReason.EXECUTOR_UNAVAILABLE,
+                        "",
+                        evidence));
             } else if (!input.scoringInput().discretionaryEligible()) {
                 candidates.add(OpinionDecisionTrace.Candidate.suppressed(
                         activity,
                         breakdown,
-                        OpinionDecisionTrace.SuppressionReason.DISCRETIONARY_CONTEXT_BLOCKED));
+                        OpinionDecisionTrace.SuppressionReason.DISCRETIONARY_CONTEXT_BLOCKED,
+                        "",
+                        evidence));
             } else if (!admission.adoptionReady()
                     && retainsIncumbent(input, incumbent, activity)
                     && breakdown != null) {
                 // Not adoptable, but running and continuable: it competes on its real utility.
-                candidates.add(OpinionDecisionTrace.Candidate.eligible(breakdown));
+                candidates.add(OpinionDecisionTrace.Candidate.eligible(breakdown, evidence));
                 eligible.add(breakdown);
             } else if (!admission.adoptionReady()) {
                 candidates.add(OpinionDecisionTrace.Candidate.suppressed(
                         activity,
                         breakdown,
                         OpinionDecisionTrace.SuppressionReason.ADOPTION_NOT_READY,
-                        admission.suppressionDetail()));
+                        admission.suppressionDetail(),
+                        evidence));
             } else if (breakdown != null) {
-                candidates.add(OpinionDecisionTrace.Candidate.eligible(breakdown));
+                candidates.add(OpinionDecisionTrace.Candidate.eligible(breakdown, evidence));
                 eligible.add(breakdown);
             }
         }

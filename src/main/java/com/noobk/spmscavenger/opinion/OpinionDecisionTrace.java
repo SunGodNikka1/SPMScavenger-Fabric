@@ -68,7 +68,8 @@ public final class OpinionDecisionTrace {
             ActivityUtilityBreakdown breakdown,
             CandidateState state,
             SuppressionReason suppressionReason,
-            String suppressionDetail) {
+            String suppressionDetail,
+            ExecutionEvidence execution) {
 
         public Candidate {
             Objects.requireNonNull(activity, "activity");
@@ -90,9 +91,16 @@ public final class OpinionDecisionTrace {
         }
 
         public static Candidate eligible(ActivityUtilityBreakdown breakdown) {
+            return eligible(breakdown, null);
+        }
+
+        /** Task 43 — why this candidate was legally in the comparison. */
+        public static Candidate eligible(
+                ActivityUtilityBreakdown breakdown, ExecutionEvidence execution) {
             Objects.requireNonNull(breakdown, "breakdown");
             return new Candidate(
-                    breakdown.activity(), breakdown, CandidateState.ELIGIBLE, SuppressionReason.NONE, "");
+                    breakdown.activity(), breakdown, CandidateState.ELIGIBLE,
+                    SuppressionReason.NONE, "", execution);
         }
 
         public static Candidate suppressed(
@@ -107,7 +115,18 @@ public final class OpinionDecisionTrace {
                 ActivityUtilityBreakdown breakdown,
                 SuppressionReason reason,
                 String suppressionDetail) {
-            return new Candidate(activity, breakdown, CandidateState.SUPPRESSED, reason, suppressionDetail);
+            return suppressed(activity, breakdown, reason, suppressionDetail, null);
+        }
+
+        public static Candidate suppressed(
+                DiscretionaryActivity activity,
+                ActivityUtilityBreakdown breakdown,
+                SuppressionReason reason,
+                String suppressionDetail,
+                ExecutionEvidence execution) {
+            return new Candidate(
+                    activity, breakdown, CandidateState.SUPPRESSED, reason, suppressionDetail,
+                    execution);
         }
     }
 
@@ -233,6 +252,35 @@ public final class OpinionDecisionTrace {
 
     private final Deque<MutableDecision> decisions = new ArrayDeque<>();
     private long nextDecisionId = 1L;
+
+    /**
+     * Task 43 — bounded history of yield transaction phases.
+     *
+     * <p>Sized to the decision history so a transaction and the decision that caused it stay
+     * inspectable together; the request itself carries its causal ids, so correctness never depends
+     * on the window.
+     */
+    private final java.util.ArrayDeque<YieldEvent> yieldEvents = new java.util.ArrayDeque<>();
+
+    private static final int MAX_YIELD_EVENTS = 48;
+
+    public void recordYieldEvent(YieldEvent event) {
+        if (event == null) {
+            return;
+        }
+        yieldEvents.addLast(event);
+        while (yieldEvents.size() > MAX_YIELD_EVENTS) {
+            yieldEvents.removeFirst();
+        }
+    }
+
+    public List<YieldEvent> yieldEvents() {
+        return List.copyOf(yieldEvents);
+    }
+
+    public java.util.Optional<YieldEvent> lastYieldEvent() {
+        return java.util.Optional.ofNullable(yieldEvents.peekLast());
+    }
 
     public long beginDecision(long gameTime, List<Candidate> candidates) {
         Objects.requireNonNull(candidates, "candidates");
