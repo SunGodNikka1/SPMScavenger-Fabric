@@ -15,7 +15,7 @@
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-12 (GAO-4R1 MAIBS + GAO-10 brainstorm continuation B-48…B-55; lock-ready GAO-4R1 API sketch) |
+| **Last update** | 2026-08-12 (Task 43 / GAO-4R1 CLOSED — STATIC ACCEPT; D-GAO-050/051 LOCKED / IMPLEMENTED; 745 tests; runtime UNVERIFIED) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,7 +39,7 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** **lock GAO-4R1** (adoption vs continuation + generic yield API) → authorize **Task 43**
+**Nearest frontier:** **GAO-10 SOCIAL** — GAO-4R1 is `IMPLEMENTED / STATIC ACCEPT` and Task 43 is `CLOSED` (745 tests, runtime `UNVERIFIED`). Evaluate D-GAO-045…056 against the finished generic APIs rather than designing SOCIAL around EXPLORE/REST machinery. Previously: **lock GAO-4R1** (adoption vs continuation + generic yield API) → authorize **Task 43**
 implementation → then finalize gen-1 **GAO-10** executor contract. Runtime verification of GAO-8B
 inspector (`RQ-GAO-SHELTER-01` + SCR-2R2+ shelter physics) remains a separate launch-approved probe.
 
@@ -2504,6 +2504,92 @@ GAO-6 is the dangerous one: keyed by *other* entities, so a busy server grows it
 
 ---
 
+## Topic: Task 43 / GAO-4R1 — CLOSED, STATIC ACCEPT (745 tests)
+
+**Status:** `IMPLEMENTED / STATIC ACCEPT`. Runtime `UNVERIFIED`.
+
+### What shipped
+
+| Item | Outcome |
+| --- | --- |
+| 1–2 Continuation model + production wiring | `ActivityContinuation` / `ActivityContinuations`; `DiscretionaryActivityDirector.tick` **requires** them; `ExploringGoal.inspectContinuation` and `CampfireGoal.inspectContinuation` read bound state only |
+| 3–4 Retention on real utility | A running incumbent with blocked adoption competes on its actual score instead of being deleted from the comparison |
+| 5–7 Generic yield | `YieldRequest` + `onDiscretionaryYielded`; pairwise callbacks removed; mandatory authority still invalidates rather than negotiating |
+| 8 Trace causality | `ExecutionEvidence` per candidate, typed `YieldEvent` (REQUESTED / ENDED), Inspector projection, network codec, screen section |
+| 9 Acceptance matrix | Retention, stale acknowledgement, REST mirror, opinion-disabled revocation |
+| 10 MAIBS + closure | This section |
+
+### Defects found *during* the task, not before it
+
+Each was found by the next repair rather than by review of the previous one:
+
+1. **Framework without production** — continuation existed while `tick` defaulted to
+   `ActivityContinuations.none()`, so the retention branch was unreachable and the original defect
+   was still live.
+2. **Half-generic yield** — the request was generic while acknowledgement stayed pairwise, which
+   forced every executor to know the whole activity set.
+3. **Allocating observer** — `inspectContinuation` used `contextFor(...)`, which rehydrates or
+   creates: an observer that brings state into existence by looking at it.
+4. **Wrong causal origin** — the request recorded the decision that created the *incumbent*, not
+   the one that chose the *challenger*.
+5. **Five termination paths** — collapsed into one seam; mandatory authority previously left a
+   request behind for a later read to misreport as `STALE`.
+6. **Immortal sliding timeout** — re-raising on every qualifying decision refreshed the 200-tick
+   bound and moved the origin; and an obsolete challenger stayed executable when the incumbent won
+   again.
+7. **Reconciler unreachable** — correct semantics called only on the success path, so
+   `SWITCH_MARGIN_HOLD`, `COMMITMENT_HOLD`, `NO_CANDIDATES` and `BELOW_ACTIVATION_THRESHOLD` each
+   left a live request behind.
+8. **Recorded but not inspectable** — trace, snapshot and codec all carried the transaction; the
+   screen rendered none of it.
+9. **Acknowledgement asymmetry** — `mustYield` validated against the live `runningIntent` and
+   `acknowledgeYield` did not, so a replaced execution could complete a transaction its successor
+   was never party to. Invisible to any enum-based check because the replacement was the *same
+   activity*.
+
+### MAIBS closure pass — all six negative conditions verified at source
+
+| Must never happen | Verified by |
+| --- | --- |
+| Fresh-adoption failure invalidates a valid running execution | retention branch keys on `retainsIncumbent(...)`, not on `adoptionReady` |
+| Continuation grants permission to start a fresh execution | `input.continuations()` is read in exactly two places, both inside the retention path |
+| A `YieldRequest` becomes movement authority | the record carries identity, activities, ids and clocks only — no target, path or command |
+| A stale request or acknowledgement affects a replacement | both read and write paths validate `appliesTo(runningIntent, now)` |
+| Mandatory authority negotiates through voluntary yield | mandatory returns before any directive is produced, and `invalidateAll` finishes the transaction as `MANDATORY_INVALIDATION` |
+| Opinion-disabled leaves Opinion authority behind | disabled path invalidates all intents and terminates the request before returning |
+
+### Evidence labels
+
+```text
+CODE_CONFIRMED             yes
+UNIT_CONFIRMED             yes   745 tests
+DIRECTOR_BEHAVIOURAL       yes   tick-driven acceptance matrix
+INSPECTOR_PRESENTATION     yes   body composition regression
+RUNTIME_CONFIRMED          NO
+```
+
+**Recorded limitation, not a blocker (item 9.3).** `CampfireGoal.inspectContinuation` is
+`CODE_CONFIRMED` — it asks only about bound session state (`firePos`, `restClaimOpened`, live claim),
+runs no fresh feasibility scan, and uses the non-allocating query. The director-side behaviour is
+also `CODE_CONFIRMED`. What is **not** covered is a real-`Mob` integration test of the REST inspector
+and any runtime gameplay observation. Both remain `UNVERIFIED`.
+
+### Testing lesson (`PROVEN` — promote)
+
+**Source-shape tests are useful structural guards and do not substitute for behavioural control-flow
+tests.** In this task they were green while:
+
+- the reconciler was never called from four of five paths;
+- the trace recorded a transaction the screen never rendered;
+- a stale acknowledgement could terminalize a live execution.
+
+Two of my own structural tests also broke on a pure rename with no behaviour change, which is the
+other half of the lesson: they couple to names, not to conduct. Keep them for *invariants a test
+cannot otherwise reach* — "this file must not contain a second copy of the formula", "every consumer
+routes through the shared owner" — and never as the proof that a control path executes.
+
+---
+
 ## Topic: Hard architectural rules
 
 | ID | Rule |
@@ -3022,8 +3108,8 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 | D-GAO-047 | SOCIAL utility separates activity score ("feel social?") from target score ("who?"); entity affinity must not globally inflate SOCIAL when target invalid | `PROPOSED` | GAO-10 topic |
 | D-GAO-048 | GAO-10 reuses GAO-4R admission: suppress SOCIAL when no eligible target (`ADOPTION_NOT_READY` + `suppressionDetail`); no indefinite pending on stale UUID | `PROPOSED` | GAO-10 topic; depends GAO-4R |
 | D-GAO-049 | Opinion never writes SPM `feelingToward`; `EntityOpinionMemory` is supplemental only and cannot override hostility, commands, safety, or relationship legality | `PROPOSED` | GAO-10 topic; extends D-GAO-007 |
-| D-GAO-050 | GAO-4R1 splits adoption probe (selection) from continuation probe (incumbent RUNNING); fresh adoption failure must not terminate valid live execution | **LOCK RECOMMENDED** | GAO-4R1 topic; cave-handoff lesson; B-52 |
-| D-GAO-051 | Generic discretionary yield API replaces pairwise REST↔EXPLORE flags before a third activity ships | **LOCK RECOMMENDED** | GAO-4R1 topic; B-40/B-51 |
+| D-GAO-050 | GAO-4R1 splits adoption probe (selection) from continuation probe (incumbent RUNNING); fresh adoption failure must not terminate valid live execution | **LOCKED / IMPLEMENTED** (Task 43, 745 tests) | GAO-4R1 topic; cave-handoff lesson; B-52 |
+| D-GAO-051 | Generic discretionary yield API replaces pairwise REST↔EXPLORE flags before a third activity ships | **LOCKED / IMPLEMENTED** (Task 43, 745 tests) | GAO-4R1 topic; B-40/B-51 |
 | D-GAO-052 | Gen-1 discretionary SOCIAL uses SPM `FriendlyGreetGoal` lifecycle via minimal `SocialIntent` target adapter — no mega `SocializeGoal` | `PROPOSED` | GAO-10 SPM survey 2026-08-12 |
 | D-GAO-053 | Discretionary SOCIAL yields to SPM priority-1 `SOCIAL_REFLEX` goals; Opinion does not preempt host greet/watch reflex | `PROPOSED` | GAO-10; B-44 |
 | D-GAO-054 | Social target eligibility requires SPM `Reaction.GREET` legality via read-only bridge; `feelingToward` alone is insufficient | `PROPOSED` | GAO-10; B-46/B-55 |
@@ -3036,6 +3122,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | User + Agent_Claude | **Task 43 / GAO-4R1 CLOSED — STATIC ACCEPT** (745 tests). **D-GAO-050** and **D-GAO-051** → `LOCKED / IMPLEMENTED`. Nine defects found and repaired during the task, each surfaced by the next repair: framework-without-production wiring, half-generic yield, allocating observer, wrong causal origin, five termination paths, immortal sliding timeout, unreachable reconciler, recorded-but-not-inspectable trace, and an acknowledgement asymmetry that let a replaced execution complete its successor's transaction. MAIBS closure verified all six negative conditions at source. Runtime `UNVERIFIED`; item 9.3 real-Mob REST-inspector integration recorded as unverified, not a blocker. Lesson `PROVEN`: source-shape tests guard structure, never control flow. No SOCIAL |
 | 2026-08-09 | Agent_Claude | **Brainstorm B-28…B-33** from RET-1 runtime evidence. **`CODE_CONFIRMED` defect against LOCKED D-GAO-023**: the rule *"feasibility/safety/authority outcomes do not automatically imply dislike"* is honoured by the activity path (`outcomeFor(TOOL_FAILURE)` → `PROTECTED_INTERRUPT`) and **bypassed by the place path**, which uses an independent static table giving `TOOL_FAILURE` = −6f. A 117-cycle assign→`CAPABILITY_MISSING`→revoke loop therefore wrote 117 negative place deltas for a mob that never broke a block — enough to evict all 32 LRU entries of genuinely earned place opinion. Two independent repairs required (route place through the shared classification; suppress all experience when `everStarted == false`). New candidates **D-GAO-024** physical outcome vs bookkeeping transition, **D-GAO-025** declare bounds at design time. Also: opinion **amplifies** control-plane defects, so RET-1c is a learning-correctness prerequisite; "opinion survives unload" is currently implemented as retention; GAO-6 entity opinion is keyed by other mobs' UUIDs and unbounded by population |
 | 2026-08-12 | Agent_Cursor | **RFC Opinion brainstorm continuation (2).** Code inspection: `DiscretionaryDirectorState` retains `runningIntent` on `NO_CANDIDATES`; pinned `FriendlyGreetGoal` continuation predicates. Added B-48…B-55; GAO-4R1 MAIBS prediction + API sketch + Task 43 proposal; GAO-10 `SocialIntent` lock-ready fields + B-49 adapter rule; D-GAO-055/056. **No implementation authorization.** |
 | 2026-08-12 | Agent_Cursor | **GAO-4R1 + GAO-10 brainstorm continuation.** Inspected `DiscretionaryDirectorState` pairwise yield API, `ActivityAdmission` shape, and pinned SPM `FriendlyGreetGoal` / `FollowLovedOneGoal` / `StayNearGoal`. Added stable topic **GAO-4R1** (adoption vs continuation + generic yield), enriched GAO-10 with executor survey (recommend greet + adapter), social target resolver, MAIBS prediction, B-40…B-47, D-GAO-050…054. **No implementation authorization.** No Java edit, build, runtime launch, commit, push, or PR |
