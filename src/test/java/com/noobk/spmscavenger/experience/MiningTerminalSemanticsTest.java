@@ -138,4 +138,68 @@ class MiningTerminalSemanticsTest {
         assertTrue(place.contains("MiningTerminalSemantics"),
                 "place learning consumes the shared semantics");
     }
+
+    // ---- one foundational eligibility rule ----
+
+    /**
+     * The future trap D-GAO-024 exists to close: an {@code EXECUTION_FAILURE} with a protected cause
+     * and enough repetitions would have been eligible for place learning and rejected by activity
+     * learning — the same divergence, one terminal later.
+     */
+    @Test
+    void mustHappen_placeAndActivityLearningAgreeOnEveryOutcomeAndCause() {
+        for (OutcomeClass outcome : OutcomeClass.values()) {
+            for (ExperienceCause cause : ExperienceCause.values()) {
+                for (int failures : new int[] {0, 1, 2, 9}) {
+                    boolean foundational =
+                            ExperienceOutcomePolicy.mayEmitLearning(outcome, cause, failures);
+                    if (!foundational) {
+                        continue;
+                    }
+                    assertFalse(ExperienceOutcomePolicy.isSuppressedCause(cause),
+                            outcome + "/" + cause + ": a suppressed cause must never be eligible, "
+                                    + "whatever its outcome class or repetition count");
+                }
+            }
+        }
+    }
+
+    @Test
+    void mustNotHappen_aSuppressedCauseTeachesThroughTheFailureChannel() {
+        for (ExperienceCause cause : new ExperienceCause[] {
+                ExperienceCause.ENVIRONMENT_BLOCKED, ExperienceCause.AUTHORITY_CANCEL,
+                ExperienceCause.MINING_PLAYER_ORDER, ExperienceCause.SIMULATION_FRONTIER}) {
+            assertFalse(ExperienceOutcomePolicy.mayEmitLearning(
+                            OutcomeClass.EXECUTION_FAILURE, cause, 99),
+                    cause + ": repetition must not launder a cause that describes why the MOD "
+                            + "stopped rather than what the WORLD is like");
+        }
+    }
+
+    @Test
+    void mustHappen_repeatedGenuineFailureIsStillLearnable() {
+        assertFalse(ExperienceOutcomePolicy.mayEmitLearning(
+                        OutcomeClass.EXECUTION_FAILURE, ExperienceCause.MINING_NO_PROGRESS, 1),
+                "one stall is bad luck");
+        assertTrue(ExperienceOutcomePolicy.mayEmitLearning(
+                        OutcomeClass.EXECUTION_FAILURE, ExperienceCause.MINING_NO_PROGRESS, 2),
+                "genuinely attempting an area and repeatedly failing is real evidence about it");
+    }
+
+    /**
+     * Recorded, not changed: {@code physicalProgressObserved} is deliberately NOT required for
+     * learning. A mob that starts, repeatedly attempts a route and never manages to break a block
+     * has learned something true about that place; requiring a successful break would make it
+     * impossible to learn that a genuinely attempted area is awful to work in.
+     */
+    @Test
+    void documentsThatPhysicalProgressIsNotRequiredForLearning() {
+        MiningTerminalSemantics attempted = new MiningTerminalSemantics(
+                MiningProjectEnd.NO_PROGRESS, OutcomeClass.EXECUTION_FAILURE,
+                ExperienceCause.MINING_NO_PROGRESS, true, false);
+
+        assertTrue(attempted.mayLearnPreference(2),
+                "everStarted establishes the project left the bookkeeping plane; terminal semantics "
+                        + "then decide what the experience means");
+    }
 }

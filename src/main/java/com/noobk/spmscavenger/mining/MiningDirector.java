@@ -131,11 +131,15 @@ public final class MiningDirector {
                 end, store.leaseOf(mob.getUUID()).orElse(null));
         store.completeProject(mob.getUUID(), end, transition);
         store.clearLease(mob.getUUID());
+        // D-GAO-024 follow-up: report the evidence, not a verdict. The final learning decision
+        // depends on the execution-failure count, which the pipeline increments *after* this line -
+        // so logging mayLearnPreference() here printed learnable=false for terminals that then went
+        // on to teach. A truthful log of inputs beats a confident log of the wrong conclusion.
         SpmScavenger.LOGGER.info(
                 "[spmscavenger] director completed mode={} entity={} reason={} at={} heading={} "
-                        + "everStarted={} learnable={}",
+                        + "everStarted={} outcome={} cause={}",
                 project.mode(), mob.getId(), end, transition.at(), transition.heading(),
-                semantics.everStarted(), semantics.mayLearnPreference());
+                semantics.everStarted(), semantics.outcome(), semantics.cause());
         ExperienceEmitters.miningTerminal(mob, project, semantics, at, level.getGameTime());
     }
 

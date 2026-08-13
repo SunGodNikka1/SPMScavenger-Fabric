@@ -5,6 +5,7 @@ import com.noobk.spmscavenger.experience.EpisodeLearningEvidence;
 import com.noobk.spmscavenger.experience.EpisodeBoundaryPolicy;
 import com.noobk.spmscavenger.experience.EpisodeNormalizationPolicy;
 import com.noobk.spmscavenger.experience.ExperienceCause;
+import com.noobk.spmscavenger.experience.ExperienceOutcomePolicy;
 import com.noobk.spmscavenger.experience.OutcomeClass;
 
 /**
@@ -27,14 +28,15 @@ public final class OpinionLearningPolicy {
         };
     }
 
+    /**
+     * D-GAO-024 — delegates to the foundational rule rather than owning the list.
+     *
+     * <p>Retained as defence in depth: this policy still refuses evidence with no activity and
+     * still rejects the protected outcome classes outright. What it no longer does is be the only
+     * place in the codebase where causes are consulted.
+     */
     private static boolean blockedCause(ExperienceCause cause) {
-        return cause == ExperienceCause.AUTHORITY_CANCEL
-                || cause == ExperienceCause.PROTECTED_INTERRUPT
-                || cause == ExperienceCause.SIMULATION_FRONTIER
-                || cause == ExperienceCause.ENVIRONMENT_BLOCKED
-                || cause == ExperienceCause.MINING_PLAYER_ORDER
-                || cause == ExperienceCause.REST_COMBAT
-                || cause == ExperienceCause.REST_MANDATORY_WORK;
+        return ExperienceOutcomePolicy.isSuppressedCause(cause);
     }
 
     public static void apply(

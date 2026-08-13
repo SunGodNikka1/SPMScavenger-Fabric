@@ -92,8 +92,10 @@ public record MiningTerminalSemantics(
         if (!everStarted) {
             return false;
         }
-        return ExperienceOutcomePolicy.mayEmitPreferenceLearning(outcome)
-                || ExperienceOutcomePolicy.mayEmitFailureLearning(outcome, executionFailureCount);
+        // Cause-aware, so this cannot diverge from activity learning: both now ask the same
+        // foundational rule. Checking only the coarse outcome left a future EXECUTION_FAILURE with
+        // a protected cause eligible here and rejected there.
+        return ExperienceOutcomePolicy.mayEmitLearning(outcome, cause, executionFailureCount);
     }
 
     /** Bookkeeping and trace are always permitted; only learning is gated. */
