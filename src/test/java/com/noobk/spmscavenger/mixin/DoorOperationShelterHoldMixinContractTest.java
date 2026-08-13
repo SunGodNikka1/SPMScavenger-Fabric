@@ -18,7 +18,13 @@ class DoorOperationShelterHoldMixinContractTest {
 
         assertTrue(source.contains("@Pseudo"));
         assertTrue(source.contains("games.brennan.playermob.entity.goal.DoorOperationGoal"));
-        assertTrue(source.contains("method = {\"canUse\", \"canContinueToUse\"}"));
+        // Assert the naming CONTRACT, not one literal spelling: SPM ships intermediary, so a
+        // readable-only target silently matches nothing. See SpmGoalMixinNamingTest.
+        for (String name : new String[] {"canUse", "method_6264",
+                "canContinueToUse", "method_6266"}) {
+            assertTrue(source.contains("\"" + name + "\""),
+                    "missing injector target " + name);
+        }
         assertTrue(source.contains("require = 0"));
         assertTrue(source.contains("ShelterNightAuthority.isSettled(mob.getUUID())"));
         assertTrue(config.contains("DoorOperationShelterHoldMixin"));

@@ -76,7 +76,7 @@ public abstract class PlayerMobDoorGoalBusyMixin extends DoorInteractGoal {
      * SPM's flagless passage Goal must not report a successful start while the entity will reject
      * its OPEN request as busy. Once the current operation ends, the host's normal canUse path runs.
      */
-    @Inject(method = "canUse", at = @At("HEAD"), cancellable = true, require = 0)
+    @Inject(method = {"canUse", "method_6264"}, at = @At("HEAD"), cancellable = true, require = 0)
     private void spmscavenger$rejectBusyDoorRequest(CallbackInfoReturnable<Boolean> cir) {
         spmscavenger$resetEncounterAfterSeparation();
         if (spmscavenger$isBusy(this)) {
@@ -90,7 +90,7 @@ public abstract class PlayerMobDoorGoalBusyMixin extends DoorInteractGoal {
      * deliberately ignores disposable Path instances: a replan at the same door and approach side
      * remains the same bounded episode until the mob separates from the doorway.
      */
-    @Inject(method = "canUse", at = @At("RETURN"), cancellable = true, require = 0)
+    @Inject(method = {"canUse", "method_6264"}, at = @At("RETURN"), cancellable = true, require = 0)
     private void spmscavenger$rejectEmptyOrDuplicateEpisode(
             CallbackInfoReturnable<Boolean> cir) {
         if (!cir.getReturnValue() || !this.hasDoor) {
@@ -121,7 +121,7 @@ public abstract class PlayerMobDoorGoalBusyMixin extends DoorInteractGoal {
     }
 
     /** Capture one immutable passage identity after the host has latched its door. */
-    @Inject(method = "start", at = @At("TAIL"), require = 0)
+    @Inject(method = {"start", "method_6269"}, at = @At("TAIL"), require = 0)
     private void spmscavenger$beginPassageEpisode(CallbackInfo ci) {
         if (!this.hasDoor) {
             spmscavenger$episodeDoor = null;
@@ -135,7 +135,7 @@ public abstract class PlayerMobDoorGoalBusyMixin extends DoorInteractGoal {
     }
 
     /** Door-operation animation owns MOVE, so no physical crossing time may be charged to it. */
-    @Inject(method = "tick", at = @At("HEAD"), cancellable = true, require = 0)
+    @Inject(method = {"tick", "method_6268"}, at = @At("HEAD"), cancellable = true, require = 0)
     private void spmscavenger$pauseCrossingClockDuringOperation(CallbackInfo ci) {
         if (spmscavenger$isOperating(this)) {
             ci.cancel();
@@ -143,7 +143,7 @@ public abstract class PlayerMobDoorGoalBusyMixin extends DoorInteractGoal {
     }
 
     /** Mirror vanilla's door-plane test after the host tick; this is evidence for close-behind. */
-    @Inject(method = "tick", at = @At("TAIL"), require = 0)
+    @Inject(method = {"tick", "method_6268"}, at = @At("TAIL"), require = 0)
     private void spmscavenger$observePassage(CallbackInfo ci) {
         if (spmscavenger$episodeDoor == null) {
             return;
@@ -159,7 +159,7 @@ public abstract class PlayerMobDoorGoalBusyMixin extends DoorInteractGoal {
      * Close-behind means behind: timeout before crossing leaves the door open for navigation or a
      * fresh path. Record the encounter before the host optionally schedules its one close action.
      */
-    @Inject(method = "stop", at = @At("HEAD"), cancellable = true, require = 0)
+    @Inject(method = {"stop", "method_6270"}, at = @At("HEAD"), cancellable = true, require = 0)
     private void spmscavenger$finishPassageEpisode(CallbackInfo ci) {
         if (spmscavenger$episodeDoor != null) {
             spmscavenger$encounterCompleted |= spmscavenger$crossed;

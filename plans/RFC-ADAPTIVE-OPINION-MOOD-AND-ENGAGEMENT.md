@@ -2799,6 +2799,86 @@ bytecode 62–73.
 
 ---
 
+## Topic: Task 44A — seam proof result: `RUNTIME_CONFIRMED` **FAILURE**, root cause found
+
+**The seam was never tested.** The mixin never ran. Task 44A did its job: it was built to detect a
+silent adapter failure, and it found one — larger than the seam it was proving.
+
+### Runtime evidence
+
+Prism instance, `playermob-fabric-0.86.0+1.21.1` + `spmscavenger-1.9.4`
+(`sha256 833fc1dd…`), ~6 minutes, dozens of live PlayerMobs (`exploration ended entity=…` for
+entity ids 15–3821 throughout). **Zero `[44A]` lines.** No mixin error, no injector warning, no
+exception. The mod itself was demonstrably alive the whole session.
+
+### Root cause (`CONFIRMED`, from the shipped artifact)
+
+SPM ships **remapped to intermediary**. Its goals override vanilla `Goal` methods, so in the
+distributed jar those overrides are named `method_6264`, not `canUse`:
+
+```text
+javap games.brennan.playermob.entity.goal.FriendlyGreetGoal
+  public boolean method_6264();   <-- canUse
+  public boolean method_6266();   <-- canContinueToUse
+```
+
+**No readable `canUse` exists on any of SPM's 14 goal classes.** Our mixins are `remap = false`,
+which is *correct* — SPM's own class names must not be remapped — but that also left
+`method = "canUse"` unremapped. It matched nothing, and `require = 0` made it silent.
+
+### Scope — four shipped features were also inert
+
+This was never a 44A-only bug. Every `@Pseudo` mixin into an SPM **goal** was affected:
+
+| Mixin | Was | Status |
+| --- | --- | --- |
+| `FriendlyGreetAdmissionSeamMixin` | 44A seam | inert |
+| `FriendlyGreetShelterHoldMixin` | shipped | **inert** |
+| `WeaponAttackShelterHoldMixin` | shipped | **inert** |
+| `DoorOperationShelterHoldMixin` | shipped | **inert** |
+| `PlayerMobDoorGoalBusyMixin` | shipped | **inert** |
+| `ObjectiveReadoutMixin` (`describe`) | shipped | working — SPM's own method, readable |
+| `PlayerMobRendererReadoutMixin` | shipped | working — same reason |
+
+The two that worked are exactly the two that never touch a vanilla override. That is the whole rule,
+visible in the data.
+
+SPM is deliberately **not** a dependency in any configuration, so no environment ever resolved these
+names — dev included. `UNVERIFIED` how long they were inert; `CONFIRMED` that they are in 1.9.4.
+
+### Repair
+
+All ten injectors now name both spellings, `method = {"canUse", "method_6264"}`, verified present in
+the packaged jar. Mapping read from the file the build uses
+(`loom.mappings.1_21_1…/mappings-base.tiny`, `class_1352` → `Goal`), **not from memory** — two of
+the five are easy to invert by guessing: `tick` is `method_6268` and `stop` is `method_6270`.
+
+`require = 0` stays (right for optional compat), so enforcement moved to build time:
+`SpmGoalMixinNamingTest` fails the build when a readable vanilla-`Goal` target lacks its
+intermediary pair. **Negative control run:** reverting one injector to `"canUse"` alone reproduces
+a red build; restoring it returns green. A gate not proven to fail is not a gate.
+
+The 44A diagnostic also had a blind spot of mine: it logged inside the `mob != null` branch, so
+"never applied" and "ran, resolver returned null" were byte-identical evidence — nothing. Now
+separated (`MOB_UNRESOLVED`).
+
+### Lesson (`PROVEN`, promote)
+
+**A cross-mod mixin's soft target is a string the compiler, the remapper, and the mod loader all
+decline to check.** This is api-break-detection **shape 4** arriving through a new door: not a
+renamed vanilla member, but a *correctly named* one in the wrong **namespace**. `@Pseudo` +
+`remap = false` + `require = 0` is a fully silent triple, and every part of it is individually
+correct. GVC-6 said prove integration points from the packaged artifact; this adds **which
+namespace the artifact speaks**.
+
+### Consequence for GAO-10
+
+The Social Approach fallback is **not** triggered — the redirect was never evaluated, so nothing is
+known about the seam's viability yet. 44A must be re-run against `spmscavenger-1.9.4`
+(`sha256 5c2e7922…`). Cases A–E unchanged.
+
+---
+
 ## Topic: Hard architectural rules
 
 | ID | Rule |
@@ -3333,6 +3413,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-13 | User + Agent_Claude | **Task 44A runtime: FAILED, and it caught a shipped defect.** Zero seam pulses in a 6-minute Prism session with dozens of live PlayerMobs and no error of any kind. Root cause `CONFIRMED` from the shipped artifact: SPM is distributed remapped to intermediary, so its `Goal` overrides are `method_6264`/`method_6266`/etc. and **no readable `canUse` exists on any of its 14 goal classes**. Our `remap = false` (correct) left `method = "canUse"` unremapped; it matched nothing and `require = 0` silenced it. **Four shipped features were inert too** — FriendlyGreet/WeaponAttack/DoorOperation shelter holds and PlayerMobDoorGoalBusy; only the two mixins targeting SPM's *own* methods (`describe`, `renderObjectiveReadout`) ever worked. All ten injectors now carry both spellings, verified in the packaged jar, with mapping read from the build's own `mappings-base.tiny` (`tick` is `method_6268`, `stop` is `method_6270` — invertible by guessing). New build gate `SpmGoalMixinNamingTest` + negative control. 763 tests. Social Approach fallback **not** triggered: the seam is still untested |
 | 2026-08-09 | User + Agent_Claude | **GAO-10 contract correction.** The recorded `canContinueToUse` bound was wrong: pinned SPM uses `distanceTo(friend) <= range + 6.0` (verified at bytecode 62–73, `ldc2_w 6.0d` + `dadd`), not `<= range`. My transcription came from a `grep`-filtered `javap` dump that dropped both opcodes — a filtered view of evidence is not the evidence (AV-1). Acquisition radius (`range`, used by `nearestWhereReaction`) and continuation radius (`range + 6.0`) are deliberately different host semantics. Corrected the COMPLETED elimination predicate and added a mandatory acceptance vector: a DONE greet with the target between `range` and `range + 6` must classify COMPLETED, not ENDED_BY_WORLD — otherwise a successful greeting is recorded as world failure and, since only COMPLETED teaches, real learning is silently suppressed. Renamed the still-continuable terminal **INTERRUPTED_WHILE_CONTINUABLE** rather than asserting scheduler preemption. Gift hooks confirmed supplemental, never a prerequisite |
 | 2026-08-09 | User + Agent_Claude | **D-GAO-057 Observation Purity** and **D-GAO-058 Causal Adoption** → `LOCKED`. GAO-10 contract review from the pinned `playermob-0.86.0` bytecode: `canUse()` mutates cooldown *and* assigns `friend` (banned as a probe by 057); `canContinueToUse()` is verified pure; `PlayerMobSocialHooks` is gift-only/ServerPlayer-only. **D-GAO-052 AMENDED** to a director-gated `@Redirect` on `nearestWhereReaction` that also requires `mayStartExecutor(SOCIAL)` (Task 43R), returns null when Opinion is on with no startable intent, and the original result when Opinion is off. **D-GAO-053 must be reworked** — FriendlyGreet cannot be both protected reflex and Opinion's executor. Classification is **binding-based** so adapter failure loses control but never manufactures ownership. **TERMINAL ≠ SUCCESS resolved without exposing `Phase`**: every `canContinueToUse` term but `phase != DONE` is publicly observable, so COMPLETED/INTERRUPTED_WHILE_CONTINUABLE/ENDED_BY_WORLD is derivable by elimination over a pure predicate; only COMPLETED may teach. Open: mixin coexistence on the remapped jar. No implementation |
 | 2026-08-09 | User + Agent_Claude | **Task 43R** — GAO-10 review uncovered a Task 43 production bypass: both executor start gates used `hasActionableIntent`, which is true for a **pending challenger**, so REST (priority 7) could physically start before EXPLORE (priority 8) reached its safe yield point and acknowledged. The transaction was correct and the start gate ignored it. Added `mayStartExecutor(activity)` — while an incumbent is active only the incumbent may execute — and repointed both `DiscretionaryAuthority` consumers. Five EXPLORE/REST regressions incl. the consumer-facing facade. Task 43 re-closed at **750 tests**. Third instance of the same class: state that exists is not permission to act on it |

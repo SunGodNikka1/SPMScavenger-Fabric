@@ -24,7 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 })
 public abstract class FriendlyGreetShelterHoldMixin {
 
-    @Inject(method = {"canUse", "canContinueToUse"}, at = @At("HEAD"), cancellable = true, require = 0)
+    @Inject(method = {"canUse", "method_6264", "canContinueToUse", "method_6266"}, at = @At("HEAD"), cancellable = true, require = 0)
     private void spmscavenger$holdShelterDuringMovingGreeting(
             CallbackInfoReturnable<Boolean> cir) {
         Mob mob = OptionalGoalMobResolver.resolve(this, "voluntary travel");

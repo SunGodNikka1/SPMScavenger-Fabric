@@ -40,7 +40,7 @@ public abstract class DoorOperationShelterHoldMixin {
      * optional and preserves stock behavior if the host goal changes shape.
      */
     @Inject(
-            method = {"canUse", "canContinueToUse"},
+            method = {"canUse", "method_6264", "canContinueToUse", "method_6266"},
             at = @At("HEAD"),
             cancellable = true,
             require = 0)

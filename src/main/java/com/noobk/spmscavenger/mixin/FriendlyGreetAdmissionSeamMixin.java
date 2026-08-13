@@ -60,7 +60,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class FriendlyGreetAdmissionSeamMixin {
 
     @Redirect(
-            method = "canUse",
+            method = {"canUse", "method_6264"},
             at = @At(
                     value = "INVOKE",
                     target = "Lgames/brennan/playermob/entity/PlayerMobEntity;"
@@ -71,7 +71,10 @@ public abstract class FriendlyGreetAdmissionSeamMixin {
             @Coerce Object playerMob, @Coerce Object reaction, double range) {
         Mob mob = OptionalGoalMobResolver.resolve(this, "greet admission seam");
         LivingEntity original = SocialAdmissionSeam.invokeOriginal(playerMob, reaction, range);
-        if (mob != null) {
+        if (mob == null) {
+            SocialAdmissionSeam.logSeamReached("MOB_UNRESOLVED range=" + range
+                    + " hostFound=" + (original != null));
+        } else {
             // Task 44A publishes the observation and returns the host's own answer unchanged.
             // Substituting a bound target is 44B+, and must additionally require
             // mayStartExecutor(SOCIAL) or it reintroduces the Task 43R defect.

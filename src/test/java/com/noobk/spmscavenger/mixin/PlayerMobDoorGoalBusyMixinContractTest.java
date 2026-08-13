@@ -18,7 +18,11 @@ class PlayerMobDoorGoalBusyMixinContractTest {
 
         assertTrue(source.contains("@Pseudo"));
         assertTrue(source.contains("games.brennan.playermob.entity.goal.PlayerMobDoorGoal"));
-        assertTrue(source.contains("method = \"canUse\""));
+        for (String name : new String[] {"canUse", "method_6264", "start", "method_6269",
+                "tick", "method_6268", "stop", "method_6270"}) {
+            assertTrue(source.contains("\"" + name + "\""),
+                    "missing injector target " + name);
+        }
         assertTrue(source.contains("require = 0"));
         assertTrue(source.contains("getMethod(\"isOperatingDoor\")"));
         assertTrue(source.contains("getMethod(\"isRecovering\")"));

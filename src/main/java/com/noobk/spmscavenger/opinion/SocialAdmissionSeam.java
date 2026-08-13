@@ -66,12 +66,20 @@ public final class SocialAdmissionSeam {
         }
         long now = mob.level().getGameTime();
         WINDOWS.put(mob.getUUID(), new AdmissionWindow(now, range, eligibleTargetFound));
-        // TEMPORARY - Task 44A seam proof only. Positive evidence that the @Redirect executed:
-        // with require = 0 a non-applying mixin is silent, so absence of injector errors is not
-        // proof of application. REMOVE once 44A is closed; do not build UI for a seam test.
-        SpmScavenger.LOGGER.info(
-                "[spmscavenger][44A] admission-seam entity={} tick={} range={} targetFound={}",
-                mob.getId(), now, range, eligibleTargetFound);
+        logSeamReached("entity=" + mob.getId() + " tick=" + now + " range=" + range
+                + " targetFound=" + eligibleTargetFound);
+    }
+
+    /**
+     * TEMPORARY - Task 44A seam proof. Positive evidence that the redirect executed.
+     *
+     * <p>Deliberately callable <b>outside</b> the mob-resolved branch. The first version logged only
+     * after the mob resolved, so "the mixin never applied" and "the mixin ran but the resolver
+     * returned null" produced byte-identical evidence: nothing at all. A diagnostic that cannot
+     * separate its own failure modes is not evidence. REMOVE once 44A closes.
+     */
+    public static void logSeamReached(String detail) {
+        SpmScavenger.LOGGER.info("[spmscavenger][44A] admission-seam {}", detail);
     }
 
     /** Non-allocating: never creates an experience context for a mob that has none. */

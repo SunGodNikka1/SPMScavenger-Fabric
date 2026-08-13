@@ -13,7 +13,8 @@
 | **User constraint** | The RFC was originally design-only; the user has now separately authorized `SCR-1` and `SCR-2` implementation. Minecraft launches, commits, pushes, and `SCR-3` remain separately gated |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `progression/TaskLifecycle.java` |
 | **Owners** | User (product); architecture TBD |
-| **Last update** | 2026-08-11 |
+| **Last update** | 2026-08-13 (GTH-1 bounded natural tree harvest proposed — Still Life / wide-tree geometry) |
+| **Nearest frontier** | Peer review **GTH-1** (TreeDetector + TreeHarvest); shelter runtime matrix remains separate |
 | **Gate** | MRFC-1 |
 
 ### Naming note
@@ -1186,6 +1187,188 @@ has at most two OPEN attempts. Pure policy and Mixin contracts plus the full 681
 `clean build` and remapped bytecode/package inspection pass. Artifact SHA-256:
 `DB403E27F418303E3D800495C055477D32E02FC50828AA1848C5731ABE9187CF`. Runtime remains unverified.
 
+`DB403E27F418303E3D800495C055477D32E02FC50828AA1848C5731ABE9187CF`. Runtime remains unverified.
+
+---
+
+## Topic: GTH-1 — Bounded Natural Tree Harvest (TreeDetector → TreeHarvest)
+
+**Author:** User (product design, 2026-08-13); evidence capture Agent_Cursor
+
+**Status:** `PROPOSED / DISCUSSION` — **no implementation authorization**
+
+### Observable problem (`CONFIRMED` — code + Still Life context)
+
+Current wood acquisition is **tree acquisition** (prove one log looks like a vanilla trunk) followed by
+**vertical column felling** only:
+
+```text
+find candidate log
+        ↓
+GatherProtection.isGatherableLog(pos)   // per-log trunk tests
+        ↓
+walk to base log
+        ↓
+break
+        ↓
+continueFelling → target.above() only
+        ↓
+stop at MAX_FELL_LOGS (= 12) or column end
+```
+
+For Still Life–style trees with sideways roots, branches, and a wide canopy, the mob can:
+
+- approve the **central column** at acquisition time;
+- harvest only the vertical stack above the first broken log;
+- **ignore** lateral trunk/roots/branches that are part of the same natural tree.
+
+**Code evidence (`CONFIRMED`):**
+
+| Mechanism | Location | Limit |
+| --- | --- | --- |
+| Vertical-only continuation | `GatherResourcesGoal#continueFelling` — `target = target.above()` | no lateral/connected logs |
+| 12-log cap | `MAX_FELL_LOGS = 12` + `FellingPolicy.mayTakeNextLog` | too small for large natural components |
+| Per-log trunk test | `GatherProtection.isGatherableLog` — column walk, canopy, horizontal-wall reject | re-validates **each** candidate as isolated trunk |
+| Horizontal ≥3 logs ⇒ wall | `isHorizontalLogWall` / `MIN_HORIZONTAL_WALL_RUN = 3` | rejects realistic branch/root runs |
+| Base-only scan | `GatherApproachPolicy.isInitialTreeLog` in `findTarget` | correct for column model; insufficient for component harvest |
+
+**Parallel to shelter (`INFERRED`, same product principle):** SCR-2+ recognizes a **bounded shelter
+object** once, then operates inside it. GTH-1 applies the same pattern to trees: recognize a
+**bounded natural tree component** once, then harvest inside it — not re-ask "is this individual log
+a vanilla trunk?" for every block.
+
+### Proposed architecture
+
+```text
+GatherResourcesGoal: "I need logs."
+        ↓
+TreeDetector
+   ├── Is this a natural tree?          (claim-time, once)
+   └── Bounded connected #minecraft:logs component
+        ↓
+TreeHarvest (work object)
+   ├── discover connected logs (bounded BFS/DFS)
+   ├── approach reachable member
+   ├── break
+   ├── choose next connected member
+   ├── reposition when needed
+   └── complete when component exhausted / interrupted
+```
+
+**Responsibility split:**
+
+| Layer | Owns |
+| --- | --- |
+| `TreeDetector` | Natural-tree anchor; bounded log-component discovery; build-boundary stop |
+| `TreeHarvest` | Progressive execution over the claimed component |
+| `GatherResourcesGoal` | Demand ("need logs"), executor handoff, hard interrupts (combat, config, unload) |
+| `GatherProtection` (refactored) | **Claim-time** "may I treat this as a natural tree?" — **not** per-log trunk re-test mid-harvest |
+
+### Bounded component rules (`PROPOSED`)
+
+Do **not** unlimited flood-fill all `#minecraft:logs` — touching trees and log houses can merge.
+
+```text
+1. Find candidate #minecraft:logs (existing gather scan)
+2. Establish natural-tree anchor
+     - natural ground/root relationship
+     - foliage/canopy evidence
+     - no strong build evidence
+3. From anchor: bounded BFS/DFS through #minecraft:logs
+4. Include connected log while ALL hold:
+     - within max horizontal radius from anchor
+     - within max vertical span
+     - within max log count
+     - structurally connected to claimed tree
+     - no strong player-build boundary crossed
+5. TreeHarvest progressively breaks reachable members of that set
+```
+
+**Example Still Life scale (`PROPOSED` tuning targets — not locked):**
+
+```text
+TreeHarvest
+  logs discovered: 47
+  root radius: 6
+  height: 15
+```
+
+PlayerMob sequence: root → root → trunk → branch → branch → … until component exhausted.
+
+### GatherProtection changes (`PROPOSED`)
+
+| Current rule | GTH-1 direction |
+| --- | --- |
+| Horizontal logs ≥ 3 ⇒ reject **at candidate time** | **Remove as top-level per-log test** after tree claim; horizontal runs are legal **inside** a claimed natural tree |
+| Per-log `isGatherableLog` during scan | Replace with `TreeDetector.mayClaimNaturalTree(seed)` + component membership |
+| `hasBuiltNearby` at each log | Evaluate at **claim boundary**; stop BFS when crossing strong build evidence |
+
+**Retain fail-toward-refusing posture:** unknown/non-natural blocks still count as built at claim
+boundaries. A mob that declines a ambiguous structure is acceptable; eating a log cabin is not.
+
+**Strongest objection:** relaxing horizontal-wall rejection without a solid claim-time anchor risks
+log cabins that touch forest edges. Mitigation: anchor requires rooted + canopy + isolation; BFS stops
+at build boundary; component must not bridge through planks/stone into a house.
+
+### Worldgen / mod agnosticism (`INFERRED`)
+
+Tag-driven (`#minecraft:logs`, `#minecraft:leaves`) geometry — no Still Life mod IDs. Still Life today,
+another datapack tomorrow: intelligence adapts to **shape**, not mod identity.
+
+### Alternatives
+
+| Option | Benefit | Failure mode | Verdict |
+| --- | --- | --- | --- |
+| Keep vertical column + raise `MAX_FELL_LOGS` | Tiny diff | Still ignores branches/roots; wrong geometry model | **Rejected** |
+| Unlimited connected-log flood fill | Simple | tree─tree─log-house mega-component | **Rejected** |
+| Per-log `isGatherableLog` forever | Strong house safety | Still Life wide trees fail acquisition | **Rejected** |
+| **Bounded component claim + progressive harvest** | Matches shelter pattern; mod-agnostic; harvests whole believable tree | Requires new types + migration of protection tests | **Recommended** |
+
+### Must happen
+
+- Still Life wide tree: mob harvests roots/branches connected to approved anchor, not only central column.
+- Log cabin / player wall: **not** claimed as natural tree when build boundary or anchor tests fail.
+- Touching forest log house: BFS does not consume house interior logs across plank/stone boundary.
+- Mid-harvest: no re-call of per-log trunk/canopy test that fails after base is air (preserve atomic-session lesson from DECISIONS 2026-08-08).
+- Hard interrupts (combat, `mobGriefing`, disable gather) still stop `TreeHarvest` immediately.
+
+### Must not happen
+
+- Unlimited connected `#minecraft:logs` scan across chunks.
+- Horizontal-branch rejection **after** a valid tree component is already claimed.
+- `GatherResourcesGoal` embedding full BFS/topology logic — belongs in `TreeDetector` / `TreeHarvest`.
+- Breaking 12 logs and abandoning a 47-log legitimate natural component.
+
+### MAIBS pre-implementation prediction (`CODE_CONFIRMED` design slice)
+
+| Minute | Before (current) | After (GTH-1) |
+| --- | --- | --- |
+| 0–1 | Mob finds base log of Still Life tree; protection passes | Same — seed log found |
+| 1–2 | Breaks vertical column (~12 max); ignores lateral roots | Claims component (~47 logs); approaches nearest reachable member |
+| 2–5 | Walks away with partial wood; trunk shell remains | Progresses through roots/trunk/branches until bounded set exhausted or inventory satisfied |
+| Failure | N/A | Adjacent log house: claim fails or BFS stops at build boundary — **no house grief** |
+
+**Confidence:** geometry/policy `INFERRED`; runtime `UNVERIFIED`.
+
+### Dependencies
+
+| Prerequisite | Status |
+| --- | --- |
+| `GatherProtection` trunk heuristics | `IMPLEMENTED` — to refactor, not delete blindly |
+| `FellingPolicy` atomic approved session | `IMPLEMENTED` — preserve hard/soft interrupt split |
+| `GatherApproachPolicy` base-only scan | `IMPLEMENTED` — becomes seed selection only |
+| Still Life compatibility note (Opinion RFC) | static tag check only — GTH-1 is gather geometry |
+
+### Open research (before lock)
+
+1. Exact bounds: max radius, vertical span, log count (config vs constants).
+2. Claim anchor algorithm: lowest log on growing ground vs centroid vs user seed.
+3. Next-log selection heuristic: nearest reachable, bottom-up preference, or stability tie-break.
+4. Migration: deprecate `continueFelling` vs wrap as single-column degenerate `TreeHarvest`.
+5. Test fixtures: vanilla oak, wide Still Life sample, log cabin touching forest, two touching trees.
+
+**Implementation authorization:** none.
+
 ---
 
 ## Topic: Missing AI behaviors
@@ -1193,6 +1376,7 @@ has at most two OPEN attempts. Pure policy and Mixin contracts plus the full 681
 | # | Behavior | Needed for | Feasibility | Integration method |
 | --- | --- | --- | --- | --- |
 | M1 | Branch / vein mining | Iron, diamonds | **PARTIAL** | Extend `GatherResourcesGoal` + `MiningPolicy`; scan downward strips |
+| M1b | **Bounded natural tree harvest** | Still Life / wide trees, full trunk yield | **PROPOSED** | **GTH-1** — `TreeDetector` + `TreeHarvest`; replaces vertical-only `continueFelling` |
 | M2 | Lava/water obsidian cast | Nether portal | **REQUIRES MIXIN** or block-place goal | Custom `FluidInteractionGoal`; `mobGriefing` |
 | M3 | Underground shelter | Mining safety | **PARTIAL** | Reuse `SeekShelterGoal` patterns |
 | M4 | Inventory overflow strategy | 8-slot limit | **PARTIAL** | Drop chest / junk policy; SPM loot caps |
@@ -1389,12 +1573,23 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 **Accepted:** Marketing/docs may claim **“first-hour vanilla survival”** when Phase 1–2 runtime passes.  
 **Rejected:** Claiming dragon kill autonomy without Phase 5 evidence.
 
+### D-VP-004: Natural tree intelligence (`PROPOSED`)
+
+**Status:** `PROPOSED`  
+**Direction:** Recognize a **bounded natural tree component** once at claim time (`TreeDetector`), then
+harvest progressively (`TreeHarvest`). Per-log vertical-trunk validation is not re-run for every
+member; horizontal log runs are legal inside a claimed tree. Unlimited connected-log flood fill is
+rejected.  
+**Evidence:** `GatherResourcesGoal#continueFelling`, `GatherProtection.isHorizontalLogWall`,
+`MAX_FELL_LOGS = 12`; user Still Life geometry report 2026-08-13.
+
 ---
 
 ## Contribution
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Cursor | 2026-08-13 | **GTH-1 proposed (user design).** Captured bounded natural tree harvest architecture: `TreeDetector` claim + `TreeHarvest` progressive execution; shelter-parallel "recognize object once"; refactor `GatherProtection` to claim-time only; remove horizontal≥3 as top-level per-log reject; bounded BFS not unlimited flood fill; code evidence from `continueFelling`/`MAX_FELL_LOGS`/`isHorizontalLogWall`; MAIBS table; D-VP-004; M1b row. **No implementation authorization.** No Java edit, build, runtime launch, commit, push, or PR |
 | Agent_Codex | 2026-08-12 | Replaced fragile SPM door `Path`-object encounter identity with fixed-size physical identity (mob UUID, door position, initial approach side, wrapping generation), 2.5-block separation reset, and two-attempt bound. Added replan/separation/side/generation tests; 681 tests and clean build pass; artifact `DB403E...7CF`; runtime remains unverified. No Minecraft launch, commit, push, or PR |
 | Agent_Codex | 2026-08-12 | Implemented the SPM Door Passage Episode Repair: reject already-open/no-op OPEN, pause crossing budget during deliberate operation, close only after observed passage, and correlate same door/path completion to prevent immediate reopen. All 680 tests and clean build pass; artifact `253B5E...C221`; runtime remains unverified. No Minecraft launch, commit, push, or PR |
 | Agent_Codex | 2026-08-11 | Runtime report exposed a pre-arrival authority gap after SCR-2R5; implemented Shelter Commitment Authority Continuity so a path-probed/reserved commitment owns the voluntary-travel envelope through APPROACHING, SETTLED, and RETURNING. Gather/Craft/Smelt cannot seize finite interruption gaps; door helpers remain available outside SETTLED. All 677 tests and clean build pass; artifact `913C2F...F38`; runtime remains unverified. No Minecraft launch, commit, push, or PR |
