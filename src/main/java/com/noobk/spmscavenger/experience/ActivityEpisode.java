@@ -110,8 +110,12 @@ public final class ActivityEpisode {
         if (EpisodeNormalizationPolicy.isMilestone(event.kind())) {
             int count = milestoneCounts.merge(event.kind(), 1, Integer::sum);
             float weight = EpisodeNormalizationPolicy.repetitionWeight(event.kind(), count);
+            // D-GAO-024: the emitter asks the foundational rule, so a suppressed cause never
+            // becomes learning evidence in the first place. Relying on OpinionMemory to reject it
+            // downstream still leaked it to the external sink - "evidence" that should not exist.
             if (weight > 0.0f
-                    && ExperienceOutcomePolicy.mayEmitPreferenceLearning(event.outcome())) {
+                    && ExperienceOutcomePolicy.mayEmitLearning(
+                            event.outcome(), event.cause(), 0)) {
                 sinks.onLearningEvidence(new EpisodeLearningEvidence(
                         episodeId,
                         activity,
@@ -136,6 +140,13 @@ public final class ActivityEpisode {
             failureCount = event.activity()
                     .map(context::registerExecutionFailure)
                     .orElse(0);
+        }
+        // Eligibility is one decision, cause-aware, taken before any evidence is constructed.
+        // The failure count is read after registerExecutionFailure, exactly as before.
+        if (!ExperienceOutcomePolicy.mayEmitLearning(
+                event.outcome(), event.cause(), failureCount)) {
+            closed = true;
+            return;
         }
         if (ExperienceOutcomePolicy.mayEmitPreferenceLearning(event.outcome())) {
             float sign = ExperienceOutcomePolicy.preferenceSign(event.outcome(), event.cause());
