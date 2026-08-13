@@ -71,18 +71,27 @@ public final class DiscretionaryDirectorState {
         }
         DiscretionaryIntent incumbent = runningIntent;
         if (!yieldRequest.appliesTo(incumbent, now)) {
-            yieldRequest = null;   // stale or expired: it can never apply again
+            finishYieldRequest(
+                    yieldRequest.expired(now)
+                            ? YieldOutcome.EXPIRED
+                            : YieldOutcome.STALE_INCUMBENT,
+                    now);
             return false;
         }
         return true;
     }
 
-    void requestYield(DiscretionaryActivity challenger, long now) {
+    /**
+     * @param decisionId the decision that <b>selected the challenger</b> — the causal origin of this
+     *     switch. Previously this recorded {@code runningIntent.decisionId()}, the decision that
+     *     created the <em>incumbent</em>, so a yield raised at decision #87 claimed to originate at
+     *     #20 and any trace built on it would attach the switch to the wrong historical cause.
+     */
+    void requestYield(long decisionId, DiscretionaryActivity challenger, long now) {
         if (runningIntent == null || !runningIntent.isActive()) {
             return;
         }
-        yieldRequest = YieldRequest.of(
-                runningIntent, challenger, runningIntent.decisionId(), now);
+        yieldRequest = YieldRequest.of(runningIntent, challenger, decisionId, now);
     }
 
     /**
@@ -104,19 +113,70 @@ public final class DiscretionaryDirectorState {
             return false;
         }
         DiscretionaryActivity challenger = yieldRequest.challengerActivity();
-        markYield(releasingIntentId, releasingActivity, challenger, gameTime);
+        markYield(
+                releasingIntentId,
+                releasingActivity,
+                challenger,
+                yieldRequest.originDecisionId(),
+                gameTime);
         markTerminalForIntent(
                 releasingIntentId,
                 IntentLifecycle.INTERRUPTED,
                 InvalidationCause.SUPERSEDED,
                 gameTime,
                 "yield-" + challenger.name().toLowerCase(java.util.Locale.ROOT));
-        yieldRequest = null;
+        finishYieldRequest(YieldOutcome.ACKNOWLEDGED, gameTime);
         return true;
     }
 
-    void clearYieldRequest() {
+    /**
+     * D-GAO-051 — every path that removes a {@link YieldRequest} goes through here.
+     *
+     * <p>There were five: stale detection on read, expiry on tick, successful acknowledgement,
+     * explicit clearing, and mandatory invalidation (which silently left the request behind for a
+     * later read to notice). Five branches meant a trace would need five call sites and they would
+     * drift. One seam means the causal event is emitted exactly once, at the moment it happens.
+     *
+     * @return the request that ended, for callers that need its identity
+     */
+    java.util.Optional<YieldRequest> finishYieldRequest(YieldOutcome outcome, long gameTime) {
+        YieldRequest ending = yieldRequest;
+        if (ending == null) {
+            return java.util.Optional.empty();
+        }
         yieldRequest = null;
+        lastYieldOutcome = outcome;
+        lastYieldOutcomeAt = gameTime;
+        return java.util.Optional.of(ending);
+    }
+
+    /** How a yield request ended. Distinct from a decision disposition on purpose. */
+    public enum YieldOutcome {
+        /** The incumbent executor reached its safe yield point and reported it. */
+        ACKNOWLEDGED,
+        /** Nobody answered within the request's bounded lifetime. */
+        EXPIRED,
+        /** The incumbent it named is no longer the running execution. */
+        STALE_INCUMBENT,
+        /** Survival, combat, command or freeze ended the negotiation outright. */
+        MANDATORY_INVALIDATION,
+        /** A later decision replaced it. */
+        SUPERSEDED
+    }
+
+    private YieldOutcome lastYieldOutcome;
+    private long lastYieldOutcomeAt;
+
+    public java.util.Optional<YieldOutcome> lastYieldOutcome() {
+        return java.util.Optional.ofNullable(lastYieldOutcome);
+    }
+
+    public long lastYieldOutcomeAt() {
+        return lastYieldOutcomeAt;
+    }
+
+    void clearYieldRequest() {
+        finishYieldRequest(YieldOutcome.SUPERSEDED, lastGameTime);
     }
 
     public Optional<DiscretionaryActivity> incumbentActivity() {
@@ -142,7 +202,7 @@ public final class DiscretionaryDirectorState {
         // A request does not survive the tick that raised it being superseded; expiry and
         // identity are checked on read, so nothing here can yield the wrong execution.
         if (yieldRequest != null && yieldRequest.expired(input.gameTime())) {
-            yieldRequest = null;
+            finishYieldRequest(YieldOutcome.EXPIRED, input.gameTime());
         }
 
         if (!input.opinionEnabled()) {
@@ -276,7 +336,7 @@ public final class DiscretionaryDirectorState {
             }
         }
 
-        updateYieldRequests(winner, top.total(), scoring, input.gameTime());
+        updateYieldRequests(decisionId, winner, top.total(), scoring, input.gameTime());
     }
 
     public boolean hasRunningActionableIntent(DiscretionaryActivity activity) {
@@ -359,17 +419,23 @@ public final class DiscretionaryDirectorState {
         }
     }
 
+    /**
+     * @param originDecisionId the decision that selected the challenger. The switch belongs to that
+     *     decision; the incumbent's own creation decision still receives its terminal lifecycle, so
+     *     "why did this change" and "what happened to that intent" stay two separate truths.
+     */
     public void markYield(
             UUID releasedIntentId,
             DiscretionaryActivity released,
             DiscretionaryActivity adopted,
+            long originDecisionId,
             long gameTime) {
         DiscretionaryIntent releasedIntent = intentById(releasedIntentId);
         if (releasedIntent == null) {
             return;
         }
         trace.transition(
-                releasedIntent.decisionId(),
+                originDecisionId > 0 ? originDecisionId : releasedIntent.decisionId(),
                 gameTime,
                 OpinionDecisionTrace.Stage.YIELD,
                 releasedIntentId,
@@ -489,6 +555,7 @@ public final class DiscretionaryDirectorState {
     }
 
     private void updateYieldRequests(
+            long decisionId,
             DiscretionaryActivity winner,
             float winnerUtility,
             ScoringResult scoring,
@@ -502,7 +569,7 @@ public final class DiscretionaryDirectorState {
         // D-GAO-051 - generic: any incumbent, any challenger, bound to the incumbent's identity.
         // The pairwise version needed a new branch per activity pair and could not tell which
         // execution it was talking about.
-        requestYield(winner, gameTime);
+        requestYield(decisionId, winner, gameTime);
     }
 
     private static float utilityFor(ScoringResult scoring, DiscretionaryActivity activity) {
@@ -627,6 +694,10 @@ public final class DiscretionaryDirectorState {
     }
 
     private void invalidateAll(IntentLifecycle terminal, InvalidationCause cause, long gameTime) {
+        // Mandatory authority does not negotiate. Leaving the request behind meant a later read
+        // discovered its incumbent had vanished and reported STALE - true but misleading, since the
+        // real cause was combat or a player command.
+        finishYieldRequest(YieldOutcome.MANDATORY_INVALIDATION, gameTime);
         if (pendingIntent != null && pendingIntent.isActive()) {
             terminalize(pendingIntent, terminal, cause, gameTime, cause.name());
             pendingIntent = null;
@@ -725,6 +796,8 @@ public final class DiscretionaryDirectorState {
         incumbentActivity = null;
         restAuthorityPhase = RestAuthorityPhase.NONE;
         yieldRequest = null;
+        lastYieldOutcome = null;
+        lastYieldOutcomeAt = 0L;
         lastGameTime = 0L;
         lastAdmissions = ActivityAdmissions.unavailable();
         trace.clear();

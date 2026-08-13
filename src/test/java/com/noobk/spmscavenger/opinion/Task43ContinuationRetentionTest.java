@@ -243,4 +243,75 @@ class Task43ContinuationRetentionTest {
                     goal + " reports only its own identity and activity");
         }
     }
+
+    // ---- yield causal ownership ----
+
+    /**
+     * The origin of a switch is the decision that <b>chose the challenger</b>, not the decision that
+     * created the incumbent. Recording the latter would attach the switch to the wrong historical
+     * cause — a trace built on it would confidently point at the moment EXPLORE started as the
+     * reason REST took over, possibly dozens of decisions earlier.
+     */
+    @Test
+    void mustHappen_theYieldOriginIsTheDecisionThatChoseTheChallenger() {
+        DiscretionaryIntent incumbent = DiscretionaryIntent.pending(
+                20L, DiscretionaryActivity.EXPLORE, 29f, 10f, 100L);
+
+        YieldRequest request =
+                YieldRequest.of(incumbent, DiscretionaryActivity.REST, 87L, 900L);
+
+        assertEquals(87L, request.originDecisionId(),
+                "decision #87 compared REST 42 against EXPLORE 29 and chose to switch");
+        assertNotEquals(incumbent.decisionId(), request.originDecisionId(),
+                "#20 merely created the incumbent - it caused nothing about this switch");
+    }
+
+    /** Every way a request ends is a named outcome, captured when it happens. */
+    @Test
+    void mustHappen_everyYieldTerminationHasADistinctReason() {
+        java.util.Set<String> reasons = new java.util.HashSet<>();
+        for (DiscretionaryDirectorState.YieldOutcome outcome
+                : DiscretionaryDirectorState.YieldOutcome.values()) {
+            reasons.add(outcome.name());
+        }
+
+        assertTrue(reasons.containsAll(java.util.List.of(
+                        "ACKNOWLEDGED", "EXPIRED", "STALE_INCUMBENT",
+                        "MANDATORY_INVALIDATION", "SUPERSEDED")),
+                "five paths removed a request; each needs its own reason or the trace cannot tell "
+                        + "'nobody answered' from 'combat ended it'");
+    }
+
+    @Test
+    void mustNotHappen_mandatoryAuthorityLeavesARequestHanging() throws Exception {
+        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/noobk/spmscavenger/opinion/DiscretionaryDirectorState.java"));
+        int at = source.indexOf("private void invalidateAll(");
+        String body = source.substring(at, at + 700);
+
+        assertTrue(body.contains("MANDATORY_INVALIDATION"),
+                "mandatory authority must end the negotiation at the moment it happens - otherwise "
+                        + "a later read reports STALE, which is true but names the wrong cause");
+    }
+
+    /** One seam, so a future trace has one call site rather than five that drift. */
+    @Test
+    void mustHappen_allYieldTerminationGoesThroughOneSeam() throws Exception {
+        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/noobk/spmscavenger/opinion/DiscretionaryDirectorState.java"));
+        StringBuilder code = new StringBuilder();
+        for (String line : source.lines().toList()) {
+            String trimmed = line.strip();
+            if (!trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*")) {
+                code.append(line).append(System.lineSeparator());
+            }
+        }
+        long directClears = code.toString().lines()
+                .filter(line -> line.contains("yieldRequest = null"))
+                .count();
+
+        assertTrue(directClears <= 2,
+                "expected the seam plus the reset path only, found " + directClears
+                        + " direct clears - each one is a place a causal event can be forgotten");
+    }
 }
