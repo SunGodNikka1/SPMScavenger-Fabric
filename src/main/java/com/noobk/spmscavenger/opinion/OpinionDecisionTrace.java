@@ -361,6 +361,10 @@ public final class OpinionDecisionTrace {
 
     public void clear() {
         decisions.clear();
+        // Task 43: the yield ring escaped the reset contract. Leaving it behind produced history
+        // that outlived the decisions it referred to, while decision ids restarted from 1 - so an
+        // ended transaction would appear to cite a decision that had not happened yet.
+        yieldEvents.clear();
         nextDecisionId = 1L;
     }
 

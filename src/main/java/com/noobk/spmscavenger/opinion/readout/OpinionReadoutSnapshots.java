@@ -49,6 +49,7 @@ public final class OpinionReadoutSnapshots {
                 "",
                 ActivityAdmissionView.empty(),
                 ActivityAdmissionView.empty(),
+                List.of(),
                 List.of());
     }
 
@@ -99,7 +100,13 @@ public final class OpinionReadoutSnapshots {
                 OpinionReadoutExplanation.currentDisposition(context),
                 ActivityAdmissionView.from(context.discretionaryDirector().lastAdmissions().explore()),
                 ActivityAdmissionView.from(context.discretionaryDirector().lastAdmissions().rest()),
-                OpinionReadoutExplanation.recentDecisions(context));
+                OpinionReadoutExplanation.recentDecisions(context),
+                // Task 43 item 8 - sourced from the trace's typed history, never from
+                // lastYieldOutcome, which describes only the most recent ending and cannot show an
+                // open request or a transaction that ended two decisions ago.
+                OpinionReadoutExplanation.projectYieldEvents(
+                        context.discretionaryDirector().trace().yieldEvents(),
+                        OpinionReadoutSnapshot.MAX_YIELD_LINES));
     }
 
     public static Optional<OpinionReadoutSnapshot> captureIfPresent(

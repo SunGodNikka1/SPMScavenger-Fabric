@@ -803,4 +803,84 @@ class DiscretionaryActivityDirectorTest {
                 "not STALE - the incumbent vanished BECAUSE combat invalidated it, and naming the "
                         + "symptom instead of the cause is what the single seam prevents");
     }
+
+    // ---- Task 43 item 8: recorded truth must also be inspectable ----
+
+    @Test
+    void task43_traceResetClearsYieldHistoryToo() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 20f, 0L);
+
+        director.tick(tick(DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L,
+                idleObservation(), true));
+        assertFalse(director.trace().yieldEvents().isEmpty());
+        assertFalse(director.trace().snapshot().isEmpty());
+
+        director.trace().clear();
+
+        assertTrue(director.trace().snapshot().isEmpty());
+        assertTrue(director.trace().yieldEvents().isEmpty(),
+                "the yield ring escaped the reset contract - history outliving the decisions it "
+                        + "cites is worse than no history, because decision ids restart from 1 and "
+                        + "an ended transaction appears to reference a decision that has not "
+                        + "happened yet");
+    }
+
+    @Test
+    void task43_inspectorShowsWhyANonAdoptableIncumbentCompeted() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.EXPLORE, 30f, 0L);
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(new DirectorTickInput(
+                now, true, false, false, idleObservation(),
+                new DiscretionaryScoringInput(
+                        OpinionExperienceRegistry.contextFor(MOB).affectiveState(),
+                        OpinionExperienceRegistry.contextFor(MOB).opinionMemory(),
+                        DiscretionaryAvailability.bothPresent(), true, true),
+                ActivityAdmissions.of(
+                        ActivityAdmission.blocked(
+                                true, ActivityAdoptionBlocker.SCAN_COOLDOWN, "adoption cooldown"),
+                        ActivityAdmission.ready(true)),
+                ActivityContinuations.of(
+                        ActivityContinuation.valid(), ActivityContinuation.notRunning())));
+
+        List<String> renderedLines =
+                com.noobk.spmscavenger.opinion.readout.OpinionReadoutExplanation
+                        .recentDecisions(OpinionExperienceRegistry.contextFor(MOB))
+                        .stream()
+                        .flatMap(view -> view.candidateLines().stream())
+                        .toList();
+        String rendered = String.join(" | ", renderedLines);
+
+        assertTrue(rendered.contains("adopt=blocked:SCAN_COOLDOWN"),
+                "the Inspector must show that adoption was refused: " + rendered);
+        assertTrue(rendered.contains("retainedByContinuation"),
+                "and that continuation is why it competed anyway: " + rendered);
+    }
+
+    @Test
+    void task43_inspectorShowsTheYieldTransaction() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 20f, 0L);
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(now, idleObservation(), true));
+        UUID restIntentId = director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow();
+        director.acknowledgeYield(restIntentId, DiscretionaryActivity.REST, now + 34L);
+
+        List<String> lines = com.noobk.spmscavenger.opinion.readout.OpinionReadoutExplanation
+                .projectYieldEvents(director.trace().yieldEvents(), 12);
+
+        assertEquals(2, lines.size(), "one request, one ending: " + lines);
+        assertTrue(lines.get(0).startsWith("REQUESTED"), lines.get(0));
+        assertTrue(lines.get(0).contains("REST → EXPLORE"), lines.get(0));
+        assertTrue(lines.get(1).startsWith("ENDED"), lines.get(1));
+        assertTrue(lines.get(1).contains("outcome=ACKNOWLEDGED"), lines.get(1));
+        assertTrue(lines.get(1).contains("after=34t"),
+                "duration comes from the transaction, not from a separate clock: " + lines.get(1));
+    }
 }

@@ -11,6 +11,8 @@ import com.noobk.spmscavenger.opinion.DiscretionaryIntent;
 import com.noobk.spmscavenger.opinion.EnvironmentKind;
 import com.noobk.spmscavenger.opinion.ActivityAdmission;
 import com.noobk.spmscavenger.opinion.ActivityAdmissions;
+import com.noobk.spmscavenger.opinion.ExecutionEvidence;
+import com.noobk.spmscavenger.opinion.YieldEvent;
 import com.noobk.spmscavenger.opinion.OpinionDecisionTrace;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.opinion.PersonalityModel;
@@ -80,15 +82,19 @@ public final class OpinionReadoutExplanation {
                         + " total=" + format(b.total())
                         + " pref=" + format(b.preference())
                         + " boredom=" + format(b.boredomFit())
-                        + " stress=" + format(b.stressFit()));
+                        + " stress=" + format(b.stressFit())
+                        + executionSuffix(candidate.execution()));
             } else {
                 String detail = candidate.suppressionDetail();
                 candidates.add(candidate.activity().name()
                         + " suppressed (" + candidate.suppressionReason()
                         + (detail.isBlank() ? "" : " — " + detail)
-                        + ")");
+                        + ")"
+                        + executionSuffix(candidate.execution()));
             }
         }
+
+        List<String> yields = new ArrayList<>();
 
         List<String> transitions = new ArrayList<>();
         for (OpinionDecisionTrace.Transition transition : decision.transitions()) {
@@ -323,5 +329,65 @@ public final class OpinionReadoutExplanation {
         return latestDecision(context)
                 .map(d -> d.disposition().name())
                 .orElse("");
+    }
+
+    /**
+     * Task 43 item 8 — the copied decision evidence, not current executor state.
+     *
+     * <p>Without this the Inspector could show {@code RUNNING_INTENT_RETAINED} while giving no way
+     * to see that the retained activity was <em>not adoptable</em> — the one thing that makes the
+     * outcome surprising and the one thing D-GAO-050 exists to justify.
+     */
+    private static String executionSuffix(ExecutionEvidence evidence) {
+        if (evidence == null) {
+            return "";
+        }
+        StringBuilder out = new StringBuilder();
+        out.append(" [exec=").append(evidence.executorPresent() ? "yes" : "no");
+        out.append(" adopt=").append(evidence.adoptionReady() ? "ready" : "blocked");
+        if (!evidence.adoptionReady()) {
+            out.append(':').append(evidence.adoptionBlocker());
+        }
+        if (evidence.runningIncumbent()) {
+            out.append(" incumbent=yes cont=")
+                    .append(evidence.continuable() ? "valid" : "invalid");
+            if (!evidence.continuable()) {
+                out.append(':').append(evidence.continuationBlocker());
+            }
+        }
+        if (evidence.retainedByContinuation()) {
+            out.append(" retainedByContinuation");
+        }
+        return out.append(']').toString();
+    }
+
+    /**
+     * Task 43 item 8 — bounded typed yield history, sourced from {@code trace.yieldEvents()}.
+     *
+     * <p>Deliberately not {@code lastYieldOutcome}: that is convenience state describing only the
+     * most recent ending, and cannot show a request that is still open or a transaction that ended
+     * two decisions ago.
+     */
+    public static List<String> projectYieldEvents(List<YieldEvent> events, int max) {
+        List<String> lines = new ArrayList<>();
+        if (events == null) {
+            return lines;
+        }
+        int from = Math.max(0, events.size() - max);
+        for (YieldEvent event : events.subList(from, events.size())) {
+            if (event.phase() == YieldEvent.Phase.REQUESTED) {
+                lines.add("REQUESTED @" + event.requestedAt()
+                        + " " + event.incumbentActivity() + " → " + event.challengerActivity()
+                        + " origin=#" + event.originDecisionId()
+                        + " expires=" + event.expiresAt());
+            } else {
+                lines.add("ENDED @" + event.gameTime()
+                        + " " + event.incumbentActivity() + " → " + event.challengerActivity()
+                        + " outcome=" + event.outcome()
+                        + " origin=#" + event.originDecisionId()
+                        + " after=" + event.durationTicks() + "t");
+            }
+        }
+        return lines;
     }
 }

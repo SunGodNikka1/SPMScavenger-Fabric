@@ -39,7 +39,11 @@ public record OpinionReadoutSnapshot(
         String currentDisposition,
         ActivityAdmissionView exploreAdmission,
         ActivityAdmissionView restAdmission,
-        List<OpinionReadoutDecisionView> recentDecisions) {
+        List<OpinionReadoutDecisionView> recentDecisions,
+        List<String> recentYieldEvents) {
+
+    /** Task 43 item 8 - bounded typed yield history, so a transaction is inspectable. */
+    public static final int MAX_YIELD_LINES = 12;
 
     public static final int MAX_SUMMARY_LINES = 20;
     public static final int MAX_ACTIVITY_PREFS = 16;

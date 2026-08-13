@@ -139,6 +139,9 @@ public final class OpinionInspectPayloads {
             writeAdmission(buf, snapshot.exploreAdmission());
             writeAdmission(buf, snapshot.restAdmission());
             writeDecisions(buf, snapshot.recentDecisions());
+            // Task 43 item 8 - without this the trace knows the transaction and the client never
+            // sees it, which is "recorded" but not "inspectable".
+            writeStrings(buf, snapshot.recentYieldEvents(), OpinionReadoutSnapshot.MAX_YIELD_LINES);
         }
 
         private static OpinionReadoutSnapshot decodeSnapshot(FriendlyByteBuf buf) {
@@ -182,6 +185,7 @@ public final class OpinionInspectPayloads {
             ActivityAdmissionView exploreAdmission = readAdmission(buf);
             ActivityAdmissionView restAdmission = readAdmission(buf);
             List<OpinionReadoutDecisionView> decisions = readDecisions(buf);
+            List<String> yieldEvents = readStrings(buf, OpinionReadoutSnapshot.MAX_YIELD_LINES);
             return new OpinionReadoutSnapshot(
                     requestId,
                     entityId,
@@ -209,7 +213,8 @@ public final class OpinionInspectPayloads {
                     disposition,
                     exploreAdmission,
                     restAdmission,
-                    decisions);
+                    decisions,
+                    yieldEvents);
         }
 
         private static void writeAdmission(FriendlyByteBuf buf, ActivityAdmissionView admission) {
@@ -266,6 +271,23 @@ public final class OpinionInspectPayloads {
                 map.put(buf.readUtf(), buf.readFloat());
             }
             return Map.copyOf(map);
+        }
+
+        private static void writeStrings(FriendlyByteBuf buf, List<String> lines, int max) {
+            int count = lines == null ? 0 : Math.min(lines.size(), max);
+            buf.writeVarInt(count);
+            for (int i = 0; i < count; i++) {
+                buf.writeUtf(lines.get(i));
+            }
+        }
+
+        private static List<String> readStrings(FriendlyByteBuf buf, int max) {
+            int count = Math.min(buf.readVarInt(), max);
+            List<String> lines = new java.util.ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                lines.add(buf.readUtf());
+            }
+            return List.copyOf(lines);
         }
 
         private static void writeDecisions(FriendlyByteBuf buf, List<OpinionReadoutDecisionView> decisions) {
