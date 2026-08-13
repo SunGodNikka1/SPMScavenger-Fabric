@@ -119,12 +119,20 @@ public final class ExperienceEmitters {
                 Optional.empty()));
     }
 
+    /**
+     * D-GAO-024 - the terminal's semantics are supplied by the owner, which captured execution
+     * evidence before lifecycle cleanup destroyed it. This method no longer classifies anything.
+     */
     public static void miningTerminal(
-            Mob mob, MiningProject project, MiningProjectEnd end, BlockPos at, long gameTime) {
+            Mob mob, MiningProject project, MiningTerminalSemantics semantics, BlockPos at,
+            long gameTime) {
+        // Episode bookkeeping is NOT gated on learning eligibility: a control-plane terminal must
+        // still close and release its episode, or the retention repair regresses.
         ensureMiningEpisode(mob, project);
-        OutcomeClass outcome = outcomeFor(end);
-        ExperienceCause cause = causeFor(end);
-        float stress = end == MiningProjectEnd.NO_PROGRESS || end == MiningProjectEnd.HAZARD ? 0.25f : 0.0f;
+        MiningProjectEnd end = semantics.end();
+        OutcomeClass outcome = semantics.outcome();
+        ExperienceCause cause = semantics.cause();
+        float stress = semantics.stress();
         pipeline(mob).accept(new ExperienceEvent(
                 ExperienceKind.PROJECT_END,
                 gameTime,
@@ -133,14 +141,15 @@ public final class ExperienceEmitters {
                 cause,
                 0.0f,
                 0.0f,
-                end.lifecycle() == TaskLifecycle.SUCCESS ? 0.2f : 0.0f,
+                semantics.isSuccess() ? 0.2f : 0.0f,
                 stress,
-                end == MiningProjectEnd.CAVE_FOUND ? 0.5f : 0.0f,
+                end == MiningProjectEnd.CAVE_FOUND && semantics.everStarted() ? 0.5f : 0.0f,
                 Optional.of(activityFor(project.mode())),
                 Optional.of(at),
                 Optional.empty()));
         PlaceOpinionService.applyMiningTerminal(
-                OpinionExperienceRegistry.contextFor(mob), end, at);
+                OpinionExperienceRegistry.contextFor(mob), semantics,
+                activityFor(project.mode()), at);
     }
 
     public static void restSessionOpened(UUID mobId, RestSessionClaim claim, long gameTime) {
@@ -265,28 +274,16 @@ public final class ExperienceEmitters {
         };
     }
 
+    /** @deprecated single owner is {@link MiningTerminalSemantics#outcomeFor}. */
+    @Deprecated
     private static OutcomeClass outcomeFor(MiningProjectEnd end) {
-        return switch (end.lifecycle()) {
-            case SUCCESS -> OutcomeClass.VOLUNTARY_SUCCESS;
-            case RETRY, BLOCKED -> OutcomeClass.EXECUTION_FAILURE;
-            case INTERRUPTED -> OutcomeClass.PROTECTED_INTERRUPT;
-            default -> OutcomeClass.VOLUNTARY_ABANDON;
-        };
+        return MiningTerminalSemantics.outcomeFor(end);
     }
 
+    /** @deprecated single owner is {@link MiningTerminalSemantics#causeFor}. */
+    @Deprecated
     private static ExperienceCause causeFor(MiningProjectEnd end) {
-        return switch (end) {
-            case CAVE_FOUND -> ExperienceCause.MINING_CAVE_FOUND;
-            case HANDOFF_TUNNEL_SEARCH -> ExperienceCause.MINING_TUNNEL_HANDOFF;
-            case NO_PROGRESS -> ExperienceCause.MINING_NO_PROGRESS;
-            case SEARCH_BUDGET_EXHAUSTED -> ExperienceCause.MINING_BUDGET_EXHAUSTED;
-            case HAZARD -> ExperienceCause.MINING_HAZARD;
-            case COMBAT -> ExperienceCause.MINING_COMBAT;
-            case PLAYER_ORDER -> ExperienceCause.MINING_PLAYER_ORDER;
-            case LEASE_EXPIRED -> ExperienceCause.MINING_LEASE_EXPIRED;
-            case TOOL_FAILURE -> ExperienceCause.ENVIRONMENT_BLOCKED;
-            default -> ExperienceCause.UNSPECIFIED;
-        };
+        return MiningTerminalSemantics.causeFor(end);
     }
 
     private static LearningBefore captureLearningBefore(

@@ -8,6 +8,7 @@ import com.noobk.spmscavenger.ToolTier;
 import com.noobk.spmscavenger.ToolTierPolicy;
 import com.noobk.spmscavenger.experience.ExperienceCause;
 import com.noobk.spmscavenger.experience.ExperienceEmitters;
+import com.noobk.spmscavenger.experience.MiningTerminalSemantics;
 import com.noobk.spmscavenger.experience.ExperienceKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -123,12 +124,19 @@ public final class MiningDirector {
         MiningTransition transition =
                 MiningTransition.of(project, end, at, level.getGameTime());
         MiningProjectSavedData store = MiningProjectSavedData.get(level);
+        // D-GAO-024 - capture execution evidence BEFORE lifecycle cleanup. everStarted lives on the
+        // lease and clearLease is two lines away; a learning layer that queried it afterwards would
+        // read an absent record and treat every terminal as never-started.
+        MiningTerminalSemantics semantics = MiningTerminalSemantics.of(
+                end, store.leaseOf(mob.getUUID()).orElse(null));
         store.completeProject(mob.getUUID(), end, transition);
         store.clearLease(mob.getUUID());
         SpmScavenger.LOGGER.info(
-                "[spmscavenger] director completed mode={} entity={} reason={} at={} heading={}",
-                project.mode(), mob.getId(), end, transition.at(), transition.heading());
-        ExperienceEmitters.miningTerminal(mob, project, end, at, level.getGameTime());
+                "[spmscavenger] director completed mode={} entity={} reason={} at={} heading={} "
+                        + "everStarted={} learnable={}",
+                project.mode(), mob.getId(), end, transition.at(), transition.heading(),
+                semantics.everStarted(), semantics.mayLearnPreference());
+        ExperienceEmitters.miningTerminal(mob, project, semantics, at, level.getGameTime());
     }
 
     /**

@@ -295,6 +295,11 @@ public final class MobExperienceContext {
                 episodeId, id -> new ActivityEpisode(id, Optional.empty(), 0L));
     }
 
+    /** Running total, so learning eligibility can honour the shared failure threshold. */
+    public int executionFailureTotal(ActivityKind kind) {
+        return executionFailureTotals.getOrDefault(kind, 0);
+    }
+
     public int registerExecutionFailure(ActivityKind kind) {
         return executionFailureTotals.merge(kind, 1, Integer::sum);
     }
