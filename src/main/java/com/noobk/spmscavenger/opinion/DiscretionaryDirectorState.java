@@ -18,8 +18,14 @@ public final class DiscretionaryDirectorState {
     private DiscretionaryIntent pendingIntent;
     private DiscretionaryActivity incumbentActivity;
     private RestAuthorityPhase restAuthorityPhase = RestAuthorityPhase.NONE;
-    private boolean restYieldRequested;
-    private boolean exploreYieldRequested;
+    /**
+     * D-GAO-051 — one identity-bound yield contract instead of a boolean per activity pair.
+     *
+     * <p>Two flags described one concept and grew quadratically; worse, a bare boolean carried no
+     * identity, so a request raised against one execution could be answered by whatever happened to
+     * be running when the executor next looked.
+     */
+    private YieldRequest yieldRequest;
     private long lastGameTime;
     /**
      * GAO-4R — last-tick adoption diagnostics for inspector readout only.
@@ -49,12 +55,38 @@ public final class DiscretionaryDirectorState {
         return trace;
     }
 
-    public boolean restYieldRequested() {
-        return restYieldRequested;
+    public Optional<YieldRequest> yieldRequest() {
+        return Optional.ofNullable(yieldRequest);
     }
 
-    public boolean exploreYieldRequested() {
-        return exploreYieldRequested;
+    /**
+     * Whether the execution currently running this activity has been asked to yield.
+     *
+     * <p>Identity-bound: a stale request cannot yield a replacement intent, even for the same
+     * activity at the same place.
+     */
+    public boolean mustYield(DiscretionaryActivity activity, long now) {
+        if (yieldRequest == null || !yieldRequest.isFor(activity)) {
+            return false;
+        }
+        DiscretionaryIntent incumbent = runningIntent;
+        if (!yieldRequest.appliesTo(incumbent, now)) {
+            yieldRequest = null;   // stale or expired: it can never apply again
+            return false;
+        }
+        return true;
+    }
+
+    void requestYield(DiscretionaryActivity challenger, long now) {
+        if (runningIntent == null || !runningIntent.isActive()) {
+            return;
+        }
+        yieldRequest = YieldRequest.of(
+                runningIntent, challenger, runningIntent.decisionId(), now);
+    }
+
+    void clearYieldRequest() {
+        yieldRequest = null;
     }
 
     public Optional<DiscretionaryActivity> incumbentActivity() {
@@ -77,8 +109,11 @@ public final class DiscretionaryDirectorState {
         Objects.requireNonNull(input, "input");
         lastGameTime = input.gameTime();
         lastAdmissions = input.admissions();
-        restYieldRequested = false;
-        exploreYieldRequested = false;
+        // A request does not survive the tick that raised it being superseded; expiry and
+        // identity are checked on read, so nothing here can yield the wrong execution.
+        if (yieldRequest != null && yieldRequest.expired(input.gameTime())) {
+            yieldRequest = null;
+        }
 
         if (!input.opinionEnabled()) {
             long decisionId = trace.beginDecision(input.gameTime(), java.util.List.of());
@@ -119,7 +154,7 @@ public final class DiscretionaryDirectorState {
 
         expirePendingIfNeeded(input.gameTime());
 
-        ScoringEvaluation evaluation = evaluateCandidates(input);
+        ScoringEvaluation evaluation = evaluateCandidates(input, incumbentActivity);
         long decisionId = trace.beginDecision(input.gameTime(), evaluation.candidates());
         if (evaluation.scoring().isEmpty()) {
             trace.conclude(
@@ -434,12 +469,10 @@ public final class DiscretionaryDirectorState {
         if (!canSwitchTo(winner, winnerUtility, scoring, gameTime)) {
             return;
         }
-        if (incumbentActivity == DiscretionaryActivity.REST && winner == DiscretionaryActivity.EXPLORE) {
-            restYieldRequested = true;
-        } else if (incumbentActivity == DiscretionaryActivity.EXPLORE
-                && winner == DiscretionaryActivity.REST) {
-            exploreYieldRequested = true;
-        }
+        // D-GAO-051 - generic: any incumbent, any challenger, bound to the incumbent's identity.
+        // The pairwise version needed a new branch per activity pair and could not tell which
+        // execution it was talking about.
+        requestYield(winner, gameTime);
     }
 
     private static float utilityFor(ScoringResult scoring, DiscretionaryActivity activity) {
@@ -495,7 +528,20 @@ public final class DiscretionaryDirectorState {
                 false);
     }
 
-    private static ScoringEvaluation evaluateCandidates(DirectorTickInput input) {
+    /**
+     * D-GAO-050 — adoption failure must not delete a running incumbent from the comparison.
+     *
+     * <p>Previously a candidate whose {@code adoptionReady} was false was suppressed outright. For a
+     * <em>running</em> activity that is the wrong question: an adoption cooldown says nothing about
+     * whether the live expedition is still valid. The incumbent vanished from scoring, so a
+     * challenger beat nothing instead of beating the incumbent's real utility, and the mob abandoned
+     * a healthy expedition to a rival that would have lost a fair comparison.
+     *
+     * <p>An incumbent therefore stays eligible when {@code adoptionReady == false} but
+     * {@code continuationValid == true}. It still has to win on utility like anything else.
+     */
+    private static ScoringEvaluation evaluateCandidates(
+            DirectorTickInput input, DiscretionaryActivity incumbent) {
         Optional<ScoringResult> raw = IdleOpportunityPolicy.score(input.scoringInput());
         java.util.List<OpinionDecisionTrace.Candidate> candidates = new java.util.ArrayList<>();
         java.util.List<ActivityUtilityBreakdown> eligible = new java.util.ArrayList<>();
@@ -517,6 +563,12 @@ public final class DiscretionaryDirectorState {
                         activity,
                         breakdown,
                         OpinionDecisionTrace.SuppressionReason.DISCRETIONARY_CONTEXT_BLOCKED));
+            } else if (!admission.adoptionReady()
+                    && retainsIncumbent(input, incumbent, activity)
+                    && breakdown != null) {
+                // Not adoptable, but running and continuable: it competes on its real utility.
+                candidates.add(OpinionDecisionTrace.Candidate.eligible(breakdown));
+                eligible.add(breakdown);
             } else if (!admission.adoptionReady()) {
                 candidates.add(OpinionDecisionTrace.Candidate.suppressed(
                         activity,
@@ -533,6 +585,15 @@ public final class DiscretionaryDirectorState {
                 ? Optional.empty()
                 : Optional.of(ScoringResult.of(eligible));
         return new ScoringEvaluation(scoring, java.util.List.copyOf(candidates));
+    }
+
+    /** True when this activity is the running incumbent and its continuation is still valid. */
+    private static boolean retainsIncumbent(
+            DirectorTickInput input, DiscretionaryActivity incumbent,
+            DiscretionaryActivity activity) {
+        return incumbent != null
+                && incumbent == activity
+                && input.continuations().forActivity(activity).continuable();
     }
 
     private void invalidateAll(IntentLifecycle terminal, InvalidationCause cause, long gameTime) {
@@ -633,8 +694,7 @@ public final class DiscretionaryDirectorState {
         pendingIntent = null;
         incumbentActivity = null;
         restAuthorityPhase = RestAuthorityPhase.NONE;
-        restYieldRequested = false;
-        exploreYieldRequested = false;
+        yieldRequest = null;
         lastGameTime = 0L;
         lastAdmissions = ActivityAdmissions.unavailable();
         trace.clear();

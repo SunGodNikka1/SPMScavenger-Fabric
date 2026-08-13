@@ -35,14 +35,16 @@ public final class DiscretionaryAuthority {
         if (!opinionGatesConsumers()) {
             return false;
         }
-        return stateFor(mobId).restYieldRequested();
+        DiscretionaryDirectorState state = stateFor(mobId);
+        return state.mustYield(DiscretionaryActivity.REST, state.lastGameTime());
     }
 
     public static boolean mustYieldDiscretionaryExplore(UUID mobId) {
         if (!opinionGatesConsumers()) {
             return false;
         }
-        return stateFor(mobId).exploreYieldRequested();
+        DiscretionaryDirectorState state = stateFor(mobId);
+        return state.mustYield(DiscretionaryActivity.EXPLORE, state.lastGameTime());
     }
 
     public static boolean mustYieldWander(UUID mobId) {

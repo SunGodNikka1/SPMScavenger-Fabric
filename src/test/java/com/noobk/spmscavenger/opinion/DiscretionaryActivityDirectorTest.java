@@ -71,7 +71,7 @@ class DiscretionaryActivityDirectorTest {
 
         director.tick(tick(afterCommitment, idleObservation(), true));
 
-        assertTrue(director.restYieldRequested());
+        assertTrue(director.mustYield(DiscretionaryActivity.REST, director.lastGameTime()));
         UUID exploreIntentId = director.pendingIntent()
                 .map(DiscretionaryIntent::intentId)
                 .orElseThrow();
@@ -124,7 +124,7 @@ class DiscretionaryActivityDirectorTest {
 
         director.tick(tick(afterCommitment, idleObservation(), true));
 
-        assertTrue(director.restYieldRequested());
+        assertTrue(director.mustYield(DiscretionaryActivity.REST, director.lastGameTime()));
         UUID exploreIntentId = director.pendingIntent()
                 .map(DiscretionaryIntent::intentId)
                 .orElseThrow();
@@ -149,7 +149,7 @@ class DiscretionaryActivityDirectorTest {
 
         director.tick(tick(afterCommitment, idleObservation(), true));
 
-        assertTrue(director.exploreYieldRequested());
+        assertTrue(director.mustYield(DiscretionaryActivity.EXPLORE, director.lastGameTime()));
         UUID restIntentId = director.pendingIntent()
                 .map(DiscretionaryIntent::intentId)
                 .orElseThrow();
@@ -246,7 +246,7 @@ class DiscretionaryActivityDirectorTest {
         director.tick(tick(50L, idleObservation(), true));
 
         assertEquals(DiscretionaryActivity.EXPLORE, director.incumbentActivity().orElseThrow());
-        assertFalse(director.restYieldRequested());
+        assertFalse(director.mustYield(DiscretionaryActivity.REST, director.lastGameTime()));
         assertEquals(
                 OpinionDecisionTrace.DecisionDisposition.COMMITMENT_HOLD,
                 director.trace().snapshot().getLast().disposition());
@@ -483,7 +483,7 @@ class DiscretionaryActivityDirectorTest {
         neutralMood().seedChannels(0f, 5f, 0f, 85f, 0f);
         director.tick(tick(afterCommitment, idleObservation(), true));
 
-        assertTrue(director.exploreYieldRequested());
+        assertTrue(director.mustYield(DiscretionaryActivity.EXPLORE, director.lastGameTime()));
     }
 
     @Test
@@ -495,7 +495,7 @@ class DiscretionaryActivityDirectorTest {
 
         director.tick(tick(afterCommitment, idleObservation(), true));
 
-        assertFalse(director.restYieldRequested());
+        assertFalse(director.mustYield(DiscretionaryActivity.REST, director.lastGameTime()));
         assertTrue(director.pendingIntent().isEmpty());
         assertEquals(
                 OpinionDecisionTrace.DecisionDisposition.SWITCH_MARGIN_HOLD,
@@ -513,7 +513,7 @@ class DiscretionaryActivityDirectorTest {
         neutralMood().seedChannels(0f, 5f, 0f, 85f, 0f);
         director.tick(tick(50L, idleObservation(), true));
 
-        assertFalse(director.exploreYieldRequested());
+        assertFalse(director.mustYield(DiscretionaryActivity.EXPLORE, director.lastGameTime()));
         assertEquals(exploreId, director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow());
     }
 
