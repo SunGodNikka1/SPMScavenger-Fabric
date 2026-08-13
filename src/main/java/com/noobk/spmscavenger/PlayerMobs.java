@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger;
 
+import com.noobk.spmscavenger.opinion.SocialTargetLegality;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -440,7 +441,9 @@ public final class PlayerMobs {
      *     both mean no social target exists as far as this addon is concerned.
      */
     public static LivingEntity nearestGreetTarget(Mob self, double range) {
-        if (!isPlayerMob(self) || range <= 0.0D || !resolveGreet()) {
+        if (!isPlayerMob(self)
+                || !SocialTargetLegality.isUsableRadius(range)
+                || !resolveGreet()) {
             return null;
         }
         try {

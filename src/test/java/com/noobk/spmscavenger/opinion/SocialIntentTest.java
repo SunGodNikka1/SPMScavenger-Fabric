@@ -22,13 +22,33 @@ class SocialIntentTest {
         assertEquals(30L, intent.evidenceAgeTicks());
     }
 
-    /** The radius belongs to SPM. A zero or negative one means we invented it, so reject loudly. */
+    /**
+     * The radius belongs to SPM and is external evidence, so every unusable shape must be rejected
+     * at the boundary — not only the two a bare positivity check happens to catch.
+     */
     @Test
-    void mustNotHappen_anIntentCarriesARadiusThisAddonChose() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new SocialIntent(TARGET, 100L, 100L, 0.0D));
-        assertThrows(IllegalArgumentException.class,
-                () -> new SocialIntent(TARGET, 100L, 100L, -10.0D));
+    void mustNotHappen_anIntentCarriesAnUnusableRadius() {
+        for (double bad : new double[] {
+                0.0D, -10.0D, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY}) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> new SocialIntent(TARGET, 100L, 100L, bad),
+                    "radius " + bad + " must be rejected");
+        }
+    }
+
+    /**
+     * The two that slip past {@code range <= 0}, called out on their own because they are the reason
+     * this guard exists. {@code +Infinity} squares to {@code +Infinity} and would put every entity
+     * in the world inside the acquisition radius — a silent inversion of fail-closed, arriving as
+     * "it greeted someone impossibly far away" rather than as an error.
+     */
+    @Test
+    void mustNotHappen_nanOrInfinityPassAPositivityCheck() {
+        assertFalse(Double.NaN <= 0.0D, "NaN survives a bare positivity guard");
+        assertFalse(Double.POSITIVE_INFINITY <= 0.0D, "+Infinity survives it too");
+        assertFalse(SocialTargetLegality.isUsableRadius(Double.NaN));
+        assertFalse(SocialTargetLegality.isUsableRadius(Double.POSITIVE_INFINITY));
+        assertTrue(SocialTargetLegality.isUsableRadius(10.0D), "SPM's observed radius is usable");
     }
 
     /** Evidence cannot come from the future; that would be a clock or ordering defect, not data. */

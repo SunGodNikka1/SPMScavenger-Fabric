@@ -33,6 +33,23 @@ public final class SocialTargetLegality {
     }
 
     /**
+     * The host acquisition radius invariant, defined once.
+     *
+     * <p>{@code range > 0} alone is not enough, because neither {@code NaN} nor {@code +Infinity}
+     * satisfies {@code range <= 0}: both slip through a positivity guard. {@code +Infinity} is the
+     * dangerous one — it squares to {@code +Infinity}, every finite distance compares
+     * {@code <=} against it, and the range boundary silently accepts the whole world. That is the
+     * exact inverse of this project's fail-closed posture, and it would arrive as "the mob greeted
+     * someone impossibly far away", not as an exception.
+     *
+     * <p>The radius is <b>external host evidence</b>, not a value this addon controls, so it is
+     * validated wherever it enters the contract rather than trusted from its source.
+     */
+    public static boolean isUsableRadius(double range) {
+        return Double.isFinite(range) && range > 0.0D;
+    }
+
+    /**
      * @param spmAvailable SPM's relationship API is readable
      * @param hasCombatTarget the host mob currently has a combat target
      * @param hasFreshAdmission a non-stale admission pulse exists for this mob
@@ -74,9 +91,12 @@ public final class SocialTargetLegality {
         if (!sameLevel) {
             return SocialTargetValidity.WRONG_LEVEL;
         }
-        if (!(distanceSqr <= rangeSqr)) {
-            // NaN-safe by construction: written as a positive bound so an unmeasurable distance
-            // falls through to rejection rather than passing.
+        if (!Double.isFinite(rangeSqr) || rangeSqr <= 0.0D || !(distanceSqr <= rangeSqr)) {
+            // Two separate fail-closed guards sharing one branch:
+            //  - an unusable bound (NaN, +Infinity, non-positive) can never be satisfied, so it
+            //    rejects instead of admitting everything;
+            //  - the comparison is written as a positive bound so a NaN *distance* also rejects.
+            //    Written as `distanceSqr > rangeSqr` both would have passed.
             return SocialTargetValidity.OUT_OF_RANGE;
         }
         if (!greetReaction) {

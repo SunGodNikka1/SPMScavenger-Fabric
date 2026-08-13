@@ -90,4 +90,30 @@ class SocialTargetLegalityTest {
         }
         assertFalse(SocialTargetValidity.NO_ADMISSION_EVIDENCE.usable());
     }
+
+    /**
+     * Last line of defence: an unusable <em>bound</em> must reject rather than admit everything.
+     * With {@code rangeSqr = +Infinity} the comparison {@code distanceSqr <= rangeSqr} is true for
+     * every finite distance, so without this guard the range term would accept the whole world.
+     */
+    @Test
+    void mustNotHappen_anUnusableRangeBoundAdmitsEverything() {
+        for (double badBound : new double[] {
+                Double.POSITIVE_INFINITY, Double.NaN, 0.0D, -1.0D}) {
+            assertEquals(SocialTargetValidity.OUT_OF_RANGE, SocialTargetLegality.check(
+                            true, false, true, true, true, true, 25.0D, badBound, true),
+                    "range bound " + badBound + " must reject, not admit");
+        }
+    }
+
+    @Test
+    void mustHappen_theRadiusInvariantIsFinitePositive() {
+        assertTrue(SocialTargetLegality.isUsableRadius(10.0D));
+        assertTrue(SocialTargetLegality.isUsableRadius(Double.MIN_VALUE));
+        assertFalse(SocialTargetLegality.isUsableRadius(0.0D));
+        assertFalse(SocialTargetLegality.isUsableRadius(-1.0D));
+        assertFalse(SocialTargetLegality.isUsableRadius(Double.NaN));
+        assertFalse(SocialTargetLegality.isUsableRadius(Double.POSITIVE_INFINITY));
+        assertFalse(SocialTargetLegality.isUsableRadius(Double.NEGATIVE_INFINITY));
+    }
 }

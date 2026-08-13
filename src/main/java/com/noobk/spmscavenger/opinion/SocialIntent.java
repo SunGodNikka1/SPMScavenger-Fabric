@@ -35,10 +35,13 @@ public record SocialIntent(
 
     public SocialIntent {
         Objects.requireNonNull(targetId, "targetId");
-        if (hostAcquisitionRange <= 0.0D) {
+        if (!SocialTargetLegality.isUsableRadius(hostAcquisitionRange)) {
             throw new IllegalArgumentException(
-                    "hostAcquisitionRange must be positive; it is SPM's own radius read from the "
-                            + "admission pulse, never a value this addon chooses");
+                    "hostAcquisitionRange must be finite and positive; it is SPM's own radius "
+                            + "read from the admission pulse, never a value this addon chooses. "
+                            + "NaN and +Infinity are rejected here because neither fails a bare "
+                            + "positivity check, and +Infinity would make every distance in range: "
+                            + "got " + hostAcquisitionRange);
         }
         if (admissionObservedAtTick > formedAtTick) {
             throw new IllegalArgumentException(

@@ -2967,14 +2967,50 @@ would be wrong ~62 times in 63. And a pulse that *did* find somebody describes a
 `PULSE_LIFETIME_TICKS` old — in that window the target can move, die, turn hostile, unload, or change
 dimension. **Evidence that an action was recently possible is not authority to perform it now.**
 
-### Design correction from the artifact (`CONFIRMED`, bytecode)
+### Design correction from the artifact
 
 I was about to write a target scan. SPM already ships one:
 
-| Member | Purity | Role |
+| Member | Role |
+| --- | --- |
+| `reactionToward(LivingEntity) → Reaction` | the host's own greet predicate |
+| `nearestWhereReaction(Reaction, double)` | the host's own bounded search |
+
+**Purity claim corrected — the first version of this section was wrong.** It said `CONFIRMED` pure
+on the strength of *zero direct `putfield`/`putstatic` in the method body*. That is a filtered
+representation of the evidence, not the evidence: a method with no direct field stores can still
+mutate through anything it calls. Re-audited over the invoked call paths:
+
+| Member | Verdict | Basis |
 | --- | --- | --- |
-| `reactionToward(LivingEntity) → Reaction` | 0 `putfield`/`putstatic` | the host's own greet predicate |
-| `nearestWhereReaction(Reaction, double)` | 0 `putfield`/`putstatic` | the host's own bounded search |
+| `nearestWhereReaction` | `CONFIRMED` observationally pure | own body + lambda; calls only `level()`, `getBoundingBox()`, `AABB.inflate`, `Level.getEntitiesOfClass`, `distanceToSqr`, `isAlive`, and `reactionToward` |
+| `feelingToward` | `CONFIRMED` observationally pure | `FeelingLedger.feelingToward(UUID)` + `getUUID()` |
+| `reactionToward` | **`NOT PURE`** | transitively writes two fields |
+
+```java
+private double selfCombatPower() {          // called by reactionToward
+    if (selfCombatPowerTick != tickCount) {
+        selfCombatPowerCache = combatPowerOf(this);   // putfield
+        selfCombatPowerTick  = tickCount;             // putfield
+    }
+    return selfCombatPowerCache;
+}
+```
+
+It is a **per-tick memo cache**, and the value cached is a pure function of the mob's own state
+(`getHealth`, `getMainHandItem`, `getArmorValue`, `EquipmentEvaluator.score`). So the effect is
+narrow but real: **querying the relationship in a tick SPM would not have warms the cache early**.
+If the mob's health, armour or main hand then changes later in that same tick, SPM's own subsequent
+`reactionToward` reads our stale-within-tick value instead of recomputing. Our observation can
+therefore change the host's answer — a genuine **D-GAO-057** exposure, not a theoretical one.
+
+**Not live in 44B**: nothing calls the resolver yet. It becomes reachable the moment 44C wires it to
+the director, which is why cadence is a correctness question there and not merely a cost one.
+
+Mitigation available and worth considering in 44C: resolve only while the admission pulse is from
+**the current tick**, in which case SPM has already populated the cache via its own
+`nearestWhereReaction → lambda → reactionToward`, and our call becomes a pure cache read that writes
+nothing. `PRODUCT DECISION` for 44C — it trades some candidate opportunities for strict purity.
 
 So the resolver **mirrors SPM's predicate instead of re-deriving one from `feelingToward`
 thresholds** (SPM-0 level 3 beats a number we invent) and **calls SPM's own search instead of adding
@@ -3003,6 +3039,20 @@ already paid for that once.
 `getX()`, so a reference lets stale state read as current. It also rejects a non-positive radius and
 evidence that postdates the intent.
 
+### Repair — host acquisition radius must be finite-positive
+
+`hostAcquisitionRange <= 0.0D` rejected neither `NaN` nor `+Infinity`, because **neither satisfies
+`<= 0`**. `+Infinity` was the dangerous one: it squares to `+Infinity`, every finite `distanceSqr`
+compares `<=` against it, and the range term silently admits the entire world — the precise inverse
+of fail-closed, arriving as "it greeted someone impossibly far away" rather than as an exception.
+
+The radius is **external host evidence**, so the invariant is now `Double.isFinite(range) && range >
+0`, defined **once** in `SocialTargetLegality.isUsableRadius` and applied at all three points where
+it enters the contract: `SocialIntent`'s constructor, `PlayerMobs.nearestGreetTarget`, and the
+legality predicate's own bound (last line of defence, so an unusable bound rejects rather than
+admits). Regressions cover `NaN`, `±Infinity`, `0` and negative; negative control confirms
+reverting to `range > 0` turns the build red.
+
 ### Findings worth keeping
 
 - `NaN` distance rejects, because the bound is written `!(d <= r)`; `d > r` would have let an
@@ -3014,6 +3064,28 @@ evidence that postdates the intent.
   strips comments first.
 
 14 new tests, 779 total.
+
+### Boundary to preserve at executor binding (44C → 44D)
+
+44B's `validate()` requires a fresh admission window. Correct now, but it must **not** become the
+adoption rule, because at real adoption we hold strictly better evidence than any cached pulse:
+
+```
+FriendlyGreet.canUse()
+   cooldown passed
+   combat gate passed
+        ↓
+   nearestWhereReaction redirect      ← the host is admitting NOW
+```
+
+| Step | Admission evidence |
+| --- | --- |
+| 44C candidate discovery | recent pulse — an observation |
+| 44D adoption inside the redirect | the current invocation — present fact |
+
+**Must not happen:** executing inside a live host admission, and rejecting because a 40-tick pulse
+expired. That would let historical evidence override present reality — the mirror image of the
+mistake 44B exists to prevent, and equally wrong.
 
 ### Still open, deliberately
 
@@ -3561,6 +3633,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-13 | User + Agent_Claude | **44B repair + evidence correction (782 tests).** User caught a real invariant hole: `hostAcquisitionRange <= 0` rejects neither `NaN` nor `+Infinity`, and `+Infinity` squares to `+Infinity` so **every finite distance falls inside the acquisition radius** — fail-open, and it would surface as a mob greeting across the map rather than as an error. Invariant is now `Double.isFinite && > 0`, defined once in `isUsableRadius` and applied at all three contract entries plus the predicate's own bound; regressions + negative control. **Purity claim corrected and partly retracted:** counting `putfield` is itself a filtered representation of evidence. Re-audited over call paths — `nearestWhereReaction` and `feelingToward` are `CONFIRMED` observationally pure, but **`reactionToward` is NOT pure**: it calls `selfCombatPower`, a per-tick memo cache writing two fields, so querying early can warm the cache and change SPM's own later answer within the same tick — a live **D-GAO-057** exposure once 44C wires the resolver to the director. Mitigation (`PRODUCT DECISION` for 44C): resolve only on a same-tick pulse, making our call a pure cache read. Recorded the 44C→44D boundary: adoption must use the **present** redirect invocation, never let an expired pulse veto a live host admission |
 | 2026-08-13 | User + Agent_Claude | **Task 44B — `SocialIntent` + bounded target resolver, `STATIC` complete (779 tests).** Encodes the runtime rule *admission pulse ≠ social target*: 98.4% of pulses had no target, and even a positive one is up to 40 ticks stale, so the resolver re-runs the host's search for **identity** and re-validates at adoption. **Design correction from bytecode:** SPM already ships `reactionToward` and `nearestWhereReaction`, both `CONFIRMED` pure, so we mirror its predicate and reuse its search rather than deriving thresholds from `feelingToward` (SPM-0/SPM-2); `Reaction.GREET` read at runtime, never copied; acquisition radius taken from the host's own pulse. `SocialTargetLegality` is pure and applied in exactly **one** place, guarded with a negative control, because sharing a constant is not sharing a boundary. `SocialIntent` holds a UUID, not a reference. Self-caught: a false-negative purity check from a broken filter, an always-true `|| true` term, and a scope guard that failed on correct javadoc. Scope held — no utility, binding, substitution, learning, classification or Inspector |
 | 2026-08-13 | User + Agent_Claude | **Task 44A CLOSED — `RUNTIME_CONFIRMED`.** 9 804 pulses across 132 mobs in ~24 s: cases A, C, D, E confirmed; **0** `MOB_UNRESOLVED`, **0** injector errors, and `released` == distinct entities exactly, which is a `RUNTIME_CONFIRMED` RET-1a bound rather than merely case D. **Case B stays `UNVERIFIED`** — shelter was never staged, and a sheltered mob is indistinguishable from one on cooldown or in combat since all three produce no pulse; HEAD-before-INVOKE remains `INFERRED` from bytecode position and must be proven before SOCIAL relies on shelter suppressing an adopted greet. **Design finding:** the pulse is ~21/tick and **98.4% carry `targetFound=false`**, so pulse presence is nearly always true and must not be read as 'a greet is available' — only the host's `eligibleTargetFound` discriminates. Temporary diagnostics removed. 765 tests. GAO-10 SOCIAL implementation is unblocked |
 | 2026-08-13 | User + Agent_Claude | **44A run 2: naming fix `RUNTIME_CONFIRMED` working, second silent defect unmasked.** Stack shows `GoalSelector.method_6275` → `FriendlyGreetGoal.method_6264` → our `handler$…$holdShelterDuringMovingGreeting` — the handlers execute inside SPM for the first time. They immediately hit `IllegalClassLoadError`: `OptionalGoalMobResolver` was a plain helper inside the mixin-owned package, which compiles, packages and class-loads fine and throws only when an injected handler calls it (`Ticking entity` crash 1 s after join). Moved to `compat`; new gate `MixinPackagePurityTest` + negative control. **Two silent failures, the second masked by the first** — fixing #1 is what revealed #2, and no green build or clean log could have shown either. 765 tests. Seam still unproven: cases A–E not yet reached |
