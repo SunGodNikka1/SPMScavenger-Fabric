@@ -2,6 +2,8 @@ package com.noobk.spmscavenger.mixin;
 
 import com.noobk.spmscavenger.compat.OptionalGoalMobResolver;
 import com.noobk.spmscavenger.opinion.SocialAdmissionSeam;
+import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
+import com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import org.spongepowered.asm.mixin.Mixin;
@@ -9,9 +11,12 @@ import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.objectweb.asm.Opcodes;
 
 /**
- * Task 44A — adapter seam proof. <b>Observation only: this changes no behaviour.</b>
+ * Task 44A/44D — host admission observation plus exact Opinion-owned executor binding.
  *
  * <h2>What it is proving</h2>
  *
@@ -81,6 +86,56 @@ public abstract class FriendlyGreetAdmissionSeamMixin {
             SocialAdmissionSeam.recordObservation(
                     mob, range, original == null ? null : original.getUUID());
         }
-        return original;
+        if (!OpinionFeatureGate.isEnabled()) {
+            return original;
+        }
+        if (mob == null || original == null) {
+            if (mob != null) {
+                SocialExecutionBindingRegistry.rejectAdmission(mob.getUUID());
+            }
+            return null;
+        }
+        return SocialExecutionBindingRegistry
+                        .admit(mob, original.getUUID(), mob.level().getGameTime())
+                        .isPresent()
+                ? original
+                : null;
+    }
+
+    @Inject(method = {"start", "method_6269"}, at = @At("TAIL"), require = 0)
+    private void spmscavenger$startBoundGreet(CallbackInfo ci) {
+        Mob mob = OptionalGoalMobResolver.resolve(this, "greet execution start");
+        if (mob != null) {
+            SocialExecutionBindingRegistry.started(mob, mob.level().getGameTime());
+        }
+    }
+
+    /**
+     * The pinned methods load {@code Phase.DONE} exactly six times (three per method). We target the
+     * enum constant rather than every {@code phase} write because {@code tickGift()} also writes
+     * {@code Phase.FETCH}; treating that transition as completion would create false learning.
+     */
+    @Inject(
+            method = {"tickGift", "tickFetch"},
+            at = @At(
+                    value = "FIELD",
+                    target = "Lgames/brennan/playermob/entity/goal/FriendlyGreetGoal$Phase;"
+                            + "DONE:Lgames/brennan/playermob/entity/goal/FriendlyGreetGoal$Phase;",
+                    opcode = Opcodes.GETSTATIC,
+                    shift = At.Shift.BEFORE),
+            require = 0)
+    private void spmscavenger$observeHostCompletion(CallbackInfo ci) {
+        Mob mob = OptionalGoalMobResolver.resolve(this, "greet completion evidence");
+        if (mob != null) {
+            SocialExecutionBindingRegistry.completionObserved(mob);
+        }
+    }
+
+    @Inject(method = {"stop", "method_6270"}, at = @At("HEAD"), require = 0)
+    private void spmscavenger$finishBoundGreet(CallbackInfo ci) {
+        Mob mob = OptionalGoalMobResolver.resolve(this, "greet execution stop");
+        if (mob != null) {
+            SocialExecutionBindingRegistry.stopped(mob, mob.level().getGameTime());
+        }
     }
 }

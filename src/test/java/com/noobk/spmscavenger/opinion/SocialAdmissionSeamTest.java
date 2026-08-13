@@ -100,16 +100,19 @@ class SocialAdmissionSeamTest {
         assertEquals(0, SocialAdmissionSeam.trackedWindowCount());
     }
 
-    /** 44A changes no behaviour: the redirect returns the host's own answer. */
+    /** 44D preserves exact parity when Opinion is disabled and gates the host answer when enabled. */
     @Test
-    void mustNotHappen_theSeamSubstitutesATarget() throws Exception {
+    void mustHappen_theSeamKeepsTheOptionalFailClosedGate() throws Exception {
         String source = java.nio.file.Files.readString(java.nio.file.Path.of(
                 "src/main/java/com/noobk/spmscavenger/mixin/"
                         + "FriendlyGreetAdmissionSeamMixin.java"));
 
+        assertTrue(source.contains("if (!OpinionFeatureGate.isEnabled())"));
         assertTrue(source.contains("return original;"),
-                "Task 44A observes only - target substitution is 44B and must additionally require "
-                        + "mayStartExecutor(SOCIAL), or it reintroduces the Task 43R defect");
+                "Opinion-off must preserve SPM's own target exactly");
+        assertTrue(source.contains("SocialExecutionBindingRegistry")
+                        && source.contains(".admit("),
+                "Opinion-on admission must bind the current host answer, not a cached pulse");
         assertTrue(source.contains("require = 0"),
                 "a missing call site must be survivable, never fatal");
     }

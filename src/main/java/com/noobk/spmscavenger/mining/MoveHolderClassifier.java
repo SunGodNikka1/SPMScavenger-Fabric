@@ -14,6 +14,7 @@ import com.noobk.spmscavenger.goal.SeekShelterGoal;
 import com.noobk.spmscavenger.goal.SmeltAtFurnaceGoal;
 import com.noobk.spmscavenger.goal.TrackedLocalWanderGoal;
 import com.noobk.spmscavenger.goal.TunnelSearchGoal;
+import com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
@@ -74,6 +75,11 @@ public final class MoveHolderClassifier {
                 }
             }
             return ActivityClass.SCAVENGE_WORK;
+        }
+        if (base == ActivityClass.SOCIAL_REFLEX
+                && goal.getClass().getName().endsWith("FriendlyGreetGoal")
+                && SocialExecutionBindingRegistry.isRunning(mobId)) {
+            return ActivityClass.DISCRETIONARY_SOCIAL;
         }
         return base;
     }
@@ -189,6 +195,8 @@ public final class MoveHolderClassifier {
                 return MoveHolderClassification.PROTECTED_LOW_FOOD;
             case SOCIAL_REFLEX:
                 return MoveHolderClassification.PROTECTED_FINITE;
+            case DISCRETIONARY_SOCIAL:
+                return MoveHolderClassification.ORDINARY_HOST_WORK;
             case SOCIAL_TRAVEL, COMBAT_PREP, SCAVENGE_LOOT, FARMING, DUNGEON_TRAIN:
                 return MoveHolderClassification.ORDINARY_HOST_WORK;
             case MANDATORY_COMBAT:

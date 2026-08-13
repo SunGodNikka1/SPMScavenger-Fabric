@@ -211,6 +211,59 @@ public final class ExperienceEmitters {
         EntityOpinionService.applyCompanionInvite(context, companionId);
     }
 
+    /**
+     * Task 44D — terminal for one exact Opinion-owned native SPM greet.
+     *
+     * <p>The caller supplies host-produced completion evidence. A stop with no DONE evidence still
+     * closes its dedicated episode but uses a protected outcome and therefore teaches nothing.
+     */
+    public static void socialGreetTerminal(
+            Mob mob,
+            UUID intentId,
+            UUID subjectId,
+            long startedGameTime,
+            long gameTime,
+            boolean completed) {
+        if (mob == null || intentId == null || subjectId == null) {
+            return;
+        }
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(mob);
+        LearningBefore learningBefore = captureLearningBefore(context, ActivityKind.SOCIALIZING);
+        context.ensureEpisode(intentId, startedGameTime, Optional.of(ActivityKind.SOCIALIZING));
+        OutcomeClass outcome = completed
+                ? OutcomeClass.VOLUNTARY_SUCCESS
+                : OutcomeClass.PROTECTED_INTERRUPT;
+        ExperienceCause cause = completed
+                ? ExperienceCause.SOCIAL_GREET
+                : ExperienceCause.PROTECTED_INTERRUPT;
+        pipeline(mob).accept(new ExperienceEvent(
+                ExperienceKind.SOCIAL_INTERACTION,
+                gameTime,
+                intentId,
+                outcome,
+                cause,
+                completed ? 0.15f : 0.0f,
+                completed ? -0.05f : 0.0f,
+                completed ? 0.1f : 0.0f,
+                0.0f,
+                completed ? 0.1f : 0.0f,
+                Optional.of(ActivityKind.SOCIALIZING),
+                Optional.of(mob.blockPosition()),
+                Optional.of(subjectId)));
+        if (completed) {
+            EntityOpinionService.applySocialInteraction(context, subjectId, 5f);
+        }
+        recordLearningOutcome(
+                context,
+                intentId,
+                ActivityKind.SOCIALIZING,
+                ExperienceKind.SOCIAL_INTERACTION,
+                outcome,
+                cause,
+                gameTime,
+                learningBefore);
+    }
+
     public static void restSessionClosed(
             UUID mobId, RestSessionClaim claim, RestCloseReason reason, long gameTime) {
         RestCloseAttribution.Semantics semantics = RestCloseAttribution.forReason(reason);

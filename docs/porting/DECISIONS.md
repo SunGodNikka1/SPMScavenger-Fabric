@@ -1384,3 +1384,25 @@ because both are SOCIAL. Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`; physic
 `UNVERIFIED` because Task 44D is not implemented. `clean build`: 800 tests, zero failures/errors/
 skips. Artifact SHA-256:
 `429E212164B0116E9F68DBB13066CAA9AC35B69B311B6F0FE4C74ABC0EEED550`.
+
+### GAO-10 Task 44D — exact FriendlyGreet executor binding
+
+`FriendlyGreetGoal` is Opinion-owned only when the live SPM admission names the exact subject of
+the currently startable `DiscretionaryCandidateKey`. The runtime binding is keyed by mob UUID and
+carries intent UUID, subject UUID, and a monotonic admission generation; it is confirmed at
+`start()`, classified as `DISCRETIONARY_SOCIAL` only while that exact intent remains live, and
+released at stop/unload/death/server stop. Unbound native greets remain `SOCIAL_REFLEX`.
+
+Terminal success uses host-produced evidence. Pinned SPM 0.86.0 contains six `Phase.DONE` assignment
+branches—three in `tickGift()` and three in `tickFetch()`—but `tickGift()` also writes `FETCH`.
+Therefore the optional Mixin targets the exact `Phase.DONE` constant loads, not every `phase` write.
+`stop()` without that marker closes neutrally and teaches nothing; addon code never probes
+`canContinueToUse()` or transitively impure `reactionToward()`.
+
+Alternatives rejected: treating every stop as success creates false learning; probing continuation
+changes host memo state; a custom social Goal duplicates SPM. **Must happen:** SOCIAL/Bob starts and
+learns only from a completed Bob greet. **Must not happen:** Alice borrows Bob's intent, an unbound
+greet becomes discretionary, or FETCH counts as completion. Static MAIBS:
+`PASS — BEHAVIORALLY_PLAUSIBLE`; Minecraft runtime remains `UNVERIFIED`. Full suite and clean build:
+807 tests, zero failures/errors/skips. Artifact SHA-256:
+`A9803703B020D8F2DD739BB11654AAE5B4809B0AB3412A57ECD17C286B4DEDE8`.

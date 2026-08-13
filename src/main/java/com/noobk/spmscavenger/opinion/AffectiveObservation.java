@@ -20,7 +20,8 @@ public record AffectiveObservation(
     public static AffectiveObservation from(
             ActivityObservationService.Observation observation, int intervalTicks) {
         Set<ActivityClass> active = observation.activeClasses();
-        boolean social = active.contains(ActivityClass.SOCIAL_TRAVEL);
+        boolean social = active.contains(ActivityClass.SOCIAL_TRAVEL)
+                || active.contains(ActivityClass.DISCRETIONARY_SOCIAL);
         return new AffectiveObservation(
                 observation.discretionaryIdleCandidate(),
                 observation.resting(),

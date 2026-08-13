@@ -8,14 +8,14 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
-| **Mode** | `PROGRESSIVE_CONTINUATION` — GAO-10 Task 44C-R statically accepted; executor contract is the next authorization boundary |
-| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1** + **GAO-4R** (`IMPLEMENTED / STATIC ACCEPT`); GAO-8B Task 42A/42B `IMPLEMENTED / STATIC ACCEPT`; D-GAO-043 `IMPLEMENTED / STATIC ACCEPT`; D-GAO-044 `LOCKED`; **GAO-10 Task 44C-R `STATIC ACCEPT`, Task 44D `READY FOR AUTHORIZATION`** |
+| **Mode** | `PROGRESSIVE_CONTINUATION` — GAO-10 Task 44D statically accepted; runtime falsification is the next physical evidence boundary |
+| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1** + **GAO-4R** (`IMPLEMENTED / STATIC ACCEPT`); GAO-8B Task 42A/42B `IMPLEMENTED / STATIC ACCEPT`; D-GAO-043 `IMPLEMENTED / STATIC ACCEPT`; D-GAO-044 `LOCKED`; **GAO-10 Tasks 44C-R/44D `STATIC ACCEPT`** |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-13 (Task 44C-R STATIC ACCEPT; 800 tests; D-GAO-053/059 lock recommended; Task 44D awaiting authorization) |
+| **Last update** | 2026-08-13 (Task 44D STATIC ACCEPT; 807 tests; D-GAO-053/059 implemented; runtime unverified) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,9 +39,8 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** lock amended **D-GAO-053** (exact binding-based classification) and new
-**D-GAO-059** (host-produced terminal evidence; no impure continuation probe), then implement
-**Task 44D — FriendlyGreet executor binding** under explicit authorization. Bob's issue-time utility
+**Nearest frontier:** runtime-falsify **Task 44D — FriendlyGreet executor binding** under separate
+Minecraft-launch authorization. Bob's issue-time utility
 baseline remains a documented runtime tuning question, not a prerequisite rescoring project.
 Runtime verification of GAO-8B inspector (`RQ-GAO-SHELTER-01` + SCR-2R2+ shelter physics) remains a
 separate launch-approved probe.
@@ -2749,8 +2748,8 @@ binding = mob + intent + Bob + admission generation
         ↓
 start() confirms adoption/running
         ↓
-host tick reaches a pinned phase-field write site:
-tickGift/tickFetch writes FriendlyGreetGoal$Phase.DONE
+host tick reaches a pinned DONE assignment branch:
+tickGift/tickFetch loads FriendlyGreetGoal$Phase.DONE for assignment
         ↓
 optional injection records COMPLETION_OBSERVED after that exact write
         ↓
@@ -2759,9 +2758,10 @@ stop() HEAD consumes recorded evidence
     marker absent   → NON_COMPLETED / neutral terminal cause
 ```
 
-The pinned bytecode has four actual `phase = DONE` writes during execution: two in `tickGift()` and
-two in `tickFetch()`; `start()`/`stop()` initialization and cleanup are deliberately excluded. A
-Mixin `@Inject`/`@Redirect` tied to those exact host field-write sites records evidence without
+The pinned bytecode has six actual `phase = DONE` branches during execution: three in `tickGift()`
+and three in `tickFetch()`; `tickGift()` also writes `phase = FETCH`, so an all-`phase`-write hook
+would falsely credit the fetch transition as success. `start()`/`stop()` initialization and cleanup
+are deliberately excluded. A Mixin `@Inject` tied to the six exact `Phase.DONE` constant-load sites records evidence without
 reading or mutating the private phase itself. `subObjective() == null` was considered and rejected:
 its default branch also returns null, so a future unknown phase could be misclassified as success
 instead of failing closed. If the pinned write sites change, optional injections do not apply and
@@ -2849,7 +2849,7 @@ and removed at terminal/invalidation. SkepticalWatch and every unrelated social 
 protected host activity. Adapter failure therefore loses discretionary control and positive
 learning; it cannot manufacture ownership.
 
-**Decision status:** `LOCK RECOMMENDED`; this replaces the obsolete wording that all
+**Decision status:** `LOCKED / IMPLEMENTED`; this replaces the obsolete wording that all
 `FriendlyGreetGoal` executions are protected external reflexes.
 
 ### Task 44D behavioral prediction (`BEHAVIORALLY_PLAUSIBLE`, pre-implementation)
@@ -3921,11 +3921,11 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 | D-GAO-050 | GAO-4R1 splits adoption probe (selection) from continuation probe (incumbent RUNNING); fresh adoption failure must not terminate valid live execution | **LOCKED / IMPLEMENTED** (Task 43, 745 tests) | GAO-4R1 topic; cave-handoff lesson; B-52 |
 | D-GAO-051 | Generic discretionary yield API replaces pairwise REST↔EXPLORE flags before a third activity ships | **LOCKED / IMPLEMENTED** (Task 43, 745 tests) | GAO-4R1 topic; B-40/B-51 |
 | D-GAO-052 | Gen-1 discretionary SOCIAL uses SPM `FriendlyGreetGoal` lifecycle via minimal `SocialIntent` target adapter — no mega `SocializeGoal` | `PROPOSED` | GAO-10 SPM survey 2026-08-12 |
-| D-GAO-053 | `FriendlyGreetGoal` classification is exact-binding based: this mob/intent/subject/admission generation is `DISCRETIONARY_SOCIAL`; unbound greet and unrelated host reflexes remain protected `SOCIAL_REFLEX` | `LOCK RECOMMENDED` | GAO-10 executor review; D-GAO-058 |
+| D-GAO-053 | `FriendlyGreetGoal` classification is exact-binding based: this mob/intent/subject/admission generation is `DISCRETIONARY_SOCIAL`; unbound greet and unrelated host reflexes remain protected `SOCIAL_REFLEX` | **LOCKED / IMPLEMENTED** (Task 44D, 807 tests) | GAO-10 executor review; D-GAO-058 |
 | D-GAO-054 | Social target eligibility requires SPM `Reaction.GREET` legality via read-only bridge; `feelingToward` alone is insufficient | `PROPOSED` | GAO-10; B-46/B-55 |
 | D-GAO-055 | `SocialIntent` carries explicit `expiresAtGameTime` bounded by greet worst-case tick budget; expired pending invalidates before adoption | `PROPOSED` | GAO-10; B-48 |
 | D-GAO-056 | Gen-1 greet adapter gates Opinion-targeted greets only — does not globally override SPM `nearestWhereReaction` selection | `PROPOSED` | GAO-10; B-49 |
-| D-GAO-059 | SOCIAL terminal classification consumes host-produced completion evidence; addon code must not call `canContinueToUse()` or `reactionToward()` as a terminal probe. Missing/changed evidence fails closed to no positive learning | `LOCK RECOMMENDED` | Pinned 0.86.0 bytecode; D-GAO-057; Task 44D prediction |
+| D-GAO-059 | SOCIAL terminal classification consumes host-produced completion evidence; addon code must not call `canContinueToUse()` or `reactionToward()` as a terminal probe. Missing/changed evidence fails closed to no positive learning | **LOCKED / IMPLEMENTED** (Task 44D, 807 tests) | Pinned 0.86.0 bytecode; D-GAO-057; Task 44D prediction |
 
 ---
 
@@ -3933,6 +3933,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-13 | Agent_Codex | **Task 44D STATIC ACCEPT.** Exact SOCIAL subject is bound at the live SPM redirect, correlated through start/observer/terminal by mob + intent + subject + admission generation, and unbound native greets remain `SOCIAL_REFLEX`. D-GAO-053/059 locked and implemented. Unfiltered host bytecode corrected the RFC from four to six DONE branches; post-implementation review caught that `tickGift` also writes FETCH, so the Mixin targets exact `Phase.DONE` constant loads rather than all phase writes. Start consumes the old admission pulse and dynamic classification revalidates the live intent. Completed greets emit one SOCIAL terminal; interruptions close without learning. 807 tests and `clean build` pass; JAR SHA-256 `A9803703B020D8F2DD739BB11654AAE5B4809B0AB3412A57ECD17C286B4DEDE8`. Static MAIBS PASS; physical behavior remains runtime `UNVERIFIED`. No launch, commit, push or PR |
 | 2026-08-13 | User + Agent_Claude | **Task 44C** — SOCIAL becomes the third discretionary candidate; the director now compares EXPLORE/REST/SOCIAL. Per the user's product decision the exact `SocialIntent` that won scoring is bound **immutably to that `DiscretionaryIntent`** (invariant `activity == SOCIAL ↔ socialSubject != null`), never reconstructed from a later observation — a per-mob `currentSocialTarget` would let decision #91 about Bob greet Alice with every activity-level check still passing. Absent subject **removes** SOCIAL from comparison in both scoring paths rather than scoring it against nobody, so the trace can distinguish *considered and rejected* from *there was nobody*; gated in `IdleOpportunityPolicy` too, since `hasExecutor(SOCIAL) == false` hides it only until 44D. Utility = sociability + entity preference (own named `subjectFit`) + boredom − stress. Resolver on the 10-tick director cadence uses the captured UUID plus cheap live-world checks; it performs no SPM search or relationship call. 7 tests, both invariants negative-controlled; **793 total, 0 failures**. Still no FriendlyGreet substitution, binding, learning, Inspector or `DISCRETIONARY_SOCIAL` — candidacy is not start permission |
 | 2026-08-13 | Agent_Codex | **44C-R static accept:** peer review correctly reopened 44C because the real director still issued subject-less SOCIAL and compared candidates by activity enum. Added `DiscretionaryCandidateKey`; propagated exact identity through candidate evaluation/continuation, issuance, retention, switch blocking, yield transactions, causal trace, adoption, start permission and start marking; activity-only SOCIAL seams fail closed. Direct regressions cover executable SOCIAL, Bob→Alice replacement, Alice not borrowing Bob's continuation, yield correlation, trace identity, singleton parity and losing-subject isolation. Removed stale SPM-search claim. Focused tests and `clean build` pass; **800 tests, 0 failures/errors/skips**; JAR SHA-256 `429E212164B0116E9F68DBB13066CAA9AC35B69B311B6F0FE4C74ABC0EEED550`. Static MAIBS `PASS — BEHAVIORALLY_PLAUSIBLE`; physical SOCIAL remains `UNVERIFIED` because 44D is not implemented. No Minecraft launch, commit, push, or PR |
 | 2026-08-13 | User + Agent_Codex | **Independent 44C-R source review accepted; 44D frontier refined.** Candidate identity now survives choose→issue→retain→switch→yield→admit→start→trace. Bob's issue-time utility remains the intentional incumbent baseline during an Alice challenge; possible stickiness/eagerness is a runtime tuning question, not an identity defect. Reopened the old terminal-elimination proposal: pinned `canContinueToUse()` calls transitively impure `reactionToward`, so 44D must capture host-produced completion evidence and fail closed rather than probe it at stop. D-GAO-053 amended to exact binding-based classification; D-GAO-059 proposed. No code implementation or runtime launch |

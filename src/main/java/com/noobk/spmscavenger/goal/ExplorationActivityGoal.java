@@ -157,7 +157,8 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         RestSessionCoordinator.validate(mob, observation, mob.level().getGameTime());
         AffectiveStateService.observe(mob, observation, OBSERVE_INTERVAL);
         PassiveExpressionService.observe(mob, observation);
-        DiscretionaryAvailability availability = new DiscretionaryAvailability(cfg.exploring, cfg.campfire);
+        DiscretionaryAvailability availability =
+                new DiscretionaryAvailability(cfg.exploring, cfg.campfire, PlayerMobs.available());
         long now = mob.level().getGameTime();
         int idleTicks = ExploreReadinessThresholds.idleTicks(cfg, mob.getUUID());
         int tripThreshold = cfg.exploreLocalTripsThreshold;
@@ -170,7 +171,23 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
         ActivityAdmission restAdmission = campfireGoal == null
                 ? ActivityAdmission.executorAbsent()
                 : campfireGoal.inspectAdmission(now);
-        ActivityAdmissions admissions = ActivityAdmissions.of(exploreAdmission, restAdmission);
+        SocialIntent freshSocialOpportunity = com.noobk.spmscavenger.opinion.SocialTargetResolver
+                .resolve(mob, now)
+                .orElse(null);
+        SocialIntent boundSocialSubject =
+                com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry
+                        .runningSubject(mob.getUUID())
+                        .orElse(null);
+        SocialIntent socialOpportunity =
+                boundSocialSubject != null ? boundSocialSubject : freshSocialOpportunity;
+        ActivityAdmission socialAdmission = socialOpportunity == null
+                ? ActivityAdmission.blocked(
+                        PlayerMobs.available(),
+                        com.noobk.spmscavenger.opinion.ActivityAdoptionBlocker.NO_SOCIAL_TARGET,
+                        "SPM named no live greet target")
+                : ActivityAdmission.ready(PlayerMobs.available());
+        ActivityAdmissions admissions =
+                ActivityAdmissions.of(exploreAdmission, restAdmission, socialAdmission);
         // D-GAO-050 - real continuation snapshots, never derived from adoptionReady. Adoption and
         // continuation stay independently observable, so a running incumbent with a closed adoption
         // window is representable as adoptable=false + continuable=true and keeps competing on its
@@ -182,13 +199,10 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
                         : exploringGoal.inspectContinuation(now),
                 campfireGoal == null
                         ? ActivityContinuation.notRunning()
-                        : campfireGoal.inspectContinuation(now));
-        // GAO-10: resolve the social opportunity on the director's own decision cadence, never
-        // per tick. Cheap by construction now - the seam already holds SPM's chosen identity, so
-        // this is a map lookup plus an id resolution, with no search and no relationship query.
-        SocialIntent socialOpportunity = com.noobk.spmscavenger.opinion.SocialTargetResolver
-                .resolve(mob, now)
-                .orElse(null);
+                        : campfireGoal.inspectContinuation(now),
+                boundSocialSubject == null
+                        ? ActivityContinuation.notRunning()
+                        : ActivityContinuation.valid());
 
         DiscretionaryActivityDirector.tick(
                 mob.getUUID(),

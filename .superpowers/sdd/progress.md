@@ -9,6 +9,7 @@
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
 | **GAO-9** | **CLOSED / STATIC ACCEPT** — bounded overland environment affinity; 618 tests | `task-41-report.md` |
+| **GAO-10 / Task 44D** | **COMPLETE / STATIC ACCEPT** — exact FriendlyGreet executor binding; 807 tests | `task-44d-report.md` |
 | **RT-GAO-1** | **Narrowed** — static/MAIBS sufficient for parity, GAO-5B math, RET lifecycle; runtime only for `RUNTIME_QUESTION` (nav, SPM goal contention, perf) | RFC GAO validation topic |
 | **RET-GAO-1** | **DONE** (static) — bounded live + frozen snapshot store; runtime `UNVERIFIED` | `task-35-report.md` |
 
@@ -49,6 +50,7 @@ Task 38: complete — GAO-6R social sub-episode repair; GAO-6 CLOSED (574 tests)
 Task 39: complete with concerns — GAO-7 PersonalityModel static accept (581 tests; runtime visual salience unverified)
 Task 40: complete with concerns — GAO-8A passive physical expression (593 tests; runtime visual cadence unverified)
 Task 41: complete with concerns — GAO-9 overland environment affinity (618 tests; runtime distribution/performance unverified)
+Task 44D: complete with concerns — exact FriendlyGreet executor binding (807 tests; physical runtime unverified)
 
 Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 

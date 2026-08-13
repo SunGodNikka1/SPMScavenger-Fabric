@@ -16,6 +16,7 @@ public enum ActivityAdoptionBlocker {
     NO_VALID_REST_POSITION,
     SCAN_COOLDOWN,
     MOB_GRIEFING_DISABLED,
+    NO_SOCIAL_TARGET,
     /** Explore-specific gates; see {@link ActivityAdmission#detail()}. */
     EXPLORE_NOT_READY
 }

@@ -433,3 +433,21 @@ All 677 tests and `clean build` pass with zero failures/errors/skips. Final rema
 Focused tests and `clean build`: **800 tests, 0 failures, 0 errors, 0 skipped**. Static MAIBS:
 `PASS — BEHAVIORALLY_PLAUSIBLE`. Task 44D physical execution and runtime target correlation remain
 `UNVERIFIED` and unimplemented.
+
+### GAO-10 Task 44D — FriendlyGreet executor binding (static)
+
+| Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Live SPM admission names Bob | Exact pending/running SOCIAL/Bob intent creates one generation-bound admission | Alice or activity-only SOCIAL borrows Bob authority | `SocialExecutionBindingTest` `CODE_CONFIRMED` |
+| GoalSelector starts greet | Exact binding adopts/marks the same intent RUNNING; observer reports `DISCRETIONARY_SOCIAL` | Admission alone or unrelated native greet gains Opinion classification | Binding/taxonomy tests `CODE_CONFIRMED` |
+| `tickGift` changes to FETCH | No completion marker | Any phase write is treated as success | exact `Phase.DONE` target + negative source test `CODE_CONFIRMED` |
+| Host reaches a DONE branch | One completion marker; stop terminalizes SUCCEEDED and emits one social terminal | `stop()` alone or repeated marker produces duplicate positive learning | lifecycle tests `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| Combat/command/world interruption | Missing DONE closes protected/neutral and releases binding | Interruption teaches dislike or calls `canContinueToUse`/`reactionToward` | emitter/source tests `CODE_CONFIRMED` |
+| Opinion disabled | Redirect returns SPM's original target; SOCIAL is not issued | Existing SPM greeting behavior is suppressed | source contract + full suite `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| Unload/death/server stop | Binding and admission observation are released | Per-mob runtime registry grows across entity/server lifetime | production hooks + registry tests `CODE_CONFIRMED`; heap trend `UNVERIFIED` |
+
+Focused tests and full `clean build`: **807 tests, 0 failures, 0 errors, 0 skipped**. Final remapped
+JAR packages the binding registry and optional common Mixin. Static MAIBS:
+`PASS — BEHAVIORALLY_PLAUSIBLE`; target choice, bow/gift animation, interruption, optional-Mixin
+application, and learning in a real world remain runtime `UNVERIFIED`. SHA-256:
+`A9803703B020D8F2DD739BB11654AAE5B4809B0AB3412A57ECD17C286B4DEDE8`.

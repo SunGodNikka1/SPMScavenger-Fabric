@@ -13,6 +13,8 @@ public enum ActivityClass {
     MANDATORY_COMMAND,
     MANDATORY_SURVIVAL,
     SOCIAL_REFLEX,
+    /** Opinion-owned finite SPM greeting with an exact live execution binding. */
+    DISCRETIONARY_SOCIAL,
     MANDATORY_COMBAT,
     SOCIAL_TRAVEL,
     COMBAT_PREP,

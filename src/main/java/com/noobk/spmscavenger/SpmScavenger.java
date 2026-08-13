@@ -114,6 +114,7 @@ public class SpmScavenger implements ModInitializer {
                         mob.getUUID(), world.getGameTime());
                 OpinionExperienceRegistry.parkOnUnload(mob.getUUID(), world.getGameTime());
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
+                com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
             }
         });
         // Gate RET-1 - release per-world experience state when the server stops. Without this a
@@ -126,6 +127,7 @@ public class SpmScavenger implements ModInitializer {
                     FurnaceStations.shutdownServerState();
                     SeekShelterGoal.shutdownServerState();
                     com.noobk.spmscavenger.opinion.SocialAdmissionSeam.shutdownServerState();
+                    com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.shutdownServerState();
                 });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
@@ -133,6 +135,7 @@ public class SpmScavenger implements ModInitializer {
                 SeekShelterGoal.onDeath(mob.getUUID());
                 OpinionExperienceRegistry.onDeath(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
+                com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
             }
         });
     }
