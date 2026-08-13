@@ -2635,6 +2635,139 @@ routes through the shared owner" — and never as the proof that a control path 
 
 ---
 
+## Topic: GAO-10 SOCIAL — executor contract review (`RESEARCH`, no implementation)
+
+**Evidence:** `javap` on the pinned `playermob-0.86.0` artifact. Every claim below is read from
+bytecode, not from memory.
+
+### FriendlyGreetGoal, as it actually is
+
+```java
+canUse() {
+    if (cooldownTicks > 0) { cooldownTicks--; return false; }   // MUTATES
+    if (mob.getTarget() != null) return false;
+    LivingEntity found = mob.nearestWhereReaction(GREET, range);
+    if (found == null) return false;
+    this.friend = found;                                        // MUTATES
+    return true;
+}
+
+canContinueToUse() =                                            // 0 putfield - PURE
+       phase != DONE
+    && friend != null && friend.isAlive()
+    && mob.getTarget() == null
+    && mob.reactionToward(friend) == GREET
+    && mob.distanceTo(friend) <= range
+
+stop() { cooldownTicks = …; friend = null; fetchItem = null; phase = …; }
+```
+
+| Question | Answerable purely? | Why |
+| --- | --- | --- |
+| AVAILABLE | yes | goal present in the selector |
+| RUNNING | yes | `WrappedGoal.isRunning()` |
+| CONTINUABLE | yes | `canContinueToUse()` is verified side-effect-free |
+| ADOPTABLE | **no** | `canUse()` decrements the cooldown **and assigns `friend`** — probing it selects a target. Banned by **D-GAO-057** |
+
+Public relationship APIs exist and are what SPM itself uses: `nearestWhereReaction(Reaction, double)`,
+`reactionToward(LivingEntity)`, `feelingToward(LivingEntity)`. Target legality is therefore SPM's own
+semantics, not an invented `feelingToward` threshold.
+
+`PlayerMobSocialHooks` is **gift-only and `ServerPlayer`-specific** (`onMobGift` / `onPlayerGift`).
+Useful later as supplemental positive evidence for player-target gifts; it cannot supply general
+greet start/stop, target identity, or PlayerMob→PlayerMob coverage.
+
+### D-GAO-052 — AMENDED: director-gated redirect
+
+A single `@Redirect` on the `nearestWhereReaction(…)` call **inside** `canUse()`:
+
+```text
+Opinion OFF                                   → original SPM result           (exact parity)
+Opinion ON, no SocialIntent                   → null                          (no autonomous start)
+Opinion ON, intent, mayStartExecutor == false → null                          (Task 43R honoured)
+Opinion ON, intent, may start, target legal   → bound target
+```
+
+The third line is the correction Task 43R forces: without it SOCIAL would reintroduce the defect
+just repaired, starting before an incumbent reached its safe yield point.
+
+Why this satisfies the locked rules: `canUse()` is never called as a probe (SPM calls it on its own
+schedule); SPM's cooldown and combat checks run **before** the redirect, so its rate limit and combat
+authority still gate everything; target legality is re-validated with public `reactionToward` /
+`distanceTo`; and an unbound greet never fires the redirect, so it can never be credited to Opinion
+(**D-GAO-058**).
+
+**D-GAO-053 must be reworked.** `FriendlyGreetGoal` cannot be both a protected external
+`SOCIAL_REFLEX` the director yields to *and* the director's own executor. Skeptical watch, flee,
+combat and commands remain host authority; greeting does not.
+
+### Dynamic classification — binding-based, not intent-based
+
+```text
+FriendlyGreet running + live adapter binding  → DISCRETIONARY_SOCIAL
+FriendlyGreet running, no binding             → SOCIAL_REFLEX
+```
+
+Not "a SocialIntent happens to exist". Static mapping would be actively harmful: `DiscretionaryEligibility`
+treats `SOCIAL_REFLEX` as blocking, so a successful adoption would be re-observed as external
+authority and **the director would invalidate its own intent one tick after winning**.
+
+**Fail-closed guarantee:** if an SPM update removes the redirect call site, vanilla SPM may greet
+while Opinion is enabled — but no binding was created, so the observer still reports `SOCIAL_REFLEX`.
+*Adapter failure may lose SOCIAL control; it can never manufacture causal ownership.*
+
+### Lifecycle seams
+
+| Seam | Meaning |
+| --- | --- |
+| redirect returns the bound target | SPM accepted our target under its own admission rules |
+| `start()` | **ADOPTED / RUNNING** — the GoalSelector actually activated the executor |
+| `stop()` | **executor ended** — *not* success |
+
+### Completion: TERMINAL ≠ SUCCESS (resolved, option 1)
+
+`stop()` runs after both a completed greet and an interruption, so crediting it as a positive social
+experience would be false learning — the same family as *control-plane events are not experiential
+evidence*.
+
+**A truthful completion signal needs no new API and no exposed `Phase`.** Every term of
+`canContinueToUse()` except `phase != DONE` is publicly observable, and the adapter already knows the
+target from its own binding rather than SPM's private `friend`:
+
+```text
+at stop() HEAD, before SPM clears its fields:
+
+canContinueToUse() == true      → PREEMPTED      (still valid; the selector took the slot)
+canContinueToUse() == false
+    and target alive
+    and no combat target
+    and reactionToward(target) == GREET
+    and within range              → COMPLETED    (only phase == DONE can still be false)
+otherwise                        → ENDED_BY_WORLD (friend died, fled, turned hostile)
+```
+
+Elimination over a pure predicate, which is itself **D-GAO-057**-compliant. `range` is the one
+constant the adapter must read, and it is a scalar set at construction — not a state machine.
+
+**Learning consequence:** only `COMPLETED` may produce positive social learning. `PREEMPTED` and
+`ENDED_BY_WORLD` are recorded as terminal evidence and teach nothing, exactly as
+`PROTECTED_INTERRUPT` does for mining. Better no learning than false learning.
+
+### Still unresolved before implementation
+
+1. **Mixin coexistence** — the addon already injects HEAD into `canUse()` for shelter authority.
+   HEAD-cancel and INVOKE-redirect operate at different sites and should compose, but this is an
+   **implementation acceptance gate**: both must be proven to apply against the pinned *remapped*
+   jar (api-break-detection step 3b), not assumed.
+2. Whether `COMPLETED` alone is a rich enough signal, or whether gift completions via
+   `PlayerMobSocialHooks` should supplement it for player targets.
+
+**Host readout is statically safe:** `ObjectiveReadout` renders only `WrappedGoal`s where
+`isRunning()`, so a null redirect (→ `canUse()` false → never starts) cannot produce a phantom
+"Greeting" objective.
+
+---
+
 ## Topic: Hard architectural rules
 
 | ID | Rule |
@@ -2654,6 +2787,8 @@ routes through the shared owner" — and never as the proof that a control path 
 | **D-GAO-021** | **LOCKED:** Sustained REST is an arrival-anchored, condition-bound claim tied to the activity/authority that legitimately adopted REST; Goal liveness or proximity alone is insufficient |
 | **D-GAO-022** | **LOCKED:** Experience is episode-scoped and frequency-normalized; bounded short-term affect pulses and normalized long-term `OpinionMemory` learning are separate outputs and cannot double-apply one event |
 | **D-GAO-023** | **LOCKED:** Outcome class controls learning eligibility, not sign; exact terminal cause is preserved, and feasibility/safety/authority outcomes do not automatically imply dislike |
+| **D-GAO-057** | **LOCKED:** *Observation Purity.* Admission, continuation, feasibility, inspection and readout probes are observationally pure. Asking whether an action is possible must not allocate or rehydrate policy state, consume cooldowns, select or assign targets, start or stop executors, alter navigation/world/inventory, or otherwise change the answer by asking |
+| **D-GAO-058** | **LOCKED:** *Causal Adoption.* A discretionary intent becomes adopted/running only when the physical executor demonstrably accepts that exact intent identity. Observing an independently autonomous host behaviour of the same semantic activity is **not** adoption and must not be credited to the Opinion decision |
 | **D-GAO-024** | *(candidate, B-28)* Experience must be evidence of a **physical outcome**, never a bookkeeping transition. A terminal the executor never began (`everStarted == false`) teaches nothing — cannot be a static enum table, since the same terminal is learnable or not depending on whether execution happened |
 | **D-GAO-025** | *(candidate, B-33)* Every opinion collection declares its bound in this RFC **before** the task is implemented — Gate RET-1a applied at design time rather than at review |
 | **D-GAO-024** | **LOCKED:** Goal liveness proves occupancy only. Lack of progress may advance affect/restlessness, but cannot grant discretionary preemption authority |
@@ -3167,6 +3302,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | User + Agent_Claude | **D-GAO-057 Observation Purity** and **D-GAO-058 Causal Adoption** → `LOCKED`. GAO-10 contract review from the pinned `playermob-0.86.0` bytecode: `canUse()` mutates cooldown *and* assigns `friend` (banned as a probe by 057); `canContinueToUse()` is verified pure; `PlayerMobSocialHooks` is gift-only/ServerPlayer-only. **D-GAO-052 AMENDED** to a director-gated `@Redirect` on `nearestWhereReaction` that also requires `mayStartExecutor(SOCIAL)` (Task 43R), returns null when Opinion is on with no startable intent, and the original result when Opinion is off. **D-GAO-053 must be reworked** — FriendlyGreet cannot be both protected reflex and Opinion's executor. Classification is **binding-based** so adapter failure loses control but never manufactures ownership. **TERMINAL ≠ SUCCESS resolved without exposing `Phase`**: every `canContinueToUse` term but `phase != DONE` is publicly observable, so COMPLETED/PREEMPTED/ENDED_BY_WORLD is derivable by elimination over a pure predicate; only COMPLETED may teach. Open: mixin coexistence on the remapped jar. No implementation |
 | 2026-08-09 | User + Agent_Claude | **Task 43R** — GAO-10 review uncovered a Task 43 production bypass: both executor start gates used `hasActionableIntent`, which is true for a **pending challenger**, so REST (priority 7) could physically start before EXPLORE (priority 8) reached its safe yield point and acknowledged. The transaction was correct and the start gate ignored it. Added `mayStartExecutor(activity)` — while an incumbent is active only the incumbent may execute — and repointed both `DiscretionaryAuthority` consumers. Five EXPLORE/REST regressions incl. the consumer-facing facade. Task 43 re-closed at **750 tests**. Third instance of the same class: state that exists is not permission to act on it |
 | 2026-08-09 | User + Agent_Claude | **Task 43 / GAO-4R1 CLOSED — STATIC ACCEPT** (745 tests). **D-GAO-050** and **D-GAO-051** → `LOCKED / IMPLEMENTED`. Nine defects found and repaired during the task, each surfaced by the next repair: framework-without-production wiring, half-generic yield, allocating observer, wrong causal origin, five termination paths, immortal sliding timeout, unreachable reconciler, recorded-but-not-inspectable trace, and an acknowledgement asymmetry that let a replaced execution complete its successor's transaction. MAIBS closure verified all six negative conditions at source. Runtime `UNVERIFIED`; item 9.3 real-Mob REST-inspector integration recorded as unverified, not a blocker. Lesson `PROVEN`: source-shape tests guard structure, never control flow. No SOCIAL |
 | 2026-08-09 | Agent_Claude | **Brainstorm B-28…B-33** from RET-1 runtime evidence. **`CODE_CONFIRMED` defect against LOCKED D-GAO-023**: the rule *"feasibility/safety/authority outcomes do not automatically imply dislike"* is honoured by the activity path (`outcomeFor(TOOL_FAILURE)` → `PROTECTED_INTERRUPT`) and **bypassed by the place path**, which uses an independent static table giving `TOOL_FAILURE` = −6f. A 117-cycle assign→`CAPABILITY_MISSING`→revoke loop therefore wrote 117 negative place deltas for a mob that never broke a block — enough to evict all 32 LRU entries of genuinely earned place opinion. Two independent repairs required (route place through the shared classification; suppress all experience when `everStarted == false`). New candidates **D-GAO-024** physical outcome vs bookkeeping transition, **D-GAO-025** declare bounds at design time. Also: opinion **amplifies** control-plane defects, so RET-1c is a learning-correctness prerequisite; "opinion survives unload" is currently implemented as retention; GAO-6 entity opinion is keyed by other mobs' UUIDs and unbounded by population |
