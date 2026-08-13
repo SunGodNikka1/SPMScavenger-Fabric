@@ -8,14 +8,14 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 — reference `Projects/references/SocialPlayerMobs-v0.86.0/` |
 | **Codename** | **GA-OPINION** (General Autonomy — Adaptive Opinion) |
 | **Scope** | Cross-cutting discretionary intelligence layer: personality, learned opinions, short-term affect, and idle-time activity choice — **design for later**; not mining-specific |
-| **Mode** | `PROGRESSIVE_CONTINUATION` — Task 42B implemented; runtime inspector verification remains `UNVERIFIED` |
-| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1**; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT`; Task 42B `IMPLEMENTED / STATIC ACCEPT`; D-GAO-043 `IMPLEMENTED / STATIC ACCEPT`; D-GAO-044 `LOCKED` |
+| **Mode** | `PROGRESSIVE_CONTINUATION` — GAO-10 proposed for review; stabilize GAO-4R/GAO-4R1 before implementation |
+| **Status** | GAO-0 through GAO-9 (**CLOSED / STATIC ACCEPT**) + GAO-4.1 + **RET-GAO-1** + **GAO-4R** (`IMPLEMENTED / STATIC ACCEPT`); GAO-8B Task 42A/42B `IMPLEMENTED / STATIC ACCEPT`; D-GAO-043 `IMPLEMENTED / STATIC ACCEPT`; D-GAO-044 `LOCKED`; **GAO-10** `PROPOSED / DISCUSSION` |
 | **User constraint** | Addon architecture only; **must not** fork or replace SPM; Opinion disabled ⇒ SPM parity unchanged |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`; `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (MI-14 execution control); `MoveHolderClassifier` (MI-14C2-R1 activity taxonomy seed); SPM `DispositionResolver`, `FollowLovedOneGoal` |
 | **Owners** | User (product) |
 | **Primary author** | **Agent_ChatGPT** (user-provided design, 2026-08-09) |
 | **Peer review** | Agent_Cursor; Agent_Claude; Agent_Codex; user-provided contract review (2026-08-09) |
-| **Last update** | 2026-08-12 (Task 42B GAO-8B inspector implemented; D-GAO-044 locked) |
+| **Last update** | 2026-08-12 (GAO-4R1 MAIBS + GAO-10 brainstorm continuation B-48…B-55; lock-ready GAO-4R1 API sketch) |
 | **Gate** | MRFC-1 |
 
 ---
@@ -39,8 +39,9 @@ Today, when a PlayerMob has **no urgent objective**, behavior tends toward **sta
 
 **SPM compatibility is non-negotiable:** Opinion is an **addon intelligence layer** beside SPM — it reuses `feelingToward` / `DispositionResolver` for social authority and observes **host** GoalSelector activity (lesson from MI-14C2-R2).
 
-**Nearest frontier:** runtime verification of the GAO-8B inspector (`RQ-GAO-SHELTER-01` paired with SCR-2R2+ physical shelter fixes) — requires separate Minecraft launch approval.
-(`SCR-2R2+`); Opinion only owns truthful explanation and suppression semantics.
+**Nearest frontier:** **lock GAO-4R1** (adoption vs continuation + generic yield API) → authorize **Task 43**
+implementation → then finalize gen-1 **GAO-10** executor contract. Runtime verification of GAO-8B
+inspector (`RQ-GAO-SHELTER-01` + SCR-2R2+ shelter physics) remains a separate launch-approved probe.
 
 ---
 
@@ -81,6 +82,23 @@ Early candidates from Agent_Cursor brainstorm (2026-08-09). Serious items promot
 | B-36 | GAO-8B must show `SHELTER_HOLD` suppression separately from discretionary REST and from `resting=true` | **PROMOTE** → GAO-8B shelter readout; becomes D-GAO-044 |
 | B-37 | Failed shelter path / door churn must not teach environment or REST dislike | **PROMOTE** → experience eligibility; extends D-GAO-023; no new learning sink |
 | B-38 | Inspector exposes read-only `ShelterNightAuthority` phase (`APPROACHING`/`SETTLED`/`RETURNING`) when present | **PROMOTE** → Task 42B snapshot fields; helps explain door loops without rescanning goals |
+| B-39 | Third discretionary activity `SOCIAL` with target-specific `SocialIntent`, separate activity vs target utility, GAO-4R admission, existing SPM executor — not a mega `SocializeGoal` | **PROMOTE** → GAO-10 topic (Agent_ChatGPT, 2026-08-12) |
+| B-40 | Replace pairwise `restYieldRequested` / `exploreYieldRequested` with activity-generic `requestYield(incumbent, challenger)` before a third discretionary activity ships | **PROMOTE** → GAO-4R1 topic (Agent_Cursor, 2026-08-12) |
+| B-41 | Split GAO-4R admission into **ADOPTABLE** (selection) vs **CONTINUABLE** (incumbent execution) — fresh probe failure must not kill a live run | **PROMOTE** → GAO-4R1 topic |
+| B-42 | Gen-1 SOCIAL executor = SPM `FriendlyGreetGoal` lifecycle via minimal `SocialIntent` target adapter, not a new socialize mega-goal | **PROMOTE** → GAO-10 gen-1 research (Agent_Cursor, 2026-08-12) |
+| B-43 | Bounded target resolver: alive/loaded/same-dimension/distance + SPM `Reaction.GREET` legality + no combat/command conflict | **PROMOTE** → GAO-10 target resolver |
+| B-44 | Discretionary SOCIAL must not preempt SPM priority-1 `SOCIAL_REFLEX` goals (`FriendlyGreetGoal`, `SkepticalWatchGoal`, …) — desire yields to host reflex | **PROMOTE** → GAO-10 + priority hierarchy |
+| B-45 | Wire existing `ActivityKind.SOCIALIZING` + `ExperienceCause.SOCIAL_GREET` terminals on attributable social completion — do not invent parallel social learning | **REFINEMENT** → GAO-10 experience section |
+| B-46 | Add read-only `PlayerMobs.reactionToward` bridge for eligibility (alongside existing `feelingToward`) | **PROMOTE** → GAO-10 research / GAO-6 extension |
+| B-47 | Invalidate pending `SocialIntent` when chosen target fails eligibility before adoption; running social uses continuation probe not fresh adoption | **PROMOTE** → GAO-4R1 + GAO-10 lifecycle |
+| B-48 | `SocialIntent` pending TTL bounded by `FriendlyGreetGoal` worst-case tick budget (~400t: follow 100 + crouch 100 + fetch 100 + margin) | **PROMOTE** → GAO-10 lifecycle |
+| B-49 | Gen-1 adapter gates SPM `FriendlyGreetGoal.canUse()` only when Opinion-issued `SocialIntent` target matches — do **not** replace global `nearestWhereReaction` (preserves SPM autonomous greets when Opinion abstains) | **PROMOTE** → GAO-10 executor |
+| B-50 | SOCIAL continuation probe mirrors greet `canContinueToUse`: target alive, `reactionToward==GREET`, distance ≤ `range+6`, no combat target | **PROMOTE** → GAO-4R1 + GAO-10 |
+| B-51 | `YieldRequest` record + `mustYield(incumbentActivity)` replaces pairwise booleans before third activity | **PROMOTE** → GAO-4R1 (duplicate of B-40 — **merge at implementation**) |
+| B-52 | Explicit contract: director `NO_CANDIDATES` while `runningIntent` active ⇒ `RETAINED` disposition — already in code (`retainedDisposition`); needs GAO-4R1 regression tests | **PROMOTE** → GAO-4R1 tests |
+| B-53 | Inspector day-one: extend `ActivityAdmissions` + snapshot with `social` admission row and bound `SocialIntentView` (target id/name, TTL, suppression detail) | **PROMOTE** → GAO-10 + GAO-8B |
+| B-54 | `ActivityUtilityScorer.scoreSocial` uses `OpinionMemory.memoryOf(SOCIALIZING)` symmetric to EXPLORE/REST — activity score has **no** per-target affinity term | **PROMOTE** → GAO-10 utility |
+| B-55 | `PlayerMobs.reactionToward` reflection bridge (public SPM API) — eligibility gate alongside `feelingToward`; fails closed like existing bridges | **PROMOTE** → GAO-10 + GAO-6 extension (extends B-46) |
 
 ---
 
@@ -1511,9 +1529,674 @@ ranking.
 
 ---
 
+## Topic: GAO-4R1 — Adoption vs continuation stabilization
+
+**Author:** Agent_Cursor (brainstorm evidence, 2026-08-12)
+
+**Status:** `LOCK RECOMMENDED` — **blocks GAO-10 implementation**; does not require Minecraft runtime
+
+### Observable problem
+
+GAO-4R fixed a real failure mode: REST could win utility while `CampfireGoal` was not adoptable,
+producing misleading `PENDING` intents and false "I want to rest" causality. The fix correctly
+uses `ActivityAdmission.adoptionReady()` only at **selection** time.
+
+A third discretionary activity exposes a second failure mode if we stop there:
+
+```text
+SOCIAL is RUNNING (greeting Bob)
+        ↓
+next tick: no *other* eligible greet target / fresh adoption probe fails
+        ↓
+director treats SOCIAL as globally not adoptable
+        ↓
+running greet loses authority mid-sequence   ← must not happen
+```
+
+**Borrowed lesson (`CONFIRMED`, MI-14C2-R2 / cave handoff):** authority protecting a live
+continuation must not expire merely because a fresh admission probe would fail. The continuation's
+own validity predicate owns RUNNING retention.
+
+### Code evidence (`CONFIRMED`)
+
+| Finding | Path |
+| --- | --- |
+| Pairwise yield flags only cover EXPLORE↔REST | `DiscretionaryDirectorState.updateYieldRequests()` — no third activity hook |
+| Yield API is activity-pair specific | `DiscretionaryAuthority.mustYieldDiscretionaryRest/Explore()` |
+| Selection suppresses on `!admission.adoptionReady()` | `DiscretionaryDirectorState.evaluateCandidates()` |
+| `ActivityAdmission` has no continuation field | `ActivityAdmission.java` — `executorPresent` + `adoptionReady` only |
+| Running vs pending tracked separately | `pendingIntent` / `runningIntent` in `DiscretionaryDirectorState` |
+
+### Proposed contract
+
+Split executor readiness into two probes per activity:
+
+| Probe | Used when | Question |
+| --- | --- | --- |
+| **Adoption** | utility competition, new `PENDING` issue | Can this activity **start now** from idle/discretionary context? |
+| **Continuation** | incumbent `ADOPTED`/`RUNNING` retention | Is the **current** intent/execution still valid? |
+
+```text
+evaluateCandidates()
+  → suppress candidate when !adoptionReady()
+
+retainIncumbent()
+  → keep RUNNING when continuationReady(incumbentIntent)
+  → do NOT re-check adoptionReady() against a challenger world
+```
+
+**GAO-4R1 must happen before GAO-10:**
+
+1. Document continuation rules for EXPLORE and REST (retrofit tests).
+2. Introduce `ActivityContinuation` (or extend `ActivityAdmission` with optional incumbent context).
+3. Replace pairwise yield booleans with a generic yield request record.
+
+### Generic yield API (`PROPOSED`)
+
+```text
+YieldRequest {
+  UUID releasingIntentId;
+  DiscretionaryActivity incumbent;
+  DiscretionaryActivity challenger;
+  long requestedAtTick;
+}
+
+requestYield(incumbentIntent, challengerActivity)
+  → consumer goals poll mustYield(mobId, incumbentActivity)
+```
+
+**Why now:** adding `socialYieldRequested` + three pairwise matrices scales as O(n²) and will be
+wrong for EXPLORE↔SOCIAL and REST↔SOCIAL pairs.
+
+| Option | Benefit | Failure mode | Verdict |
+| --- | --- | --- | --- |
+| Keep pairwise flags; add SOCIAL pairs | Minimal diff | 6 directed pairs at 3 activities; untestable matrix | **Rejected** |
+| Generic yield + activity-tagged consumers | Scales to N activities; one test surface | Requires REST/EXPLORE consumer refactor | **Recommended** |
+| No yield; rely on Goal priority only | No director API | Equal-priority scheduler fights; D-GAO-018 violated | **Rejected** |
+
+### Must happen
+
+- Running REST survives `SCAN_COOLDOWN` / transient `NO_CAMPFIRE_ITEM` on **adoption** probe while
+  `RestSessionClaim` or adopted campfire execution remains valid.
+- Running EXPLORE survives explore-readiness dip while expedition is live (existing commitment
+  semantics preserved).
+- Future running SOCIAL survives "no second eligible target nearby" while greet sequence is live.
+
+### Must not happen
+
+- Fresh adoption failure terminates an unrelated valid RUNNING intent.
+- Continuation probe scans unbounded world state or force-loads chunks.
+- GAO-10 ships on top of pairwise-only yield API.
+
+### Dependencies
+
+| Prerequisite | Status |
+| --- | --- |
+| GAO-4R `ActivityAdmission` | `IMPLEMENTED` |
+| GAO-4 intent lifecycle | `IMPLEMENTED` |
+| GAO-10 | blocked until GAO-4R1 accepted |
+
+**Implementation authorization:** none until D-GAO-050/051 **LOCKED** and Task 43 brief accepted.
+
+### MAIBS-1 — behavioral prediction (GAO-4R1, pre-implementation)
+
+**Gate (predicted):** `PASS — BEHAVIORALLY_PLAUSIBLE` once continuation probes ship with tests.
+
+| Layer | Intended | Mechanism | Predicted observable | Confidence |
+| --- | --- | --- | --- | --- |
+| REST continuation | Campfire REST survives transient `NO_CAMPFIRE_ITEM` / scan cooldown on **adoption** probe | `RestContinuation.inspect(incumbentIntent, claim, campfire)` | Mob keeps sitting at adopted campfire through item-scan gaps; director trace `RETAINED` | `CODE_CONFIRMED` path exists for empty scoring + running intent |
+| EXPLORE continuation | Live expedition survives explore-readiness dip | `ExploreContinuation.inspect(expedition != null, discretionary path)` | Leader keeps walking waypoints when idle counters dip mid-expedition | `CODE_CONFIRMED` (`ExploringGoal` commitment + cave-handoff lesson) |
+| Future SOCIAL continuation | Greet sequence survives "no second GREET target" on adoption scan | Continuation uses bound `SocialIntent` + greet predicates (B-50) | Bob greet completes crouch/gift even if Alice enters range later | `INFERRED` — requires GAO-10 |
+| Yield generalization | Third activity without O(n²) flags | `YieldRequest` polled by REST/EXPLORE/SOCIAL consumers | Voluntary handoff when switch margin + commitment satisfied | `INFERRED` |
+
+**Weird behaviors (pre-mortem):**
+
+| # | Risk | Class | Mitigation |
+| --- | --- | --- | --- |
+| 1 | Continuation probe re-scans world every tick | `ARCHITECTURE_DEFECT` if unbounded | Continuation reads **bound intent context** only (claim, expedition ref, social target id) |
+| 2 | Adoption failure clears `runningIntent` when scoring empty | Would be `ARCHITECTURE_DEFECT` | **Already avoided** — `NO_CANDIDATES` early-return retains running intent (B-52); add explicit tests |
+| 3 | Generic yield fires while incumbent in mandatory shelter hold | `ARCHITECTURE_DEFECT` | Yield consumers must respect `SHELTER_HOLD` + mining lease (existing guards) |
+
+**Falsifying runtime probes (`RUNTIME_QUESTION`, post-Task 43):** REST adopted then campfire item briefly absent — session completes; expedition mid-route with boredom dip — no false yield; inspector shows `RETAINED` when adoption suppressed but continuation valid.
+
+### API sketch (`LOCK RECOMMENDED`)
+
+```text
+ActivityContinuation {
+  boolean continuable();
+  ActivityAdoptionBlocker blocker();  // when false
+  String detail();
+}
+
+ActivityAdmissions {
+  ActivityAdmission explore;
+  ActivityAdmission rest;
+  // GAO-10: ActivityAdmission social;
+}
+
+// Adoption: existing ActivityAdmission.adoptionReady() — selection only
+// Continuation: new probe on incumbent intent + executor context
+
+DiscretionaryYield {
+  UUID releasingIntentId;
+  DiscretionaryActivity incumbent;
+  DiscretionaryActivity challenger;
+  long requestedAtTick;
+}
+
+DiscretionaryAuthority.requestYield(mobId, incumbentIntentId, challenger)
+DiscretionaryAuthority.mustYield(mobId, incumbentActivity)  // replaces pairwise booleans
+```
+
+**Task 43 (proposed):** extend `ActivityAdmission`/`ActivityAdmissions`; add continuation inspectors for REST + EXPLORE; generic yield; tests for B-52 + REST/EXPLORE continuation; **no SOCIAL enum yet**.
+
+---
+
+## Topic: GAO-10 — Discretionary Social Choice & Social Intent
+
+**Author:** Agent_ChatGPT (user-provided design, 2026-08-12)
+
+**Status:** `PROPOSED / DISCUSSION` — **do not implement** until **GAO-4R** and **GAO-4R1**
+(adoption-vs-continuation stabilization) are accepted. Next major Opinion capability after the
+EXPLORE + REST discretionary pair.
+
+### Goal
+
+Extend the discretionary Opinion decision space from:
+
+```text
+EXPLORE
+REST
+```
+
+to:
+
+```text
+EXPLORE
+REST
+SOCIAL
+```
+
+**SOCIAL** means: the PlayerMob has discretionary freedom and *subjectively wants* to spend time
+interacting with another entity/person.
+
+This is an **optional desire**, not friendship authority, command authority, mandatory behavior, or
+a replacement for SPM social AI.
+
+### Architectural rule (hard)
+
+**Do not** create a generic mega `SocializeGoal` merely to satisfy Opinion.
+
+Opinion should decide: *"I feel like doing something social."*
+
+Existing SPM/social executors should continue to decide and perform the actual physical interaction
+wherever possible.
+
+```text
+Personality / Affect / Opinions
+        ↓
+DiscretionaryActivityDirector
+        ↓
+     SOCIAL
+        ↓
+Social Target Resolver
+        ↓
+SocialIntent(target)
+        ↓
+Existing finite SPM/social executor
+        ↓
+Physical interaction
+        ↓
+Terminal evidence
+        ↓
+Social experience / learning
+```
+
+### Existing intelligence to activate (reuse, do not fork)
+
+| System | Role in GAO-10 |
+| --- | --- |
+| `PersonalityModel.sociability` | Trait channel for activity-level social desire |
+| SPM `feelingToward` | Relationship authority / host truth — **read-only** |
+| `EntityOpinionMemory` | Supplemental learned entity affinity |
+| `SpmEntityOpinionBridge.utilitySupplement(...)` | Soft social utility contribution at the existing seam |
+| `AffectiveState` | Boredom / engagement / stress / satisfaction |
+| `OpinionDecisionTrace` | Causal selection/adoption/terminal explanation |
+| GAO-4R `ActivityAdmission` | `AVAILABLE` / `ADOPTABLE` distinction |
+
+**Authority boundary (`LOCKED` direction):** SPM relationship state remains authoritative. Opinion
+**must never** write or replace `feelingToward`. `EntityOpinionMemory` is subjective supplemental
+preference only and must not override hostility, player authority, safety, or SPM relationship
+legality.
+
+### Activity vs target separation (hard)
+
+Keep **one** finite discretionary activity:
+
+```text
+DiscretionaryActivity.SOCIAL
+```
+
+Do **not** expand the enum into per-target values (`SOCIAL_WITH_BOB`, `SOCIAL_WITH_ALICE`, …).
+Target identity belongs to a separate intent record:
+
+```text
+SocialIntent {
+  UUID intentId;
+  UUID originDecisionId;
+  UUID targetEntityId;
+  float selectedActivityUtility;
+  float targetScore;
+  String targetRationale;          // trace/debug only; bounded length
+  long issuedAtGameTime;
+  long expiresAtGameTime;          // B-48: ≤ greet worst-case (~400t from issue)
+}
+```
+
+Exact field set is **lock-ready** for gen-1; `expiresAtGameTime` mandatory (B-47/B-48).
+
+**Gen-1 adapter (`LOCK RECOMMENDED` — B-49):** mixin or thin gate on `FriendlyGreetGoal.canUse()` —
+only when mob has active Opinion `SocialIntent` for target `T`, allow greet start if
+`reactionToward(T)==GREET`; otherwise defer to SPM's native `nearestWhereReaction` path when Opinion
+abstains or has no intent.
+
+GAO-10 must explicitly separate three questions — **do not** mix them into one giant utility function:
+
+1. **Do I want to socialize?** (activity score)
+2. **If yes, who do I want to socialize with?** (target score)
+3. **Is there a real executor capable of interacting with that target now?** (admission)
+
+**Proposed pipeline:**
+
+```text
+SOCIAL activity utility
+        ↓
+SOCIAL becomes desirable
+        ↓
+enumerate bounded eligible social targets
+        ↓
+target ranking
+        ↓
+admission validation
+        ↓
+issue target-specific SocialIntent
+```
+
+This allows:
+
+```text
+SOCIAL utility high
+but
+no eligible person nearby
+        ↓
+SOCIAL suppressed / not adoptable
+```
+
+instead of producing a permanently pending social intent with no valid target.
+
+**Strong constraint:** relationship/entity affinity should **not** entirely determine whether the
+mob wants `SOCIAL` as a category. Prefer two levels:
+
+| Level | Question |
+| --- | --- |
+| **Activity score** | "Do I feel social?" |
+| **Target score** | "Who do I want to spend time with?" |
+
+This avoids Bob's friendship score artificially making the entire `SOCIAL` activity globally
+attractive when Bob is not a valid target.
+
+### SOCIAL utility model (`LOCK RECOMMENDED` — B-54)
+
+**Activity score** (`scoreSocial`) — symmetric to EXPLORE/REST; **no per-target affinity**:
+
+```text
+base social usefulness
++ PersonalityModel.sociability
++ affective social desire / boredom relief
++ OpinionMemory.memoryOf(SOCIALIZING)
+- repetition / recent negative SOCIAL activity outcome
+- cost
+```
+
+**Target score** (resolver stage only) — who to greet:
+
+```text
+SpmEntityOpinionBridge.utilitySupplement(target)
++ SPM feelingToward (read-only)
++ EntityOpinionMemory supplemental affinity
++ distance tie-breaker
+- recent per-target repetition
+```
+
+Do **not** fold `utilitySupplement(target)` into `scoreSocial()` — that reintroduces Bob-bias
+making the whole SOCIAL category attractive when Bob is offline (B-54).
+
+### Gen-1 executor scope (`PROPOSED` — requires SPM source research)
+
+Research pinned SPM source and choose **one** finite existing social behavior as the first executor.
+Do **not** support every social behavior in GAO-10 gen-1.
+
+#### SPM executor survey (`CONFIRMED` — pinned reference `SocialPlayerMobs-v0.86.0`)
+
+| Goal | Finite terminal? | Target ownership | MOVE/LOOK | Relationship gate | Verdict for gen-1 |
+| --- | --- | --- | --- | --- | --- |
+| **`FriendlyGreetGoal`** | **Yes** — `Phase.DONE` after FOLLOW→CROUCH→GIFT/FETCH; disengage cooldown 200–400 ticks | **Self-selects** via `nearestWhereReaction(GREET, range)` | MOVE+LOOK | `Reaction.GREET`; combat self-gate | **Recommended** with `SocialIntent` adapter |
+| `FollowLovedOneGoal` | No — catch-up while `tooFarFrom`; releases when close | `findFollowTarget()` | MOVE+LOOK | feeling ≥ LOVE | **Reject** — travel companion, not discretionary visit |
+| `StayNearGoal` | No — tether while beyond radius | `StayAnchor` (player command) | MOVE+LOOK | command authority | **Reject** — not discretionary desire |
+| `SkepticalWatchGoal` | Short LOOK burst | reactive target | LOOK | hostile/skeptical | **Reject** — reflex, not socialize |
+| `DoorOperationGoal` | Finite helper | social context | MOVE+LOOK | helper reflex | **Reject** — not social content |
+
+**Recommended gen-1 path (`INFERRED`, pending product ack):**
+
+```text
+SocialIntent(targetUuid)
+        ↓
+SocialGreetAdmission.inspect(target)   // Reaction.GREET + distance + loaded + ...
+        ↓
+minimal adapter (mixin or gate on FriendlyGreetGoal)
+        ↓
+only start/continue when intent target matches + Reaction.GREET holds
+        ↓
+terminal → SOCIAL_COMPLETED / TARGET_LEFT / COMBAT_INTERRUPTED / ...
+        ↓
+ExperienceKind.SOCIAL_INTERACTION + ActivityKind.SOCIALIZING
+```
+
+**Adapter necessity (`CONFIRMED`):** `FriendlyGreetGoal.canUse()` always picks
+`mob.nearestWhereReaction(Reaction.GREET, range)` — it cannot consume an Opinion-issued target
+without a small bridge. The bridge should **not** reimplement greet phases; it should constrain
+*when* the host goal may start and *which* `LivingEntity` is eligible.
+
+**Existing addon hooks:** `FriendlyGreetShelterHoldMixin` already participates in mandatory
+shelter envelope — any GAO-10 adapter must respect the same `SHELTER_HOLD` authority (D-GAO-043).
+
+**Anti-duplication (`CONFIRMED`):** `AnticsGoal` explicitly avoids crouch-bowing because SPM's
+`FriendlyGreetGoal` owns that gesture — discretionary SOCIAL must not stack cosmetic expression on
+the same greet.
+
+Inspect actual lifecycle: `canUse`, `start`, continuation, target ownership, MOVE/LOOK flags,
+completion, interruption, relationship requirements, player-command interaction, combat
+interaction.
+
+If no existing executor cleanly supports discretionary `SOCIAL`, discuss the **smallest**
+adapter/executor necessary. Do not immediately invent a large new Goal.
+
+### Social target resolver (`PROPOSED` — bounded)
+
+Answer: *Is this entity a legitimate social target right now?*
+
+| Check | Source |
+| --- | --- |
+| alive + loaded + same dimension | vanilla entity state |
+| within bounded greet range | config constant; no chunk forcing |
+| `mob.getTarget() == null` | combat yields |
+| no conflicting player command / stay anchor | `PlayerMobs` stay/attack order probes |
+| SPM `reactionToward(target) == GREET` | **requires B-55** `PlayerMobs.reactionToward` bridge (`NOT FOUND` in addon today — only `feelingToward` exists) |
+| optional: `feelingToward` above hostility threshold | supplemental, not sole gate |
+| executor-specific: target still in range at adoption | `FriendlyGreetGoal` distance + reaction continuation |
+
+**Candidate enumeration:** bounded nearby set from SPM's existing reaction scan pattern
+(`nearestWhereReaction`), not a world-wide entity opinion scan. Rank with activity score separate
+from `SpmEntityOpinionBridge.utilitySupplement()` at target-scoring stage only.
+
+**Must not happen:** unbounded `EntityOpinionMemory` iteration; force-loaded chunks; opinion target
+overrides SPM `Reaction.WATCH` / hostility.
+
+### Target eligibility (`PROPOSED`)
+
+Bounded **Social Target Resolver** answering: *Is this entity a legitimate social target?*
+
+Potential evidence (all bounded — no arbitrary world scans, no force-loaded chunks):
+
+| Check | Purpose |
+| --- | --- |
+| alive | basic validity |
+| loaded | no stale UUID resurrection |
+| same dimension | cross-dimension social is out of scope gen-1 |
+| bounded distance | local candidate set only |
+| not hostile | SPM relationship legality |
+| SPM relationship allows interaction | host authority |
+| no conflicting player command | command hierarchy |
+| executor-specific requirements | gen-1 executor contract |
+| target not invalid/busy where relevant | adoption, not wishful thinking |
+
+Use a bounded nearby candidate set or host-provided relationship/social information.
+
+### Target scoring (`PROPOSED`)
+
+Once eligibility is established, rank eligible targets using soft preference:
+
+- SPM `feelingToward`
+- learned `EntityOpinionMemory`
+- recent social repetition
+- recent positive/negative interaction history
+- personality contribution where appropriate
+- distance/cost as a weak tie-breaker
+
+Evaluate `SpmEntityOpinionBridge.utilitySupplement()` at the existing seam — do not duplicate.
+SPM relationship remains the stronger authority channel; learned entity affinity remains supplemental.
+
+### Admission semantics (must reuse GAO-4R)
+
+| State | Meaning |
+| --- | --- |
+| `AVAILABLE` | executor/support exists |
+| `ADOPTABLE` | at least one legitimate target + executor can meaningfully start **now** |
+| `RUNNING` | a social intent was actually adopted |
+| `CONTINUABLE` | existing social execution remains valid |
+
+**GAO-4R lesson (hard):** executor installed ≠ executor currently adoptable.
+
+**GAO-4R1 requirement:** adoption-versus-continuation rules must apply. A running `SOCIAL`
+interaction must **not** suddenly become invalid merely because new social adoption is currently
+unavailable.
+
+### Intent lifecycle (same control-plane principles as EXPLORE/REST)
+
+```text
+SELECT
+  ↓
+PENDING
+  ↓
+ADOPTED
+  ↓
+RUNNING
+  ↓
+TERMINAL
+```
+
+Must support:
+
+- bounded pending TTL
+- mandatory-authority invalidation
+- player-command invalidation
+- combat/safety interruption
+- target-invalid interruption
+- successful completion
+- voluntary switch/yield
+
+Do not let a stale target UUID keep `SOCIAL` alive indefinitely.
+
+### Experience terminals (`LOCK RECOMMENDED` — B-45)
+
+Learning fires on **attributable completion**, not greet start:
+
+| Terminal | `ExperienceCause` | `ActivityKind` | Episode |
+| --- | --- | --- | --- |
+| Greet phases complete (`Phase.DONE`) | `SOCIAL_GREET` (existing) | `SOCIALIZING` | dedicated social episode id (GAO-6R pattern) |
+| Target left / unloaded | `SOCIAL_INTERRUPTED` or existing interrupt cause | `SOCIALIZING` | terminal episode |
+| Combat preemption | `COMBAT_INTERRUPT` (existing hierarchy) | prior activity | no false SOCIAL dislike |
+| Adoption failed / no target | **no learning** | — | D-GAO-023 pattern |
+| Voluntary yield to EXPLORE/REST | `VOLUNTARY_SWITCH` (existing discretionary) | incumbent | no double credit |
+
+Reuse `ExperienceEmitters` + `EpisodeBoundaryPolicy` — do not invent parallel social learning bus.
+
+`SOCIAL` becomes a peer discretionary activity:
+
+```text
+EXPLORE ↔ REST ↔ SOCIAL
+```
+
+Existing minimum commitment and switch-margin semantics should **generalize** rather than adding
+pair-specific spaghetti (`restYieldRequested`, `exploreYieldRequested`, `socialYieldRequested`, …).
+
+**Discussion item:** GAO-10 may expose that the current pairwise EXPLORE↔REST yield API needs to
+become activity-generic before a third candidate is added. Investigate before implementation.
+
+**Desired future concept:**
+
+```text
+requestYield(currentIntent, challengerActivity)
+```
+
+rather than an if/else matrix for every activity pair.
+
+### Social experience and learning
+
+`SOCIAL` needs causal episode attribution. Existing RFC work established that social companion
+sub-episodes must not corrupt exploration episodes (GAO-6R).
+
+Research whether to introduce/activate `SOCIAL_INTERACTION` experience evidence. Positive/negative
+learning should come from **meaningful terminals**, not every proximity tick.
+
+**Valid semantic outcomes (examples):**
+
+| Outcome | Teaches subjective preference? |
+| --- | --- |
+| `SOCIAL_COMPLETED` | yes |
+| `TARGET_LEFT` | contextual |
+| `TARGET_BECAME_INVALID` | no |
+| `PLAYER_AUTHORITY_INTERRUPTED` | no |
+| `COMBAT_INTERRUPTED` | no |
+| `EXECUTOR_FAILED` | no |
+
+Authority/feasibility failures must **not** teach *"I dislike socializing."* Subjective learning
+should only occur from attributable social experience (extends D-GAO-023 / B-30).
+
+### Anti-lockstep / group behavior
+
+Multiple sociable mobs must not automatically become synchronized clones. Discuss reuse of:
+
+- deterministic per-mob staggering
+- individual personality
+- individual relationship scores
+- individual learned entity opinions
+- bounded target ranking
+
+Do **not** add reservations merely to prevent multiple mobs from intentionally socializing together.
+Reservations are for actually exclusive resources, not ordinary friendship (extends B-32).
+
+### Opinion Inspector requirements (day-one, read-only)
+
+GAO-10 must be visible through the existing inspector from implementation start. Capture
+decision-time causality in the trace — do not reconstruct target choice from later world state.
+
+**Example — running:**
+
+```text
+SOCIAL total=37.4
+target=Bob
+
+social components:
+  sociability +8.2
+  affect +4.0
+  activityPreference +1.0
+
+target components:
+  feelingToward +7.1
+  learnedAffinity +2.3
+
+admission:
+  installed=true
+  adoptable=true
+
+lifecycle:
+  SOCIAL (RUNNING)
+target UUID/name: Bob
+```
+
+**Example — suppressed:**
+
+```text
+SOCIAL suppressed:
+NO_ELIGIBLE_SOCIAL_TARGET
+```
+
+Use per-candidate `suppressionDetail` (GAO-4R pattern) — do not extend a single
+`lastExploreReadiness`-style side channel for SOCIAL.
+
+### Dependencies
+
+| Prerequisite | Status | Why |
+| --- | --- | --- |
+| GAO-4 `DiscretionaryActivityDirector` | `IMPLEMENTED` | intent lifecycle, yield, trace |
+| GAO-4R `ActivityAdmission` | `IMPLEMENTED` | AVAILABLE vs ADOPTABLE |
+| GAO-4R1 adoption-vs-continuation | `PROPOSED` | running SOCIAL must not false-invalidate |
+| GAO-6 ENTITY bridge | `IMPLEMENTED` | `SpmEntityOpinionBridge`, `EntityOpinionMemory` |
+| GAO-7 PersonalityModel | `IMPLEMENTED` | `sociability` trait |
+| GAO-8B inspector | `IMPLEMENTED` | causal readout surface |
+| Generic yield API research | `PROPOSED` | third activity peer switching |
+
+### Must happen (acceptance direction)
+
+- `SOCIAL` competes as a third discretionary activity with separate activity vs target scoring.
+- At least one existing finite SPM social executor (or minimal adapter) performs physical interaction.
+- Admission suppresses `SOCIAL` when no eligible target exists (`ADOPTION_NOT_READY` + detail).
+- Inspector shows activity utility, target, components, admission, and lifecycle from decision-time trace.
+- SPM `feelingToward` remains read-only; supplemental entity opinions never override host legality.
+
+### Must not happen (hard rejects)
+
+- Replace SPM's relationship system or write `feelingToward`.
+- Add `SOCIAL` as mandatory work or let sociability override combat/survival/commands.
+- Unbounded entity-opinion scan or force-loaded chunks.
+- Giant `SocializeGoal` without proving it is necessary.
+- Learn dislike from authority/feasibility failures.
+- Let `PENDING` social intents survive invalid targets indefinitely.
+- Introduce pairwise yield spaghetti for every activity combination.
+- Per-target `DiscretionaryActivity` enum values.
+
+### Alternatives considered
+
+| Option | Benefit | Failure mode | Verdict |
+| --- | --- | --- | --- |
+| Mega `SocializeGoal` owning all social behavior | One place to wire | Duplicates SPM; Opinion owns execution not desire | **Rejected** |
+| Per-target activity enum (`SOCIAL_WITH_BOB`) | Simple director mapping | Combinatorial explosion; breaks utility model | **Rejected** |
+| Single combined utility (activity + target + admission) | Fewer pipeline stages | Bob's score inflates global SOCIAL; pending intents without targets | **Rejected** |
+| **Activity choice → target resolver → `SocialIntent` → existing executor** | Reuses SPM; separates desire from execution; GAO-4R admission fits | Requires yield API generalization and gen-1 executor research | **Recommended** |
+
+### Open research items (before implementation lock)
+
+1. ~~Which pinned SPM executor is the best gen-1 finite social behavior?~~ → **preliminary:**
+   `FriendlyGreetGoal` + adapter (pending product ack).
+2. Exact `SocialIntent` field set and TTL bounds.
+3. Activity-generic `requestYield` vs interim pairwise extension → **GAO-4R1** (recommended before code).
+4. Whether `SOCIAL_INTERACTION` experience emitter activates in gen-1 or gen-2 — substrate exists
+   (`ExperienceKind`, `ActivityKind.SOCIALIZING`, `ExperienceCause.SOCIAL_GREET`); emitter wiring
+   `NOT FOUND` in production greet path today.
+5. GAO-4R1 continuation rules for in-flight social execution when adoption becomes unavailable.
+6. Read-only `PlayerMobs.reactionToward` bridge for resolver eligibility (B-46).
+
+### GAO-10 pre-implementation Behavioral Prediction (`CODE_CONFIRMED` design slice)
+
+| Minute | Predicted observable behavior (if implemented per RFC) |
+| --- | --- |
+| 0–1 | Bored sociable mob near a GREET-eligible friend; SOCIAL utility rises; target resolver ranks Bob; `SocialIntent(Bob)` pending→adopted |
+| 1–2 | Mob approaches, crouch-bows, may gift if feeling ≥ LOVE — same visible sequence as stock SPM greet |
+| 2–3 | Greet completes (`Phase.DONE`); discretionary director may switch to EXPLORE/REST after commitment; positive `SOCIALIZING` preference only on attributable terminal |
+| Failure | Bob leaves range mid-greet → `TARGET_LEFT` terminal; no "I hate socializing" learning |
+| Failure | Combat target acquired → greet stops; authority interrupt; no subjective dislike learning |
+| Anti-pattern | Two mobs lockstep-greet same tick without staggering → mitigated by existing per-mob decision staggering + individual scores (B-32) |
+
+**Confidence:** policy shape `CODE_CONFIRMED`; runtime `UNVERIFIED` until separately approved launch.
+
+**Implementation authorization:** none. Peer review **GAO-4R1** first, then lock gen-1 executor choice.
+
+---
+
 ## Topic: SPM compatibility bridge
 
-**Status:** `IMPLEMENTED` (GAO-6 MVP) — read-only bridge + supplemental memory; full SOCIAL discretionary scoring deferred
+**Status:** `IMPLEMENTED` (GAO-6 MVP) — read-only bridge + supplemental memory; full SOCIAL discretionary scoring deferred to **GAO-10** (`PROPOSED / DISCUSSION`)
 
 ### SPM owns (do not duplicate)
 
@@ -1724,6 +2407,103 @@ Explicit companion/social activities may legitimately align several mobs on EXPL
 
 ---
 
+## Topic: Experience integrity — a LOCKED decision is violated in the place-opinion path
+
+**Status:** `CODE_CONFIRMED` defect against **D-GAO-023**, found via RET-1 runtime evidence
+(Agent_Claude, 2026-08-09).
+
+### B-28 — The churn loop taught the mob, and it taught it dislike
+
+A real session log showed one mob run 117 cycles of
+`assign CONTROLLED_DESCENT → CAPABILITY_MISSING → revoke → retire → assign`, every cycle with
+`everStarted=false`. **No block was ever broken.** Traced at source, every cycle did this:
+
+```text
+MiningDirector.completeProject(..., TOOL_FAILURE, at)
+  └─ ExperienceEmitters.miningTerminal(...)              unconditional
+       ├─ ensureMiningEpisode(...)                        creates an episode  → fed the leak
+       ├─ PROJECT_END, outcomeFor(TOOL_FAILURE)
+       │    = INTERRUPTED → PROTECTED_INTERRUPT             D-GAO-023 respected here
+       └─ PlaceOpinionService.applyMiningTerminal(...)
+            └─ preferenceDelta(TOOL_FAILURE) = −6f          D-GAO-023 BYPASSED here
+                 → recorded against the chunk the mob stood in, 117 times
+```
+
+**D-GAO-023 is implemented for activity opinion and not for place opinion.** The activity path
+correctly classifies `TOOL_FAILURE` as a protected interrupt — a feasibility outcome that must not
+imply dislike. The place path uses an independent static table keyed directly on
+`MiningProjectEnd`, and assigns it −6f.
+
+So the locked rule *"feasibility/safety/authority outcomes do not automatically imply dislike"* holds
+in one subsystem and is contradicted two files away. Same defect shape as the retention work: the
+principle was understood in one place and re-implemented, differently, in another.
+
+**Aggravating factor:** `PlaceOpinionMemory` is an access-ordered LRU of 32 chunks. A single spinning
+controller does not merely add a false negative — it can **evict 32 chunks of genuinely earned place
+opinion** in one session.
+
+### B-29 — Two independent repairs, not one
+
+| # | Repair | Why separate |
+| --- | --- | --- |
+| 1 | Route the place path through the same outcome classification the activity path uses | Closes the D-GAO-023 violation. A second enum table over the same terminals is the bug. |
+| 2 | Suppress **all** experience for a terminal the executor never began | Closes the class. `MiningExecutionLease.everStarted()` already records it and is already persisted. |
+
+Repair 1 alone still lets a started-then-failed project teach; repair 2 alone still lets the place
+table disagree with the activity table for real failures. Both are needed.
+
+**Candidate D-GAO-024:** an experience event must be evidence of a **physical outcome**, never of a
+bookkeeping transition. The same `MiningProjectEnd` is learnable or not depending on `everStarted`,
+so this cannot be a static enum table — which is precisely why the existing static table got it wrong.
+
+### B-30 — Opinion amplifies control-plane defects
+
+This reframes RET-1c (*never assign work the executor is guaranteed to refuse*) as a **learning-
+correctness prerequisite**, not only a memory rule. A spinning controller writes learned state faster
+than real play can correct it: 117 poisoning events in one session against a handful of genuine
+mining outcomes per hour.
+
+**Every director in this RFC inherits the hazard.** A GAO-4 director oscillating between two
+close-utility activities (B-27) would emit an abandon per flip and teach the mob to dislike exactly
+the activities it was choosing between — a defect that presents as a personality.
+
+### B-31 — Credit, and the instructive contrast
+
+| Collection | Bound | Outcome |
+| --- | --- | --- |
+| `PlaceOpinionMemory.byChunk` | LRU 32, declared up front | correct |
+| `MobExperienceContext.episodes` | none, keyed by `randomUUID()` | unbounded — repaired (RET-1b) |
+| `OpinionExperienceRegistry.CONTEXTS` | none | unbounded per session — **still open** |
+
+Place memory got it right; the file two doors down did not. That is the argument for RET-1 as a
+per-collection checklist rather than an assumed principle.
+
+### B-32 — "Opinion survives unload" is currently implemented as retention
+
+`ENTITY_UNLOAD` calls `freeze`, keeping the whole context resident, so PD-GAO-03's *"preference
+survives death"* rests on never releasing the object rather than on persistence.
+`PlaceOpinionMemory.captureSnapshot()` / `restoreFromSnapshot(...)` already exist — the primitive is
+half-built. The entity-lifetime boundary this RFC needs:
+
+```text
+ENTITY_UNLOAD   serialize durable (OpinionMemory, place, personality)
+                destroy transient (episodes, REST claim, intents, affect)
+                remove context from the registry
+ENTITY_LOAD     reconstruct context, restore durable state
+```
+
+### B-33 — GAO-5/6/7 must declare bounds before implementation
+
+| Task | Collection implied | Question to settle first |
+| --- | --- | --- |
+| **GAO-5** PLACE / ENVIRONMENT | chunk → opinion | is 32 chunks the intended horizon? A mob that mines, rests and explores cycles that in one evening |
+| **GAO-6** ENTITY bridge | **other mobs' UUIDs** → feeling | unbounded by population; cap it, or make SPM's graph the sole owner |
+| **GAO-7** PersonalityModel | fixed fields per mob | bounded by construction — state it and move on |
+
+GAO-6 is the dangerous one: keyed by *other* entities, so a busy server grows it quadratically.
+
+---
+
 ## Topic: Hard architectural rules
 
 | ID | Rule |
@@ -1743,6 +2523,8 @@ Explicit companion/social activities may legitimately align several mobs on EXPL
 | **D-GAO-021** | **LOCKED:** Sustained REST is an arrival-anchored, condition-bound claim tied to the activity/authority that legitimately adopted REST; Goal liveness or proximity alone is insufficient |
 | **D-GAO-022** | **LOCKED:** Experience is episode-scoped and frequency-normalized; bounded short-term affect pulses and normalized long-term `OpinionMemory` learning are separate outputs and cannot double-apply one event |
 | **D-GAO-023** | **LOCKED:** Outcome class controls learning eligibility, not sign; exact terminal cause is preserved, and feasibility/safety/authority outcomes do not automatically imply dislike |
+| **D-GAO-024** | *(candidate, B-28)* Experience must be evidence of a **physical outcome**, never a bookkeeping transition. A terminal the executor never began (`everStarted == false`) teaches nothing — cannot be a static enum table, since the same terminal is learnable or not depending on whether execution happened |
+| **D-GAO-025** | *(candidate, B-33)* Every opinion collection declares its bound in this RFC **before** the task is implemented — Gate RET-1a applied at design time rather than at review |
 | **D-GAO-024** | **LOCKED:** Goal liveness proves occupancy only. Lack of progress may advance affect/restlessness, but cannot grant discretionary preemption authority |
 | **D-GAO-025** | **LOCKED:** A bounded trace spans score → intent → claim → scheduler yield/handoff → executor start → exact terminal cause |
 
@@ -1784,7 +2566,7 @@ mandatory artificial diversity between cooperative mobs.
 
 ## Topic: Phased plan
 
-**Status:** GAO-0 through GAO-9 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-8B Task 42A `IMPLEMENTED / STATIC ACCEPT`; D-GAO-043 `IMPLEMENTED / STATIC ACCEPT`; Task 42B `DEPENDENCY-READY / UNAUTHORIZED`
+**Status:** GAO-0 through GAO-9 + RET-GAO-1 `IMPLEMENTED / STATIC ACCEPT`; GAO-4R `IMPLEMENTED / STATIC ACCEPT`; GAO-8B Task 42A/42B `IMPLEMENTED / STATIC ACCEPT`; D-GAO-043 `IMPLEMENTED / STATIC ACCEPT`; **GAO-10** `PROPOSED / DISCUSSION` (unauthorized)
 
 | Phase | Task | Deliverable | Depends on |
 | --- | --- | --- | --- |
@@ -1795,6 +2577,8 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-2** | `OpinionMemory` v1 (ACTIVITY only) | **IMPLEMENTED:** `ActivityOpinionMemory`, `OpinionMemory`, `OpinionLearningPolicy`, normalized-evidence wiring, PD-GAO-03 death reset | GAO-1 |
 | **GAO-3** | `IdleOpportunityPolicy` | **IMPLEMENTED:** EXPLORE + REST utility scoring, normalized components, ranked `ScoringResult`, no execution | GAO-2, existing goals |
 | **GAO-4** | `DiscretionaryActivityDirector` | **IMPLEMENTED:** intent lifecycle, abstention, voluntary yield, consumer gates, trace, explore adoption control plane | GAO-3 |
+| **GAO-4R** | Executor adoption readiness | **IMPLEMENTED:** `ActivityAdmission` (`AVAILABLE`/`ADOPTABLE`), explore + REST blockers, inspector `ActivityAdmissionView`, `ADOPTION_NOT_READY` suppression with `suppressionDetail` | GAO-4 |
+| **GAO-4R1** | Adoption vs continuation stabilization | **LOCK RECOMMENDED:** `ADOPTABLE` vs `CONTINUABLE` split; generic `YieldRequest`; Task 43; blocks GAO-10 | GAO-4R |
 | **GAO-4.1** | PD-GAO-01 C threshold wiring | **IMPLEMENTED:** `ExploreIdleThresholdPolicy`, `ExploreReadinessThresholds`; wired in `ExplorationActivityGoal` + `ExploringGoal` | GAO-4, GAO-1 |
 | **GAO-5** | PLACE memory + learning | **IMPLEMENTED:** `PlaceOpinionMemory`, `PlaceOpinionService`, mining terminal hooks | GAO-4 |
 | **GAO-5B** | PLACE destination ranking | **IMPLEMENTED:** `PlaceOpinionRouteRanker`; `ExploringGoal` route score; current-position PLACE removed from `ActivityUtilityScorer` | GAO-5, RET-GAO-1 |
@@ -1803,8 +2587,9 @@ mandatory artificial diversity between cooperative mobs.
 | **GAO-6** | ENTITY bridge | **CLOSED:** `SpmEntityOpinionBridge`, `EntityOpinionMemory`, GAO-6R `SocialExperienceEpisodes` | GAO-4, RET-GAO-1 |
 | **GAO-7** | PersonalityModel | **CLOSED / STATIC ACCEPT:** immutable six-trait model; SPM-host anchors + deterministic UUID latent traits; bounded subjective learning at the single normalized seam; snapshot lifecycle; 581-test clean build | GAO-2, GAO-6 |
 | **GAO-8A** | Passive physical expression | **CLOSED / STATIC ACCEPT:** bounded scheduler-owned LOOK expression; Task 40; 593 tests | GAO-0, GAO-1, GAO-6, GAO-7 |
-| **GAO-8B** | Understandable Opinion inspection | **PARTIAL / READY:** Task 42A structured causal trace and D-GAO-043 shelter semantics are statically accepted; D-GAO-044 proposed for shelter readout copy; PD-GAO-14 locked; Task 42B addon-owned on-demand explanation UI awaits implementation authorization | GAO-0 through GAO-9, RET-GAO-1, Task 42A, D-GAO-039/040/043/044, PD-GAO-14, SCR-2R5 |
+| **GAO-8B** | Understandable Opinion inspection | **IMPLEMENTED / STATIC ACCEPT:** Task 42A causal trace + Task 42B inspector UI; D-GAO-044 locked; runtime verification `UNVERIFIED` | GAO-0 through GAO-9, RET-GAO-1, Task 42A, D-GAO-039/040/043/044, PD-GAO-14, SCR-2R5 |
 | **GAO-9** | Overland environment affinity | **CLOSED / STATIC ACCEPT:** finite multi-label context, completion-only normalized learning, enum-bounded snapshot memory, and ±10 valid-route ranking; PROJECT memory superseded; 618 tests | GAO-0c, GAO-2, GAO-5B, RET-GAO-1 |
+| **GAO-10** | Discretionary Social Choice & Social Intent | **PROPOSED / DISCUSSION:** third discretionary activity `SOCIAL`, `SocialIntent` target binding, bounded target resolver, gen-1 finite SPM executor research, GAO-4R admission, inspector day-one — **no implementation authorization** | GAO-4R, GAO-4R1, GAO-6, GAO-7, GAO-8B |
 
 ### GAO-0b implementation task (`IMPLEMENTED / STATIC VERIFIED`)
 
@@ -2232,6 +3017,18 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 | D-GAO-042 | Trace retention is bounded by whole decisions with explicit current suppression disposition; no partial-chain eviction or authority side effect | `IMPLEMENTED / STATIC ACCEPT` | Task 42A; active-origin retention test + RET-1 static review |
 | D-GAO-043 | Arrived nighttime shelter is `SHELTER_HOLD` mandatory authority while affective rest is an independent observation; only discretionary campfire REST may yield to Opinion; physical displacement legality is decided by the separate centralized shelter envelope | `IMPLEMENTED / STATIC ACCEPT` | Cross-RFC `SCR-2R5`; taxonomy/observer/eligibility tests; 676-test clean build |
 | D-GAO-044 | GAO-8B explains mandatory `SHELTER_HOLD` separately from discretionary REST and from `resting=true`; counterfactual scores during shelter are non-causal; optional read-only `ShelterNightAuthority` phase in snapshot | `LOCKED` | Task 42B readout contract; user shelter runtime cross-link 2026-08-12 |
+| D-GAO-045 | GAO-10 `SOCIAL` is discretionary desire only; Opinion decides *want* to socialize; existing SPM/social executors perform physical interaction — no mega `SocializeGoal` | `PROPOSED` | GAO-10 topic; Agent_ChatGPT 2026-08-12 |
+| D-GAO-046 | `DiscretionaryActivity.SOCIAL` is one finite activity; target identity lives in `SocialIntent`, not per-target enum values | `PROPOSED` | GAO-10 topic |
+| D-GAO-047 | SOCIAL utility separates activity score ("feel social?") from target score ("who?"); entity affinity must not globally inflate SOCIAL when target invalid | `PROPOSED` | GAO-10 topic |
+| D-GAO-048 | GAO-10 reuses GAO-4R admission: suppress SOCIAL when no eligible target (`ADOPTION_NOT_READY` + `suppressionDetail`); no indefinite pending on stale UUID | `PROPOSED` | GAO-10 topic; depends GAO-4R |
+| D-GAO-049 | Opinion never writes SPM `feelingToward`; `EntityOpinionMemory` is supplemental only and cannot override hostility, commands, safety, or relationship legality | `PROPOSED` | GAO-10 topic; extends D-GAO-007 |
+| D-GAO-050 | GAO-4R1 splits adoption probe (selection) from continuation probe (incumbent RUNNING); fresh adoption failure must not terminate valid live execution | **LOCK RECOMMENDED** | GAO-4R1 topic; cave-handoff lesson; B-52 |
+| D-GAO-051 | Generic discretionary yield API replaces pairwise REST↔EXPLORE flags before a third activity ships | **LOCK RECOMMENDED** | GAO-4R1 topic; B-40/B-51 |
+| D-GAO-052 | Gen-1 discretionary SOCIAL uses SPM `FriendlyGreetGoal` lifecycle via minimal `SocialIntent` target adapter — no mega `SocializeGoal` | `PROPOSED` | GAO-10 SPM survey 2026-08-12 |
+| D-GAO-053 | Discretionary SOCIAL yields to SPM priority-1 `SOCIAL_REFLEX` goals; Opinion does not preempt host greet/watch reflex | `PROPOSED` | GAO-10; B-44 |
+| D-GAO-054 | Social target eligibility requires SPM `Reaction.GREET` legality via read-only bridge; `feelingToward` alone is insufficient | `PROPOSED` | GAO-10; B-46/B-55 |
+| D-GAO-055 | `SocialIntent` carries explicit `expiresAtGameTime` bounded by greet worst-case tick budget; expired pending invalidates before adoption | `PROPOSED` | GAO-10; B-48 |
+| D-GAO-056 | Gen-1 greet adapter gates Opinion-targeted greets only — does not globally override SPM `nearestWhereReaction` selection | `PROPOSED` | GAO-10; B-49 |
 
 ---
 
@@ -2239,6 +3036,10 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | Agent_Claude | **Brainstorm B-28…B-33** from RET-1 runtime evidence. **`CODE_CONFIRMED` defect against LOCKED D-GAO-023**: the rule *"feasibility/safety/authority outcomes do not automatically imply dislike"* is honoured by the activity path (`outcomeFor(TOOL_FAILURE)` → `PROTECTED_INTERRUPT`) and **bypassed by the place path**, which uses an independent static table giving `TOOL_FAILURE` = −6f. A 117-cycle assign→`CAPABILITY_MISSING`→revoke loop therefore wrote 117 negative place deltas for a mob that never broke a block — enough to evict all 32 LRU entries of genuinely earned place opinion. Two independent repairs required (route place through the shared classification; suppress all experience when `everStarted == false`). New candidates **D-GAO-024** physical outcome vs bookkeeping transition, **D-GAO-025** declare bounds at design time. Also: opinion **amplifies** control-plane defects, so RET-1c is a learning-correctness prerequisite; "opinion survives unload" is currently implemented as retention; GAO-6 entity opinion is keyed by other mobs' UUIDs and unbounded by population |
+| 2026-08-12 | Agent_Cursor | **RFC Opinion brainstorm continuation (2).** Code inspection: `DiscretionaryDirectorState` retains `runningIntent` on `NO_CANDIDATES`; pinned `FriendlyGreetGoal` continuation predicates. Added B-48…B-55; GAO-4R1 MAIBS prediction + API sketch + Task 43 proposal; GAO-10 `SocialIntent` lock-ready fields + B-49 adapter rule; D-GAO-055/056. **No implementation authorization.** |
+| 2026-08-12 | Agent_Cursor | **GAO-4R1 + GAO-10 brainstorm continuation.** Inspected `DiscretionaryDirectorState` pairwise yield API, `ActivityAdmission` shape, and pinned SPM `FriendlyGreetGoal` / `FollowLovedOneGoal` / `StayNearGoal`. Added stable topic **GAO-4R1** (adoption vs continuation + generic yield), enriched GAO-10 with executor survey (recommend greet + adapter), social target resolver, MAIBS prediction, B-40…B-47, D-GAO-050…054. **No implementation authorization.** No Java edit, build, runtime launch, commit, push, or PR |
+| 2026-08-12 | Agent_Cursor | **GAO-10 proposed (Agent_ChatGPT design capture).** Added stable topic *Discretionary Social Choice & Social Intent*: third discretionary activity `SOCIAL`, `SocialIntent` target binding, activity-vs-target utility separation, GAO-4R admission reuse, gen-1 finite SPM executor research, inspector day-one requirements, yield API generalization discussion, B-39, phased rows GAO-4R/GAO-4R1/GAO-10, and D-GAO-045…049. **No implementation authorization.** No Java edit, build, runtime launch, commit, push, or PR |
 | 2026-08-12 | Agent_Cursor | **Shelter runtime cross-link + D-GAO-044 proposed.** User reported tree/roof shelter while houses exist, house reach failures except via bed, and inside→outside door loops. Classified as primarily `SCR-2R2+` physical selection/navigation (vanilla RFC) with Opinion observability risk if Task 42B mislabels mandatory shelter as discretionary REST. Added B-36…B-38, GAO-8B shelter readout contract, RQ-GAO-SHELTER-01, and Task 42B DTO guidance. Task 42B remains unauthorized. No Java edit, build, runtime launch, commit, push, or PR |
 | 2026-08-11 | Agent_Codex | **D-GAO-043 implemented with SCR-2R5.** Added truthful mandatory `SHELTER_HOLD` while shelter rest remains an independent claim, blocked discretionary eligibility, preserved campfire `REST`, and integrated the physical authority envelope. All 676 tests and clean build pass; Task 42B is dependency-ready again. Runtime remains unverified; no launch, commit, push, or PR |
 | 2026-08-11 | Agent_Codex | **D-GAO-043 locked with SCR-2R5.** Accepted the user's two-layer correction: arrived SeekShelter becomes blocking `SHELTER_HOLD`, rest remains an independent affective predicate, and ActivityClass does not decide physical displacement. Locked a centralized four-effect interruption envelope and blocked Task 42B until implementation evidence prevents false shelter causality. No Java edit, test/build, runtime launch, commit, push, or PR |
@@ -3844,3 +4645,59 @@ expect Opinion RFC continuation to implement shelter physics. Cross-RFC pointer 
 
 **Frontier after:** lock **D-GAO-044** (product ack) → authorize **Task 42B** implementation. Physical
 shelter runtime remains vanilla RFC `SCR-2R2+` matrix with separate launch approval.
+
+---
+
+## Contribution — Agent_Cursor (GAO-10 topic capture — Agent_ChatGPT design)
+
+**Contribution type:** `BRAINSTORM_IN_RFC` / `PROGRESSIVE_CONTINUATION`
+
+**Author credit:** Agent_ChatGPT (user-provided design, 2026-08-12)
+
+**Frontier before:** EXPLORE + REST discretionary pair implemented; GAO-4R adoption readiness
+implemented; GAO-6/7 social substrate present but no third discretionary activity; SPM bridge
+deferred "full SOCIAL discretionary scoring."
+
+**Delivered:** stable topic **GAO-10 — Discretionary Social Choice & Social Intent** with
+architecture pipeline, reuse table, admission/lifecycle contracts, gen-1 executor research scope,
+inspector examples, must/must-not gates, alternatives table, open research items, B-39, phased
+rows (GAO-4R, GAO-4R1, GAO-10), and proposed decisions D-GAO-045…049.
+
+**Strongest objection:** adding a third activity before GAO-4R1 yield/adoption stabilization may
+recreate EXPLORE↔REST pairwise spaghetti unless `requestYield(currentIntent, challengerActivity)`
+is researched first.
+
+**Frontier after:** peer review GAO-10 → define/accept **GAO-4R1** → authorize gen-1 SPM executor
+research task only (read-only SPM inspection) or full GAO-10 implementation separately. No code in
+this contribution.
+
+---
+
+## Contribution — Agent_Cursor (GAO-4R1 + GAO-10 brainstorm — 2026-08-12)
+
+**Contribution type:** `BRAINSTORM_IN_RFC` / `PROGRESSIVE_CONTINUATION`
+
+**Frontier before:** GAO-10 captured at high level; GAO-4R implemented for EXPLORE/REST adoption;
+gen-1 SPM executor, target resolver, and yield generalization still open.
+
+**Code evidence (`CONFIRMED`):**
+
+- `DiscretionaryDirectorState.updateYieldRequests()` — only REST↔EXPLORE pairwise flags.
+- `ActivityAdmission` — adoption-only; no continuation channel.
+- SPM `FriendlyGreetGoal` — finite phased greet with self-selected GREET target; best gen-1
+  candidate pending `SocialIntent` adapter.
+- `PlayerMobs` — `feelingToward` bridge exists; `reactionToward` **NOT FOUND** (eligibility gap).
+
+**Delivered:** stable topic **GAO-4R1**; GAO-10 executor survey + target resolver + MAIBS table;
+B-40…B-55; D-GAO-050…056; preliminary gen-1 recommendation (`FriendlyGreetGoal` + adapter);
+GAO-4R1 API sketch + Task 43 proposal; `SocialIntent` lock-ready fields; experience terminal map.
+
+**Strongest objection:** greet adapter via mixin touches host goal lifecycle — integration risk is
+real; alternative is a thin addon-owned greet executor that copies only the finite phase machine
+(duplication cost vs mixin fragility).
+
+**Viable alternative:** defer gen-1 to "approach + stay-near" custom micro-executor if product
+rejects mixin on `FriendlyGreetGoal`; higher duplication, lower SPM fidelity.
+
+**Frontier after:** **lock D-GAO-050/051** (recommended) → authorize **Task 43** (GAO-4R1:
+continuation + generic yield, no SOCIAL enum) → static-accept → then authorize GAO-10 gen-1.
