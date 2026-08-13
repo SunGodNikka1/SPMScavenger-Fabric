@@ -85,6 +85,36 @@ public final class DiscretionaryDirectorState {
                 runningIntent, challenger, runningIntent.decisionId(), now);
     }
 
+    /**
+     * D-GAO-051 — an executor reports reaching its safe yield point; the director resolves the rest.
+     *
+     * <p>Validated against the live request rather than trusted: the acknowledgement must name an
+     * execution that is actually the incumbent of an unexpired request for that activity. A stale
+     * or mismatched acknowledgement is ignored, so a replaced intent cannot be terminalized by an
+     * older executor finishing late.
+     *
+     * @return whether the yield was accepted and completed
+     */
+    boolean acknowledgeYield(
+            UUID releasingIntentId, DiscretionaryActivity releasingActivity, long gameTime) {
+        if (yieldRequest == null
+                || !yieldRequest.isFor(releasingActivity)
+                || !yieldRequest.incumbentIntentId().equals(releasingIntentId)
+                || yieldRequest.expired(gameTime)) {
+            return false;
+        }
+        DiscretionaryActivity challenger = yieldRequest.challengerActivity();
+        markYield(releasingIntentId, releasingActivity, challenger, gameTime);
+        markTerminalForIntent(
+                releasingIntentId,
+                IntentLifecycle.INTERRUPTED,
+                InvalidationCause.SUPERSEDED,
+                gameTime,
+                "yield-" + challenger.name().toLowerCase(java.util.Locale.ROOT));
+        yieldRequest = null;
+        return true;
+    }
+
     void clearYieldRequest() {
         yieldRequest = null;
     }

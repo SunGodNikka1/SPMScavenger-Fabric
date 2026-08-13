@@ -98,40 +98,35 @@ public final class DiscretionaryAuthority {
         stateFor(mobId).markRestDeliveryComplete(gameTime);
     }
 
-    public static void onExploreYieldedForRest(UUID mobId, UUID releasingIntentId, long gameTime) {
+    /**
+     * D-GAO-051 — generic yield acknowledgement. Replaces
+     * {@code onExploreYieldedForRest} / {@code onRestYieldedForExplore}.
+     *
+     * <h2>Why the executor must not name the challenger</h2>
+     *
+     * The pairwise callbacks needed one method per ordered pair, so a third activity would have
+     * required six — the explosion D-GAO-051 exists to prevent. But the deeper problem is
+     * knowledge: an executor that names its successor has to know the whole activity set, so
+     * {@code ExploringGoal} would need to learn that SOCIAL exists.
+     *
+     * <p>The executor's entire responsibility is <em>"I, this execution, reached my safe yield
+     * point."</em> The authority layer already holds the identity-bound {@link YieldRequest} and
+     * resolves {@code challengerActivity} and {@code originDecisionId} from it. So EXPLORE need not
+     * know REST exists, and neither will need to know about SOCIAL.
+     *
+     * @param releasingIntentId the execution acknowledging, so a stale acknowledgement from a
+     *     replaced intent cannot terminalize the live one
+     * @param releasingActivity what the acknowledging executor is
+     */
+    public static void onDiscretionaryYielded(
+            UUID mobId,
+            UUID releasingIntentId,
+            DiscretionaryActivity releasingActivity,
+            long gameTime) {
         if (!opinionGatesConsumers()) {
             return;
         }
-        DiscretionaryDirectorState state = stateFor(mobId);
-        state.markYield(
-                releasingIntentId,
-                DiscretionaryActivity.EXPLORE,
-                DiscretionaryActivity.REST,
-                gameTime);
-        state.markTerminalForIntent(
-                releasingIntentId,
-                IntentLifecycle.INTERRUPTED,
-                InvalidationCause.SUPERSEDED,
-                gameTime,
-                "yield-rest");
-    }
-
-    public static void onRestYieldedForExplore(UUID mobId, UUID releasingIntentId, long gameTime) {
-        if (!opinionGatesConsumers()) {
-            return;
-        }
-        DiscretionaryDirectorState state = stateFor(mobId);
-        state.markYield(
-                releasingIntentId,
-                DiscretionaryActivity.REST,
-                DiscretionaryActivity.EXPLORE,
-                gameTime);
-        state.markTerminalForIntent(
-                releasingIntentId,
-                IntentLifecycle.INTERRUPTED,
-                InvalidationCause.SUPERSEDED,
-                gameTime,
-                "yield-explore");
+        stateFor(mobId).acknowledgeYield(releasingIntentId, releasingActivity, gameTime);
     }
 
     public static void onExploreTerminal(UUID mobId, IntentLifecycle terminal, long gameTime, String detail) {

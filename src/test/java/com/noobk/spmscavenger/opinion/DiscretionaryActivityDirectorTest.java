@@ -79,7 +79,7 @@ class DiscretionaryActivityDirectorTest {
                 .map(DiscretionaryIntent::intentId)
                 .orElseThrow();
 
-        DiscretionaryAuthority.onRestYieldedForExplore(MOB, restIntentId, afterCommitment + 1L);
+        DiscretionaryAuthority.onDiscretionaryYielded(MOB, restIntentId, DiscretionaryActivity.REST, afterCommitment + 1L);
 
         assertEquals(exploreIntentId, director.pendingIntent().map(DiscretionaryIntent::intentId).orElseThrow());
         assertTrue(director.runningIntent().isEmpty());
@@ -132,7 +132,7 @@ class DiscretionaryActivityDirectorTest {
                 .map(DiscretionaryIntent::intentId)
                 .orElseThrow();
 
-        DiscretionaryAuthority.onRestYieldedForExplore(MOB, restIntentId, afterCommitment + 1L);
+        DiscretionaryAuthority.onDiscretionaryYielded(MOB, restIntentId, DiscretionaryActivity.REST, afterCommitment + 1L);
         assertEquals(exploreIntentId, director.pendingIntent().map(DiscretionaryIntent::intentId).orElseThrow());
 
         DiscretionaryAuthority.onExploreAdopted(MOB, afterCommitment + 2L);
@@ -157,7 +157,7 @@ class DiscretionaryActivityDirectorTest {
                 .map(DiscretionaryIntent::intentId)
                 .orElseThrow();
 
-        DiscretionaryAuthority.onExploreYieldedForRest(MOB, exploreIntentId, afterCommitment + 1L);
+        DiscretionaryAuthority.onDiscretionaryYielded(MOB, exploreIntentId, DiscretionaryActivity.EXPLORE, afterCommitment + 1L);
         assertEquals(restIntentId, director.pendingIntent().map(DiscretionaryIntent::intentId).orElseThrow());
 
         DiscretionaryAuthority.onRestAdopted(MOB, afterCommitment + 2L);

@@ -87,8 +87,11 @@ public class CampfireGoal extends Goal {
         if (firePos == null || !restClaimOpened) {
             return ActivityContinuation.notRunning();
         }
+        // PERF-5A / D-GAO-050: the non-allocating query. contextFor(...) rehydrates or creates,
+        // so an "observer" that used it could bring state into existence by looking at it - the
+        // comment would say non-mutating while the implementation allocated.
         if (!com.noobk.spmscavenger.experience.OpinionExperienceRegistry
-                .contextFor(mob.getUUID()).hasLiveRestClaim()) {
+                .hasLiveRestClaim(mob.getUUID())) {
             return ActivityContinuation.invalid(
                     ActivityContinuation.ContinuationBlocker.CLAIM_LAPSED,
                     "rest claim no longer live");
@@ -143,8 +146,11 @@ public class CampfireGoal extends Goal {
         if (DiscretionaryAuthority.mustYieldDiscretionaryRest(mob.getUUID())) {
             UUID restIntentId = DiscretionaryAuthority.runningRestIntentId(mob.getUUID());
             if (restIntentId != null) {
-                DiscretionaryAuthority.onRestYieldedForExplore(
-                        mob.getUUID(), restIntentId, mob.level().getGameTime());
+                DiscretionaryAuthority.onDiscretionaryYielded(
+                        mob.getUUID(),
+                        restIntentId,
+                        com.noobk.spmscavenger.opinion.DiscretionaryActivity.REST,
+                        mob.level().getGameTime());
             }
             return false;
         }

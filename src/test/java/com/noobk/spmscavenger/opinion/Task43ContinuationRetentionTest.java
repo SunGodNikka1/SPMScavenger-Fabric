@@ -182,4 +182,65 @@ class Task43ContinuationRetentionTest {
         assertFalse(source.contains("ActivityContinuations.none()"),
                 "no production path may fall back to 'nothing is running'");
     }
+
+    // ---- continuation inspection must not create state by observing ----
+
+    /**
+     * D-GAO-050 — an inspector that allocated would make the observer a mutator: asking whether a
+     * rest session continues would bring a context into existence for a mob that has none.
+     * {@code contextFor(...)} rehydrates or creates; {@code hasLiveRestClaim(...)} does not.
+     */
+    @Test
+    void mustNotHappen_continuationInspectionAllocatesAContext() {
+        com.noobk.spmscavenger.experience.OpinionExperienceRegistry.clearAll();
+        UUID unseen = UUID.randomUUID();
+
+        boolean live = com.noobk.spmscavenger.experience.OpinionExperienceRegistry
+                .hasLiveRestClaim(unseen);
+
+        assertFalse(live, "a mob with no context holds no claim");
+        assertEquals(0, com.noobk.spmscavenger.experience.OpinionExperienceRegistry.contextCount(),
+                "and asking must not have created one - otherwise every observation tick for every "
+                        + "mob in the world allocates, which is RET-1a by another route");
+    }
+
+    @Test
+    void mustHappen_theRestInspectorUsesTheNonAllocatingQuery() throws Exception {
+        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/noobk/spmscavenger/goal/CampfireGoal.java"));
+        int inspect = source.indexOf("inspectContinuation");
+        String body = source.substring(inspect, source.indexOf("inspectAdmission", inspect));
+        // Strip comments: the body explains why contextFor is forbidden, and a naive text match
+        // trips on the explanation rather than on a call.
+        StringBuilder code = new StringBuilder();
+        for (String line : body.lines().toList()) {
+            String trimmed = line.strip();
+            if (!trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*")) {
+                code.append(line).append(System.lineSeparator());
+            }
+        }
+        body = code.toString();
+
+        assertFalse(body.contains("contextFor("),
+                "the continuation inspector must not use the allocating/rehydrating path");
+        assertTrue(body.contains("hasLiveRestClaim("),
+                "it uses the explicitly non-allocating registry query");
+    }
+
+    // ---- D-GAO-051: the executor does not name its successor ----
+
+    @Test
+    void mustNotHappen_anExecutorNamesTheChallenger() throws Exception {
+        for (String goal : new String[] {"ExploringGoal", "CampfireGoal"}) {
+            String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "src/main/java/com/noobk/spmscavenger/goal/" + goal + ".java"));
+
+            assertFalse(source.contains("YieldedForRest") || source.contains("YieldedForExplore"),
+                    goal + " still uses a pairwise acknowledgement - one method per ordered pair is "
+                            + "the explosion D-GAO-051 exists to prevent, and it forces each "
+                            + "executor to know the whole activity set");
+            assertTrue(source.contains("onDiscretionaryYielded("),
+                    goal + " reports only its own identity and activity");
+        }
+    }
 }

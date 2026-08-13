@@ -274,8 +274,14 @@ public final class ExploringGoal extends Goal {
             if (mob.level() instanceof ServerLevel level) {
                 UUID exploreIntentId = DiscretionaryAuthority.runningExploreIntentId(mob.getUUID());
                 if (exploreIntentId != null) {
-                    DiscretionaryAuthority.onExploreYieldedForRest(
-                            mob.getUUID(), exploreIntentId, level.getGameTime());
+                    // Reports only its own identity and activity; the authority layer resolves
+                    // the challenger from the identity-bound request. This goal does not know REST
+                    // exists, and will not need to learn about SOCIAL.
+                    DiscretionaryAuthority.onDiscretionaryYielded(
+                            mob.getUUID(),
+                            exploreIntentId,
+                            com.noobk.spmscavenger.opinion.DiscretionaryActivity.EXPLORE,
+                            level.getGameTime());
                 }
             }
             return false;
