@@ -1,6 +1,5 @@
 package com.noobk.spmscavenger.opinion;
 
-import com.noobk.spmscavenger.SpmScavenger;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -64,22 +63,9 @@ public final class SocialAdmissionSeam {
         if (mob == null) {
             return;
         }
-        long now = mob.level().getGameTime();
-        WINDOWS.put(mob.getUUID(), new AdmissionWindow(now, range, eligibleTargetFound));
-        logSeamReached("entity=" + mob.getId() + " tick=" + now + " range=" + range
-                + " targetFound=" + eligibleTargetFound);
-    }
-
-    /**
-     * TEMPORARY - Task 44A seam proof. Positive evidence that the redirect executed.
-     *
-     * <p>Deliberately callable <b>outside</b> the mob-resolved branch. The first version logged only
-     * after the mob resolved, so "the mixin never applied" and "the mixin ran but the resolver
-     * returned null" produced byte-identical evidence: nothing at all. A diagnostic that cannot
-     * separate its own failure modes is not evidence. REMOVE once 44A closes.
-     */
-    public static void logSeamReached(String detail) {
-        SpmScavenger.LOGGER.info("[spmscavenger][44A] admission-seam {}", detail);
+        WINDOWS.put(
+                mob.getUUID(),
+                new AdmissionWindow(mob.level().getGameTime(), range, eligibleTargetFound));
     }
 
     /** Non-allocating: never creates an experience context for a mob that has none. */
@@ -107,15 +93,7 @@ public final class SocialAdmissionSeam {
         if (mobId == null) {
             return;
         }
-        AdmissionWindow removed = WINDOWS.remove(mobId);
-        if (removed != null) {
-            // TEMPORARY - Task 44A case D. Also the marker that separates scenario runs: clearing
-            // before case B is what makes "no new pulse" unambiguous rather than a stale pulse
-            // from case A still being fresh.
-            SpmScavenger.LOGGER.info(
-                    "[spmscavenger][44A] admission-seam released mob={} observedAtTick={}",
-                    mobId, removed.observedAtTick());
-        }
+        WINDOWS.remove(mobId);
     }
 
     /** Gate RET-1: released with the world, like every other runtime-only map. */

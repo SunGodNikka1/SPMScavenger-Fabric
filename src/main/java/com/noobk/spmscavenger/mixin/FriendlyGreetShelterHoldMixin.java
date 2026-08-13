@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.mixin;
 
+import com.noobk.spmscavenger.compat.OptionalGoalMobResolver;
 import com.noobk.spmscavenger.activity.ActivityClass;
 import com.noobk.spmscavenger.goal.ShelterActivityEnvelope;
 import net.minecraft.world.entity.Mob;

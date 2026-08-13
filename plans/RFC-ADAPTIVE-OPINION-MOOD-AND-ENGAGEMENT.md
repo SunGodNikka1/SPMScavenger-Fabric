@@ -2871,6 +2871,78 @@ renamed vanilla member, but a *correctly named* one in the wrong **namespace**. 
 correct. GVC-6 said prove integration points from the packaged artifact; this adds **which
 namespace the artifact speaks**.
 
+### Second run — the naming fix worked, and unmasked a second silent defect
+
+`RUNTIME_CONFIRMED` that the mixins now apply. The crash stack is the proof the previous session
+could not produce:
+
+```text
+GoalSelector.method_6275  (class_1355 — the real scheduler tick)
+  FriendlyGreetGoal.method_6264
+    handler$dof000$spmscavenger$holdShelterDuringMovingGreeting   <-- OUR handler, inside SPM
+```
+
+Our injected handler executed inside SPM's own class for the first time. Then:
+
+```text
+IllegalClassLoadError: com.noobk.spmscavenger.mixin.OptionalGoalMobResolver is in a defined
+mixin package com.noobk.spmscavenger.mixin.* owned by spmscavenger.mixins.json and cannot be
+referenced directly
+```
+→ `Ticking entity` crash, integrated server down ~1 s after `joined the game`.
+
+**Cause.** Mixin owns every class under a declared mixin package and refuses to load any of them as
+an ordinary class. `OptionalGoalMobResolver` was a plain helper sitting there. It compiled, packaged
+and class-loaded fine — it throws only when an injected handler *calls* it. Moved to
+`com.noobk.spmscavenger.compat`; interface mixins such as `MobGoalSelectorAccessor` are exempt and
+stay. New gate `MixinPackagePurityTest`, negative control run.
+
+**The compounding lesson (`PROVEN`).** Two independent silent failures, the second **masked** by the
+first: the helper could never crash while the handlers never ran. Fixing defect 1 is what surfaced
+defect 2 — and a reviewer looking at the same green build and clean log before either fix would
+have seen no evidence of either. Depth of silent failure is not observable from the top; only
+execution reveals the next layer. This is the concrete answer to "what evidence would prove this
+conclusion wrong?" for any claim resting on build success.
+
+**Fallout to expect on the next run:** four shelter/door features are executing for the first time.
+Behaviour changes there are new-code risk, not regressions.
+
+### Run 3 — **Task 44A CLOSED, `RUNTIME_CONFIRMED`**
+
+Prism, `playermob-0.86.0` + `spmscavenger-1.9.4` (`sha256 b665af11…`), ~24 s of world time
+(ticks 87540–88013).
+
+| Measure | Value | Meaning |
+| --- | --- | --- |
+| pulses | **9 804** over **132** distinct mobs | the `@Redirect` executes on the real scheduler path |
+| `targetFound` true / false | 157 / 9 647 | host answer passed through unaltered, both polarities |
+| `MOB_UNRESOLVED` | **0** | `OptionalGoalMobResolver` never failed |
+| `released` | **132** | exactly one per mob that ever pulsed |
+| mixin / injector errors | **0** | — |
+| `range` | `10.0`, invariant | matches the constructor scalar the terminal predicate needs |
+
+**Case results.** **A** — confirmed: pulses with `targetFound=true`, SPM greeting unchanged.
+**C** — confirmed: `targetFound=false` dominates and behaviour is unaffected; repeated retries while
+nothing is eligible, exactly as predicted. **D** — confirmed, and stronger than asked: released count
+**equals** distinct-entity count, so the map is bounded by currently relevant mobs with no residue
+(Gate RET-1a, `RUNTIME_CONFIRMED`). **E** — confirmed, though positive pulse evidence is what
+actually carries it.
+
+**Case B is `UNVERIFIED`.** The session never staged shelter authority, and a mob that is sheltered
+is externally indistinguishable from one on cooldown or in combat — all three simply produce no
+pulse. HEAD-before-INVOKE ordering is `INFERRED` from bytecode position, not observed. It is not a
+44A blocker (the seam is proven) but it must be established before SOCIAL can rely on shelter
+actually suppressing an adopted greet.
+
+**Design finding for 44B.** The pulse is far denser than the design assumed: ~21 per tick across the
+loaded set, and **98.4% report no eligible target**. So "SPM was willing to look" is nearly always
+true and carries little information — its real content is the *negative* space (not greeting, not on
+cooldown, no combat target). `PULSE_LIFETIME_TICKS = 40` is consequently generous rather than tight.
+SOCIAL's utility must not treat pulse presence as evidence a greet is *available*; only
+`eligibleTargetFound` distinguishes, and that is the host's own judgement.
+
+**Diagnostics removed** (they were ~1 000 log lines/second — unshippable). 765 tests.
+
 ### Consequence for GAO-10
 
 The Social Approach fallback is **not** triggered — the redirect was never evaluated, so nothing is
@@ -3413,6 +3485,8 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-13 | User + Agent_Claude | **Task 44A CLOSED — `RUNTIME_CONFIRMED`.** 9 804 pulses across 132 mobs in ~24 s: cases A, C, D, E confirmed; **0** `MOB_UNRESOLVED`, **0** injector errors, and `released` == distinct entities exactly, which is a `RUNTIME_CONFIRMED` RET-1a bound rather than merely case D. **Case B stays `UNVERIFIED`** — shelter was never staged, and a sheltered mob is indistinguishable from one on cooldown or in combat since all three produce no pulse; HEAD-before-INVOKE remains `INFERRED` from bytecode position and must be proven before SOCIAL relies on shelter suppressing an adopted greet. **Design finding:** the pulse is ~21/tick and **98.4% carry `targetFound=false`**, so pulse presence is nearly always true and must not be read as 'a greet is available' — only the host's `eligibleTargetFound` discriminates. Temporary diagnostics removed. 765 tests. GAO-10 SOCIAL implementation is unblocked |
+| 2026-08-13 | User + Agent_Claude | **44A run 2: naming fix `RUNTIME_CONFIRMED` working, second silent defect unmasked.** Stack shows `GoalSelector.method_6275` → `FriendlyGreetGoal.method_6264` → our `handler$…$holdShelterDuringMovingGreeting` — the handlers execute inside SPM for the first time. They immediately hit `IllegalClassLoadError`: `OptionalGoalMobResolver` was a plain helper inside the mixin-owned package, which compiles, packages and class-loads fine and throws only when an injected handler calls it (`Ticking entity` crash 1 s after join). Moved to `compat`; new gate `MixinPackagePurityTest` + negative control. **Two silent failures, the second masked by the first** — fixing #1 is what revealed #2, and no green build or clean log could have shown either. 765 tests. Seam still unproven: cases A–E not yet reached |
 | 2026-08-13 | User + Agent_Claude | **Task 44A runtime: FAILED, and it caught a shipped defect.** Zero seam pulses in a 6-minute Prism session with dozens of live PlayerMobs and no error of any kind. Root cause `CONFIRMED` from the shipped artifact: SPM is distributed remapped to intermediary, so its `Goal` overrides are `method_6264`/`method_6266`/etc. and **no readable `canUse` exists on any of its 14 goal classes**. Our `remap = false` (correct) left `method = "canUse"` unremapped; it matched nothing and `require = 0` silenced it. **Four shipped features were inert too** — FriendlyGreet/WeaponAttack/DoorOperation shelter holds and PlayerMobDoorGoalBusy; only the two mixins targeting SPM's *own* methods (`describe`, `renderObjectiveReadout`) ever worked. All ten injectors now carry both spellings, verified in the packaged jar, with mapping read from the build's own `mappings-base.tiny` (`tick` is `method_6268`, `stop` is `method_6270` — invertible by guessing). New build gate `SpmGoalMixinNamingTest` + negative control. 763 tests. Social Approach fallback **not** triggered: the seam is still untested |
 | 2026-08-09 | User + Agent_Claude | **GAO-10 contract correction.** The recorded `canContinueToUse` bound was wrong: pinned SPM uses `distanceTo(friend) <= range + 6.0` (verified at bytecode 62–73, `ldc2_w 6.0d` + `dadd`), not `<= range`. My transcription came from a `grep`-filtered `javap` dump that dropped both opcodes — a filtered view of evidence is not the evidence (AV-1). Acquisition radius (`range`, used by `nearestWhereReaction`) and continuation radius (`range + 6.0`) are deliberately different host semantics. Corrected the COMPLETED elimination predicate and added a mandatory acceptance vector: a DONE greet with the target between `range` and `range + 6` must classify COMPLETED, not ENDED_BY_WORLD — otherwise a successful greeting is recorded as world failure and, since only COMPLETED teaches, real learning is silently suppressed. Renamed the still-continuable terminal **INTERRUPTED_WHILE_CONTINUABLE** rather than asserting scheduler preemption. Gift hooks confirmed supplemental, never a prerequisite |
 | 2026-08-09 | User + Agent_Claude | **D-GAO-057 Observation Purity** and **D-GAO-058 Causal Adoption** → `LOCKED`. GAO-10 contract review from the pinned `playermob-0.86.0` bytecode: `canUse()` mutates cooldown *and* assigns `friend` (banned as a probe by 057); `canContinueToUse()` is verified pure; `PlayerMobSocialHooks` is gift-only/ServerPlayer-only. **D-GAO-052 AMENDED** to a director-gated `@Redirect` on `nearestWhereReaction` that also requires `mayStartExecutor(SOCIAL)` (Task 43R), returns null when Opinion is on with no startable intent, and the original result when Opinion is off. **D-GAO-053 must be reworked** — FriendlyGreet cannot be both protected reflex and Opinion's executor. Classification is **binding-based** so adapter failure loses control but never manufactures ownership. **TERMINAL ≠ SUCCESS resolved without exposing `Phase`**: every `canContinueToUse` term but `phase != DONE` is publicly observable, so COMPLETED/INTERRUPTED_WHILE_CONTINUABLE/ENDED_BY_WORLD is derivable by elimination over a pure predicate; only COMPLETED may teach. Open: mixin coexistence on the remapped jar. No implementation |

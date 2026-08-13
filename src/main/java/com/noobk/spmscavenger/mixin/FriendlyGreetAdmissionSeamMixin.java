@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.mixin;
 
+import com.noobk.spmscavenger.compat.OptionalGoalMobResolver;
 import com.noobk.spmscavenger.opinion.SocialAdmissionSeam;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -71,10 +72,7 @@ public abstract class FriendlyGreetAdmissionSeamMixin {
             @Coerce Object playerMob, @Coerce Object reaction, double range) {
         Mob mob = OptionalGoalMobResolver.resolve(this, "greet admission seam");
         LivingEntity original = SocialAdmissionSeam.invokeOriginal(playerMob, reaction, range);
-        if (mob == null) {
-            SocialAdmissionSeam.logSeamReached("MOB_UNRESOLVED range=" + range
-                    + " hostFound=" + (original != null));
-        } else {
+        if (mob != null) {
             // Task 44A publishes the observation and returns the host's own answer unchanged.
             // Substituting a bound target is 44B+, and must additionally require
             // mayStartExecutor(SOCIAL) or it reintroduces the Task 43R defect.
