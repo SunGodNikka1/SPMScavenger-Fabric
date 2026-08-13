@@ -339,40 +339,7 @@ class Task43ContinuationRetentionTest {
                 "the transaction the director must keep instead: one start, one deadline");
     }
 
-    /** Reconciliation, not blind re-raise: the same wanted switch keeps its identity. */
-    @Test
-    void mustHappen_reconciliationRetainsAnUnchangedTransaction() throws Exception {
-        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
-                "src/main/java/com/noobk/spmscavenger/opinion/DiscretionaryDirectorState.java"));
-        int at = source.indexOf("private void updateYieldRequests(");
-        String body = source.substring(at, Math.min(source.length(), at + 2600));
 
-        assertTrue(body.contains("sameTransaction"),
-                "same incumbent + same challenger + still wanted must be left untouched");
-        assertTrue(body.contains("YieldOutcome.SUPERSEDED"),
-                "a switch the latest decision no longer wants must be terminated, not left live");
-        assertTrue(body.contains("YieldOutcome.EXPIRED"),
-                "an expired transaction ends once before any new one begins");
-    }
-
-    /**
-     * The stale-preference case: the incumbent wins again, so the challenger it was asked to yield
-     * to is no longer wanted. The request must die with the decision that wanted it — otherwise an
-     * executor yields to a challenger the director has already rejected, with a perfectly current
-     * incumbent identity.
-     */
-    @Test
-    void mustNotHappen_anObsoleteChallengerStaysExecutable() throws Exception {
-        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
-                "src/main/java/com/noobk/spmscavenger/opinion/DiscretionaryDirectorState.java"));
-        int at = source.indexOf("private void updateYieldRequests(");
-        String body = source.substring(at, Math.min(source.length(), at + 2600));
-
-        assertTrue(body.contains("boolean wantsSwitch"),
-                "the early return that left an obsolete request live is replaced by a decision");
-        assertTrue(body.contains("if (!wantsSwitch)"),
-                "not-wanted is now a branch that terminates the transaction");
-    }
 
     @Test
     void mustHappen_anExpiredTransactionEndsBeforeANewOneBegins() {

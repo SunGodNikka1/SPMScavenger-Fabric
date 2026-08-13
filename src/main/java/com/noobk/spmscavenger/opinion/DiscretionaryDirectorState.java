@@ -242,6 +242,24 @@ public final class DiscretionaryDirectorState {
             return;
         }
 
+        // Exactly one reconciliation per completed evaluation, whatever it concluded.
+        reconcileYieldTransaction(decide(input), input.gameTime());
+    }
+
+    /**
+     * D-GAO-051 — one discretionary evaluation, producing exactly one desired-yield result.
+     *
+     * <p>Extracted because the reconciler was only reachable on the successful path.
+     * {@code NO_CANDIDATES}, {@code BELOW_ACTIVATION_THRESHOLD}, {@code COMMITMENT_HOLD} and
+     * {@code SWITCH_MARGIN_HOLD} each returned early, so a live request survived a decision
+     * that had explicitly declined to switch — the same stale preference authority, reached
+     * by four other doors.
+     *
+     * <p>Scattering a clear before each return would have restored the multi-owner lifecycle
+     * the single seam removed. Instead every exit states what it authorizes, and
+     * {@link #tick} reconciles once.
+     */
+    private YieldDirective decide(DirectorTickInput input) {
         expirePendingIfNeeded(input.gameTime());
 
         ScoringEvaluation evaluation = evaluateCandidates(input, incumbentActivity);
@@ -252,7 +270,7 @@ public final class DiscretionaryDirectorState {
                     OpinionDecisionTrace.DecisionDisposition.NO_CANDIDATES,
                     null,
                     true);
-            return;
+            return YieldDirective.none();
         }
 
         ScoringResult scoring = evaluation.scoring().orElseThrow();
@@ -275,7 +293,7 @@ public final class DiscretionaryDirectorState {
                     top.activity(),
                     true);
             clearPending(IntentLifecycle.ABSTAINED, InvalidationCause.NONE, input.gameTime(), "abstain");
-            return;
+            return YieldDirective.none();
         }
 
         trace.transition(
@@ -298,7 +316,7 @@ public final class DiscretionaryDirectorState {
                             : OpinionDecisionTrace.DecisionDisposition.SWITCH_MARGIN_HOLD,
                     winner,
                     true);
-            return;
+            return YieldDirective.none();
         }
 
         if (needsPendingIssue(winner, input.gameTime())) {
@@ -336,7 +354,26 @@ public final class DiscretionaryDirectorState {
             }
         }
 
-        updateYieldRequests(decisionId, winner, top.total(), scoring, input.gameTime());
+        return YieldDirective.switchTo(decisionId, winner, top.total(), scoring);
+    }
+
+    /** What a completed evaluation authorizes: nothing, or one specific switch. */
+    private record YieldDirective(
+            boolean wantsSwitch,
+            long decisionId,
+            DiscretionaryActivity challenger,
+            float challengerUtility,
+            ScoringResult scoring) {
+
+        static YieldDirective none() {
+            return new YieldDirective(false, 0L, null, 0f, null);
+        }
+
+        static YieldDirective switchTo(
+                long decisionId, DiscretionaryActivity challenger, float utility,
+                ScoringResult scoring) {
+            return new YieldDirective(true, decisionId, challenger, utility, scoring);
+        }
     }
 
     public boolean hasRunningActionableIntent(DiscretionaryActivity activity) {
@@ -568,44 +605,53 @@ public final class DiscretionaryDirectorState {
      * <p>A yield is a <b>transaction</b>: it starts once, keeps its identity and its clock while the
      * director still wants it, and ends exactly once with a named reason.
      */
-    private void updateYieldRequests(
-            long decisionId,
-            DiscretionaryActivity winner,
-            float winnerUtility,
-            ScoringResult scoring,
-            long gameTime) {
-
-        boolean wantsSwitch = incumbentActivity != null
-                && incumbentActivity != winner
-                && canSwitchTo(winner, winnerUtility, scoring, gameTime);
+    /**
+     * D-GAO-051 — reconcile the live transaction with what the latest evaluation authorizes.
+     *
+     * <p>A yield is a <b>transaction</b>: one start, one identity, one clock, one named ending. Two
+     * defects this replaces. Raising a fresh request on every qualifying decision refreshed
+     * {@code requestedAt}, {@code expiresAt} and {@code originDecisionId} every 10 ticks, so the
+     * 200-tick bound became an immortal sliding timeout and the causal origin drifted to whichever
+     * scoring pass ran last. And when the director stopped wanting the switch, the request stayed
+     * live, so an executor could yield to a challenger the latest decision had already rejected.
+     */
+    private void reconcileYieldTransaction(YieldDirective directive, long gameTime) {
+        boolean wantsSwitch = directive.wantsSwitch()
+                && incumbentActivity != null
+                && incumbentActivity != directive.challenger()
+                && canSwitchTo(
+                        directive.challenger(),
+                        directive.challengerUtility(),
+                        directive.scoring(),
+                        gameTime);
 
         if (!wantsSwitch) {
-            // The latest decision no longer wants this switch - retain the incumbent, or the margin
-            // stopped passing. An obsolete challenger must not remain executable.
+            // Covers every conclusion that authorizes no switch - retained incumbent, margin hold,
+            // commitment hold, below threshold, no candidates. An obsolete challenger must not
+            // remain executable just because the decision ended down a different branch.
             finishYieldRequest(YieldOutcome.SUPERSEDED, gameTime);
             return;
         }
         if (yieldRequest == null) {
-            requestYield(decisionId, winner, gameTime);
+            requestYield(directive.decisionId(), directive.challenger(), gameTime);
             return;
         }
         if (yieldRequest.expired(gameTime)) {
-            // Recorded once as EXPIRED; this decision independently still wants the switch, so a
-            // new bounded transaction may begin.
+            // Ends as EXPIRED, not SUPERSEDED: nobody answered in time. This evaluation
+            // independently still wants the switch, so a new bounded transaction may begin.
             finishYieldRequest(YieldOutcome.EXPIRED, gameTime);
-            requestYield(decisionId, winner, gameTime);
+            requestYield(directive.decisionId(), directive.challenger(), gameTime);
             return;
         }
         boolean sameTransaction = runningIntent != null
                 && yieldRequest.incumbentIntentId().equals(runningIntent.intentId())
-                && yieldRequest.challengerActivity() == winner;
+                && yieldRequest.challengerActivity() == directive.challenger();
         if (sameTransaction) {
-            // Deliberately untouched: same incumbent, same challenger, still wanted. Refreshing here
-            // is exactly what made the lifetime unbounded.
+            // Deliberately untouched. Refreshing here is what made the lifetime unbounded.
             return;
         }
         finishYieldRequest(YieldOutcome.SUPERSEDED, gameTime);
-        requestYield(decisionId, winner, gameTime);
+        requestYield(directive.decisionId(), directive.challenger(), gameTime);
     }
 
     private static float utilityFor(ScoringResult scoring, DiscretionaryActivity activity) {

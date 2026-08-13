@@ -605,4 +605,98 @@ class DiscretionaryActivityDirectorTest {
                 .findFirst()
                 .orElseThrow();
     }
+
+    // ---- Task 43: a live yield transaction dies with the decision that wanted it ----
+
+    /**
+     * The caller-order defect. {@code reconcileYieldTransaction} had correct semantics but was only
+     * reachable on the successful path: {@code SWITCH_MARGIN_HOLD}, {@code COMMITMENT_HOLD},
+     * {@code NO_CANDIDATES} and {@code BELOW_ACTIVATION_THRESHOLD} each returned early, so a request
+     * raised by an earlier decision survived a later decision that explicitly declined to switch.
+     *
+     * <p>These drive {@code tick()} rather than reading source, because four green structural tests
+     * asserted the reconciler's shape while this hole was wide open.
+     */
+    @Test
+    void task43_marginHoldTerminatesAnExistingYieldRequest() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 20f, 0L);
+        long afterCommitment = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(afterCommitment, idleObservation(), true));
+        assertTrue(director.yieldRequest().isPresent(), "precondition: a switch was authorized");
+
+        // Now make the incumbent overwhelmingly preferred, so no challenger clears the margin.
+        seedOpinions(5f, 90f, 95f, 2f);
+        director.tick(tick(afterCommitment + 10L, idleObservation(), true));
+
+        assertTrue(director.yieldRequest().isEmpty(),
+                "the latest decision declined to switch, so the obsolete challenger must not stay "
+                        + "executable - the executor would otherwise still see mustYield()");
+        assertEquals(DiscretionaryDirectorState.YieldOutcome.SUPERSEDED,
+                director.lastYieldOutcome().orElseThrow());
+    }
+
+    @Test
+    void task43_ineligibleContextTerminatesAnExistingYieldRequest() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 20f, 0L);
+        long afterCommitment = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(afterCommitment, idleObservation(), true));
+        assertTrue(director.yieldRequest().isPresent());
+
+        // No eligible candidates at all - the NO_CANDIDATES early return.
+        director.tick(tick(afterCommitment + 10L, idleObservation(), false));
+
+        assertTrue(director.yieldRequest().isEmpty(),
+                "no authorization means no live switch, however the decision reached that state");
+        assertEquals(DiscretionaryDirectorState.YieldOutcome.SUPERSEDED,
+                director.lastYieldOutcome().orElseThrow());
+    }
+
+    @Test
+    void task43_aStillWantedSwitchKeepsItsIdentityAndClock() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 20f, 0L);
+        long afterCommitment = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(afterCommitment, idleObservation(), true));
+        YieldRequest first = director.yieldRequest().orElseThrow();
+
+        director.tick(tick(afterCommitment + 10L, idleObservation(), true));
+        director.tick(tick(afterCommitment + 20L, idleObservation(), true));
+        YieldRequest later = director.yieldRequest().orElseThrow();
+
+        assertEquals(first.requestedAt(), later.requestedAt(),
+                "repeated qualifying decisions must not restart the clock - that turned a bounded "
+                        + "200-tick contract into an immortal sliding timeout");
+        assertEquals(first.expiresAt(), later.expiresAt());
+        assertEquals(first.originDecisionId(), later.originDecisionId(),
+                "and the causal origin stays the decision that actually chose to switch");
+    }
+
+    @Test
+    void task43_anExpiredTransactionEndsAsExpiredNotSuperseded() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 20f, 0L);
+        long afterCommitment = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(afterCommitment, idleObservation(), true));
+        YieldRequest first = director.yieldRequest().orElseThrow();
+
+        long past = first.expiresAt() + 1;
+        director.tick(tick(past, idleObservation(), true));
+
+        assertEquals(DiscretionaryDirectorState.YieldOutcome.EXPIRED,
+                director.lastYieldOutcome().orElseThrow(),
+                "nobody answered in time - that is not the same as the director changing its mind");
+        director.yieldRequest().ifPresent(fresh -> assertNotEquals(
+                first.requestedAt(), fresh.requestedAt(),
+                "a re-authorized switch starts a NEW bounded transaction, not a revival"));
+    }
 }
