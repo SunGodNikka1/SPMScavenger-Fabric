@@ -56,6 +56,9 @@ public final class SocialTargetLegality {
      * @param hasCombatTarget the host mob currently has a combat target
      * @param hasFreshObservation a non-stale admission observation exists for this mob
      * @param observationNamedTarget that observation carried an identity rather than "nobody"
+     * @param observationNamesThisTarget that identity is the one under consideration. At discovery
+     *     this holds by construction; at re-validation it is the load-bearing check, because the
+     *     record is one-per-mob and overwritten, so the freshest answer may name someone else
      * @param targetResolved the named id resolved to a living entity in the world
      * @param targetAlive that entity is alive and not removed
      * @param sameLevel host and target share a level
@@ -66,6 +69,7 @@ public final class SocialTargetLegality {
             boolean hasCombatTarget,
             boolean hasFreshObservation,
             boolean observationNamedTarget,
+            boolean observationNamesThisTarget,
             boolean targetResolved,
             boolean targetAlive,
             boolean sameLevel,
@@ -82,6 +86,9 @@ public final class SocialTargetLegality {
         }
         if (!observationNamedTarget) {
             return SocialTargetValidity.NO_OBSERVED_TARGET;
+        }
+        if (!observationNamesThisTarget) {
+            return SocialTargetValidity.TARGET_SUPERSEDED;
         }
         if (!targetResolved) {
             return SocialTargetValidity.TARGET_GONE;

@@ -66,6 +66,52 @@ public final class ActivityUtilityScorer {
                 cost);
     }
 
+    /**
+     * GAO-10 — SOCIAL utility for one specific subject.
+     *
+     * <p>{@code subjectPreference} is this mob's opinion of <em>this</em> entity, so two mobs looking
+     * at the same neighbour can legitimately disagree, and the same mob can want company in general
+     * while wanting nothing to do with one particular neighbour.
+     *
+     * <p>This function is only ever reached once a live opportunity has been validated, so it never
+     * has to represent "there is nobody" as a low score — absence removes the candidate entirely
+     * rather than making it merely unattractive.
+     */
+    public static ActivityUtilityBreakdown scoreSocial(
+            AffectiveState affect,
+            ActivityOpinionMemory memory,
+            float sociability,
+            float subjectPreference) {
+        float preference =
+                UtilityNormalizer.channel(memory.preference()) * ActivityUtilityWeights.PREFERENCE;
+        float repetition = -UtilityNormalizer.repetitionPressure(memory.repetition())
+                * ActivityUtilityWeights.REPETITION;
+        float recentReward = UtilityNormalizer.channel(memory.recentReward())
+                * ActivityUtilityWeights.RECENT_REWARD;
+        float failurePressure = -UtilityNormalizer.failurePressure(memory.recentFailures())
+                * ActivityUtilityWeights.FAILURE;
+        float boredomFit =
+                UtilityNormalizer.channel(affect.boredom()) * ActivityUtilityWeights.SOCIAL_BOREDOM_FIT;
+        float stressFit =
+                -UtilityNormalizer.channel(affect.stress()) * ActivityUtilityWeights.SOCIAL_STRESS_FIT;
+        float subjectFit =
+                UtilityNormalizer.channel(sociability) * ActivityUtilityWeights.SOCIAL_SOCIABILITY_FIT
+                        + UtilityNormalizer.channel(subjectPreference)
+                                * ActivityUtilityWeights.SOCIAL_SUBJECT_PREFERENCE;
+        float cost = -ActivityUtilityWeights.SOCIAL_COST;
+
+        return ActivityUtilityBreakdown.social(
+                ActivityUtilityWeights.BASE_USEFULNESS_SOCIAL,
+                preference,
+                boredomFit,
+                stressFit,
+                subjectFit,
+                recentReward,
+                repetition,
+                failurePressure,
+                cost);
+    }
+
     public static ActivityUtilityBreakdown score(
             DiscretionaryActivity activity, DiscretionaryScoringInput input) {
         ActivityKind kind = activity.opinionKind();
@@ -73,6 +119,11 @@ public final class ActivityUtilityScorer {
         return switch (activity) {
             case EXPLORE -> scoreExplore(input.affectiveState(), memory);
             case REST -> scoreRest(input.affectiveState(), memory);
+            case SOCIAL -> scoreSocial(
+                    input.affectiveState(),
+                    memory,
+                    input.sociability(),
+                    input.subjectPreference());
         };
     }
 }

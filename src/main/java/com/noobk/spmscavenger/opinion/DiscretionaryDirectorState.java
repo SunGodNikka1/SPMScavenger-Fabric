@@ -769,6 +769,14 @@ public final class DiscretionaryDirectorState {
         java.util.List<ActivityUtilityBreakdown> eligible = new java.util.ArrayList<>();
 
         for (DiscretionaryActivity activity : DiscretionaryActivity.values()) {
+            // GAO-10: SOCIAL is about somebody. With no validated subject there is nothing to
+            // compare, so it is not a candidate at all rather than a candidate scoring badly - and
+            // it must not appear in the trace as a suppressed option either, because "considered
+            // and rejected" and "there was no one" are different explanations of the same silence.
+            if (activity == DiscretionaryActivity.SOCIAL
+                    && !input.scoringInput().socialCandidateAvailable()) {
+                continue;
+            }
             ActivityUtilityBreakdown breakdown = raw.stream()
                     .flatMap(result -> result.ranked().stream())
                     .filter(candidate -> candidate.activity() == activity)

@@ -28,6 +28,28 @@ public final class ActivityUtilityWeights {
     @Deprecated
     public static final float PLACE_PREFERENCE = 22f;
 
+    /**
+     * SOCIAL sits between EXPLORE and REST at rest: it is worth doing, but never so intrinsically
+     * valuable that a mob with no one nearby should feel deprived. Opportunity, not appetite, is
+     * what makes it competitive — and opportunity is gated outside scoring.
+     */
+    public static final float BASE_USEFULNESS_SOCIAL = 9f;
+
+    /** Personality is the strongest single term: a sociable mob genuinely prefers company. */
+    public static final float SOCIAL_SOCIABILITY_FIT = 32f;
+
+    /** How this mob feels about <em>this</em> entity. The reason SOCIAL is subject-specific. */
+    public static final float SOCIAL_SUBJECT_PREFERENCE = 26f;
+
+    /** Boredom pushes toward company, as it pushes toward exploring. */
+    public static final float SOCIAL_BOREDOM_FIT = 22f;
+
+    /** Stress pushes away from it — a frightened mob withdraws rather than socialises. */
+    public static final float SOCIAL_STRESS_FIT = 18f;
+
+    /** Cheap: the target is already within the host's own acquisition radius. */
+    public static final float SOCIAL_COST = 2f;
+
     public static final float REST_STRESS_FIT = 30f;
     public static final float REST_BOREDOM_FIT = 20f;
     public static final float REST_COST = 1f;

@@ -12,5 +12,38 @@ public record DiscretionaryScoringInput(
         OpinionMemory opinionMemory,
         DiscretionaryAvailability availability,
         boolean discretionaryEligible,
-        boolean opinionEnabled) {
+        boolean opinionEnabled,
+        java.util.Optional<SocialIntent> socialOpportunity,
+        float sociability,
+        float subjectPreference) {
+
+    public DiscretionaryScoringInput {
+        java.util.Objects.requireNonNull(socialOpportunity, "socialOpportunity");
+    }
+
+    /**
+     * Backwards-compatible form for callers with no social opportunity — the disabled path and
+     * every existing test. Absent opportunity means SOCIAL is not a candidate at all, rather than a
+     * candidate scoring badly.
+     */
+    public DiscretionaryScoringInput(
+            AffectiveState affectiveState,
+            OpinionMemory opinionMemory,
+            DiscretionaryAvailability availability,
+            boolean discretionaryEligible,
+            boolean opinionEnabled) {
+        this(affectiveState, opinionMemory, availability, discretionaryEligible, opinionEnabled,
+                java.util.Optional.empty(), 0f, 0f);
+    }
+
+    /**
+     * GAO-10 — SOCIAL competes only while a validated subject exists.
+     *
+     * <p>This is candidacy, not permission. The director's own admission and executor start gates
+     * still apply, and physical start additionally requires the live host to name this same entity
+     * (44D). A fresh target-bearing observation buys a seat at the table, nothing more.
+     */
+    public boolean socialCandidateAvailable() {
+        return socialOpportunity.isPresent();
+    }
 }

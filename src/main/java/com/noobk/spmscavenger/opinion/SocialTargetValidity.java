@@ -31,6 +31,16 @@ public enum SocialTargetValidity {
      */
     NO_OBSERVED_TARGET,
 
+    /**
+     * The freshest observation names <b>somebody else</b>. The opportunity has moved on: the host's
+     * newest answer no longer supports this intent's subject.
+     *
+     * <p>Distinct from {@link #NO_OBSERVED_TARGET} on purpose. "The host now wants Alice" and "the
+     * host wants nobody" are different worlds, and collapsing them would hide a subject change
+     * behind a generic absence.
+     */
+    TARGET_SUPERSEDED,
+
     /** The named entity is gone: unloaded, despawned, or no longer resolvable by id. */
     TARGET_GONE,
 

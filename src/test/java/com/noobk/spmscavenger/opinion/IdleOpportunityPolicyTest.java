@@ -94,11 +94,11 @@ class IdleOpportunityPolicyTest {
     void identicalScoresProduceDeterministicTieBreak() {
         ActivityUtilityBreakdown explore = new ActivityUtilityBreakdown(
                 DiscretionaryActivity.EXPLORE,
-                10f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, -8f,
+                10f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, -8f,
                 42f);
         ActivityUtilityBreakdown rest = new ActivityUtilityBreakdown(
                 DiscretionaryActivity.REST,
-                8f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, -1f,
+                8f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, -1f,
                 42f);
 
         ScoringResult first = ScoringResult.of(List.of(explore, rest));

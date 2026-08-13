@@ -8,7 +8,16 @@ import com.noobk.spmscavenger.experience.ActivityKind;
  */
 public enum DiscretionaryActivity {
     EXPLORE(ActivityKind.OVERLAND_EXPLORATION),
-    REST(ActivityKind.REST);
+    REST(ActivityKind.REST),
+
+    /**
+     * GAO-10 — greeting a specific entity SPM recently named.
+     *
+     * <p>Unlike its two siblings, SOCIAL is <b>about somebody</b>. Its candidacy therefore depends
+     * on a live opportunity, and the winning subject is bound immutably to the intent that decision
+     * creates: the activity may be re-chosen, but a chosen subject is never re-derived.
+     */
+    SOCIAL(ActivityKind.SOCIALIZING);
 
     private final ActivityKind opinionKind;
 

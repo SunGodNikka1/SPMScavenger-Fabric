@@ -63,7 +63,7 @@ public final class SocialTargetResolver {
 
         SocialTargetValidity validity = judge(
                 mob, target, evidence == null ? Double.NaN : evidence.range(),
-                evidence != null, named != null);
+                evidence != null, named != null, true);
         if (!validity.usable()) {
             return Resolution.rejected(validity);
         }
@@ -84,10 +84,28 @@ public final class SocialTargetResolver {
         if (mob == null || intent == null) {
             return SocialTargetValidity.TARGET_GONE;
         }
-        Optional<SocialAdmissionSeam.AdmissionObservation> observed =
-                SocialAdmissionSeam.observation(mob.getUUID(), now);
+        SocialAdmissionSeam.AdmissionObservation evidence =
+                SocialAdmissionSeam.observation(mob.getUUID(), now).orElse(null);
+
+        // The freshest observation must still name THIS subject. The record is one-per-mob and
+        // overwritten, so "an observation exists" says nothing about whom it is about: at tick 100
+        // the host names Bob and we form an intent; at tick 101 it names Alice, or nobody. Passing a
+        // hardcoded `true` here (as the first version of this method did) let Bob's intent survive
+        // on Alice's evidence — 44D's identity equality would still have refused to execute it, but
+        // the control plane would have kept scoring a subject the host had already moved on from.
+        boolean namesThisTarget =
+                evidence != null && intent.targetId().equals(evidence.targetId());
+
+        // Use the range from the observation that actually corroborates this target, not the one
+        // captured when the intent was formed. Old evidence must not set the bound for a new check.
+        double range = namesThisTarget ? evidence.range() : intent.hostAcquisitionRange();
+
         LivingEntity target = resolveLiving(mob, intent.targetId());
-        return judge(mob, target, intent.hostAcquisitionRange(), observed.isPresent(), true);
+        return judge(
+                mob, target, range,
+                evidence != null,
+                evidence != null && evidence.hasTarget(),
+                namesThisTarget);
     }
 
     /**
@@ -98,11 +116,13 @@ public final class SocialTargetResolver {
             LivingEntity target,
             double range,
             boolean hasFreshObservation,
-            boolean observationNamedTarget) {
+            boolean observationNamedTarget,
+            boolean observationNamesThisTarget) {
         return SocialTargetLegality.check(
                 mob.getTarget() != null,
                 hasFreshObservation,
                 observationNamedTarget,
+                observationNamesThisTarget,
                 target != null,
                 target != null && target.isAlive() && !target.isRemoved(),
                 target != null && mob.level() == target.level(),

@@ -3143,6 +3143,105 @@ mistake 44B exists to prevent, and equally wrong.
 
 ---
 
+## Topic: Task 44C — SOCIAL as the third discretionary candidate (`STATIC` complete, 793 tests)
+
+GAO-10 becomes visible here for the first time: the director now compares **EXPLORE / REST / SOCIAL**
+instead of a fixed pair. Nothing greets yet — 44C decides, 44D adopts, 44D+ runs.
+
+### The subject belongs to the decision, not to the mob
+
+The narrow implementation the user specified, and the reason it is narrow:
+
+```java
+DiscretionaryIntent
+  ├─ normal generic fields
+  └─ SocialIntent? socialSubject          // invariant: activity == SOCIAL ↔ socialSubject != null
+```
+
+The rejected alternative was a mutable `currentSocialTarget` per mob. It fails on a concrete
+sequence, not on taste:
+
+```text
+t=1000  decision #91 scores SOCIAL with Bob, wins, intent PENDING
+t=1004  a new admission observation names Alice   (Bob walked off; SPM re-searched)
+t=1010  executor asks "who am I greeting?"
+        per-mob field  → Alice     ❌  decision #91 was about Bob
+        bound subject  → Bob       ✓  and 44D's identity check then fails cleanly
+```
+
+Both readings agree the activity is SOCIAL, so the substitution is invisible to every check that
+looks at activity alone. Binding the exact instance makes the drift *representable* — the intent
+still says Bob, so adoption fails and the decision is discarded, which is the correct outcome. The
+per-mob field would instead have greeted Alice under Bob's authority and, once learning exists,
+attributed the result to a decision that was never made. Same family as D-GAO-050/051: **adoption is
+identity-bound, not activity-bound.**
+
+`boundTo(UUID)` is the only comparison offered; there is deliberately no setter and no
+`withSubject(…)`.
+
+### Absence removes the candidate; it does not lower its score
+
+```java
+if (activity == SOCIAL && !input.socialCandidateAvailable()) continue;   // both scoring paths
+```
+
+Scoring SOCIAL with `sociability = 0, subjectPreference = 0` for a subject who does not exist yields
+a real number that reads like a considered judgement about a person. It would also appear in the
+decision trace as *considered and rejected*, when the truth is *there was nobody* — different
+explanations of the same silence, and the trace exists precisely to tell them apart.
+
+The gate is duplicated in `IdleOpportunityPolicy` and `DiscretionaryDirectorState` on purpose. Today
+`hasExecutor(SOCIAL)` is `false` (44D has not bound an executor), which *already* hides SOCIAL from
+the policy — so the policy would look correct while resting on an accident that flips in 44D.
+
+### SOCIAL utility
+
+| Term | Weight | Source |
+| --- | --- | --- |
+| base usefulness | 9 | between EXPLORE and REST |
+| sociability fit | 32 | `PersonalityModel.sociability()` — the trait, read only when a subject exists |
+| subject preference | 26 | `EntityOpinionMemory.preference(targetId)` — opinion of **this** entity |
+| boredom fit | 22 | company relieves boredom |
+| stress fit | −18 | a stressed mob is poor company |
+| cost | −2 | cheap; the mob walks a short distance |
+
+`sociability` and `subjectPreference` land in one named `subjectFit` component rather than reusing
+`noveltyFit`. A mob can want company in general and want nothing to do with *this* neighbour; the
+readout must be able to say which, and a borrowed field would make the explanation lie.
+
+Availability reports SOCIAL's executor as **absent** — truthfully. It is also the fail-safe
+direction: an incumbent that can never physically start would block EXPLORE and REST behind a
+yield that never completes, which is the Task 43R shape exactly.
+
+### The resolver runs on the director's cadence
+
+One bounded SPM search per decision cycle (10 ticks), not per tick — `ExplorationActivityGoal`
+resolves the opportunity where it already computes the director's other inputs (Gate SPM-5: reuse
+existing observation).
+
+### Tests (7 new, both invariants negative-controlled)
+
+| Must happen | Must not happen |
+| --- | --- |
+| the winning `SocialIntent` **instance** is bound to that intent | SOCIAL with no subject, or a subject on EXPLORE/REST (both throw) |
+| SOCIAL is scored once a subject exists | SOCIAL appears among candidates with no subject |
+| sociability and entity preference move the score **independently** | `subjectFit` collapses into `noveltyFit` |
+
+Negative controls: deleting the activity/subject invariant fails
+`mustNotHappen_activityAndSubjectDisagree`; deleting the scorer gate fails
+`mustNotHappen_socialIsScoredWithNoSubject`. Both were run and both failed as required — without
+that, a green suite proves only that the tests execute.
+
+### Still not permission (`UNVERIFIED` — by construction, not by omission)
+
+A fresh target-bearing observation buys SOCIAL a **seat at the table**. Physical start additionally
+requires 44D: the live redirect invocation naming this same UUID, matched against the active
+intent — mob UUID + intent identity + target UUID + current admission episode. And D-GAO-053 must
+be reworked immediately before that binding, because `FriendlyGreetGoal` cannot simultaneously be a
+protected external `SOCIAL_REFLEX` the director yields to and the director's own executor.
+
+---
+
 ## Topic: Hard architectural rules
 
 | ID | Rule |
@@ -3677,6 +3776,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-13 | User + Agent_Claude | **Task 44C** — SOCIAL becomes the third discretionary candidate; the director now compares EXPLORE/REST/SOCIAL. Per the user's product decision the exact `SocialIntent` that won scoring is bound **immutably to that `DiscretionaryIntent`** (invariant `activity == SOCIAL ↔ socialSubject != null`), never reconstructed from a later observation — a per-mob `currentSocialTarget` would let decision #91 about Bob greet Alice with every activity-level check still passing. Absent subject **removes** SOCIAL from comparison in both scoring paths rather than scoring it against nobody, so the trace can distinguish *considered and rejected* from *there was nobody*; gated in `IdleOpportunityPolicy` too, since `hasExecutor(SOCIAL) == false` hides it only until 44D. Utility = sociability + entity preference (own named `subjectFit`) + boredom − stress. Resolver on the 10-tick director cadence, one bounded search per cycle. 7 tests, both invariants negative-controlled; **793 total, 0 failures**. Still no FriendlyGreet substitution, binding, learning, Inspector or `DISCRETIONARY_SOCIAL` — candidacy is not start permission |
 | 2026-08-13 | User + Agent_Claude | **`PRODUCT DECISION`: preserve the host's chosen target identity instead of re-scanning (784 tests).** Same-tick mitigation **rejected** — it would have made SOCIAL candidacy depend on scheduler phase alignment. The redirect already holds SPM's returned entity; 44B threw it away as `targetFound: boolean` and re-ran the host's own search to recover it. `AdmissionWindow` → **`AdmissionObservation(tick, range, targetId)`**; the resolver now makes **zero SPM calls** and does cheap live checks only; the 112-line greet reflection block in `PlayerMobs` is deleted for want of a consumer. **The D-GAO-057 exposure is removed rather than scheduled around**, and a relationship term can no longer exist — SPM returning the identity *is* proof of greet legality at that moment, guarded by a test. Evidence levels fixed: 44C CHOOSE = observation + live checks (scoreable), 44D ADOPT = live redirect + **exact target-UUID equality** (executable), 44D+ RUN = causal ownership. 40-tick lifetime kept. 44D binding key recorded: mob + intent identity + target UUID + current admission episode, exact correspondence only |
 | 2026-08-13 | User + Agent_Claude | **44B repair + evidence correction (782 tests).** User caught a real invariant hole: `hostAcquisitionRange <= 0` rejects neither `NaN` nor `+Infinity`, and `+Infinity` squares to `+Infinity` so **every finite distance falls inside the acquisition radius** — fail-open, and it would surface as a mob greeting across the map rather than as an error. Invariant is now `Double.isFinite && > 0`, defined once in `isUsableRadius` and applied at all three contract entries plus the predicate's own bound; regressions + negative control. **Purity claim corrected and partly retracted:** counting `putfield` is itself a filtered representation of evidence. Re-audited over call paths — `nearestWhereReaction` and `feelingToward` are `CONFIRMED` observationally pure, but **`reactionToward` is NOT pure**: it calls `selfCombatPower`, a per-tick memo cache writing two fields, so querying early can warm the cache and change SPM's own later answer within the same tick — a live **D-GAO-057** exposure once 44C wires the resolver to the director. Mitigation (`PRODUCT DECISION` for 44C): resolve only on a same-tick pulse, making our call a pure cache read. Recorded the 44C→44D boundary: adoption must use the **present** redirect invocation, never let an expired pulse veto a live host admission |
 | 2026-08-13 | User + Agent_Claude | **Task 44B — `SocialIntent` + bounded target resolver, `STATIC` complete (779 tests).** Encodes the runtime rule *admission pulse ≠ social target*: 98.4% of pulses had no target, and even a positive one is up to 40 ticks stale, so the resolver re-runs the host's search for **identity** and re-validates at adoption. **Design correction from bytecode:** SPM already ships `reactionToward` and `nearestWhereReaction`, both `CONFIRMED` pure, so we mirror its predicate and reuse its search rather than deriving thresholds from `feelingToward` (SPM-0/SPM-2); `Reaction.GREET` read at runtime, never copied; acquisition radius taken from the host's own pulse. `SocialTargetLegality` is pure and applied in exactly **one** place, guarded with a negative control, because sharing a constant is not sharing a boundary. `SocialIntent` holds a UUID, not a reference. Self-caught: a false-negative purity check from a broken filter, an always-true `|| true` term, and a scope guard that failed on correct javadoc. Scope held — no utility, binding, substitution, learning, classification or Inspector |

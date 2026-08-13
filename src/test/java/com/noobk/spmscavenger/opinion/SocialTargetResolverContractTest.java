@@ -76,15 +76,21 @@ class SocialTargetResolverContractTest {
     }
 
     /**
-     * Scope guard for 44B. Each of these belongs to a later, explicitly gated step, and every one of
-     * them would quietly convert a data-model change into a behaviour change.
+     * Scope guard. SOCIAL may now be scored and may compete; it still may not <em>execute</em>.
+     * Each remaining absence belongs to a later, explicitly gated step, and every one of them would
+     * quietly convert a data-model change into a behaviour change.
      */
     @Test
-    void mustNotHappen_44bReachesIntoExecutionOrScoring() throws IOException {
-        String activities = source(Path.of(
-                "src/main/java/com/noobk/spmscavenger/opinion/DiscretionaryActivity.java"));
-        assertFalse(activities.contains("SOCIAL"),
-                "SOCIAL becomes a scored activity in 44C, not 44B");
+    void mustNotHappen_44cReachesIntoExecutionOrLearning() throws IOException {
+        String activities = code(source(Path.of(
+                "src/main/java/com/noobk/spmscavenger/opinion/DiscretionaryActivity.java")));
+        assertTrue(activities.contains("SOCIAL(ActivityKind.SOCIALIZING)"),
+                "44C adds SOCIAL as the third discretionary candidate");
+
+        String availability = code(source(Path.of(
+                "src/main/java/com/noobk/spmscavenger/opinion/DiscretionaryAvailability.java")));
+        assertTrue(availability.contains("socialExecutorPresent"),
+                "SOCIAL's executor presence must be a real input, not an assumption");
 
         String seamMixin = source(Path.of("src/main/java/com/noobk/spmscavenger/mixin/"
                 + "FriendlyGreetAdmissionSeamMixin.java"));

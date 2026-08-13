@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.goal;
 
+import com.noobk.spmscavenger.opinion.SocialIntent;
 import com.noobk.spmscavenger.activity.ActivityObservationService;
 import com.noobk.spmscavenger.DescentPressurePolicy;
 import com.noobk.spmscavenger.PlayerMobs;
@@ -182,6 +183,13 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
                 campfireGoal == null
                         ? ActivityContinuation.notRunning()
                         : campfireGoal.inspectContinuation(now));
+        // GAO-10: resolve the social opportunity on the director's own decision cadence, never
+        // per tick. Cheap by construction now - the seam already holds SPM's chosen identity, so
+        // this is a map lookup plus an id resolution, with no search and no relationship query.
+        SocialIntent socialOpportunity = com.noobk.spmscavenger.opinion.SocialTargetResolver
+                .resolve(mob, now)
+                .orElse(null);
+
         DiscretionaryActivityDirector.tick(
                 mob.getUUID(),
                 now,
@@ -189,7 +197,8 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
                 availability,
                 mob.getTarget() != null,
                 admissions,
-                continuations);
+                continuations,
+                socialOpportunity);
 
         boolean mayCreateWork = permitsNewMiningWork(cfg.enabled, allowNewMiningWork);
         if (mayCreateWork) {

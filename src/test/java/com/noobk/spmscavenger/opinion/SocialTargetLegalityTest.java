@@ -14,9 +14,10 @@ class SocialTargetLegalityTest {
 
     private static final double RANGE_SQR = 100.0D; // SPM's observed acquisition radius, 10.0
 
-    /** combat, freshObservation, namedTarget, resolved, alive, sameLevel, dSqr, rSqr */
+    /** combat, fresh, namedAnybody, namesThisTarget, resolved, alive, sameLevel, dSqr, rSqr */
     private static SocialTargetValidity legal() {
-        return SocialTargetLegality.check(false, true, true, true, true, true, 25.0D, RANGE_SQR);
+        return SocialTargetLegality.check(
+                false, true, true, true, true, true, true, 25.0D, RANGE_SQR);
     }
 
     @Test
@@ -32,7 +33,7 @@ class SocialTargetLegalityTest {
     @Test
     void mustNotHappen_anAdmissionWithoutATargetBecomesAnOpportunity() {
         assertEquals(SocialTargetValidity.NO_OBSERVED_TARGET, SocialTargetLegality.check(
-                        false, true, false, false, false, false, Double.NaN, RANGE_SQR),
+                false, true, false, false, false, false, false, Double.NaN, RANGE_SQR),
                 "the host looked and named nobody; that is not an opportunity");
     }
 
@@ -43,22 +44,22 @@ class SocialTargetLegalityTest {
     @Test
     void mustNotHappen_aNamedTargetStaysUsableAfterTheWorldMoves() {
         assertEquals(SocialTargetValidity.TARGET_GONE, SocialTargetLegality.check(
-                false, true, true, false, false, false, Double.NaN, RANGE_SQR));
+                false, true, true, true, false, false, false, Double.NaN, RANGE_SQR));
         assertEquals(SocialTargetValidity.TARGET_DEAD, SocialTargetLegality.check(
-                false, true, true, true, false, true, 25.0D, RANGE_SQR));
+                false, true, true, true, true, false, true, 25.0D, RANGE_SQR));
         assertEquals(SocialTargetValidity.WRONG_LEVEL, SocialTargetLegality.check(
-                false, true, true, true, true, false, 25.0D, RANGE_SQR));
+                false, true, true, true, true, true, false, 25.0D, RANGE_SQR));
         assertEquals(SocialTargetValidity.OUT_OF_RANGE, SocialTargetLegality.check(
-                false, true, true, true, true, true, 100.01D, RANGE_SQR));
+                false, true, true, true, true, true, true, 100.01D, RANGE_SQR));
     }
 
     @Test
     void mustHappen_theHostsOwnGatesRejectFirst() {
         assertEquals(SocialTargetValidity.COMBAT_TARGET, SocialTargetLegality.check(
-                        true, true, true, true, true, true, 25.0D, RANGE_SQR),
+                true, true, true, true, true, true, true, 25.0D, RANGE_SQR),
                 "SPM returns false on a combat target before it ever searches");
         assertEquals(SocialTargetValidity.NO_ADMISSION_EVIDENCE, SocialTargetLegality.check(
-                        false, false, true, true, true, true, 25.0D, RANGE_SQR),
+                false, false, true, true, true, true, true, 25.0D, RANGE_SQR),
                 "without an observation the host is on cooldown, greeting, or being held");
     }
 
@@ -79,7 +80,7 @@ class SocialTargetLegalityTest {
     @Test
     void mustHappen_theRangeBoundIsInclusive() {
         assertEquals(SocialTargetValidity.VALID, SocialTargetLegality.check(
-                false, true, true, true, true, true, RANGE_SQR, RANGE_SQR));
+                false, true, true, true, true, true, true, RANGE_SQR, RANGE_SQR));
     }
 
     /**
@@ -89,7 +90,7 @@ class SocialTargetLegalityTest {
     @Test
     void mustNotHappen_anUnmeasurableDistancePasses() {
         assertEquals(SocialTargetValidity.OUT_OF_RANGE, SocialTargetLegality.check(
-                false, true, true, true, true, true, Double.NaN, RANGE_SQR));
+                false, true, true, true, true, true, true, Double.NaN, RANGE_SQR));
     }
 
     /**
@@ -101,7 +102,7 @@ class SocialTargetLegalityTest {
     void mustNotHappen_anUnusableRangeBoundAdmitsEverything() {
         for (double badBound : new double[] {Double.POSITIVE_INFINITY, Double.NaN, 0.0D, -1.0D}) {
             assertEquals(SocialTargetValidity.OUT_OF_RANGE, SocialTargetLegality.check(
-                            false, true, true, true, true, true, 25.0D, badBound),
+                false, true, true, true, true, true, true, 25.0D, badBound),
                     "range bound " + badBound + " must reject, not admit");
         }
     }
@@ -123,5 +124,32 @@ class SocialTargetLegalityTest {
             assertEquals(validity == SocialTargetValidity.VALID, validity.usable(),
                     validity + " must only be usable when it is VALID");
         }
+    }
+
+    /**
+     * The repair that mattered most in 44B.
+     *
+     * <p>The observation record is one-per-mob and overwritten, so "a fresh observation exists" says
+     * nothing about <em>whom</em> it concerns. An intent formed for Bob at tick 100 must not survive
+     * on an observation naming Alice at tick 101 — 44D's identity equality would still refuse to
+     * execute it, but the control plane would go on scoring a subject the host had abandoned.
+     */
+    @Test
+    void mustNotHappen_anIntentSurvivesOnEvidenceAboutSomebodyElse() {
+        assertEquals(SocialTargetValidity.TARGET_SUPERSEDED, SocialTargetLegality.check(
+                        false, true, true, false, true, true, true, 25.0D, RANGE_SQR),
+                "a fresh observation naming another entity supersedes this intent");
+    }
+
+    /** "The host now wants Alice" and "the host wants nobody" must stay distinguishable. */
+    @Test
+    void mustHappen_supersededAndEmptyObservationsAreDistinctCauses() {
+        SocialTargetValidity superseded = SocialTargetLegality.check(
+                false, true, true, false, true, true, true, 25.0D, RANGE_SQR);
+        SocialTargetValidity empty = SocialTargetLegality.check(
+                false, true, false, false, false, false, false, Double.NaN, RANGE_SQR);
+        assertEquals(SocialTargetValidity.TARGET_SUPERSEDED, superseded);
+        assertEquals(SocialTargetValidity.NO_OBSERVED_TARGET, empty);
+        assertFalse(superseded == empty, "collapsing these hides a subject change behind absence");
     }
 }

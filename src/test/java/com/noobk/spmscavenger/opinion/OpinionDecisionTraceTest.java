@@ -22,6 +22,7 @@ class OpinionDecisionTraceTest {
                 3f,
                 4f,
                 5f,
+                55f,
                 6f,
                 7f,
                 8f,
@@ -42,6 +43,10 @@ class OpinionDecisionTraceTest {
         assertEquals(3f, stored.boredomFit());
         assertEquals(4f, stored.stressFit());
         assertEquals(5f, stored.noveltyFit());
+        // GAO-10: the SOCIAL subject term is a real component and must survive the trace intact,
+        // like every other. A component that silently reads back as 0 would make an explanation
+        // that is complete-looking and wrong.
+        assertEquals(55f, stored.subjectFit());
         assertEquals(6f, stored.recentReward());
         assertEquals(8f, stored.failurePressure());
         assertEquals(-9f, stored.cost());

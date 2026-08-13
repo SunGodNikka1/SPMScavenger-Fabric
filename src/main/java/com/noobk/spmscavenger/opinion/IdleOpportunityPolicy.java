@@ -29,6 +29,14 @@ public final class IdleOpportunityPolicy {
             if (!input.availability().hasExecutor(activity)) {
                 continue;
             }
+            // GAO-10: SOCIAL is about somebody. Scoring it with no subject would run the sociability
+            // and entity-preference terms against nobody and produce a number that reads like a
+            // considered judgement about a person who does not exist. Absence removes the candidate;
+            // it does not make it merely unattractive. Today `hasExecutor(SOCIAL)` is false and hides
+            // this, which is exactly why the gate belongs here rather than resting on that accident.
+            if (activity == DiscretionaryActivity.SOCIAL && !input.socialCandidateAvailable()) {
+                continue;
+            }
             candidates.add(ActivityUtilityScorer.score(activity, input));
         }
 
