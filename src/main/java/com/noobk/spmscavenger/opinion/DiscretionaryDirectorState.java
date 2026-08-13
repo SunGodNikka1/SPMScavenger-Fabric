@@ -396,6 +396,35 @@ public final class DiscretionaryDirectorState {
                 && runningIntent.activity() == activity;
     }
 
+    /**
+     * Task 43R — <b>permission to physically start</b>, which is not the same as having desire.
+     *
+     * <p>{@link #hasActionableIntent} answers "is there an intent for this activity", and returns
+     * true for a <em>pending challenger</em>. Using it as the executor start gate let a challenger
+     * begin before the incumbent reached its safe yield point and acknowledged - so the whole
+     * voluntary-yield transaction could be bypassed by whichever executor the GoalSelector happened
+     * to reach first. Campfire sits at priority 7 and Exploring at 8, so REST could genuinely
+     * preempt a running EXPLORE it was still waiting on.
+     *
+     * <p>The rule: while an incumbent owns the slot, only the incumbent may execute. A pending
+     * challenger becomes startable exactly when the incumbent is gone - by acknowledgement, terminal
+     * or invalidation.
+     */
+    public boolean mayStartExecutor(DiscretionaryActivity activity) {
+        if (runningIntent != null && runningIntent.isActive()) {
+            return runningIntent.activity() == activity;
+        }
+        return pendingIntent != null
+                && pendingIntent.isActive()
+                && pendingIntent.activity() == activity;
+    }
+
+    /**
+     * Whether any intent for this activity exists, pending or running.
+     *
+     * <p>Desire, not permission. Do not use as an executor start gate - see
+     * {@link #mayStartExecutor}.
+     */
     public boolean hasActionableIntent(DiscretionaryActivity activity) {
         if (pendingIntent != null
                 && pendingIntent.isActive()

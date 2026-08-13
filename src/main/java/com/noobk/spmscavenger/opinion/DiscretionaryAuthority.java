@@ -21,14 +21,14 @@ public final class DiscretionaryAuthority {
         if (!opinionGatesConsumers()) {
             return true;
         }
-        return stateFor(mobId).hasActionableIntent(DiscretionaryActivity.EXPLORE);
+        return stateFor(mobId).mayStartExecutor(DiscretionaryActivity.EXPLORE);
     }
 
     public static boolean mayStartDiscretionaryRest(UUID mobId) {
         if (!opinionGatesConsumers()) {
             return true;
         }
-        return stateFor(mobId).hasActionableIntent(DiscretionaryActivity.REST);
+        return stateFor(mobId).mayStartExecutor(DiscretionaryActivity.REST);
     }
 
     public static boolean mustYieldDiscretionaryRest(UUID mobId) {

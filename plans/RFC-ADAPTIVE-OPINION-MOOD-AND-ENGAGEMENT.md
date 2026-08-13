@@ -2504,7 +2504,7 @@ GAO-6 is the dangerous one: keyed by *other* entities, so a busy server grows it
 
 ---
 
-## Topic: Task 43 / GAO-4R1 — CLOSED, STATIC ACCEPT (745 tests)
+## Topic: Task 43 / GAO-4R1 — CLOSED, STATIC ACCEPT (750 tests, after Task 43R)
 
 **Status:** `IMPLEMENTED / STATIC ACCEPT`. Runtime `UNVERIFIED`.
 
@@ -2573,6 +2573,51 @@ RUNTIME_CONFIRMED          NO
 runs no fresh feasibility scan, and uses the non-allocating query. The director-side behaviour is
 also `CODE_CONFIRMED`. What is **not** covered is a real-`Mob` integration test of the REST inspector
 and any runtime gameplay observation. Both remain `UNVERIFIED`.
+
+### Task 43R — executor start permission (narrow repair, found by GAO-10)
+
+**Discovered while reviewing SOCIAL, not while reviewing Task 43.** The transaction architecture was
+correct; the executor **start gate** bypassed it.
+
+```java
+// both consumers used this as the start gate
+hasActionableIntent(activity)   // true for a PENDING challenger
+```
+
+So during a voluntary switch:
+
+```text
+running EXPLORE
+pending REST
+YieldRequest EXPLORE → REST      (EXPLORE has not acknowledged)
+
+mayStartDiscretionaryRest() → TRUE   ❌
+```
+
+Not theoretical: `CampfireGoal` is priority **7** and `ExploringGoal` is **8**, so REST could
+physically preempt the very EXPLORE it was waiting on. The safe-yield-point contract held in the
+director and was unenforced at the boundary the executors actually call.
+
+**Repair — desire is not permission.**
+
+```java
+mayStartExecutor(activity):
+    if an incumbent is active → only the incumbent may execute
+    otherwise                 → a pending intent for this activity may start
+```
+
+`hasActionableIntent` survives as "is there an intent", documented as **not** a start gate. Both
+`DiscretionaryAuthority` consumers now call `mayStartExecutor`.
+
+**Regressions (5, EXPLORE/REST only — deliberately not SOCIAL):** pending challenger blocked while
+the incumbent holds the slot; acknowledgement releases it; the reverse direction, so the rule is not
+accidentally activity-specific; a pending intent with no incumbent still starts immediately; and the
+`DiscretionaryAuthority` facade the executors actually call honours the gate.
+
+**Lesson.** This is the third form of the same confusion Task 43 kept finding: *state that exists*
+is not *permission to act on it*. Adoption vs continuation, request vs authority, and now desire vs
+start permission. The generic control plane is worth having precisely because each of these has to
+be distinguished once rather than per activity.
 
 ### Testing lesson (`PROVEN` — promote)
 
@@ -3122,6 +3167,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | User + Agent_Claude | **Task 43R** — GAO-10 review uncovered a Task 43 production bypass: both executor start gates used `hasActionableIntent`, which is true for a **pending challenger**, so REST (priority 7) could physically start before EXPLORE (priority 8) reached its safe yield point and acknowledged. The transaction was correct and the start gate ignored it. Added `mayStartExecutor(activity)` — while an incumbent is active only the incumbent may execute — and repointed both `DiscretionaryAuthority` consumers. Five EXPLORE/REST regressions incl. the consumer-facing facade. Task 43 re-closed at **750 tests**. Third instance of the same class: state that exists is not permission to act on it |
 | 2026-08-09 | User + Agent_Claude | **Task 43 / GAO-4R1 CLOSED — STATIC ACCEPT** (745 tests). **D-GAO-050** and **D-GAO-051** → `LOCKED / IMPLEMENTED`. Nine defects found and repaired during the task, each surfaced by the next repair: framework-without-production wiring, half-generic yield, allocating observer, wrong causal origin, five termination paths, immortal sliding timeout, unreachable reconciler, recorded-but-not-inspectable trace, and an acknowledgement asymmetry that let a replaced execution complete its successor's transaction. MAIBS closure verified all six negative conditions at source. Runtime `UNVERIFIED`; item 9.3 real-Mob REST-inspector integration recorded as unverified, not a blocker. Lesson `PROVEN`: source-shape tests guard structure, never control flow. No SOCIAL |
 | 2026-08-09 | Agent_Claude | **Brainstorm B-28…B-33** from RET-1 runtime evidence. **`CODE_CONFIRMED` defect against LOCKED D-GAO-023**: the rule *"feasibility/safety/authority outcomes do not automatically imply dislike"* is honoured by the activity path (`outcomeFor(TOOL_FAILURE)` → `PROTECTED_INTERRUPT`) and **bypassed by the place path**, which uses an independent static table giving `TOOL_FAILURE` = −6f. A 117-cycle assign→`CAPABILITY_MISSING`→revoke loop therefore wrote 117 negative place deltas for a mob that never broke a block — enough to evict all 32 LRU entries of genuinely earned place opinion. Two independent repairs required (route place through the shared classification; suppress all experience when `everStarted == false`). New candidates **D-GAO-024** physical outcome vs bookkeeping transition, **D-GAO-025** declare bounds at design time. Also: opinion **amplifies** control-plane defects, so RET-1c is a learning-correctness prerequisite; "opinion survives unload" is currently implemented as retention; GAO-6 entity opinion is keyed by other mobs' UUIDs and unbounded by population |
 | 2026-08-12 | Agent_Cursor | **RFC Opinion brainstorm continuation (2).** Code inspection: `DiscretionaryDirectorState` retains `runningIntent` on `NO_CANDIDATES`; pinned `FriendlyGreetGoal` continuation predicates. Added B-48…B-55; GAO-4R1 MAIBS prediction + API sketch + Task 43 proposal; GAO-10 `SocialIntent` lock-ready fields + B-49 adapter rule; D-GAO-055/056. **No implementation authorization.** |

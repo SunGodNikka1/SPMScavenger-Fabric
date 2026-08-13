@@ -1049,4 +1049,121 @@ class DiscretionaryActivityDirectorTest {
         assertFalse(director.mustYield(DiscretionaryActivity.EXPLORE, now + 10L));
         assertTrue(director.intent().isEmpty(), "and no discretionary intent remains actionable");
     }
+
+    // ==== Task 43R - pending desire is not permission to execute ====
+
+    /**
+     * The defect GAO-10 uncovered. {@code hasActionableIntent} returns true for a pending
+     * challenger, and both executor start gates used it - so a challenger could physically start
+     * before the incumbent reached its safe yield point and acknowledged.
+     *
+     * <p>Not theoretical: Campfire is priority 7 and Exploring is 8, so REST can preempt a running
+     * EXPLORE it is still waiting on. The transaction was correct and the start gate bypassed it.
+     */
+    @Test
+    void task43r_aPendingChallengerMayNotStartWhileTheIncumbentHoldsTheSlot() {
+        seedOpinions(11f, 4f, 55f, 5f);
+        neutralMood().seedChannels(0f, 10f, 0f, 5f, 5f);
+        director.seedIncumbent(DiscretionaryActivity.EXPLORE, 20f, 0L);
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(now, idleObservation(), true));
+
+        assertTrue(director.pendingIntent()
+                        .filter(intent -> intent.activity() == DiscretionaryActivity.REST)
+                        .isPresent(),
+                "precondition: REST won and is pending");
+        assertTrue(director.yieldRequest().isPresent(),
+                "precondition: EXPLORE has been asked to yield");
+
+        assertTrue(director.hasActionableIntent(DiscretionaryActivity.REST),
+                "desire exists - which is exactly why the old gate said yes");
+        assertFalse(director.mayStartExecutor(DiscretionaryActivity.REST),
+                "but REST must not physically start until EXPLORE reaches its safe yield point - "
+                        + "otherwise the whole voluntary-yield transaction is decorative");
+        assertTrue(director.mayStartExecutor(DiscretionaryActivity.EXPLORE),
+                "the incumbent still owns the slot and may keep executing");
+    }
+
+    @Test
+    void task43r_acknowledgementReleasesTheSlotToTheChallenger() {
+        seedOpinions(11f, 4f, 55f, 5f);
+        neutralMood().seedChannels(0f, 10f, 0f, 5f, 5f);
+        director.seedIncumbent(DiscretionaryActivity.EXPLORE, 20f, 0L);
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(now, idleObservation(), true));
+        UUID exploreIntentId =
+                director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow();
+        assertFalse(director.mayStartExecutor(DiscretionaryActivity.REST));
+
+        boolean accepted = director.acknowledgeYield(
+                exploreIntentId, DiscretionaryActivity.EXPLORE, now + 20L);
+
+        assertTrue(accepted, "the incumbent reached its safe yield point");
+        assertTrue(director.yieldRequest().isEmpty(), "transaction complete");
+        assertTrue(director.mayStartExecutor(DiscretionaryActivity.REST),
+                "only now may the challenger physically start");
+        assertFalse(director.mayStartExecutor(DiscretionaryActivity.EXPLORE),
+                "and the released incumbent no longer holds the slot");
+    }
+
+    /** The reverse direction, so the rule is not accidentally activity-specific. */
+    @Test
+    void task43r_theSameGateAppliesWithRestIncumbentAndExploreChallenger() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 20f, 0L);
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(now, idleObservation(), true));
+
+        assertTrue(director.hasActionableIntent(DiscretionaryActivity.EXPLORE));
+        assertFalse(director.mayStartExecutor(DiscretionaryActivity.EXPLORE),
+                "EXPLORE waits for REST to acknowledge, exactly as REST waited for EXPLORE");
+        assertTrue(director.mayStartExecutor(DiscretionaryActivity.REST));
+
+        UUID restIntentId =
+                director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow();
+        director.acknowledgeYield(restIntentId, DiscretionaryActivity.REST, now + 20L);
+
+        assertTrue(director.mayStartExecutor(DiscretionaryActivity.EXPLORE));
+    }
+
+    @Test
+    void task43r_aPendingIntentWithNoIncumbentMayStartImmediately() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        long now = 40L;
+
+        director.tick(tick(now, idleObservation(), true));
+
+        assertTrue(director.pendingIntent().isPresent(), "precondition: something was issued");
+        DiscretionaryActivity chosen = director.pendingIntent()
+                .map(DiscretionaryIntent::activity)
+                .orElseThrow();
+        assertTrue(director.mayStartExecutor(chosen),
+                "no incumbent owns the slot, so the gate must not stall a first adoption");
+    }
+
+    /** The consumer-facing gate, since that is what the executors actually call. */
+    @Test
+    void task43r_theAuthorityFacadeHonoursTheStartGate() {
+        seedOpinions(11f, 4f, 55f, 5f);
+        neutralMood().seedChannels(0f, 10f, 0f, 5f, 5f);
+        director.seedIncumbent(DiscretionaryActivity.EXPLORE, 20f, 0L);
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(now, idleObservation(), true));
+
+        assertFalse(DiscretionaryAuthority.mayStartDiscretionaryRest(MOB),
+                "the facade the CampfireGoal calls must refuse while EXPLORE still owns the slot");
+
+        UUID exploreIntentId =
+                director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow();
+        director.acknowledgeYield(exploreIntentId, DiscretionaryActivity.EXPLORE, now + 20L);
+
+        assertTrue(DiscretionaryAuthority.mayStartDiscretionaryRest(MOB),
+                "and permit it once the transaction has completed");
+    }
 }
