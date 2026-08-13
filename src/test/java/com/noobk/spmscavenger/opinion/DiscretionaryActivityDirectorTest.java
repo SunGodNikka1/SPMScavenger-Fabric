@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -882,5 +883,170 @@ class DiscretionaryActivityDirectorTest {
         assertTrue(lines.get(1).contains("outcome=ACKNOWLEDGED"), lines.get(1));
         assertTrue(lines.get(1).contains("after=34t"),
                 "duration comes from the transaction, not from a separate clock: " + lines.get(1));
+    }
+
+    // ==== Task 43 item 9 - the acceptance matrix ====
+
+    private DirectorTickInput task43Tick(
+            long gameTime,
+            ActivityAdmissions admissions,
+            ActivityContinuations continuations,
+            boolean eligible,
+            boolean combat) {
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(MOB);
+        return new DirectorTickInput(
+                gameTime, true, false, combat, idleObservation(),
+                new DiscretionaryScoringInput(
+                        context.affectiveState(), context.opinionMemory(),
+                        DiscretionaryAvailability.bothPresent(), eligible, true),
+                admissions, continuations);
+    }
+
+    /**
+     * Item 9.1 - the original GAO-4R1 defect, dead.
+     *
+     * <p>A running EXPLORE whose <em>adoption</em> is blocked competes on its real utility. Before
+     * Task 43 it was deleted from scoring, so REST won by beating nothing. This fails instantly if
+     * anyone collapses ADOPTABLE and CONTINUABLE again.
+     */
+    @Test
+    void task43_lowerUtilityChallengerLosesToARetainedIncumbent() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.EXPLORE, 30f, 0L);
+        UUID before = director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow();
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(task43Tick(
+                now,
+                ActivityAdmissions.of(
+                        ActivityAdmission.blocked(
+                                true, ActivityAdoptionBlocker.SCAN_COOLDOWN, "adoption cooldown"),
+                        ActivityAdmission.ready(true)),
+                ActivityContinuations.of(
+                        ActivityContinuation.valid(), ActivityContinuation.notRunning()),
+                true, false));
+
+        assertEquals(before,
+                director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow(),
+                "the incumbent execution must be the same one");
+        assertEquals(Optional.of(DiscretionaryActivity.EXPLORE), director.incumbentActivity());
+        assertTrue(director.pendingIntent().isEmpty(), "no challenger was adopted");
+        assertTrue(director.yieldRequest().isEmpty(), "and none was asked to take over");
+
+        OpinionDecisionTrace.Candidate explore = director.trace().snapshot().stream()
+                .flatMap(decision -> decision.candidates().stream())
+                .filter(candidate -> candidate.activity() == DiscretionaryActivity.EXPLORE)
+                .reduce((first, second) -> second)
+                .orElseThrow();
+        assertEquals(OpinionDecisionTrace.CandidateState.ELIGIBLE, explore.state(),
+                "it competed rather than being suppressed");
+        assertNotNull(explore.breakdown(), "with a real score, not -Infinity");
+        assertTrue(explore.execution().retainedByContinuation(),
+                "and the record says why that was legal");
+    }
+
+    /**
+     * Item 9.2 - identity, not activity equality, is what protects a replacement.
+     *
+     * <p>Same activity deliberately: if the guard compared enums, this would pass while a late
+     * acknowledgement from a dead execution terminalized a live one.
+     */
+    @Test
+    void task43_aLateAcknowledgementCannotTouchASameActivityReplacement() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 20f, 0L);
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(now, idleObservation(), true));
+        UUID executionA = director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow();
+        assertTrue(director.yieldRequest().isPresent());
+
+        // Lifecycle moves on: a new REST execution replaces A.
+        director.seedIncumbent(DiscretionaryActivity.REST, 25f, now + 50L);
+        UUID executionB = director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow();
+        assertNotEquals(executionA, executionB, "precondition: a genuine replacement");
+        IntentLifecycle lifecycleBefore =
+                director.runningIntent().map(DiscretionaryIntent::lifecycle).orElseThrow();
+
+        // Executor A finally reports its safe yield point, long after it stopped mattering.
+        boolean accepted = director.acknowledgeYield(
+                executionA, DiscretionaryActivity.REST, now + 60L);
+
+        assertFalse(accepted, "a dead execution cannot complete a transaction");
+        assertEquals(executionB,
+                director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow(),
+                "B is still the running execution");
+        assertEquals(lifecycleBefore,
+                director.runningIntent().map(DiscretionaryIntent::lifecycle).orElseThrow(),
+                "and its lifecycle is untouched - same activity, so only identity could save it");
+    }
+
+    /** Item 9.3 - the REST mirror of the EXPLORE cooldown bug. */
+    @Test
+    void task43_restCannotStartFreshButKeepsRunning() {
+        seedOpinions(11f, 4f, 55f, 5f);
+        neutralMood().seedChannels(0f, 10f, 0f, 5f, 5f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 30f, 0L);
+        UUID before = director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow();
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(task43Tick(
+                now,
+                ActivityAdmissions.of(
+                        ActivityAdmission.ready(true),
+                        ActivityAdmission.blocked(
+                                true, ActivityAdoptionBlocker.NO_CAMPFIRE_AVAILABLE,
+                                "no new campfire to adopt")),
+                ActivityContinuations.of(
+                        ActivityContinuation.notRunning(), ActivityContinuation.valid()),
+                true, false));
+
+        assertEquals(before,
+                director.runningIntent().map(DiscretionaryIntent::intentId).orElseThrow(),
+                "a mob already resting keeps its session when it merely cannot start a new one");
+        assertEquals(Optional.of(DiscretionaryActivity.REST), director.incumbentActivity());
+
+        OpinionDecisionTrace.Candidate rest = director.trace().snapshot().stream()
+                .flatMap(decision -> decision.candidates().stream())
+                .filter(candidate -> candidate.activity() == DiscretionaryActivity.REST)
+                .reduce((first, second) -> second)
+                .orElseThrow();
+        assertTrue(rest.execution().isRetainedDespiteBlockedAdoption(),
+                "adoption blocked, continuation valid, retained - the same shape as EXPLORE");
+    }
+
+    /**
+     * Item 9.4 - disabling Opinion must not leave Opinion-created authority able to influence
+     * legacy execution. A disposition of OPINION_DISABLED alone would prove nothing.
+     */
+    @Test
+    void task43_disablingOpinionRevokesAuthorityItHadIssued() {
+        seedOpinions(55f, 5f, 11f, 4f);
+        neutralMood().seedChannels(0f, 80f, 0f, 5f, 15f);
+        director.seedIncumbent(DiscretionaryActivity.REST, 20f, 0L);
+        long now = DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 10L;
+
+        director.tick(tick(now, idleObservation(), true));
+        assertTrue(director.yieldRequest().isPresent(), "precondition: live discretionary authority");
+        assertTrue(director.mustYield(DiscretionaryActivity.REST, now));
+        assertTrue(director.pendingIntent().isPresent());
+
+        MobExperienceContext context = OpinionExperienceRegistry.contextFor(MOB);
+        director.tick(new DirectorTickInput(
+                now + 10L, false, false, false, idleObservation(),
+                new DiscretionaryScoringInput(
+                        context.affectiveState(), context.opinionMemory(),
+                        DiscretionaryAvailability.bothPresent(), true, false),
+                TestActivityAdmissions.bothReady(),
+                ActivityContinuations.none()));
+
+        assertTrue(director.yieldRequest().isEmpty(),
+                "a live yield must not survive Opinion being switched off - the executor would "
+                        + "still see mustYield() and stop for a director that is no longer running");
+        assertFalse(director.mustYield(DiscretionaryActivity.REST, now + 10L));
+        assertFalse(director.mustYield(DiscretionaryActivity.EXPLORE, now + 10L));
+        assertTrue(director.intent().isEmpty(), "and no discretionary intent remains actionable");
     }
 }

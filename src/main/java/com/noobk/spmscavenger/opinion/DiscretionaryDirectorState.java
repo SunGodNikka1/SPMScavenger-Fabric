@@ -113,6 +113,15 @@ public final class DiscretionaryDirectorState {
                 || yieldRequest.expired(gameTime)) {
             return false;
         }
+        // The request must still describe the LIVE execution, not merely match the acknowledger.
+        // mustYield() validated against runningIntent and this did not, so a replaced execution
+        // could complete a transaction its successor was never party to - recording an
+        // ACKNOWLEDGED switch that never happened and consuming the request the current incumbent
+        // may still owe. Same activity makes it invisible to any enum-based check.
+        if (!yieldRequest.appliesTo(runningIntent, gameTime)) {
+            finishYieldRequest(YieldOutcome.STALE_INCUMBENT, gameTime);
+            return false;
+        }
         DiscretionaryActivity challenger = yieldRequest.challengerActivity();
         markYield(
                 releasingIntentId,
