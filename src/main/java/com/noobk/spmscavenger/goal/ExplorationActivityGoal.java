@@ -7,6 +7,8 @@ import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.opinion.AffectiveStateService;
 import com.noobk.spmscavenger.opinion.ActivityAdmission;
 import com.noobk.spmscavenger.opinion.ActivityAdmissions;
+import com.noobk.spmscavenger.opinion.ActivityContinuation;
+import com.noobk.spmscavenger.opinion.ActivityContinuations;
 import com.noobk.spmscavenger.opinion.DiscretionaryActivityDirector;
 import com.noobk.spmscavenger.opinion.DiscretionaryActivity;
 import com.noobk.spmscavenger.opinion.DiscretionaryAvailability;
@@ -168,13 +170,26 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
                 ? ActivityAdmission.executorAbsent()
                 : campfireGoal.inspectAdmission(now);
         ActivityAdmissions admissions = ActivityAdmissions.of(exploreAdmission, restAdmission);
+        // D-GAO-050 - real continuation snapshots, never derived from adoptionReady. Adoption and
+        // continuation stay independently observable, so a running incumbent with a closed adoption
+        // window is representable as adoptable=false + continuable=true and keeps competing on its
+        // actual utility rather than being deleted from the comparison.
+        ExploringGoal exploringGoal = ControlledDescentGoal.exploringGoalOf(mob);
+        ActivityContinuations continuations = ActivityContinuations.of(
+                exploringGoal == null
+                        ? ActivityContinuation.notRunning()
+                        : exploringGoal.inspectContinuation(now),
+                campfireGoal == null
+                        ? ActivityContinuation.notRunning()
+                        : campfireGoal.inspectContinuation(now));
         DiscretionaryActivityDirector.tick(
                 mob.getUUID(),
                 now,
                 observation,
                 availability,
                 mob.getTarget() != null,
-                admissions);
+                admissions,
+                continuations);
 
         boolean mayCreateWork = permitsNewMiningWork(cfg.enabled, allowNewMiningWork);
         if (mayCreateWork) {

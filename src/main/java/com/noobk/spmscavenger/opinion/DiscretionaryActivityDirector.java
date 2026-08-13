@@ -19,7 +19,8 @@ public final class DiscretionaryActivityDirector {
             ActivityObservationService.Observation observation,
             DiscretionaryAvailability availability,
             boolean combatTarget,
-            ActivityAdmissions admissions) {
+            ActivityAdmissions admissions,
+            ActivityContinuations continuations) {
         if (!OpinionFeatureGate.isEnabled()) {
             MobExperienceContext existing = OpinionExperienceRegistry.find(mobId);
             if (existing == null) {
@@ -37,7 +38,8 @@ public final class DiscretionaryActivityDirector {
                             availability,
                             false,
                             false),
-                    admissions));
+                    admissions,
+                    continuations));
             return;
         }
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
@@ -55,7 +57,8 @@ public final class DiscretionaryActivityDirector {
                 combatTarget,
                 observation,
                 scoringInput,
-                admissions));
+                admissions,
+                continuations));
     }
 
     public static DiscretionaryDirectorState stateFor(UUID mobId) {

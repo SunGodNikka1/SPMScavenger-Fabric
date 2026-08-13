@@ -4,6 +4,7 @@ import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.opinion.ActivityAdmission;
+import com.noobk.spmscavenger.opinion.ActivityContinuation;
 import com.noobk.spmscavenger.opinion.DiscretionaryAuthority;
 import com.noobk.spmscavenger.opinion.IntentLifecycle;
 import net.minecraft.core.BlockPos;
@@ -74,6 +75,27 @@ public class CampfireGoal extends Goal {
     }
 
     /** GAO-4R — decision-time admission without calling {@link #canUse()}. */
+    /**
+     * D-GAO-050 — is the rest session currently adopted still continuable?
+     *
+     * <p>Asks about the <em>running</em> session, never whether a fresh campfire rest could begin.
+     * A mob already resting beside a fire whose adoption window has closed is still resting; the
+     * claim it holds is what makes continuation valid, and that claim is bound state read without
+     * mutation.
+     */
+    public ActivityContinuation inspectContinuation(long gameTime) {
+        if (firePos == null || !restClaimOpened) {
+            return ActivityContinuation.notRunning();
+        }
+        if (!com.noobk.spmscavenger.experience.OpinionExperienceRegistry
+                .contextFor(mob.getUUID()).hasLiveRestClaim()) {
+            return ActivityContinuation.invalid(
+                    ActivityContinuation.ContinuationBlocker.CLAIM_LAPSED,
+                    "rest claim no longer live");
+        }
+        return ActivityContinuation.valid();
+    }
+
     public ActivityAdmission inspectAdmission(long gameTime) {
         return RestExecutorAdmission.inspect(mob, gameTime, scanClock, firePos, idlePos);
     }

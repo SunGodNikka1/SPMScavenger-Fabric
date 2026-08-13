@@ -6,6 +6,7 @@ import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
 import com.noobk.spmscavenger.opinion.DiscretionaryActivityDirector;
 import com.noobk.spmscavenger.opinion.ActivityAdmissions;
+import com.noobk.spmscavenger.opinion.ActivityContinuations;
 import com.noobk.spmscavenger.opinion.DiscretionaryAvailability;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import org.junit.jupiter.api.AfterEach;
@@ -63,7 +64,8 @@ class OpinionExperienceRegistryAllocationTest {
                 observation,
                 new DiscretionaryAvailability(true, true),
                 false,
-                ActivityAdmissions.unavailable());
+                ActivityAdmissions.unavailable(),
+                ActivityContinuations.none());
 
         assertEquals(0, OpinionExperienceRegistry.contextCount());
     }

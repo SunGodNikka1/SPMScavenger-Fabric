@@ -433,13 +433,15 @@ class DiscretionaryActivityDirectorTest {
         seedOpinions(55f, 5f, 11f, 4f);
         neutralMood().seedChannels(0f, 80f, 0f, 5f, 10f);
         DiscretionaryActivityDirector.tick(
-                MOB, 10L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, TestActivityAdmissions.bothReady());
+                MOB, 10L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, TestActivityAdmissions.bothReady(),
+                ActivityContinuations.none());
         UUID staleId = director.intent().get().intentId();
         assertTrue(director.intent().isPresent());
 
         OpinionFeatureGate.testOverride = false;
         DiscretionaryActivityDirector.tick(
-                MOB, 20L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, TestActivityAdmissions.bothReady());
+                MOB, 20L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, TestActivityAdmissions.bothReady(),
+                ActivityContinuations.none());
 
         assertTrue(director.intent().isEmpty());
         assertTrue(hasTerminalDetail("OPINION_DISABLED"));
@@ -447,7 +449,8 @@ class DiscretionaryActivityDirectorTest {
 
         OpinionFeatureGate.testOverride = true;
         DiscretionaryActivityDirector.tick(
-                MOB, 30L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, TestActivityAdmissions.bothReady());
+                MOB, 30L, idleObservation(), DiscretionaryAvailability.bothPresent(), false, TestActivityAdmissions.bothReady(),
+                ActivityContinuations.none());
 
         assertTrue(director.intent().isPresent());
         assertFalse(staleId.equals(director.intent().get().intentId()));

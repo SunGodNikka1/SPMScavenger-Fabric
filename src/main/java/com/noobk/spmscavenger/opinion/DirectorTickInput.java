@@ -20,8 +20,12 @@ public record DirectorTickInput(
         continuations = continuations == null ? ActivityContinuations.none() : continuations;
     }
 
-    /** D-GAO-050 back-compat: a caller that supplies no continuation state has none running. */
-    public DirectorTickInput(
+    /**
+     * Test-only convenience. Production must pass real continuation snapshots: defaulting to
+     * {@code none()} is exactly how the framework existed while the defect stayed live, since a
+     * running incumbent reported NOT_RUNNING and was deleted from scoring anyway.
+     */
+    DirectorTickInput(
             long gameTime,
             boolean opinionEnabled,
             boolean frozen,

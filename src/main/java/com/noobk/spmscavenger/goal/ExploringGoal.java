@@ -8,6 +8,7 @@ import com.noobk.spmscavenger.DescentHeadingPolicy;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.WorkDemandPolicy;
+import com.noobk.spmscavenger.opinion.ActivityContinuation;
 import com.noobk.spmscavenger.mining.ExecutionIntentPolicy;
 import com.noobk.spmscavenger.mining.MiningExecutionGuard;
 import com.noobk.spmscavenger.mining.MiningGoalKind;
@@ -115,6 +116,31 @@ public final class ExploringGoal extends Goal {
      * @param lifetimeTicks window to measure against, so an authority window stays an explicit
      *     decision at the call site rather than an implicit default
      */
+    /**
+     * D-GAO-050 — is the expedition currently adopted still continuable?
+     *
+     * <p>Deliberately <b>not</b> an adoption readiness scan: it asks nothing about cooldowns,
+     * idle thresholds or whether a <em>new</em> expedition could begin. Those answer adoption. This
+     * reads only bound state already held by this goal, so it is O(1) and cannot change the answer
+     * by asking.
+     *
+     * <p>This is the seam the whole task exists for: an EXPLORE with
+     * {@code adoptable=false, blocker=COOLDOWN} can legitimately be
+     * {@code running=true, continuable=true}, and must then compete on its real utility instead of
+     * being deleted from the comparison.
+     */
+    public ActivityContinuation inspectContinuation(long gameTime) {
+        if (expedition == null) {
+            return ActivityContinuation.notRunning();
+        }
+        if (expeditionExpired(expedition.startedTick, gameTime, MAX_EXPEDITION_TICKS)) {
+            return ActivityContinuation.invalid(
+                    ActivityContinuation.ContinuationBlocker.EXECUTION_ENDED,
+                    "expedition older than MAX_EXPEDITION_TICKS");
+        }
+        return ActivityContinuation.valid();
+    }
+
     public static boolean expeditionExpired(long startedTick, long now, int lifetimeTicks) {
         return now - startedTick > lifetimeTicks;
     }
