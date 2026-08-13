@@ -124,6 +124,7 @@ public class SpmScavenger implements ModInitializer {
                     OpinionExperienceRegistry.shutdownServerState();
                     FurnaceStations.shutdownServerState();
                     SeekShelterGoal.shutdownServerState();
+                    com.noobk.spmscavenger.opinion.SocialAdmissionSeam.shutdownServerState();
                 });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
