@@ -2657,7 +2657,7 @@ canContinueToUse() =                                            // 0 putfield - 
     && friend != null && friend.isAlive()
     && mob.getTarget() == null
     && mob.reactionToward(friend) == GREET
-    && mob.distanceTo(friend) <= range
+    && mob.distanceTo(friend) <= range + 6.0        // CONTINUATION radius, not acquisition
 
 stop() { cooldownTicks = …; friend = null; fetchItem = null; phase = …; }
 ```
@@ -2722,7 +2722,7 @@ while Opinion is enabled — but no binding was created, so the observer still r
 | --- | --- |
 | redirect returns the bound target | SPM accepted our target under its own admission rules |
 | `start()` | **ADOPTED / RUNNING** — the GoalSelector actually activated the executor |
-| `stop()` | **executor ended** — *not* success |
+| `stop()` | **executor ended** — *not* success. Classified COMPLETED / INTERRUPTED_WHILE_CONTINUABLE / ENDED_BY_WORLD; only COMPLETED teaches |
 
 ### Completion: TERMINAL ≠ SUCCESS (resolved, option 1)
 
@@ -2737,17 +2737,44 @@ target from its own binding rather than SPM's private `friend`:
 ```text
 at stop() HEAD, before SPM clears its fields:
 
-canContinueToUse() == true      → PREEMPTED      (still valid; the selector took the slot)
-canContinueToUse() == false
-    and target alive
-    and no combat target
-    and reactionToward(target) == GREET
-    and within range              → COMPLETED    (only phase == DONE can still be false)
-otherwise                        → ENDED_BY_WORLD (friend died, fled, turned hostile)
+C = canContinueToUse()
+
+C == true    → INTERRUPTED_WHILE_CONTINUABLE
+                 (ended while its own predicate still held — usually scheduler preemption, but
+                  goal removal or control change can also reach stop(); we name what we observed)
+
+C == false and ALL public continuation terms still true:
+    target alive
+    no combat target
+    reactionToward(target) == GREET
+    distanceTo(target) <= range + 6.0
+             → COMPLETED   (the only remaining false term is `phase != DONE`)
+
+C == false and any public term false
+             → ENDED_BY_WORLD  (friend died, fled, turned hostile, left the envelope)
 ```
 
-Elimination over a pure predicate, which is itself **D-GAO-057**-compliant. `range` is the one
-constant the adapter must read, and it is a scalar set at construction — not a state machine.
+Elimination over a pure predicate, which is itself **D-GAO-057**-compliant.
+
+**The two radii are different host semantics and must not be conflated:**
+
+| | Value | Used by |
+| --- | --- | --- |
+| acquisition radius | `range` | `canUse` → `nearestWhereReaction(GREET, range)` |
+| continuation radius | `range + 6.0` | `canContinueToUse` |
+
+**Acceptance vector (mandatory):** a greet that genuinely reached `Phase.DONE` with the target
+between `range` and `range + 6.0` must classify **COMPLETED**, not `ENDED_BY_WORLD`. With
+`range = 10` and the target at 13 blocks, SPM still considers the pair inside its continuation
+envelope; reconstructing the bound as `<= range` would have manufactured a world-failure terminal
+for a successful greeting — and, because only COMPLETED teaches, silently suppressed real learning
+while leaving the mob's behaviour unchanged. Exactly the shape of defect that becomes fake
+personality later.
+
+**Transcription note (`AV-1`).** The RFC originally recorded `<= range`. The error came from reading
+a `javap` dump through a `grep` filter (`getfield|invoke|if|ireturn|getstatic`) that silently dropped
+`ldc2_w 6.0d` and `dadd`. A filtered view of evidence is not the evidence; verified unfiltered at
+bytecode 62–73.
 
 **Learning consequence:** only `COMPLETED` may produce positive social learning. `PREEMPTED` and
 `ENDED_BY_WORLD` are recorded as terminal evidence and teach nothing, exactly as
@@ -2759,8 +2786,12 @@ constant the adapter must read, and it is a scalar set at construction — not a
    HEAD-cancel and INVOKE-redirect operate at different sites and should compose, but this is an
    **implementation acceptance gate**: both must be proven to apply against the pinned *remapped*
    jar (api-break-detection step 3b), not assumed.
-2. Whether `COMPLETED` alone is a rich enough signal, or whether gift completions via
-   `PlayerMobSocialHooks` should supplement it for player targets.
+2. Whether `COMPLETED` should be *enriched* by gift evidence. **Resolved in principle:**
+   `COMPLETED` alone is sufficient for gen-1 SOCIAL success — "the selected social interaction
+   completed normally". `PlayerMobSocialHooks` covers only `ServerPlayer` gift events, so making it
+   a prerequisite would leave every PlayerMob→PlayerMob greeting and every non-gift completion
+   unattributable. It may later enrich explanation or experience magnitude for the subset it does
+   cover; it must not define basic success.
 
 **Host readout is statically safe:** `ObjectiveReadout` renders only `WrappedGoal`s where
 `isRunning()`, so a null redirect (→ `canUse()` false → never starts) cannot produce a phantom
@@ -3302,6 +3333,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-09 | User + Agent_Claude | **GAO-10 contract correction.** The recorded `canContinueToUse` bound was wrong: pinned SPM uses `distanceTo(friend) <= range + 6.0` (verified at bytecode 62–73, `ldc2_w 6.0d` + `dadd`), not `<= range`. My transcription came from a `grep`-filtered `javap` dump that dropped both opcodes — a filtered view of evidence is not the evidence (AV-1). Acquisition radius (`range`, used by `nearestWhereReaction`) and continuation radius (`range + 6.0`) are deliberately different host semantics. Corrected the COMPLETED elimination predicate and added a mandatory acceptance vector: a DONE greet with the target between `range` and `range + 6` must classify COMPLETED, not ENDED_BY_WORLD — otherwise a successful greeting is recorded as world failure and, since only COMPLETED teaches, real learning is silently suppressed. Renamed the still-continuable terminal **INTERRUPTED_WHILE_CONTINUABLE** rather than asserting scheduler preemption. Gift hooks confirmed supplemental, never a prerequisite |
 | 2026-08-09 | User + Agent_Claude | **D-GAO-057 Observation Purity** and **D-GAO-058 Causal Adoption** → `LOCKED`. GAO-10 contract review from the pinned `playermob-0.86.0` bytecode: `canUse()` mutates cooldown *and* assigns `friend` (banned as a probe by 057); `canContinueToUse()` is verified pure; `PlayerMobSocialHooks` is gift-only/ServerPlayer-only. **D-GAO-052 AMENDED** to a director-gated `@Redirect` on `nearestWhereReaction` that also requires `mayStartExecutor(SOCIAL)` (Task 43R), returns null when Opinion is on with no startable intent, and the original result when Opinion is off. **D-GAO-053 must be reworked** — FriendlyGreet cannot be both protected reflex and Opinion's executor. Classification is **binding-based** so adapter failure loses control but never manufactures ownership. **TERMINAL ≠ SUCCESS resolved without exposing `Phase`**: every `canContinueToUse` term but `phase != DONE` is publicly observable, so COMPLETED/PREEMPTED/ENDED_BY_WORLD is derivable by elimination over a pure predicate; only COMPLETED may teach. Open: mixin coexistence on the remapped jar. No implementation |
 | 2026-08-09 | User + Agent_Claude | **Task 43R** — GAO-10 review uncovered a Task 43 production bypass: both executor start gates used `hasActionableIntent`, which is true for a **pending challenger**, so REST (priority 7) could physically start before EXPLORE (priority 8) reached its safe yield point and acknowledged. The transaction was correct and the start gate ignored it. Added `mayStartExecutor(activity)` — while an incumbent is active only the incumbent may execute — and repointed both `DiscretionaryAuthority` consumers. Five EXPLORE/REST regressions incl. the consumer-facing facade. Task 43 re-closed at **750 tests**. Third instance of the same class: state that exists is not permission to act on it |
 | 2026-08-09 | User + Agent_Claude | **Task 43 / GAO-4R1 CLOSED — STATIC ACCEPT** (745 tests). **D-GAO-050** and **D-GAO-051** → `LOCKED / IMPLEMENTED`. Nine defects found and repaired during the task, each surfaced by the next repair: framework-without-production wiring, half-generic yield, allocating observer, wrong causal origin, five termination paths, immortal sliding timeout, unreachable reconciler, recorded-but-not-inspectable trace, and an acknowledgement asymmetry that let a replaced execution complete its successor's transaction. MAIBS closure verified all six negative conditions at source. Runtime `UNVERIFIED`; item 9.3 real-Mob REST-inspector integration recorded as unverified, not a blocker. Lesson `PROVEN`: source-shape tests guard structure, never control flow. No SOCIAL |
