@@ -1366,3 +1366,21 @@ Static MAIBS remains `PASS — BEHAVIORALLY_PLAUSIBLE`; physical multi-mob/exter
 `UNVERIFIED`. All 681 tests and `clean build` pass. The remapped artifact packages the policy,
 encounter record, and optional Mixin. SHA-256:
 `DB403E27F418303E3D800495C055477D32E02FC50828AA1848C5731ABE9187CF`.
+
+### GAO-10 Task 44C-R — subject-bearing discretionary candidate identity
+
+The activity enum is semantic type, not execution identity. `SOCIAL(Bob)` and `SOCIAL(Alice)` now
+have distinct `DiscretionaryCandidateKey` values while EXPLORE and REST remain singleton keys. The
+exact scored `SocialIntent` is carried through issuance; evaluation retention, switching, yields,
+adoption, executor admission/start, and the atomic causal trace compare the key. Activity-only
+SOCIAL execution seams fail closed. This prevents subject-less issuance exceptions and prevents a
+new subject from retaining or borrowing another subject's continuation authority.
+
+Alternatives rejected: scattered SOCIAL-specific comparisons would drift across lifecycle seams;
+full `SocialIntent` equality would incorrectly make observation timestamps/range part of stable
+candidate identity. **Must happen:** a Bob decision binds and traces Bob; a later Alice decision is
+distinct. **Must not happen:** Alice retains Bob or inherits Bob's continuation exception merely
+because both are SOCIAL. Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`; physical SOCIAL remains
+`UNVERIFIED` because Task 44D is not implemented. `clean build`: 800 tests, zero failures/errors/
+skips. Artifact SHA-256:
+`429E212164B0116E9F68DBB13066CAA9AC35B69B311B6F0FE4C74ABC0EEED550`.

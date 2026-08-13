@@ -3,6 +3,7 @@ package com.noobk.spmscavenger.opinion;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -138,5 +139,216 @@ class SocialCandidateBindingTest {
         assertTrue(social.subjectFit() > 0f, "sociability and entity opinion land in subjectFit");
         assertEquals(0f, social.noveltyFit(),
                 "novelty is EXPLORE's term; reusing its slot would make the readout lie");
+    }
+
+    @Test
+    void repair44c_socialWinnerIssuesTheExactScoredSubjectThroughTheRealDirectorPath() {
+        DiscretionaryDirectorState director = new DiscretionaryDirectorState();
+        SocialIntent bob = subject(BOB);
+
+        director.tick(socialTick(1_000L, bob, 100f, 100f));
+
+        DiscretionaryIntent issued = director.pendingIntent().orElseThrow();
+        assertEquals(DiscretionaryActivity.SOCIAL, issued.activity());
+        assertSame(bob, issued.socialSubject(),
+                "issuePending must carry the exact SocialIntent that participated in scoring");
+        assertEquals(new DiscretionaryCandidateKey(DiscretionaryActivity.SOCIAL, BOB),
+                issued.candidateKey());
+        OpinionDecisionTrace.Decision decision = director.trace().snapshot().getLast();
+        assertEquals(issued.candidateKey(), decision.selectedCandidateKey(),
+                "the causal decision must name Bob too, not merely the SOCIAL enum");
+        assertEquals(issued.candidateKey(), decision.candidates().stream()
+                .filter(candidate -> candidate.activity() == DiscretionaryActivity.SOCIAL)
+                .findFirst()
+                .orElseThrow()
+                .candidateKey());
+    }
+
+    @Test
+    void repair44c_aliceDecisionCannotSilentlyRetainPendingBob() {
+        DiscretionaryDirectorState director = new DiscretionaryDirectorState();
+        SocialIntent bob = subject(BOB);
+        SocialIntent alice = subject(ALICE);
+
+        director.tick(socialTick(1_000L, bob, 100f, 100f));
+        UUID bobIntentId = director.pendingIntent().orElseThrow().intentId();
+        director.tick(socialTick(1_010L, alice, 100f, 100f));
+
+        DiscretionaryIntent issued = director.pendingIntent().orElseThrow();
+        assertNotEquals(bobIntentId, issued.intentId(),
+                "same activity kind must not alias two different social candidates");
+        assertSame(alice, issued.socialSubject());
+        assertTrue(issued.boundTo(ALICE));
+        assertFalse(issued.boundTo(BOB));
+        assertEquals(issued.candidateKey(),
+                director.trace().snapshot().getLast().selectedCandidateKey());
+    }
+
+    @Test
+    void repair44c_activityOnlySocialAdmissionFailsClosed() {
+        DiscretionaryDirectorState director = new DiscretionaryDirectorState();
+        SocialIntent bob = subject(BOB);
+        director.tick(socialTick(1_000L, bob, 100f, 100f));
+
+        assertFalse(director.mayStartExecutor(DiscretionaryActivity.SOCIAL),
+                "activity-only admission cannot prove which subject may execute");
+        director.adopt(DiscretionaryActivity.SOCIAL, 1_001L);
+        assertTrue(director.runningIntent().isEmpty());
+        assertTrue(director.pendingIntent().isPresent());
+
+        DiscretionaryCandidateKey bobKey =
+                new DiscretionaryCandidateKey(DiscretionaryActivity.SOCIAL, BOB);
+        assertTrue(director.mayStartExecutor(bobKey));
+        director.adopt(bobKey, 1_001L);
+        assertTrue(director.runningIntent().orElseThrow().boundTo(BOB));
+    }
+
+    @Test
+    void repair44c_candidateKeyTreatsExploreAndRestAsSingletons() {
+        assertEquals(
+                DiscretionaryCandidateKey.singleton(DiscretionaryActivity.EXPLORE),
+                DiscretionaryIntent.pending(
+                                1L, DiscretionaryActivity.EXPLORE, 1f, 0f, 1L)
+                        .candidateKey());
+        assertEquals(
+                DiscretionaryCandidateKey.singleton(DiscretionaryActivity.REST),
+                DiscretionaryIntent.pending(
+                                2L, DiscretionaryActivity.REST, 1f, 0f, 1L)
+                        .candidateKey());
+        assertThrows(IllegalArgumentException.class,
+                () -> DiscretionaryCandidateKey.singleton(DiscretionaryActivity.SOCIAL));
+    }
+
+    @Test
+    void repair44c_availableSocialSubjectDoesNotAttachWhenExploreWins() {
+        DiscretionaryDirectorState director = new DiscretionaryDirectorState();
+        SocialIntent bob = subject(BOB);
+        AffectiveState affect = new AffectiveState();
+        affect.seedChannels(0f, 100f, 0f, 0f, 100f);
+        OpinionMemory opinions = new OpinionMemory();
+        opinions.memoryOf(ActivityKind.OVERLAND_EXPLORATION).seedForTest(100f, 0f, 0);
+
+        director.tick(new DirectorTickInput(
+                1_000L, true, false, false,
+                com.noobk.spmscavenger.activity.ActivityObservationService.summarize(
+                        java.util.EnumSet.of(
+                                com.noobk.spmscavenger.activity.ActivityClass.IDLE_CANDIDATE)),
+                new DiscretionaryScoringInput(
+                        affect, opinions, new DiscretionaryAvailability(true, true, true),
+                        true, true, Optional.of(bob), 0f, -100f),
+                ActivityAdmissions.of(
+                        ActivityAdmission.ready(true), ActivityAdmission.ready(true),
+                        ActivityAdmission.ready(true)),
+                ActivityContinuations.none()));
+
+        DiscretionaryIntent issued = director.pendingIntent().orElseThrow();
+        assertEquals(DiscretionaryActivity.EXPLORE, issued.activity());
+        assertNull(issued.socialSubject(), "a losing SOCIAL subject belongs to no EXPLORE intent");
+    }
+
+    @Test
+    void repair44c_bobToAliceSwitchCarriesAliceThroughYieldArbitration() {
+        DiscretionaryDirectorState director = new DiscretionaryDirectorState();
+        SocialIntent bob = subject(BOB);
+        SocialIntent alice = subject(ALICE);
+        director.tick(socialTick(1_000L, bob, 40f, 20f));
+        DiscretionaryCandidateKey bobKey =
+                new DiscretionaryCandidateKey(DiscretionaryActivity.SOCIAL, BOB);
+        director.adopt(bobKey, 1_001L);
+        director.markRunning(bobKey, 1_001L);
+
+        long afterCommitment = 1_001L + DiscretionaryDirectorConstants.MIN_COMMITMENT_TICKS + 1L;
+        director.tick(socialTick(afterCommitment, alice, 100f, 100f));
+
+        YieldRequest request = director.yieldRequest().orElseThrow();
+        assertEquals(
+                new DiscretionaryCandidateKey(DiscretionaryActivity.SOCIAL, ALICE),
+                request.challengerKey(),
+                "a same-activity subject switch is still a distinct yield transaction");
+        assertTrue(director.runningIntent().orElseThrow().boundTo(BOB));
+        assertTrue(director.pendingIntent().orElseThrow().boundTo(ALICE));
+    }
+
+    @Test
+    void repair44c_aliceCannotBorrowBobsContinuationWhenAdoptionIsBlocked() {
+        DiscretionaryDirectorState director = new DiscretionaryDirectorState();
+        SocialIntent bob = subject(BOB);
+        SocialIntent alice = subject(ALICE);
+        DiscretionaryCandidateKey bobKey =
+                new DiscretionaryCandidateKey(DiscretionaryActivity.SOCIAL, BOB);
+
+        director.tick(socialTick(1_000L, bob, 100f, 100f));
+        director.adopt(bobKey, 1_001L);
+        director.markRunning(bobKey, 1_001L);
+
+        AffectiveState affect = new AffectiveState();
+        affect.seedChannels(0f, 100f, 0f, 0f, 0f);
+        director.tick(new DirectorTickInput(
+                1_010L,
+                true,
+                false,
+                false,
+                com.noobk.spmscavenger.activity.ActivityObservationService.summarize(java.util.EnumSet.of(
+                        com.noobk.spmscavenger.activity.ActivityClass.IDLE_CANDIDATE)),
+                new DiscretionaryScoringInput(
+                        affect,
+                        new OpinionMemory(),
+                        new DiscretionaryAvailability(true, true, true),
+                        true,
+                        true,
+                        Optional.of(alice),
+                        100f,
+                        100f),
+                ActivityAdmissions.of(
+                        ActivityAdmission.ready(true),
+                        ActivityAdmission.ready(true),
+                        ActivityAdmission.blocked(
+                                true, ActivityAdoptionBlocker.SCAN_COOLDOWN,
+                                "blocked-for-alice")),
+                ActivityContinuations.of(
+                        ActivityContinuation.notRunning(),
+                        ActivityContinuation.notRunning(),
+                        ActivityContinuation.valid())));
+
+        assertTrue(director.runningIntent().orElseThrow().boundTo(BOB));
+        assertTrue(director.pendingIntent().isEmpty(),
+                "Alice is not Bob's incumbent and cannot inherit Bob's continuation exception");
+        OpinionDecisionTrace.Candidate social = director.trace().snapshot().getLast()
+                .candidates().stream()
+                .filter(candidate -> candidate.activity() == DiscretionaryActivity.SOCIAL)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(OpinionDecisionTrace.CandidateState.SUPPRESSED, social.state());
+        assertEquals(OpinionDecisionTrace.SuppressionReason.ADOPTION_NOT_READY,
+                social.suppressionReason());
+        assertFalse(social.execution().retainedByContinuation());
+    }
+
+    private static DirectorTickInput socialTick(
+            long tick, SocialIntent subject, float sociability, float preference) {
+        AffectiveState affect = new AffectiveState();
+        affect.seedChannels(0f, 100f, 0f, 0f, 0f);
+        return new DirectorTickInput(
+                tick,
+                true,
+                false,
+                false,
+                com.noobk.spmscavenger.activity.ActivityObservationService.summarize(
+                        java.util.EnumSet.of(
+                                com.noobk.spmscavenger.activity.ActivityClass.IDLE_CANDIDATE)),
+                new DiscretionaryScoringInput(
+                        affect,
+                        new OpinionMemory(),
+                        new DiscretionaryAvailability(true, true, true),
+                        true,
+                        true,
+                        Optional.of(subject),
+                        sociability,
+                        preference),
+                ActivityAdmissions.of(
+                        ActivityAdmission.ready(true),
+                        ActivityAdmission.ready(true),
+                        ActivityAdmission.ready(true)),
+                ActivityContinuations.none());
     }
 }

@@ -87,7 +87,7 @@ public final class DiscretionaryDirectorState {
      *     created the <em>incumbent</em>, so a yield raised at decision #87 claimed to originate at
      *     #20 and any trace built on it would attach the switch to the wrong historical cause.
      */
-    void requestYield(long decisionId, DiscretionaryActivity challenger, long now) {
+    void requestYield(long decisionId, DiscretionaryCandidateKey challenger, long now) {
         if (runningIntent == null || !runningIntent.isActive()) {
             return;
         }
@@ -122,7 +122,7 @@ public final class DiscretionaryDirectorState {
             finishYieldRequest(YieldOutcome.STALE_INCUMBENT, gameTime);
             return false;
         }
-        DiscretionaryActivity challenger = yieldRequest.challengerActivity();
+        DiscretionaryActivity challenger = yieldRequest.challengerKey().activity();
         markYield(
                 releasingIntentId,
                 releasingActivity,
@@ -276,7 +276,7 @@ public final class DiscretionaryDirectorState {
     private YieldDirective decide(DirectorTickInput input) {
         expirePendingIfNeeded(input.gameTime());
 
-        ScoringEvaluation evaluation = evaluateCandidates(input, incumbentActivity);
+        ScoringEvaluation evaluation = evaluateCandidates(input, runningIntent);
         long decisionId = trace.beginDecision(input.gameTime(), evaluation.candidates());
         if (evaluation.scoring().isEmpty()) {
             trace.conclude(
@@ -290,6 +290,7 @@ public final class DiscretionaryDirectorState {
         ScoringResult scoring = evaluation.scoring().orElseThrow();
         ActivityUtilityBreakdown top = scoring.top().orElseThrow();
         float runnerUp = runnerUpUtility(scoring);
+        DiscretionaryCandidateKey winnerKey = candidateKey(top.activity(), input.scoringInput());
 
         if (top.total() < DiscretionaryDirectorConstants.ACTIVATION_THRESHOLD) {
             trace.transition(
@@ -301,10 +302,11 @@ public final class DiscretionaryDirectorState {
                     null,
                     InvalidationCause.NONE,
                     "top=" + top.total());
-            trace.conclude(
+            trace.concludeCandidate(
                     decisionId,
                     OpinionDecisionTrace.DecisionDisposition.BELOW_ACTIVATION_THRESHOLD,
-                    top.activity(),
+                    InvalidationCause.NONE,
+                    winnerKey,
                     true);
             clearPending(IntentLifecycle.ABSTAINED, InvalidationCause.NONE, input.gameTime(), "abstain");
             return YieldDirective.none();
@@ -321,31 +323,35 @@ public final class DiscretionaryDirectorState {
                 "top=" + top.total() + " runnerUp=" + runnerUp);
 
         DiscretionaryActivity winner = top.activity();
-        SwitchBlocker switchBlocker = switchBlocker(winner, top.total(), scoring, input.gameTime());
+        SwitchBlocker switchBlocker = switchBlocker(winnerKey, top.total(), scoring, input.gameTime());
         if (switchBlocker != SwitchBlocker.NONE) {
-            trace.conclude(
+            trace.concludeCandidate(
                     decisionId,
                     switchBlocker == SwitchBlocker.COMMITMENT
                             ? OpinionDecisionTrace.DecisionDisposition.COMMITMENT_HOLD
                             : OpinionDecisionTrace.DecisionDisposition.SWITCH_MARGIN_HOLD,
-                    winner,
+                    InvalidationCause.NONE,
+                    winnerKey,
                     true);
             return YieldDirective.none();
         }
 
-        if (needsPendingIssue(winner, input.gameTime())) {
-            issuePending(decisionId, winner, top.total(), runnerUp, input.gameTime());
-            trace.conclude(
+        if (needsPendingIssue(winnerKey, input.gameTime())) {
+            issuePending(decisionId, winnerKey, socialSubjectFor(winnerKey, input.scoringInput()),
+                    top.total(), runnerUp, input.gameTime());
+            trace.concludeCandidate(
                     decisionId,
                     OpinionDecisionTrace.DecisionDisposition.INTENT_ISSUED,
-                    winner,
+                    InvalidationCause.NONE,
+                    winnerKey,
                     false);
         } else {
-            DiscretionaryIntent existing = activeIntentFor(winner);
+            DiscretionaryIntent existing = activeIntentFor(winnerKey);
             if (existing == null) {
                 recoverRetainedIntentInvariantViolation(
                         decisionId,
-                        winner,
+                        winnerKey,
+                        socialSubjectFor(winnerKey, input.scoringInput()),
                         top.total(),
                         runnerUp,
                         input.gameTime(),
@@ -356,26 +362,28 @@ public final class DiscretionaryDirectorState {
                 if (retained.isEmpty()) {
                     recoverRetainedIntentInvariantViolation(
                             decisionId,
-                            winner,
+                            winnerKey,
+                            socialSubjectFor(winnerKey, input.scoringInput()),
                             top.total(),
                             runnerUp,
                             input.gameTime(),
                             "active intent lifecycle not retainable: " + existing.lifecycle());
                 } else {
                     trace.attachIntent(decisionId, existing.intentId());
-                    trace.conclude(decisionId, retained.get(), winner, true);
+                    trace.concludeCandidate(
+                            decisionId, retained.get(), InvalidationCause.NONE, winnerKey, true);
                 }
             }
         }
 
-        return YieldDirective.switchTo(decisionId, winner, top.total(), scoring);
+        return YieldDirective.switchTo(decisionId, winnerKey, top.total(), scoring);
     }
 
     /** What a completed evaluation authorizes: nothing, or one specific switch. */
     private record YieldDirective(
             boolean wantsSwitch,
             long decisionId,
-            DiscretionaryActivity challenger,
+            DiscretionaryCandidateKey challenger,
             float challengerUtility,
             ScoringResult scoring) {
 
@@ -384,7 +392,7 @@ public final class DiscretionaryDirectorState {
         }
 
         static YieldDirective switchTo(
-                long decisionId, DiscretionaryActivity challenger, float utility,
+                long decisionId, DiscretionaryCandidateKey challenger, float utility,
                 ScoringResult scoring) {
             return new YieldDirective(true, decisionId, challenger, utility, scoring);
         }
@@ -411,12 +419,20 @@ public final class DiscretionaryDirectorState {
      * or invalidation.
      */
     public boolean mayStartExecutor(DiscretionaryActivity activity) {
+        if (activity == DiscretionaryActivity.SOCIAL) {
+            return false;
+        }
+        return mayStartExecutor(DiscretionaryCandidateKey.singleton(activity));
+    }
+
+    /** Exact candidate gate used by subject-bearing executors such as future 44D. */
+    public boolean mayStartExecutor(DiscretionaryCandidateKey candidate) {
         if (runningIntent != null && runningIntent.isActive()) {
-            return runningIntent.activity() == activity;
+            return runningIntent.candidateKey().equals(candidate);
         }
         return pendingIntent != null
                 && pendingIntent.isActive()
-                && pendingIntent.activity() == activity;
+                && pendingIntent.candidateKey().equals(candidate);
     }
 
     /**
@@ -437,7 +453,15 @@ public final class DiscretionaryDirectorState {
     }
 
     public void adopt(DiscretionaryActivity activity, long gameTime) {
-        DiscretionaryIntent target = resolveAdoptTarget(activity);
+        if (activity == DiscretionaryActivity.SOCIAL) {
+            return;
+        }
+        adopt(DiscretionaryCandidateKey.singleton(activity), gameTime);
+    }
+
+    /** Exact adoption seam; activity-only SOCIAL callers fail closed instead of guessing a target. */
+    public void adopt(DiscretionaryCandidateKey candidate, long gameTime) {
+        DiscretionaryIntent target = resolveAdoptTarget(candidate);
         if (target == null) {
             return;
         }
@@ -446,8 +470,8 @@ public final class DiscretionaryDirectorState {
             pendingIntent = null;
         }
         target.markAdopted(gameTime);
-        incumbentActivity = activity;
-        if (activity == DiscretionaryActivity.REST) {
+        incumbentActivity = candidate.activity();
+        if (candidate.activity() == DiscretionaryActivity.REST) {
             restAuthorityPhase = RestAuthorityPhase.DELIVERY;
         }
         trace.transition(
@@ -455,15 +479,23 @@ public final class DiscretionaryDirectorState {
                 gameTime,
                 OpinionDecisionTrace.Stage.ADOPT,
                 target.intentId(),
-                activity,
+                candidate.activity(),
                 target.lifecycle(),
                 InvalidationCause.NONE,
                 "utility=" + target.selectedUtility());
     }
 
     public void markRunning(DiscretionaryActivity activity, long gameTime) {
+        if (activity == DiscretionaryActivity.SOCIAL) {
+            return;
+        }
+        markRunning(DiscretionaryCandidateKey.singleton(activity), gameTime);
+    }
+
+    /** Exact execution-start correlation; activity-only SOCIAL callers fail closed. */
+    public void markRunning(DiscretionaryCandidateKey candidate, long gameTime) {
         DiscretionaryIntent target = runningIntent;
-        if (target == null || target.activity() != activity) {
+        if (target == null || !target.candidateKey().equals(candidate)) {
             return;
         }
         target.markRunning();
@@ -472,7 +504,7 @@ public final class DiscretionaryDirectorState {
                 gameTime,
                 OpinionDecisionTrace.Stage.EXECUTOR,
                 target.intentId(),
-                activity,
+                candidate.activity(),
                 target.lifecycle(),
                 InvalidationCause.NONE,
                 "running");
@@ -573,30 +605,30 @@ public final class DiscretionaryDirectorState {
         }
     }
 
-    private DiscretionaryIntent resolveAdoptTarget(DiscretionaryActivity activity) {
+    private DiscretionaryIntent resolveAdoptTarget(DiscretionaryCandidateKey candidate) {
         if (pendingIntent != null
                 && pendingIntent.isActive()
-                && pendingIntent.activity() == activity) {
+                && pendingIntent.candidateKey().equals(candidate)) {
             return pendingIntent;
         }
         if (runningIntent != null
                 && runningIntent.isActive()
-                && runningIntent.activity() == activity) {
+                && runningIntent.candidateKey().equals(candidate)) {
             return runningIntent;
         }
         return null;
     }
 
-    private boolean needsPendingIssue(DiscretionaryActivity winner, long gameTime) {
+    private boolean needsPendingIssue(DiscretionaryCandidateKey winner, long gameTime) {
         if (pendingIntent != null
                 && pendingIntent.isActive()
-                && pendingIntent.activity() == winner
+                && pendingIntent.candidateKey().equals(winner)
                 && !pendingIntent.isExpiredPending(gameTime)) {
             return false;
         }
         if (runningIntent != null
                 && runningIntent.isActive()
-                && runningIntent.activity() == winner
+                && runningIntent.candidateKey().equals(winner)
                 && pendingIntent == null) {
             return false;
         }
@@ -605,7 +637,8 @@ public final class DiscretionaryDirectorState {
 
     private void issuePending(
             long decisionId,
-            DiscretionaryActivity winner,
+            DiscretionaryCandidateKey winner,
+            SocialIntent socialSubject,
             float utility,
             float runnerUp,
             long gameTime) {
@@ -613,21 +646,22 @@ public final class DiscretionaryDirectorState {
             terminalize(pendingIntent, IntentLifecycle.INTERRUPTED, InvalidationCause.SUPERSEDED, gameTime, "superseded-pending");
             pendingIntent = null;
         }
-        pendingIntent = DiscretionaryIntent.pending(decisionId, winner, utility, runnerUp, gameTime);
+        pendingIntent = DiscretionaryIntent.pending(
+                decisionId, winner.activity(), socialSubject, utility, runnerUp, gameTime);
         trace.attachIntent(decisionId, pendingIntent.intentId());
         trace.transition(
                 decisionId,
                 gameTime,
                 OpinionDecisionTrace.Stage.INTENT,
                 pendingIntent.intentId(),
-                winner,
+                winner.activity(),
                 pendingIntent.lifecycle(),
                 InvalidationCause.NONE,
                 "utility=" + utility);
     }
 
     private boolean canSwitchTo(
-            DiscretionaryActivity winner,
+            DiscretionaryCandidateKey winner,
             float winnerUtility,
             ScoringResult scoring,
             long gameTime) {
@@ -661,7 +695,8 @@ public final class DiscretionaryDirectorState {
     private void reconcileYieldTransaction(YieldDirective directive, long gameTime) {
         boolean wantsSwitch = directive.wantsSwitch()
                 && incumbentActivity != null
-                && incumbentActivity != directive.challenger()
+                && (runningIntent == null
+                        || !runningIntent.candidateKey().equals(directive.challenger()))
                 && canSwitchTo(
                         directive.challenger(),
                         directive.challengerUtility(),
@@ -688,7 +723,7 @@ public final class DiscretionaryDirectorState {
         }
         boolean sameTransaction = runningIntent != null
                 && yieldRequest.incumbentIntentId().equals(runningIntent.intentId())
-                && yieldRequest.challengerActivity() == directive.challenger();
+                && yieldRequest.challengerKey().equals(directive.challenger());
         if (sameTransaction) {
             // Deliberately untouched. Refreshing here is what made the lifetime unbounded.
             return;
@@ -728,7 +763,8 @@ public final class DiscretionaryDirectorState {
      */
     private void recoverRetainedIntentInvariantViolation(
             long decisionId,
-            DiscretionaryActivity winner,
+            DiscretionaryCandidateKey winner,
+            SocialIntent socialSubject,
             float utility,
             float runnerUp,
             long gameTime,
@@ -738,14 +774,15 @@ public final class DiscretionaryDirectorState {
                 gameTime,
                 OpinionDecisionTrace.Stage.SELECT,
                 null,
-                winner,
+                winner.activity(),
                 null,
                 InvalidationCause.NONE,
                 "DIRECTOR_INCONSISTENCY: " + detail);
-        issuePending(decisionId, winner, utility, runnerUp, gameTime);
-        trace.conclude(
+        issuePending(decisionId, winner, socialSubject, utility, runnerUp, gameTime);
+        trace.concludeCandidate(
                 decisionId,
                 OpinionDecisionTrace.DecisionDisposition.DIRECTOR_INCONSISTENCY,
+                InvalidationCause.NONE,
                 winner,
                 false);
     }
@@ -763,7 +800,7 @@ public final class DiscretionaryDirectorState {
      * {@code continuationValid == true}. It still has to win on utility like anything else.
      */
     private static ScoringEvaluation evaluateCandidates(
-            DirectorTickInput input, DiscretionaryActivity incumbent) {
+            DirectorTickInput input, DiscretionaryIntent incumbent) {
         Optional<ScoringResult> raw = IdleOpportunityPolicy.score(input.scoringInput());
         java.util.List<OpinionDecisionTrace.Candidate> candidates = new java.util.ArrayList<>();
         java.util.List<ActivityUtilityBreakdown> eligible = new java.util.ArrayList<>();
@@ -784,40 +821,45 @@ public final class DiscretionaryDirectorState {
                     .orElse(null);
             ActivityAdmission admission = input.admissions().forActivity(activity);
             ActivityContinuation continuation = input.continuations().forActivity(activity);
-            boolean isIncumbent = incumbent == activity;
+            DiscretionaryCandidateKey candidateKey = candidateKey(activity, input.scoringInput());
+            boolean isIncumbent = incumbent != null
+                    && incumbent.isActive()
+                    && incumbent.candidateKey().equals(candidateKey);
             boolean retained = !admission.adoptionReady()
-                    && retainsIncumbent(input, incumbent, activity);
+                    && retainsIncumbent(input, incumbent, candidateKey);
             ExecutionEvidence evidence =
                     ExecutionEvidence.of(admission, continuation, isIncumbent, retained);
             if (!admission.executorPresent()) {
                 candidates.add(OpinionDecisionTrace.Candidate.suppressed(
-                        activity,
+                        candidateKey,
                         null,
                         OpinionDecisionTrace.SuppressionReason.EXECUTOR_UNAVAILABLE,
                         "",
                         evidence));
             } else if (!input.scoringInput().discretionaryEligible()) {
                 candidates.add(OpinionDecisionTrace.Candidate.suppressed(
-                        activity,
+                        candidateKey,
                         breakdown,
                         OpinionDecisionTrace.SuppressionReason.DISCRETIONARY_CONTEXT_BLOCKED,
                         "",
                         evidence));
             } else if (!admission.adoptionReady()
-                    && retainsIncumbent(input, incumbent, activity)
+                    && retainsIncumbent(input, incumbent, candidateKey)
                     && breakdown != null) {
                 // Not adoptable, but running and continuable: it competes on its real utility.
-                candidates.add(OpinionDecisionTrace.Candidate.eligible(breakdown, evidence));
+                candidates.add(OpinionDecisionTrace.Candidate.eligible(
+                        candidateKey, breakdown, evidence));
                 eligible.add(breakdown);
             } else if (!admission.adoptionReady()) {
                 candidates.add(OpinionDecisionTrace.Candidate.suppressed(
-                        activity,
+                        candidateKey,
                         breakdown,
                         OpinionDecisionTrace.SuppressionReason.ADOPTION_NOT_READY,
                         admission.suppressionDetail(),
                         evidence));
             } else if (breakdown != null) {
-                candidates.add(OpinionDecisionTrace.Candidate.eligible(breakdown, evidence));
+                candidates.add(OpinionDecisionTrace.Candidate.eligible(
+                        candidateKey, breakdown, evidence));
                 eligible.add(breakdown);
             }
         }
@@ -830,11 +872,12 @@ public final class DiscretionaryDirectorState {
 
     /** True when this activity is the running incumbent and its continuation is still valid. */
     private static boolean retainsIncumbent(
-            DirectorTickInput input, DiscretionaryActivity incumbent,
-            DiscretionaryActivity activity) {
+            DirectorTickInput input, DiscretionaryIntent incumbent,
+            DiscretionaryCandidateKey candidate) {
         return incumbent != null
-                && incumbent == activity
-                && input.continuations().forActivity(activity).continuable();
+                && incumbent.isActive()
+                && incumbent.candidateKey().equals(candidate)
+                && input.continuations().forActivity(candidate.activity()).continuable();
     }
 
     private void invalidateAll(IntentLifecycle terminal, InvalidationCause cause, long gameTime) {
@@ -880,11 +923,13 @@ public final class DiscretionaryDirectorState {
                 detail);
     }
 
-    private DiscretionaryIntent activeIntentFor(DiscretionaryActivity activity) {
-        if (pendingIntent != null && pendingIntent.isActive() && pendingIntent.activity() == activity) {
+    private DiscretionaryIntent activeIntentFor(DiscretionaryCandidateKey candidate) {
+        if (pendingIntent != null && pendingIntent.isActive()
+                && pendingIntent.candidateKey().equals(candidate)) {
             return pendingIntent;
         }
-        if (runningIntent != null && runningIntent.isActive() && runningIntent.activity() == activity) {
+        if (runningIntent != null && runningIntent.isActive()
+                && runningIntent.candidateKey().equals(candidate)) {
             return runningIntent;
         }
         return null;
@@ -956,17 +1001,23 @@ public final class DiscretionaryDirectorState {
     }
 
     private SwitchBlocker switchBlocker(
-            DiscretionaryActivity winner,
+            DiscretionaryCandidateKey winner,
             float winnerUtility,
             ScoringResult scoring,
             long gameTime) {
-        if (incumbentActivity == null || incumbentActivity == winner) {
+        if (incumbentActivity == null) {
+            return SwitchBlocker.NONE;
+        }
+        if (runningIntent != null && runningIntent.candidateKey().equals(winner)) {
             return SwitchBlocker.NONE;
         }
         if (runningIntent != null && runningIntent.isWithinCommitment(gameTime)) {
             return SwitchBlocker.COMMITMENT;
         }
-        float currentIncumbentUtility = utilityFor(scoring, incumbentActivity);
+        float currentIncumbentUtility = runningIntent != null
+                && runningIntent.activity() == winner.activity()
+                ? runningIntent.selectedUtility()
+                : utilityFor(scoring, incumbentActivity);
         return winnerUtility >= currentIncumbentUtility + DiscretionaryDirectorConstants.SWITCH_MARGIN
                 ? SwitchBlocker.NONE
                 : SwitchBlocker.MARGIN;
@@ -981,4 +1032,26 @@ public final class DiscretionaryDirectorState {
     private record ScoringEvaluation(
             Optional<ScoringResult> scoring,
             java.util.List<OpinionDecisionTrace.Candidate> candidates) {}
+
+    private static DiscretionaryCandidateKey candidateKey(
+            DiscretionaryActivity activity, DiscretionaryScoringInput input) {
+        SocialIntent subject = activity == DiscretionaryActivity.SOCIAL
+                ? input.socialOpportunity().orElseThrow(
+                        () -> new IllegalStateException("SOCIAL winner has no scored subject"))
+                : null;
+        return DiscretionaryCandidateKey.of(activity, subject);
+    }
+
+    private static SocialIntent socialSubjectFor(
+            DiscretionaryCandidateKey candidate, DiscretionaryScoringInput input) {
+        if (candidate.activity() != DiscretionaryActivity.SOCIAL) {
+            return null;
+        }
+        SocialIntent subject = input.socialOpportunity().orElseThrow(
+                () -> new IllegalStateException("SOCIAL winner has no scored subject"));
+        if (!candidate.subjectId().equals(subject.targetId())) {
+            throw new IllegalStateException("winner key and scored SOCIAL subject disagree");
+        }
+        return subject;
+    }
 }

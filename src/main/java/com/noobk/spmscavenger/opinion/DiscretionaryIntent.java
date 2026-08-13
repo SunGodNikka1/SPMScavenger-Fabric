@@ -108,6 +108,11 @@ public final class DiscretionaryIntent {
         return socialSubject;
     }
 
+    /** Director-level identity; activity alone is insufficient once SOCIAL has a subject. */
+    public DiscretionaryCandidateKey candidateKey() {
+        return DiscretionaryCandidateKey.of(activity, socialSubject);
+    }
+
     /** Whether this intent is bound to {@code targetId} — the equality 44D adoption will require. */
     public boolean boundTo(UUID targetId) {
         return socialSubject != null && socialSubject.targets(targetId);

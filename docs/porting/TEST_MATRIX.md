@@ -419,3 +419,17 @@ only post-arrival state. Runtime confirmation requires installing and hashing th
 the binary used for the triggering session could not be recovered from the instance after launch.
 All 677 tests and `clean build` pass with zero failures/errors/skips. Final remapped JAR SHA-256:
 `913C2F65192E8EF9937BBD7A93452ECE3F149584192B151612D0B33323892F38`.
+
+### GAO-10 Task 44C-R — candidate identity (static)
+
+| Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Executable SOCIAL wins | Pending intent and causal trace bind the exact scored subject | Subject-less `pending()` exception once the executor becomes present | `SocialCandidateBindingTest` `CODE_CONFIRMED` |
+| Bob pending, Alice wins later | New Alice intent/key replaces Bob | Activity-only SOCIAL retention silently preserves Bob | `SocialCandidateBindingTest` `CODE_CONFIRMED` |
+| Bob running/continuable, Alice adoption blocked | Alice is suppressed as non-adoptable | Alice borrows Bob's continuation exception | `SocialCandidateBindingTest` `CODE_CONFIRMED` |
+| Bob → Alice switch | Yield challenger key is SOCIAL/Alice; Bob remains the named incumbent until safe yield | Yield transaction aliases both subjects as SOCIAL | `SocialCandidateBindingTest` `CODE_CONFIRMED` |
+| EXPLORE/REST | Existing singleton identity and behavior remain unchanged | A losing SOCIAL subject attaches to non-social intent | Focused director tests + full suite `CODE_CONFIRMED` |
+
+Focused tests and `clean build`: **800 tests, 0 failures, 0 errors, 0 skipped**. Static MAIBS:
+`PASS — BEHAVIORALLY_PLAUSIBLE`. Task 44D physical execution and runtime target correlation remain
+`UNVERIFIED` and unimplemented.

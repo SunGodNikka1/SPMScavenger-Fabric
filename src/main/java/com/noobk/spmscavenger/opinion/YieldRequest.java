@@ -26,7 +26,7 @@ import java.util.UUID;
  *
  * @param incumbentIntentId the execution being asked to yield; a request cannot outlive it
  * @param incumbentActivity what is running
- * @param challengerActivity what asked for the slot
+ * @param challengerKey the exact candidate that asked for the slot
  * @param originDecisionId the decision that raised it, for trace correlation
  * @param requestedAt game time raised
  * @param expiresAt bounded lifecycle — an unanswered request must not linger
@@ -34,7 +34,7 @@ import java.util.UUID;
 public record YieldRequest(
         UUID incumbentIntentId,
         DiscretionaryActivity incumbentActivity,
-        DiscretionaryActivity challengerActivity,
+        DiscretionaryCandidateKey challengerKey,
         long originDecisionId,
         long requestedAt,
         long expiresAt) {
@@ -45,12 +45,12 @@ public record YieldRequest(
     public YieldRequest {
         Objects.requireNonNull(incumbentIntentId, "incumbentIntentId");
         Objects.requireNonNull(incumbentActivity, "incumbentActivity");
-        Objects.requireNonNull(challengerActivity, "challengerActivity");
+        Objects.requireNonNull(challengerKey, "challengerKey");
     }
 
     public static YieldRequest of(
             DiscretionaryIntent incumbent,
-            DiscretionaryActivity challenger,
+            DiscretionaryCandidateKey challenger,
             long originDecisionId,
             long now) {
         return new YieldRequest(
@@ -60,6 +60,19 @@ public record YieldRequest(
                 originDecisionId,
                 now,
                 now + LIFETIME_TICKS);
+    }
+
+    /** Existing singleton-activity seam; SOCIAL must use an exact subject-bearing key. */
+    public static YieldRequest of(
+            DiscretionaryIntent incumbent,
+            DiscretionaryActivity challenger,
+            long originDecisionId,
+            long now) {
+        return of(
+                incumbent,
+                DiscretionaryCandidateKey.singleton(challenger),
+                originDecisionId,
+                now);
     }
 
     /**
@@ -81,5 +94,10 @@ public record YieldRequest(
 
     public boolean isFor(DiscretionaryActivity activity) {
         return incumbentActivity == activity;
+    }
+
+    /** Compatibility/readout view; arbitration must compare {@link #challengerKey()}. */
+    public DiscretionaryActivity challengerActivity() {
+        return challengerKey.activity();
     }
 }

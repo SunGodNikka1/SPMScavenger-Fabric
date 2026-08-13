@@ -3143,7 +3143,7 @@ mistake 44B exists to prevent, and equally wrong.
 
 ---
 
-## Topic: Task 44C — SOCIAL as the third discretionary candidate (`STATIC` complete, 793 tests)
+## Topic: Task 44C — SOCIAL as the third discretionary candidate (`44C-R STATIC ACCEPT`)
 
 GAO-10 becomes visible here for the first time: the director now compares **EXPLORE / REST / SOCIAL**
 instead of a fixed pair. Nothing greets yet — 44C decides, 44D adopts, 44D+ runs.
@@ -3215,11 +3215,56 @@ yield that never completes, which is the Task 43R shape exactly.
 
 ### The resolver runs on the director's cadence
 
-One bounded SPM search per decision cycle (10 ticks), not per tick — `ExplorationActivityGoal`
-resolves the opportunity where it already computes the director's other inputs (Gate SPM-5: reuse
-existing observation).
+Every ten ticks, `ExplorationActivityGoal` resolves the UUID already captured by the host admission
+observation and performs only cheap live-world checks. It performs **no SPM search and no SPM
+relationship call**; the host seam already chose the identity.
 
-### Tests (7 new, both invariants negative-controlled)
+### 44C-R — candidate identity plumbing
+
+Peer review exposed that 44C's data model was correct while the real director path remained
+activity-only. `issuePending()` used the subject-less overload (a deterministic exception once
+SOCIAL became executable), and retention/switch/yield comparisons treated SOCIAL(Bob) and
+SOCIAL(Alice) as identical.
+
+The repair introduces one canonical `DiscretionaryCandidateKey(activity, subjectId?)`:
+
+```text
+EXPLORE      = (EXPLORE, null)
+REST         = (REST, null)
+SOCIAL Bob   = (SOCIAL, Bob)
+SOCIAL Alice = (SOCIAL, Alice)
+```
+
+The exact `SocialIntent` that participated in scoring now flows through issuance; candidate-key
+equality owns candidate evaluation/continuation retention, pending/running retention, switch
+blocking, yield transaction correlation, adoption, executor permission, and executor-start marking.
+The atomic decision trace stores the same key for each candidate and its selected result, so an
+inspector cannot present SOCIAL(Bob) and SOCIAL(Alice) as one causal choice. Activity-only SOCIAL
+adoption/start calls fail closed rather than guessing a subject. EXPLORE/REST remain singleton
+candidates and retain their existing APIs and behavior.
+
+Alternatives: scattered SOCIAL branches were rejected because comparison semantics would drift;
+using full `SocialIntent` equality everywhere was rejected because the director needs stable
+candidate identity while the complete observation also carries timestamps/range. The key is
+fixed-size value data and adds no retention collection.
+
+**MAIBS static:** `PASS — BEHAVIORALLY_PLAUSIBLE`. Bob may remain incumbent through his bounded
+commitment before Alice can switch (`ACCEPTABLE_STEPPING_STONE`); rapid subject churn may create
+bounded supersession (`RUNTIME_QUESTION`); an activity-only optional-host caller cannot execute
+SOCIAL (`must fail closed`). Must happen: Bob-winning issuance binds Bob and an Alice-winning later
+decision cannot retain Bob. Must not happen: subject-less SOCIAL construction, Bob/Alice aliasing,
+or behavior change for EXPLORE/REST.
+
+**Static gate:** focused candidate/director/trace tests pass; `clean build` passes; **800 tests,
+0 failures, 0 errors, 0 skipped**. The remapped JAR packages `DiscretionaryCandidateKey`, the
+subject-aware director/trace, and identity-bearing yield records. Artifact
+`build/libs/spmscavenger-1.9.4.jar`, SHA-256
+`429E212164B0116E9F68DBB13066CAA9AC35B69B311B6F0FE4C74ABC0EEED550`.
+
+44D and D-GAO-053 remain blocked from implementation; 44C-R removes their prerequisite identity
+defect but does not authorize or implement an executor.
+
+### Tests (13 focused 44C/44C-R tests, both original invariants negative-controlled)
 
 | Must happen | Must not happen |
 | --- | --- |
@@ -3776,7 +3821,8 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
-| 2026-08-13 | User + Agent_Claude | **Task 44C** — SOCIAL becomes the third discretionary candidate; the director now compares EXPLORE/REST/SOCIAL. Per the user's product decision the exact `SocialIntent` that won scoring is bound **immutably to that `DiscretionaryIntent`** (invariant `activity == SOCIAL ↔ socialSubject != null`), never reconstructed from a later observation — a per-mob `currentSocialTarget` would let decision #91 about Bob greet Alice with every activity-level check still passing. Absent subject **removes** SOCIAL from comparison in both scoring paths rather than scoring it against nobody, so the trace can distinguish *considered and rejected* from *there was nobody*; gated in `IdleOpportunityPolicy` too, since `hasExecutor(SOCIAL) == false` hides it only until 44D. Utility = sociability + entity preference (own named `subjectFit`) + boredom − stress. Resolver on the 10-tick director cadence, one bounded search per cycle. 7 tests, both invariants negative-controlled; **793 total, 0 failures**. Still no FriendlyGreet substitution, binding, learning, Inspector or `DISCRETIONARY_SOCIAL` — candidacy is not start permission |
+| 2026-08-13 | User + Agent_Claude | **Task 44C** — SOCIAL becomes the third discretionary candidate; the director now compares EXPLORE/REST/SOCIAL. Per the user's product decision the exact `SocialIntent` that won scoring is bound **immutably to that `DiscretionaryIntent`** (invariant `activity == SOCIAL ↔ socialSubject != null`), never reconstructed from a later observation — a per-mob `currentSocialTarget` would let decision #91 about Bob greet Alice with every activity-level check still passing. Absent subject **removes** SOCIAL from comparison in both scoring paths rather than scoring it against nobody, so the trace can distinguish *considered and rejected* from *there was nobody*; gated in `IdleOpportunityPolicy` too, since `hasExecutor(SOCIAL) == false` hides it only until 44D. Utility = sociability + entity preference (own named `subjectFit`) + boredom − stress. Resolver on the 10-tick director cadence uses the captured UUID plus cheap live-world checks; it performs no SPM search or relationship call. 7 tests, both invariants negative-controlled; **793 total, 0 failures**. Still no FriendlyGreet substitution, binding, learning, Inspector or `DISCRETIONARY_SOCIAL` — candidacy is not start permission |
+| 2026-08-13 | Agent_Codex | **44C-R static accept:** peer review correctly reopened 44C because the real director still issued subject-less SOCIAL and compared candidates by activity enum. Added `DiscretionaryCandidateKey`; propagated exact identity through candidate evaluation/continuation, issuance, retention, switch blocking, yield transactions, causal trace, adoption, start permission and start marking; activity-only SOCIAL seams fail closed. Direct regressions cover executable SOCIAL, Bob→Alice replacement, Alice not borrowing Bob's continuation, yield correlation, trace identity, singleton parity and losing-subject isolation. Removed stale SPM-search claim. Focused tests and `clean build` pass; **800 tests, 0 failures/errors/skips**; JAR SHA-256 `429E212164B0116E9F68DBB13066CAA9AC35B69B311B6F0FE4C74ABC0EEED550`. Static MAIBS `PASS — BEHAVIORALLY_PLAUSIBLE`; physical SOCIAL remains `UNVERIFIED` because 44D is not implemented. No Minecraft launch, commit, push, or PR |
 | 2026-08-13 | User + Agent_Claude | **`PRODUCT DECISION`: preserve the host's chosen target identity instead of re-scanning (784 tests).** Same-tick mitigation **rejected** — it would have made SOCIAL candidacy depend on scheduler phase alignment. The redirect already holds SPM's returned entity; 44B threw it away as `targetFound: boolean` and re-ran the host's own search to recover it. `AdmissionWindow` → **`AdmissionObservation(tick, range, targetId)`**; the resolver now makes **zero SPM calls** and does cheap live checks only; the 112-line greet reflection block in `PlayerMobs` is deleted for want of a consumer. **The D-GAO-057 exposure is removed rather than scheduled around**, and a relationship term can no longer exist — SPM returning the identity *is* proof of greet legality at that moment, guarded by a test. Evidence levels fixed: 44C CHOOSE = observation + live checks (scoreable), 44D ADOPT = live redirect + **exact target-UUID equality** (executable), 44D+ RUN = causal ownership. 40-tick lifetime kept. 44D binding key recorded: mob + intent identity + target UUID + current admission episode, exact correspondence only |
 | 2026-08-13 | User + Agent_Claude | **44B repair + evidence correction (782 tests).** User caught a real invariant hole: `hostAcquisitionRange <= 0` rejects neither `NaN` nor `+Infinity`, and `+Infinity` squares to `+Infinity` so **every finite distance falls inside the acquisition radius** — fail-open, and it would surface as a mob greeting across the map rather than as an error. Invariant is now `Double.isFinite && > 0`, defined once in `isUsableRadius` and applied at all three contract entries plus the predicate's own bound; regressions + negative control. **Purity claim corrected and partly retracted:** counting `putfield` is itself a filtered representation of evidence. Re-audited over call paths — `nearestWhereReaction` and `feelingToward` are `CONFIRMED` observationally pure, but **`reactionToward` is NOT pure**: it calls `selfCombatPower`, a per-tick memo cache writing two fields, so querying early can warm the cache and change SPM's own later answer within the same tick — a live **D-GAO-057** exposure once 44C wires the resolver to the director. Mitigation (`PRODUCT DECISION` for 44C): resolve only on a same-tick pulse, making our call a pure cache read. Recorded the 44C→44D boundary: adoption must use the **present** redirect invocation, never let an expired pulse veto a live host admission |
 | 2026-08-13 | User + Agent_Claude | **Task 44B — `SocialIntent` + bounded target resolver, `STATIC` complete (779 tests).** Encodes the runtime rule *admission pulse ≠ social target*: 98.4% of pulses had no target, and even a positive one is up to 40 ticks stale, so the resolver re-runs the host's search for **identity** and re-validates at adoption. **Design correction from bytecode:** SPM already ships `reactionToward` and `nearestWhereReaction`, both `CONFIRMED` pure, so we mirror its predicate and reuse its search rather than deriving thresholds from `feelingToward` (SPM-0/SPM-2); `Reaction.GREET` read at runtime, never copied; acquisition radius taken from the host's own pulse. `SocialTargetLegality` is pure and applied in exactly **one** place, guarded with a negative control, because sharing a constant is not sharing a boundary. `SocialIntent` holds a UUID, not a reference. Self-caught: a false-negative purity check from a broken filter, an always-true `|| true` term, and a scope guard that failed on correct javadoc. Scope held — no utility, binding, substitution, learning, classification or Inspector |

@@ -34,7 +34,7 @@ public record YieldEvent(
         long gameTime,
         UUID incumbentIntentId,
         DiscretionaryActivity incumbentActivity,
-        DiscretionaryActivity challengerActivity,
+        DiscretionaryCandidateKey challengerKey,
         long originDecisionId,
         long requestedAt,
         long expiresAt,
@@ -51,7 +51,7 @@ public record YieldEvent(
                 gameTime,
                 request.incumbentIntentId(),
                 request.incumbentActivity(),
-                request.challengerActivity(),
+                request.challengerKey(),
                 request.originDecisionId(),
                 request.requestedAt(),
                 request.expiresAt(),
@@ -67,7 +67,7 @@ public record YieldEvent(
                 gameTime,
                 request.incumbentIntentId(),
                 request.incumbentActivity(),
-                request.challengerActivity(),
+                request.challengerKey(),
                 request.originDecisionId(),
                 request.requestedAt(),
                 request.expiresAt(),
@@ -76,6 +76,11 @@ public record YieldEvent(
 
     public boolean succeeded() {
         return outcome == DiscretionaryDirectorState.YieldOutcome.ACKNOWLEDGED;
+    }
+
+    /** Compatibility/readout view; causal correlation uses {@link #challengerKey()}. */
+    public DiscretionaryActivity challengerActivity() {
+        return challengerKey.activity();
     }
 
     /** How long the transaction lived, for readouts that want it without recomputing. */

@@ -65,6 +65,7 @@ public final class OpinionDecisionTrace {
     /** A score copied at evaluation time, or an explicit unscored suppression. */
     public record Candidate(
             DiscretionaryActivity activity,
+            DiscretionaryCandidateKey candidateKey,
             ActivityUtilityBreakdown breakdown,
             CandidateState state,
             SuppressionReason suppressionReason,
@@ -73,6 +74,10 @@ public final class OpinionDecisionTrace {
 
         public Candidate {
             Objects.requireNonNull(activity, "activity");
+            Objects.requireNonNull(candidateKey, "candidateKey");
+            if (candidateKey.activity() != activity) {
+                throw new IllegalArgumentException("candidate key activity does not match candidate");
+            }
             Objects.requireNonNull(state, "state");
             Objects.requireNonNull(suppressionReason, "suppressionReason");
             suppressionDetail = suppressionDetail == null ? "" : suppressionDetail;
@@ -97,9 +102,19 @@ public final class OpinionDecisionTrace {
         /** Task 43 — why this candidate was legally in the comparison. */
         public static Candidate eligible(
                 ActivityUtilityBreakdown breakdown, ExecutionEvidence execution) {
+            return eligible(
+                    DiscretionaryCandidateKey.singleton(breakdown.activity()),
+                    breakdown,
+                    execution);
+        }
+
+        public static Candidate eligible(
+                DiscretionaryCandidateKey candidateKey,
+                ActivityUtilityBreakdown breakdown,
+                ExecutionEvidence execution) {
             Objects.requireNonNull(breakdown, "breakdown");
             return new Candidate(
-                    breakdown.activity(), breakdown, CandidateState.ELIGIBLE,
+                    breakdown.activity(), candidateKey, breakdown, CandidateState.ELIGIBLE,
                     SuppressionReason.NONE, "", execution);
         }
 
@@ -124,9 +139,20 @@ public final class OpinionDecisionTrace {
                 SuppressionReason reason,
                 String suppressionDetail,
                 ExecutionEvidence execution) {
+            return suppressed(
+                    DiscretionaryCandidateKey.singleton(activity), breakdown, reason,
+                    suppressionDetail, execution);
+        }
+
+        public static Candidate suppressed(
+                DiscretionaryCandidateKey candidateKey,
+                ActivityUtilityBreakdown breakdown,
+                SuppressionReason reason,
+                String suppressionDetail,
+                ExecutionEvidence execution) {
             return new Candidate(
-                    activity, breakdown, CandidateState.SUPPRESSED, reason, suppressionDetail,
-                    execution);
+                    candidateKey.activity(), candidateKey, breakdown, CandidateState.SUPPRESSED,
+                    reason, suppressionDetail, execution);
         }
     }
 
@@ -203,6 +229,7 @@ public final class OpinionDecisionTrace {
             DecisionDisposition disposition,
             InvalidationCause dispositionCause,
             DiscretionaryActivity selectedActivity,
+            DiscretionaryCandidateKey selectedCandidateKey,
             UUID intentId,
             List<Transition> transitions,
             List<LearningOutcome> learningOutcomes,
@@ -226,6 +253,7 @@ public final class OpinionDecisionTrace {
         private DecisionDisposition disposition = DecisionDisposition.EVALUATING;
         private InvalidationCause dispositionCause = InvalidationCause.NONE;
         private DiscretionaryActivity selectedActivity;
+        private DiscretionaryCandidateKey selectedCandidateKey;
         private UUID intentId;
         private boolean closed;
 
@@ -243,6 +271,7 @@ public final class OpinionDecisionTrace {
                     disposition,
                     dispositionCause,
                     selectedActivity,
+                    selectedCandidateKey,
                     intentId,
                     transitions,
                     learningOutcomes,
@@ -318,6 +347,31 @@ public final class OpinionDecisionTrace {
                 ? InvalidationCause.NONE
                 : dispositionCause;
         decision.selectedActivity = selectedActivity;
+        decision.selectedCandidateKey = selectedActivity == null
+                ? null
+                : DiscretionaryCandidateKey.singleton(selectedActivity);
+        decision.closed = closed;
+    }
+
+    /** Subject-aware conclusion; SOCIAL cannot be reconstructed from an activity enum. */
+    public void concludeCandidate(
+            long decisionId,
+            DecisionDisposition disposition,
+            InvalidationCause dispositionCause,
+            DiscretionaryCandidateKey selectedCandidateKey,
+            boolean closed) {
+        MutableDecision decision = find(decisionId);
+        if (decision == null) {
+            return;
+        }
+        decision.disposition = Objects.requireNonNull(disposition, "disposition");
+        decision.dispositionCause = dispositionCause == null
+                ? InvalidationCause.NONE
+                : dispositionCause;
+        decision.selectedCandidateKey = selectedCandidateKey;
+        decision.selectedActivity = selectedCandidateKey == null
+                ? null
+                : selectedCandidateKey.activity();
         decision.closed = closed;
     }
 
