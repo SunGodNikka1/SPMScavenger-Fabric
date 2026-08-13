@@ -314,4 +314,76 @@ class Task43ContinuationRetentionTest {
                 "expected the seam plus the reset path only, found " + directClears
                         + " direct clears - each one is a place a causal event can be forgotten");
     }
+
+    // ---- a yield is a transaction, not a per-tick flag ----
+
+    /**
+     * Repeated qualifying decisions must not restart the clock. The director observes every 10
+     * ticks; raising a fresh request each time turned a bounded 200-tick contract into an immortal
+     * sliding timeout, and moved the causal origin to whichever scoring pass ran last.
+     */
+    @Test
+    void mustNotHappen_repeatedDecisionsRefreshTheYieldClock() {
+        DiscretionaryIntent incumbent = DiscretionaryIntent.pending(
+                20L, DiscretionaryActivity.EXPLORE, 29f, 10f, 100L);
+
+        YieldRequest first = YieldRequest.of(incumbent, DiscretionaryActivity.REST, 87L, 900L);
+        // What a naive refresh at the next observation pass would produce.
+        YieldRequest refreshed = YieldRequest.of(incumbent, DiscretionaryActivity.REST, 88L, 910L);
+
+        assertNotEquals(first.expiresAt(), refreshed.expiresAt(),
+                "documents the drift: a refresh moves the deadline");
+        assertNotEquals(first.originDecisionId(), refreshed.originDecisionId(),
+                "and moves the cause");
+        assertEquals(900L + YieldRequest.LIFETIME_TICKS, first.expiresAt(),
+                "the transaction the director must keep instead: one start, one deadline");
+    }
+
+    /** Reconciliation, not blind re-raise: the same wanted switch keeps its identity. */
+    @Test
+    void mustHappen_reconciliationRetainsAnUnchangedTransaction() throws Exception {
+        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/noobk/spmscavenger/opinion/DiscretionaryDirectorState.java"));
+        int at = source.indexOf("private void updateYieldRequests(");
+        String body = source.substring(at, Math.min(source.length(), at + 2600));
+
+        assertTrue(body.contains("sameTransaction"),
+                "same incumbent + same challenger + still wanted must be left untouched");
+        assertTrue(body.contains("YieldOutcome.SUPERSEDED"),
+                "a switch the latest decision no longer wants must be terminated, not left live");
+        assertTrue(body.contains("YieldOutcome.EXPIRED"),
+                "an expired transaction ends once before any new one begins");
+    }
+
+    /**
+     * The stale-preference case: the incumbent wins again, so the challenger it was asked to yield
+     * to is no longer wanted. The request must die with the decision that wanted it — otherwise an
+     * executor yields to a challenger the director has already rejected, with a perfectly current
+     * incumbent identity.
+     */
+    @Test
+    void mustNotHappen_anObsoleteChallengerStaysExecutable() throws Exception {
+        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/noobk/spmscavenger/opinion/DiscretionaryDirectorState.java"));
+        int at = source.indexOf("private void updateYieldRequests(");
+        String body = source.substring(at, Math.min(source.length(), at + 2600));
+
+        assertTrue(body.contains("boolean wantsSwitch"),
+                "the early return that left an obsolete request live is replaced by a decision");
+        assertTrue(body.contains("if (!wantsSwitch)"),
+                "not-wanted is now a branch that terminates the transaction");
+    }
+
+    @Test
+    void mustHappen_anExpiredTransactionEndsBeforeANewOneBegins() {
+        DiscretionaryIntent incumbent = DiscretionaryIntent.pending(
+                20L, DiscretionaryActivity.EXPLORE, 29f, 10f, 100L);
+        YieldRequest request = YieldRequest.of(incumbent, DiscretionaryActivity.REST, 87L, 900L);
+
+        long past = 900L + YieldRequest.LIFETIME_TICKS;
+        assertTrue(request.expired(past));
+        assertFalse(request.appliesTo(incumbent, past),
+                "an expired request cannot be silently reused - it is recorded EXPIRED, and a new "
+                        + "decision must independently choose to start a fresh bounded transaction");
+    }
 }

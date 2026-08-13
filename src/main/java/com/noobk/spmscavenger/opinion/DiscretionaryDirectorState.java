@@ -554,21 +554,57 @@ public final class DiscretionaryDirectorState {
         return switchBlocker(winner, winnerUtility, scoring, gameTime) == SwitchBlocker.NONE;
     }
 
+    /**
+     * D-GAO-051 — reconcile the desired switch with the request already in flight.
+     *
+     * <p>Two defects this replaces. First, raising a fresh request on every qualifying decision
+     * refreshed {@code requestedAt}, {@code expiresAt} and {@code originDecisionId} every 10 ticks:
+     * the 200-tick bound became an immortal sliding timeout, and the causal origin drifted to
+     * whichever repeated scoring pass ran last rather than the decision that actually chose to
+     * switch. Second, when the incumbent won again the old early return left the request live, so an
+     * executor could still yield to a challenger the latest decision had already rejected — stale
+     * preference authority even though the incumbent identity was current.
+     *
+     * <p>A yield is a <b>transaction</b>: it starts once, keeps its identity and its clock while the
+     * director still wants it, and ends exactly once with a named reason.
+     */
     private void updateYieldRequests(
             long decisionId,
             DiscretionaryActivity winner,
             float winnerUtility,
             ScoringResult scoring,
             long gameTime) {
-        if (incumbentActivity == null || incumbentActivity == winner) {
+
+        boolean wantsSwitch = incumbentActivity != null
+                && incumbentActivity != winner
+                && canSwitchTo(winner, winnerUtility, scoring, gameTime);
+
+        if (!wantsSwitch) {
+            // The latest decision no longer wants this switch - retain the incumbent, or the margin
+            // stopped passing. An obsolete challenger must not remain executable.
+            finishYieldRequest(YieldOutcome.SUPERSEDED, gameTime);
             return;
         }
-        if (!canSwitchTo(winner, winnerUtility, scoring, gameTime)) {
+        if (yieldRequest == null) {
+            requestYield(decisionId, winner, gameTime);
             return;
         }
-        // D-GAO-051 - generic: any incumbent, any challenger, bound to the incumbent's identity.
-        // The pairwise version needed a new branch per activity pair and could not tell which
-        // execution it was talking about.
+        if (yieldRequest.expired(gameTime)) {
+            // Recorded once as EXPIRED; this decision independently still wants the switch, so a
+            // new bounded transaction may begin.
+            finishYieldRequest(YieldOutcome.EXPIRED, gameTime);
+            requestYield(decisionId, winner, gameTime);
+            return;
+        }
+        boolean sameTransaction = runningIntent != null
+                && yieldRequest.incumbentIntentId().equals(runningIntent.intentId())
+                && yieldRequest.challengerActivity() == winner;
+        if (sameTransaction) {
+            // Deliberately untouched: same incumbent, same challenger, still wanted. Refreshing here
+            // is exactly what made the lifetime unbounded.
+            return;
+        }
+        finishYieldRequest(YieldOutcome.SUPERSEDED, gameTime);
         requestYield(decisionId, winner, gameTime);
     }
 
