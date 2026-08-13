@@ -1,31 +1,34 @@
 package com.noobk.spmscavenger.opinion;
 
 /**
- * Task 44B — the single legality predicate for a social target, over primitives only.
+ * Task 44B/44C — the single legality predicate for a social <em>opportunity</em>, over primitives.
+ *
+ * <h2>What this does and does not decide</h2>
+ *
+ * It answers "is the entity SPM recently named still physically usable?" — present, alive,
+ * co-located, in range. It deliberately does <b>not</b> re-ask whether the host would greet them.
+ * That question was already answered, by the host, when its own search returned this identity; and
+ * asking it again would mean calling {@code reactionToward}, which transitively writes a per-tick
+ * memo cache and could change the host's own later answer inside the same tick (D-GAO-057).
+ *
+ * <h2>Evidence levels</h2>
+ *
+ * <pre>
+ * CHOOSE (44C)  recent host observation + these cheap live checks → SOCIAL may be scored
+ * ADOPT  (44D)  the current redirect invocation + exact target-UUID equality → permission
+ * RUN    (44D+) FriendlyGreet actually starts → causal ownership
+ * </pre>
+ *
+ * A stale relationship can therefore make SOCIAL briefly <em>scoreable</em>, never <em>executable</em>:
+ * adoption is refused unless the live host names the same entity again. And a refused adoption is
+ * not a negative social outcome, so it cannot teach dislike.
  *
  * <h2>Why one shared function</h2>
  *
- * Resolution and re-validation ask the same question at two different moments. If each owned its own
- * copy of the rule they would drift, and the drift would be invisible: a target legal enough to
- * select but not to adopt produces an intent that can never start, forever. This project has already
- * paid for that lesson once — sharing a <em>constant</em> between two checks did not share the
- * <em>boundary</em>, because one used {@code <} and the other {@code >}. So the predicate itself is
- * the shared thing, not its inputs.
- *
- * <h2>The rule this encodes</h2>
- *
- * <pre>
- * admission pulse exists  ≠  social target available
- * </pre>
- *
- * 98.4% of observed pulses carried {@code targetFound=false}, so pulse presence is nearly always
- * true and means only "the host recently got as far as looking". Even a pulse that <em>did</em> find
- * somebody is evidence about a moment up to {@code PULSE_LIFETIME_TICKS} ago; in that window the
- * target can move, die, turn hostile, unload, or change dimension.
- *
- * <p><b>Evidence that an action was recently possible is not authority to perform it now.</b> That
- * is why every term here is re-evaluated against live state at adoption, and why the entity is
- * carried as an id rather than a reference.
+ * Discovery and re-validation ask the same question at two moments. Separate copies drift, and the
+ * drift is invisible — a target legal enough to select but not to adopt yields an intent that can
+ * never start. This project already paid for that once: two checks shared a <em>constant</em> but
+ * not the <em>boundary</em>, one using {@code <} and the other {@code >}.
  */
 public final class SocialTargetLegality {
 
@@ -35,12 +38,12 @@ public final class SocialTargetLegality {
     /**
      * The host acquisition radius invariant, defined once.
      *
-     * <p>{@code range > 0} alone is not enough, because neither {@code NaN} nor {@code +Infinity}
-     * satisfies {@code range <= 0}: both slip through a positivity guard. {@code +Infinity} is the
-     * dangerous one — it squares to {@code +Infinity}, every finite distance compares
-     * {@code <=} against it, and the range boundary silently accepts the whole world. That is the
-     * exact inverse of this project's fail-closed posture, and it would arrive as "the mob greeted
-     * someone impossibly far away", not as an exception.
+     * <p>{@code range > 0} alone is not enough: neither {@code NaN} nor {@code +Infinity} satisfies
+     * {@code range <= 0}, so both slip through a positivity guard. {@code +Infinity} is the
+     * dangerous one — it squares to {@code +Infinity}, every finite distance compares {@code <=}
+     * against it, and the range boundary silently accepts the whole world. That is the exact inverse
+     * of this project's fail-closed posture, and it would arrive as "the mob greeted someone
+     * impossibly far away", not as an exception.
      *
      * <p>The radius is <b>external host evidence</b>, not a value this addon controls, so it is
      * validated wherever it enters the contract rather than trusted from its source.
@@ -50,37 +53,35 @@ public final class SocialTargetLegality {
     }
 
     /**
-     * @param spmAvailable SPM's relationship API is readable
      * @param hasCombatTarget the host mob currently has a combat target
-     * @param hasFreshAdmission a non-stale admission pulse exists for this mob
-     * @param targetResolved the remembered id resolved to an entity in the world
+     * @param hasFreshObservation a non-stale admission observation exists for this mob
+     * @param observationNamedTarget that observation carried an identity rather than "nobody"
+     * @param targetResolved the named id resolved to a living entity in the world
      * @param targetAlive that entity is alive and not removed
      * @param sameLevel host and target share a level
      * @param distanceSqr squared distance between host and target
      * @param rangeSqr squared acquisition radius — the host's own, never one of ours
-     * @param greetReaction SPM answered GREET for this exact entity, now
      */
     public static SocialTargetValidity check(
-            boolean spmAvailable,
             boolean hasCombatTarget,
-            boolean hasFreshAdmission,
+            boolean hasFreshObservation,
+            boolean observationNamedTarget,
             boolean targetResolved,
             boolean targetAlive,
             boolean sameLevel,
             double distanceSqr,
-            double rangeSqr,
-            boolean greetReaction) {
+            double rangeSqr) {
 
-        // Ordered to mirror the host's own gate order, so a rejection here means the same thing it
-        // would mean inside SPM: cooldown/combat first, then whether a legal target exists.
-        if (!spmAvailable) {
-            return SocialTargetValidity.SPM_UNAVAILABLE;
-        }
+        // Ordered to mirror the host's own gate order, so a rejection here means what it would mean
+        // inside SPM: combat first, then whether a usable target exists at all.
         if (hasCombatTarget) {
             return SocialTargetValidity.COMBAT_TARGET;
         }
-        if (!hasFreshAdmission) {
+        if (!hasFreshObservation) {
             return SocialTargetValidity.NO_ADMISSION_EVIDENCE;
+        }
+        if (!observationNamedTarget) {
+            return SocialTargetValidity.NO_OBSERVED_TARGET;
         }
         if (!targetResolved) {
             return SocialTargetValidity.TARGET_GONE;
@@ -91,16 +92,13 @@ public final class SocialTargetLegality {
         if (!sameLevel) {
             return SocialTargetValidity.WRONG_LEVEL;
         }
-        if (!Double.isFinite(rangeSqr) || rangeSqr <= 0.0D || !(distanceSqr <= rangeSqr)) {
-            // Two separate fail-closed guards sharing one branch:
+        if (!isUsableRadius(rangeSqr) || !(distanceSqr <= rangeSqr)) {
+            // Two fail-closed guards in one branch:
             //  - an unusable bound (NaN, +Infinity, non-positive) can never be satisfied, so it
             //    rejects instead of admitting everything;
-            //  - the comparison is written as a positive bound so a NaN *distance* also rejects.
-            //    Written as `distanceSqr > rangeSqr` both would have passed.
+            //  - the comparison is a positive bound, so a NaN *distance* also rejects. Written as
+            //    `distanceSqr > rangeSqr`, both would have passed.
             return SocialTargetValidity.OUT_OF_RANGE;
-        }
-        if (!greetReaction) {
-            return SocialTargetValidity.NOT_GREET_REACTION;
         }
         return SocialTargetValidity.VALID;
     }

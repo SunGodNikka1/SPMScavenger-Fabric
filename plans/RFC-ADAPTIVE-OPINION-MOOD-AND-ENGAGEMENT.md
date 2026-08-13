@@ -3065,6 +3065,50 @@ reverting to `range > 0` turns the build red.
 
 14 new tests, 779 total.
 
+### `PRODUCT DECISION` — preserve the host's chosen identity; do **not** re-scan
+
+The same-tick re-scan mitigation was **rejected**, and correctly. It would have made a correctness
+property depend on scheduler phase: director runs on the right tick → SOCIAL gets a candidate;
+director misses it → the opportunity vanishes. Alignment is not an invariant.
+
+The real defect was upstream of the impurity. The redirect already holds SPM's answer:
+
+```java
+LivingEntity original = SocialAdmissionSeam.invokeOriginal(playerMob, reaction, range);
+```
+
+…and 44B reduced it to `targetFound = true/false`, then later re-ran the *same host search* purely
+to recover the identity it had discarded. Keeping the UUID removes the second search, the relationship
+query, and with them the only reason this addon ever touched an impure host method.
+
+| | before | after |
+| --- | --- | --- |
+| observation | `tick, range, targetFound: boolean` | `tick, range, targetId: UUID?` |
+| resolver | re-runs `nearestWhereReaction`, then `reactionToward` | resolves the given UUID; **no SPM calls at all** |
+| D-GAO-057 exposure | live once wired to the director | **none — the impure path is deleted, not scheduled around** |
+| `PlayerMobs` greet reflection | 112 lines | removed (no consumer) |
+
+A returned target is itself **proof of greet legality at that moment** — SPM's search already applied
+its own relationship predicate. So no relationship term survives anywhere; a test asserts no validity
+cause ever reintroduces one.
+
+**Evidence levels, now explicit:**
+
+| Step | Evidence | Confers |
+| --- | --- | --- |
+| 44C CHOOSE | recent host observation + cheap live checks | SOCIAL may be *scored* |
+| 44D ADOPT | current redirect invocation **and** exact target-UUID equality | permission to *execute* |
+| 44D+ RUN | FriendlyGreet actually starts | causal ownership |
+
+A stale relationship can make SOCIAL briefly scoreable, never executable — and a refused adoption is
+not a negative social outcome, so it cannot teach dislike. The 40-tick lifetime therefore stays as
+"SPM recently saw an opportunity involving Bob", tuned only from observed churn.
+
+**44D binding key** (recorded now so it is not softened later): `mob UUID` + `active SocialIntent
+identity` + `target UUID` + `current admission episode`. Exact correspondence only. "Opinion wanted
+Bob, SPM currently wants Alice, FriendlyGreet starts Alice, Opinion claims Bob" is precisely the
+D-GAO-058 break this exists to prevent.
+
 ### Boundary to preserve at executor binding (44C → 44D)
 
 44B's `validate()` requires a fresh admission window. Correct now, but it must **not** become the
@@ -3633,6 +3677,7 @@ Unload/reload snapshot semantics: **STATIC ACCEPT** (`RET-GAO-1`, Task 35). Manu
 
 | Date | Agent | Change |
 | --- | --- | --- |
+| 2026-08-13 | User + Agent_Claude | **`PRODUCT DECISION`: preserve the host's chosen target identity instead of re-scanning (784 tests).** Same-tick mitigation **rejected** — it would have made SOCIAL candidacy depend on scheduler phase alignment. The redirect already holds SPM's returned entity; 44B threw it away as `targetFound: boolean` and re-ran the host's own search to recover it. `AdmissionWindow` → **`AdmissionObservation(tick, range, targetId)`**; the resolver now makes **zero SPM calls** and does cheap live checks only; the 112-line greet reflection block in `PlayerMobs` is deleted for want of a consumer. **The D-GAO-057 exposure is removed rather than scheduled around**, and a relationship term can no longer exist — SPM returning the identity *is* proof of greet legality at that moment, guarded by a test. Evidence levels fixed: 44C CHOOSE = observation + live checks (scoreable), 44D ADOPT = live redirect + **exact target-UUID equality** (executable), 44D+ RUN = causal ownership. 40-tick lifetime kept. 44D binding key recorded: mob + intent identity + target UUID + current admission episode, exact correspondence only |
 | 2026-08-13 | User + Agent_Claude | **44B repair + evidence correction (782 tests).** User caught a real invariant hole: `hostAcquisitionRange <= 0` rejects neither `NaN` nor `+Infinity`, and `+Infinity` squares to `+Infinity` so **every finite distance falls inside the acquisition radius** — fail-open, and it would surface as a mob greeting across the map rather than as an error. Invariant is now `Double.isFinite && > 0`, defined once in `isUsableRadius` and applied at all three contract entries plus the predicate's own bound; regressions + negative control. **Purity claim corrected and partly retracted:** counting `putfield` is itself a filtered representation of evidence. Re-audited over call paths — `nearestWhereReaction` and `feelingToward` are `CONFIRMED` observationally pure, but **`reactionToward` is NOT pure**: it calls `selfCombatPower`, a per-tick memo cache writing two fields, so querying early can warm the cache and change SPM's own later answer within the same tick — a live **D-GAO-057** exposure once 44C wires the resolver to the director. Mitigation (`PRODUCT DECISION` for 44C): resolve only on a same-tick pulse, making our call a pure cache read. Recorded the 44C→44D boundary: adoption must use the **present** redirect invocation, never let an expired pulse veto a live host admission |
 | 2026-08-13 | User + Agent_Claude | **Task 44B — `SocialIntent` + bounded target resolver, `STATIC` complete (779 tests).** Encodes the runtime rule *admission pulse ≠ social target*: 98.4% of pulses had no target, and even a positive one is up to 40 ticks stale, so the resolver re-runs the host's search for **identity** and re-validates at adoption. **Design correction from bytecode:** SPM already ships `reactionToward` and `nearestWhereReaction`, both `CONFIRMED` pure, so we mirror its predicate and reuse its search rather than deriving thresholds from `feelingToward` (SPM-0/SPM-2); `Reaction.GREET` read at runtime, never copied; acquisition radius taken from the host's own pulse. `SocialTargetLegality` is pure and applied in exactly **one** place, guarded with a negative control, because sharing a constant is not sharing a boundary. `SocialIntent` holds a UUID, not a reference. Self-caught: a false-negative purity check from a broken filter, an always-true `|| true` term, and a scope guard that failed on correct javadoc. Scope held — no utility, binding, substitution, learning, classification or Inspector |
 | 2026-08-13 | User + Agent_Claude | **Task 44A CLOSED — `RUNTIME_CONFIRMED`.** 9 804 pulses across 132 mobs in ~24 s: cases A, C, D, E confirmed; **0** `MOB_UNRESOLVED`, **0** injector errors, and `released` == distinct entities exactly, which is a `RUNTIME_CONFIRMED` RET-1a bound rather than merely case D. **Case B stays `UNVERIFIED`** — shelter was never staged, and a sheltered mob is indistinguishable from one on cooldown or in combat since all three produce no pulse; HEAD-before-INVOKE remains `INFERRED` from bytecode position and must be proven before SOCIAL relies on shelter suppressing an adopted greet. **Design finding:** the pulse is ~21/tick and **98.4% carry `targetFound=false`**, so pulse presence is nearly always true and must not be read as 'a greet is available' — only the host's `eligibleTargetFound` discriminates. Temporary diagnostics removed. 765 tests. GAO-10 SOCIAL implementation is unblocked |

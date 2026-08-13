@@ -42,19 +42,37 @@ class SocialTargetResolverContractTest {
     }
 
     /**
-     * The resolver must re-run the host's search rather than trusting the pulse's stale boolean.
-     * {@code eligibleTargetFound} never carried an identity, so it can say somebody was greetable
-     * but never whom.
+     * The resolver must consume the identity SPM already handed it, and must never re-derive one.
+     *
+     * <p>Re-running {@code nearestWhereReaction} recovered an identity we had been given; re-asking
+     * {@code reactionToward} queried a relationship the host had already decided — and that call
+     * transitively writes a per-tick memo cache, so it could change the host's own later answer
+     * inside the same tick (D-GAO-057). Both are gone. This guard keeps them gone.
      */
     @Test
-    void mustNotHappen_theResolverTrustsTheStalePulseFlag() throws IOException {
-        String resolver = source(RESOLVER);
-        assertFalse(resolver.contains("eligibleTargetFound()"),
-                "the pulse flag is evidence about a past moment, not a target");
-        assertTrue(resolver.contains("PlayerMobs.nearestGreetTarget("),
-                "target identity must come from SPM's own live search");
+    void mustNotHappen_theResolverReDerivesWhatTheHostAlreadyAnswered() throws IOException {
+        String resolver = code(source(RESOLVER));
+        for (String forbidden : new String[] {
+                "nearestGreetTarget", "greetsToward", "reactionToward", "PlayerMobs"}) {
+            assertFalse(resolver.contains(forbidden),
+                    "the resolver must not call " + forbidden + "; SPM already answered this");
+        }
+        assertTrue(resolver.contains("evidence.targetId()") || resolver.contains("targetId()"),
+                "target identity must come from the host's own recorded observation");
         assertTrue(resolver.contains("evidence.range()"),
-                "the acquisition radius must be read from the host's pulse, never chosen here");
+                "the acquisition radius must be read from the host's observation, never chosen here");
+    }
+
+    /** The identity must be captured at the seam, where SPM's own answer arrives. */
+    @Test
+    void mustHappen_theSeamPreservesTheHostsChosenTarget() throws IOException {
+        String mixin = code(source(Path.of("src/main/java/com/noobk/spmscavenger/mixin/"
+                + "FriendlyGreetAdmissionSeamMixin.java")));
+        assertTrue(mixin.contains("original.getUUID()"),
+                "the redirect holds SPM's chosen entity; reducing it to a boolean is what forced "
+                        + "the redundant re-search this design removed");
+        assertTrue(mixin.contains("return original;"),
+                "and it still returns the host's answer unchanged");
     }
 
     /**

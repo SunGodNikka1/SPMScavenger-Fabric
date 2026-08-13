@@ -76,7 +76,10 @@ public abstract class FriendlyGreetAdmissionSeamMixin {
             // Task 44A publishes the observation and returns the host's own answer unchanged.
             // Substituting a bound target is 44B+, and must additionally require
             // mayStartExecutor(SOCIAL) or it reintroduces the Task 43R defect.
-            SocialAdmissionSeam.recordAdmissionWindow(mob, range, original != null);
+            // Hand over SPM's own chosen target, not a boolean about it. This is the single
+            // reason no later step needs to re-run the host's search or query its relationship API.
+            SocialAdmissionSeam.recordObservation(
+                    mob, range, original == null ? null : original.getUUID());
         }
         return original;
     }

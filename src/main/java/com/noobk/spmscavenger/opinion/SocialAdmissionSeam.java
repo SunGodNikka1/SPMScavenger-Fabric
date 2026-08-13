@@ -40,7 +40,7 @@ public final class SocialAdmissionSeam {
     public static final int PULSE_LIFETIME_TICKS = 40;
 
     /** Runtime only: a witnessed scheduler attempt has no meaning across a restart. */
-    private static final Map<UUID, AdmissionWindow> WINDOWS = new ConcurrentHashMap<>();
+    private static final Map<UUID, AdmissionObservation> OBSERVATIONS = new ConcurrentHashMap<>();
 
     private static volatile MethodHandle nearestWhereReaction;
 
@@ -48,34 +48,56 @@ public final class SocialAdmissionSeam {
     }
 
     /**
-     * @param eligibleTargetFound whether the host itself found a greet-eligible entity. Recorded
-     *     because "SPM was willing to look" and "SPM found somebody" are different facts, and only
-     *     the host may decide the second.
+     * What the host actually decided, kept whole.
+     *
+     * <h2>Why the identity and not a boolean</h2>
+     *
+     * The redirect sits on the return of SPM's own {@code nearestWhereReaction(GREET, range)}, so it
+     * receives <b>the exact entity SPM chose</b>. Reducing that to {@code targetFound = true} threw
+     * away the answer and forced a later re-run of the same search purely to recover the identity we
+     * had already been handed — duplicated work, and worse: {@code reactionToward} transitively
+     * writes a per-tick memo cache, so asking again could warm it early and change the host's own
+     * later answer within that tick. Keeping the UUID removes the second search, and with it the
+     * only reason this addon had to touch an impure host method at all (D-GAO-057).
+     *
+     * <p>A returned target is also <em>proof of greet legality at that moment</em> — SPM's search
+     * already applied its own relationship predicate. So no relationship question of ours remains.
+     *
+     * @param targetId the entity SPM selected, or {@code null} when it found nobody. Null is the
+     *     common case: 98.4% of observed admissions named no target.
      */
-    public record AdmissionWindow(long observedAtTick, double range, boolean eligibleTargetFound) {
+    public record AdmissionObservation(long observedAtTick, double range, UUID targetId) {
 
         public boolean isFresh(long now) {
             return now - observedAtTick <= PULSE_LIFETIME_TICKS && now >= observedAtTick;
         }
+
+        /** Whether the host named somebody. Presence of an identity is the whole signal. */
+        public boolean hasTarget() {
+            return targetId != null;
+        }
     }
 
-    public static void recordAdmissionWindow(Mob mob, double range, boolean eligibleTargetFound) {
+    /**
+     * @param targetId exactly what SPM's search returned — never re-derived, never inferred
+     */
+    public static void recordObservation(Mob mob, double range, UUID targetId) {
         if (mob == null) {
             return;
         }
-        WINDOWS.put(
+        OBSERVATIONS.put(
                 mob.getUUID(),
-                new AdmissionWindow(mob.level().getGameTime(), range, eligibleTargetFound));
+                new AdmissionObservation(mob.level().getGameTime(), range, targetId));
     }
 
     /** Non-allocating: never creates an experience context for a mob that has none. */
-    public static java.util.Optional<AdmissionWindow> admissionWindow(UUID mobId, long now) {
-        AdmissionWindow window = WINDOWS.get(mobId);
+    public static java.util.Optional<AdmissionObservation> observation(UUID mobId, long now) {
+        AdmissionObservation window = OBSERVATIONS.get(mobId);
         if (window == null) {
             return java.util.Optional.empty();
         }
         if (!window.isFresh(now)) {
-            WINDOWS.remove(mobId, window);
+            OBSERVATIONS.remove(mobId, window);
             return java.util.Optional.empty();
         }
         return java.util.Optional.of(window);
@@ -93,21 +115,21 @@ public final class SocialAdmissionSeam {
         if (mobId == null) {
             return;
         }
-        WINDOWS.remove(mobId);
+        OBSERVATIONS.remove(mobId);
     }
 
     /** Gate RET-1: released with the world, like every other runtime-only map. */
     public static void shutdownServerState() {
-        WINDOWS.clear();
+        OBSERVATIONS.clear();
         nearestWhereReaction = null;
     }
 
     public static int trackedWindowCount() {
-        return WINDOWS.size();
+        return OBSERVATIONS.size();
     }
 
     public static boolean seamObserved(UUID mobId) {
-        return WINDOWS.containsKey(mobId);
+        return OBSERVATIONS.containsKey(mobId);
     }
 
     /**
@@ -158,6 +180,6 @@ public final class SocialAdmissionSeam {
 
     /** Test seam. */
     static void clearForTest() {
-        WINDOWS.clear();
+        OBSERVATIONS.clear();
     }
 }

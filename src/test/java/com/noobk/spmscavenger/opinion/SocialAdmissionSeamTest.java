@@ -59,8 +59,9 @@ class SocialAdmissionSeamTest {
 
     @Test
     void mustHappen_aWitnessedAttemptIsFreshOnlyBriefly() {
-        SocialAdmissionSeam.AdmissionWindow window =
-                new SocialAdmissionSeam.AdmissionWindow(100L, 10.0, true);
+        SocialAdmissionSeam.AdmissionObservation window =
+                new SocialAdmissionSeam.AdmissionObservation(
+                        100L, 10.0, java.util.UUID.randomUUID());
 
         assertTrue(window.isFresh(100L));
         assertTrue(window.isFresh(100L + SocialAdmissionSeam.PULSE_LIFETIME_TICKS));
@@ -78,7 +79,7 @@ class SocialAdmissionSeamTest {
 
     @Test
     void mustNotHappen_readingAWindowCreatesOne() {
-        assertTrue(SocialAdmissionSeam.admissionWindow(MOB, 0L).isEmpty());
+        assertTrue(SocialAdmissionSeam.observation(MOB, 0L).isEmpty());
         assertEquals(0, SocialAdmissionSeam.trackedWindowCount(),
                 "observation must not allocate - RET-1a and D-GAO-057 agree on this");
         assertFalse(SocialAdmissionSeam.seamObserved(MOB));
@@ -89,7 +90,7 @@ class SocialAdmissionSeamTest {
         assertEquals(0, SocialAdmissionSeam.trackedWindowCount());
         // Nothing recorded, so nothing to evict; the contract is that expiry deletes rather than
         // merely reporting stale - the RET-1a "expired is a predicate, never a deletion" trap.
-        assertTrue(SocialAdmissionSeam.admissionWindow(MOB, 10_000L).isEmpty());
+        assertTrue(SocialAdmissionSeam.observation(MOB, 10_000L).isEmpty());
         assertEquals(0, SocialAdmissionSeam.trackedWindowCount());
     }
 
