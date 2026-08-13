@@ -81,6 +81,20 @@ public final class SocialAdmissionSeam {
         return java.util.Optional.of(window);
     }
 
+    /**
+     * Gate RET-1a: released at <b>entity</b> lifetime, not merely world lifetime.
+     *
+     * <p>Eviction on read alone bounded the map by "mobs still being queried"; an unloaded or dead
+     * mob left its final window resident for the rest of the session, because nothing would ever ask
+     * about it again. The bound must be currently relevant mobs, not every PlayerMob that ever
+     * produced a pulse.
+     */
+    public static void release(UUID mobId) {
+        if (mobId != null) {
+            WINDOWS.remove(mobId);
+        }
+    }
+
     /** Gate RET-1: released with the world, like every other runtime-only map. */
     public static void shutdownServerState() {
         WINDOWS.clear();
@@ -109,17 +123,36 @@ public final class SocialAdmissionSeam {
         try {
             MethodHandle handle = nearestWhereReaction;
             if (handle == null) {
+                // Resolve against the class that DECLARES the method and the enum's own class, not
+                // whichever concrete instance happened to be observed first. A cached handle keyed
+                // to an accidental subclass would quietly fail for any other one.
+                Class<?> owner = declaringClassOf(playerMob.getClass(), "nearestWhereReaction");
+                Class<?> reactionType = reaction.getClass().isEnum()
+                        ? reaction.getClass()
+                        : reaction.getClass().getSuperclass();
                 handle = MethodHandles.publicLookup().findVirtual(
-                        playerMob.getClass(),
+                        owner,
                         "nearestWhereReaction",
-                        MethodType.methodType(
-                                LivingEntity.class, reaction.getClass(), double.class));
+                        MethodType.methodType(LivingEntity.class, reactionType, double.class));
                 nearestWhereReaction = handle;
             }
             return (LivingEntity) handle.invoke(playerMob, reaction, range);
         } catch (Throwable resolutionFailed) {
             return null;
         }
+    }
+
+    /** Walks to the type that actually declares the method, so the cache is subclass-independent. */
+    private static Class<?> declaringClassOf(Class<?> from, String method) {
+        for (Class<?> type = from; type != null && type != Object.class;
+                type = type.getSuperclass()) {
+            for (java.lang.reflect.Method candidate : type.getDeclaredMethods()) {
+                if (candidate.getName().equals(method)) {
+                    return type;
+                }
+            }
+        }
+        return from;
     }
 
     /** Test seam. */

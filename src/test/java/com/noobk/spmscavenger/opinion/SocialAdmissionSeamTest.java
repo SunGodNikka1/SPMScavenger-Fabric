@@ -119,4 +119,55 @@ class SocialAdmissionSeamTest {
                 "no host object, no answer - null is what canUse() sees when nothing is eligible, "
                         + "so the safe direction is 'no greet', never a fabricated target");
     }
+
+    // ---- entity-lifetime bound (Gate RET-1a) ----
+
+    /**
+     * Eviction on read alone bounded the map by "mobs still being queried". An unloaded or dead mob
+     * is never queried again, so its final window stayed resident for the rest of the session -
+     * "expired is a predicate, never a deletion" arriving by a different door.
+     */
+    @Test
+    void mustHappen_unloadAndDeathReleaseTheWindowImmediately() {
+        assertEquals(0, SocialAdmissionSeam.trackedWindowCount());
+
+        SocialAdmissionSeam.release(MOB);
+        assertEquals(0, SocialAdmissionSeam.trackedWindowCount(), "releasing an absent mob is safe");
+
+        SocialAdmissionSeam.release(null);
+        assertEquals(0, SocialAdmissionSeam.trackedWindowCount(), "and a null id is not a crash");
+    }
+
+    @Test
+    void mustHappen_bothEntityLifecycleHooksReleaseTheSeam() throws Exception {
+        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/noobk/spmscavenger/SpmScavenger.java"));
+        String stripped = source.lines()
+                .filter(line -> !line.strip().startsWith("//"))
+                .reduce("", (a, b) -> a + b + System.lineSeparator());
+
+        int releases = stripped.split(java.util.regex.Pattern.quote(
+                "SocialAdmissionSeam.release("), -1).length - 1;
+        assertEquals(2, releases,
+                "ENTITY_UNLOAD and AFTER_DEATH must both release - one alone leaves the other path "
+                        + "accumulating for the whole session, found " + releases);
+        assertTrue(stripped.contains("SocialAdmissionSeam.shutdownServerState()"),
+                "and the world boundary still clears the rest");
+    }
+
+    /** The failure Task 44A exists to detect: descriptor accepted, handler rejected at load. */
+    @Test
+    void mustHappen_theRedirectHandlerCoercesInaccessibleHostTypes() throws Exception {
+        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/noobk/spmscavenger/mixin/"
+                        + "FriendlyGreetAdmissionSeamMixin.java"));
+
+        assertTrue(source.contains("@Coerce Object playerMob"),
+                "an INVOKE redirect handler must match the redirected signature with the owner "
+                        + "prepended; the addon cannot name PlayerMobEntity, so the parameter must "
+                        + "be coerced or the injector rejects the handler at load while the build "
+                        + "stays green");
+        assertTrue(source.contains("@Coerce Object reaction"),
+                "same for the Reaction enum");
+    }
 }

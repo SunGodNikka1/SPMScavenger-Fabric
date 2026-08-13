@@ -113,6 +113,7 @@ public class SpmScavenger implements ModInitializer {
                 RestSessionCoordinator.invalidateOnUnload(
                         mob.getUUID(), world.getGameTime());
                 OpinionExperienceRegistry.parkOnUnload(mob.getUUID(), world.getGameTime());
+                com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
             }
         });
         // Gate RET-1 - release per-world experience state when the server stops. Without this a
@@ -131,6 +132,7 @@ public class SpmScavenger implements ModInitializer {
                 cancelShelterCommitment(mob);
                 SeekShelterGoal.onDeath(mob.getUUID());
                 OpinionExperienceRegistry.onDeath(mob.getUUID());
+                com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
             }
         });
     }

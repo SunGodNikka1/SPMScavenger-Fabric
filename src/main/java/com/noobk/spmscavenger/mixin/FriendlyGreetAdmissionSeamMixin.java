@@ -6,6 +6,7 @@ import net.minecraft.world.entity.Mob;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
@@ -44,6 +45,15 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * <p>{@code require = 0} throughout: if SPM restructures the call away, the mixin silently does not
  * apply, the pulse is never published, and SOCIAL can never be adopted. Adapter failure loses
  * control; it can never manufacture ownership (D-GAO-058).
+ *
+ * <h2>Why {@code @Coerce}</h2>
+ *
+ * An INVOKE redirect handler must match the redirected method's signature with the invocation owner
+ * prepended. The addon deliberately does not compile against SPM, so {@code PlayerMobEntity} and
+ * {@code Reaction} cannot be named - {@code @Coerce} is the documented mechanism for accepting an
+ * otherwise inaccessible reference argument as {@code Object}. Without it the target INVOKE can
+ * exist, the build can pass, and the injector still rejects the handler descriptor at load - which
+ * is precisely the failure Task 44A exists to detect rather than ship.
  */
 @Pseudo
 @Mixin(targets = "games.brennan.playermob.entity.goal.FriendlyGreetGoal", remap = false)
@@ -58,7 +68,7 @@ public abstract class FriendlyGreetAdmissionSeamMixin {
                             + "Lnet/minecraft/world/entity/LivingEntity;"),
             require = 0)
     private LivingEntity spmscavenger$observeGreetAdmission(
-            Object playerMob, Object reaction, double range) {
+            @Coerce Object playerMob, @Coerce Object reaction, double range) {
         Mob mob = OptionalGoalMobResolver.resolve(this, "greet admission seam");
         LivingEntity original = SocialAdmissionSeam.invokeOriginal(playerMob, reaction, range);
         if (mob != null) {
