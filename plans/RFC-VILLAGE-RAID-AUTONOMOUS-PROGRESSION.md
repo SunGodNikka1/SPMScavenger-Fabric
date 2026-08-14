@@ -10,8 +10,8 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
 | **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (hardened through V1-R3); V2+ design-only; no VR-T* runtime |
-| **Nearest frontier** | **V1 perception driver** (cadence + mob-count budget), then **V4 Place-opinion bridge** design (D-VR-025/026); VR-T1 runtime |
-| **Last update** | 2026-08-14 (**V1-R3** — permanent removal sweeps every dimension; 864 tests. Prior: D-VR-025/026 pre-lock review — User) |
+| **Nearest frontier** | **V1 perception driver** (cadence + mob-count budget), then **V4 Place-opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**); VR-T1 runtime |
+| **Last update** | 2026-08-14 (user topics: Ominous Bottle policy, two-step trade, golem build, hero gifts, village founding; D-VR-027…032) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -210,6 +210,7 @@ settlement valid, override raid/shelter mandates, or invent trade permission.
 
 ```text
 KnownVillage
+├── origin: DISCOVERED | FOUNDED          (D-VR-032 — PROPOSED)
 ├── anchor / approximate center
 ├── bell positions
 ├── beds seen
@@ -408,23 +409,30 @@ Opinion comes **after** those gates.
 **Question:** Does `KnownVillage` fit under existing **Place** opinion, or justify a new **SETTLEMENT**
 subject type?
 
-| Need | Place @ `KnownVillage.anchor` chunk | Dedicated SETTLEMENT subject |
+| Need | Place @ **current** `KnownVillage.anchor` chunk | Dedicated SETTLEMENT subject |
 | --- | --- | --- |
-| "I like village A" / bad experience at B | **Yes** — `PlaceOpinionMemory` keyed by `ChunkPos` (`PlaceOpinionMemory.java`) | Duplicate preference store |
-| Soft route bias to village | **Yes** — `PlaceOpinionRouteRanker` (`MAX_ROUTE_BIAS = 15`, GAO-5B) | Overkill |
+| "I like this geography" / bad experience at a place | **Yes** — `PlaceOpinionMemory` keyed by `ChunkPos` | Wrong abstraction |
+| "I like this settlement" across anchor moves | **No** — geographic Place does not follow identity (D-VR-026 **HELD**) | **Yes** — settlement-persistent pref |
+| Soft route bias to village | **Yes** — `PlaceOpinionRouteRanker` via `SettlementOpinionBias` (±15) | Overkill until identity gap proven |
 | HOME_VILLAGE / TRADING_POST tier | **No** — factual `MobVillageMemory` | Wrong layer |
 | Trader profession / offer memory | **No** — V2 `KnownVillager` + Entity opinion optional | Could blur subjects |
 | Raid history at anchor | **No** — village factual record | Either works; keep factual |
-| Sociability → populated settlements | **Yes** — personality × density heuristic in director bias | New subject unnecessary |
+| Sociability → populated settlements | **Yes** — inside `SettlementOpinionBias` (Opinion package) | New subject unnecessary gen-1 |
 
-**Decision (`D-VR-026` `LOCK RECOMMENDED` amended):** **Do not add SETTLEMENT gen-1.** Map each
-`KnownVillage` to Place opinion via immutable **`placeOpinionChunkKey`** (frozen at discovery), read
-through `SettlementOpinionBias`. Terminal learning uses the same key — **not** the current mutable
-anchor chunk.
+**Decision (`D-VR-026` **HELD** — User amendment, 2026-08-14):** **Do not add SETTLEMENT gen-1.** Place
+learning and ranking use **current** `KnownVillage.anchor()` geography (`ChunkPos` of current anchor) via
+`SettlementOpinionBias` → `PlaceOpinionRouteRanker`. **Rejected:** frozen `placeOpinionChunkKey` — that
+turns geographic Place memory into a settlement-ID store.
 
-**Evidence threshold to reopen SETTLEMENT:** Place at anchor chunk cannot express a settlement-specific
-preference that (a) cannot live in `KnownVillage`/`KnownVillager` facts and (b) cannot use Entity
-opinion for named traders — **after** V2/V4 ship and runtime proves the gap.
+**Accepted limitation:** when anchor supersede moves across chunks, Place preference does **not** follow
+settlement identity; factual `MobVillageMemory` (tier, trade, home) still does. If runtime needs *"I like
+this same village regardless of anchor movement"*, that is evidence to reopen **SETTLEMENT** — not to
+encode settlement identity in an old chunk key.
+
+**Evidence threshold to reopen SETTLEMENT:** Place@current-anchor + Entity trader prefs cannot express
+settlement-persistent preference that (a) cannot live in `KnownVillage`/`KnownVillager` facts and (b)
+cannot use Entity opinion for named traders — **after** V2/V4 ship and runtime proves the gap (including
+anchor-cross-chunk preference continuity).
 
 ### Authority stack (village slice)
 
@@ -452,7 +460,7 @@ Opinion picks **who** to greet; Village supplies **where** the settlement is.
 ## Topic: Pre-lock review — D-VR-025/026 (`User` + `Agent_Cursor`)
 
 **Author:** User (review criteria); `Agent_Cursor` (code evidence, 2026-08-14)  
-**Status:** `REVIEW` — amendments required before lock
+**Status:** `D-VR-025` **LOCKED**; `D-VR-026` **HELD** (User amendment, 2026-08-14)
 
 ### Finding 1 — Remembered villages while unloaded/unperceived (`CONFIRMED` gap in draft)
 
@@ -510,55 +518,40 @@ public static int request(
 
 **Rejected:** `OpinionVillageBias` formula inlined in village package (superseded draft).
 
-### Finding 3 — Mutable anchor unsafe as persistent Place key (`CONFIRMED` — not safe without frozen key)
+### Finding 3 — Place key vs anchor drift (`CONFIRMED` tradeoff; frozen key **REJECTED**)
 
 **User question:** Is `KnownVillage.anchor()` safe as the Place opinion key when anchor recomputation
 crosses chunks?
 
-**Answer: `NO`** — not when keyed by **current** anchor chunk alone.
+**Technical answer (`CODE_CONFIRMED`):** using **current** anchor chunk means Place preference is
+**geographic** — when `withObservation` moves the anchor across chunks, prior Place learning on the old
+chunk does not automatically apply to the new geography (`PlaceOpinionMemory` keys by `ChunkPos` only;
+`KnownVillage.java` replacement semantics; V1-R2 400-block drift).
 
-**Evidence (`CODE_CONFIRMED`):**
+**User amendment (D-VR-026 held):** that behaviour is **correct for Place**, not a bug to paper over.
+Frozen `placeOpinionChunkKey` was **rejected** because it encodes settlement identity in Place storage.
+Keep learning/ranking tied to **actual/current** anchor geography. Settlement-persistent liking across
+anchor moves is **SETTLEMENT-subject** evidence, not a chunk-key workaround.
 
-- Anchor is `final` per object but **replaced** via `withObservation` → new `KnownVillage`
-  (`KnownVillage.java` L90–109) when `ObservationQuality.supersedes`.
-- V1-R2: monotone observation sequence can move anchor **400 blocks** (`RFC` V1-R2 table) — routinely
-  crosses chunk boundaries.
-- `PlaceOpinionMemory` keys by `ChunkPos.toLong()` only (`PlaceOpinionMemory.java` L17–30) — no
-  settlement identity.
-- Using current `anchor` chunk for learning then later reading after anchor replacement **orphans**
-  preference on the old chunk (silent reset).
+**V4 wiring:**
 
-**Amendment (D-VR-026):** add immutable **`placeOpinionChunkKey`** on `KnownVillage`:
+- **Learning:** village terminal / outcome wrapper records at `ChunkPos(current anchor)`.
+- **Ranking:** `SettlementOpinionBias` → `PlaceOpinionRouteRanker.destinationBias(places, anchor.x, anchor.z)`.
+- **Navigation:** path target remains current `anchor()` (raid-centre agreement, D-VR-019).
+- **Identity / tiers / home:** factual `MobVillageMemory` — unchanged.
 
-```text
-discovered(anchor, tick, quality):
-  placeOpinionChunkKey = ChunkPos(anchor).toLong()   // frozen for life of settlement row
+**Rejected:** immutable `placeOpinionChunkKey`; Place-entry migration on every anchor supersede (defer unless
+VR-T4 shows geographic split is player-visible and SETTLEMENT is still deferred).
 
-withObservation(newAnchor, ...):
-  copy placeOpinionChunkKey unchanged               // anchor may move; preference identity does not
-```
-
-- **Learning:** `PlaceOpinionService` (or village terminal wrapper) records at `placeOpinionChunkKey`.
-- **Ranking:** `SettlementOpinionBias` reads Place preference at `placeOpinionChunkKey`.
-- **Navigation:** path target remains **current** `anchor()` block (raid-centre agreement, D-VR-019).
-
-**Viable alternative rejected gen-1:** migrate Place entries on every anchor supersede when chunk
-changes — correct but requires new `PlaceOpinionMemory.migrate(long oldKey, long newKey)` and couples
-village refresh to opinion bookkeeping; defer unless frozen-key drift proves confusing in VR-T4.
-
-**SETTLEMENT subject:** still **deferred** — frozen chunk key solves anchor-cross-chunk orphaning, not
-trader-specific or tier-specific preference (Entity opinion + factual tier remain separate).
-
-### Lock recommendation
+### Lock outcome
 
 | Decision | Prior | After review |
 | --- | --- | --- |
-| **D-VR-025** | `PROPOSED` | **`LOCK RECOMMENDED` (amended)** — remembered pool + `SettlementOpinionBias` consumer |
-| **D-VR-026** | `PROPOSED` | **`LOCK RECOMMENDED` (amended)** — frozen `placeOpinionChunkKey`; SETTLEMENT still deferred |
+| **D-VR-025** | `LOCK RECOMMENDED` | **`LOCKED`** — remembered pool + `SettlementOpinionBias` consumer |
+| **D-VR-026** | `LOCK RECOMMENDED` (frozen key) | **`HELD`** — Place@current anchor; SETTLEMENT if settlement-persistent pref needed |
 
-**Blockers before implementation:** V4 adds `placeOpinionChunkKey` to `KnownVillage` NBT (migration:
-default from saved anchor chunk for pre-V4 rows). `SettlementOpinionBias` ships in Opinion package
-before director wiring.
+**Blockers before V4 implementation:** `SettlementOpinionBias` ships in Opinion package before director
+wiring (`D-VR-025`). Place key policy (`D-VR-026`) remains open until SETTLEMENT evidence or re-lock.
 
 ---
 
@@ -577,9 +570,9 @@ before director wiring.
 | `ShelterActivityEnvelope` | `FriendlyGreetShelterHoldMixin` | Already suppresses `RaidContainersGoal` during shelter hold |
 | `WorkDemandPolicy` | `WorkDemandPolicy.java` | Trade evaluation input (`D-VR-007`); diamond/iron chain cross-RFC |
 | `ActivityAdmission` pattern | Opinion RFC / `ActivityAdmissions` | Raid defense as **high-priority voluntary activity** with yield rules |
-| `PlaceOpinionRouteRanker` | `PlaceOpinionRouteRanker.java` | Soft bias toward liked village anchors (D-VR-026) |
-| `PlaceOpinionService` | `PlaceOpinionService.java` | Terminal learning from village outcomes at anchor chunk |
-| `PersonalityModel` + `AffectiveState` | Opinion package | Sociability/adventurousness/stress biases in V4 site rank |
+| `PlaceOpinionRouteRanker` | `PlaceOpinionRouteRanker.java` | Soft bias at **current** village anchor chunk (D-VR-026 **HELD**) |
+| `PlaceOpinionService` | `PlaceOpinionService.java` | Terminal learning from village outcomes at **current** anchor chunk |
+| `PersonalityModel` + `AffectiveState` | Opinion package | Composed inside `SettlementOpinionBias`, not village director (D-VR-025) |
 
 ### Raid interrupt admission (`PROPOSED` — D-VR-010)
 
@@ -1292,6 +1285,8 @@ existing `WorkDemandPolicy` paths.
 
 ---
 
+## Topic: Trading — `VillagerTradeAdapter` (`Agent_ChatGPT`)
+
 **Author:** `Agent_ChatGPT`  
 **Status:** `CONSENSUS` — hardest boundary; replaces generic `TradeCapability` sketch.
 
@@ -1870,8 +1865,8 @@ Director admission uses **`VillageScenarioProfile`** (`PROPOSED` — B-VR-24) �
 | VR-12 | Suppress village chest loot | **FULL** | Config profile + `RaidContainersGoal` predicate | Policy only |
 | VR-13 | Cure zombie villager | **PARTIAL** | `CommandedUse` weakness potion + golden apple | Needs splash timing |
 | VR-14 | Workstation craft-for-villager | **NOT PRACTICAL** | Would need villager AI coupling | |
-| VR-15 | Iron golem summon | **NOT PRACTICAL** | Village defender spawn is village-driven | |
-| VR-16 | Advanced village site selection | **PARTIAL** | Factual `FactualVillageUtility` + `OpinionVillageBias` (D-VR-025); tiers on `KnownVillage` | V4 after V2 traders |
+| VR-15 | Iron golem summon (village-driven) | **NOT PRACTICAL** | Village defender spawn is village-driven | Distinct from **manual construction** (VR-28) |
+| VR-16 | Advanced village site selection | **PARTIAL** | Factual `FactualVillageUtility` + `SettlementOpinionBias` (D-VR-025); tiers on `KnownVillage` | V4 after V2 traders |
 | VR-17 | In-village anchor pick (bell/trader/shelter) | **PARTIAL** | Micro ranking inside `VillageInteractionDirector` | Depends VR-16 |
 | VR-18 | Raid task interrupt/resume | **PARTIAL** | `RaidTask` + `TaskLifecycle` snapshot | Reuse `MiningProject` pattern |
 | VR-19 | Raid shelter (`EVACUATE`) | **PARTIAL** | SCR-2R5 `SeekShelterGoal` + interior tier | Not new hide goal |
@@ -1880,8 +1875,14 @@ Director admission uses **`VillageScenarioProfile`** (`PROPOSED` — B-VR-24) �
 | VR-22 | Day/night director arbitration | **PARTIAL** | `VillageDayNightContext` + director priority matrix | V1 read model; V2/V5 admission; D-VR-018 |
 | VR-23 | Anchor agreement with `Raid.getCenter()` | **FULL** | Derive `KnownVillage.anchor` from the same POI query the raid system uses | `Agent_Claude` F3; prerequisite for D-VR-010 firing at all |
 | VR-24 | Reputation readout (gossip accessor) | **PARTIAL** | Accessor mixin on `Villager.gossips`; no reputation bridge | `Agent_Claude` F2; consumer still `UNVERIFIED` |
-| VR-25 | Place opinion at village anchor | **PARTIAL** | `placeOpinionChunkKey` + `SettlementOpinionBias` (D-VR-026); not current anchor chunk | V4 |
+| VR-25 | Place opinion at village anchor | **PARTIAL** | `SettlementOpinionBias` at **current** anchor chunk (D-VR-026 **HELD**); no frozen chunk key | V4 |
 | VR-26 | Remembered-village candidacy while unloaded | **PARTIAL** | Candidate pool = `MobVillageMemory`; perception refresh separate (D-VR-025) | VR-T4b |
+| VR-27 | Ominous Bottle pickup & retention | **PARTIAL** | `OminousBottlePolicy` + `InventoryKnowledge`; HIGH pickup rank | V5; D-VR-027 |
+| VR-28 | Manual iron golem construction | **PARTIAL** | Block pattern + pumpkin; not village spawn | V7; D-VR-030 |
+| VR-29 | Ominous Bottle consumption policy | **REQUIRES MIXIN** (likely) | `OminousBottleConsumptionPolicy`; profile + anchor gates | V6; D-VR-028; Bad Omen bridge |
+| VR-30 | Two-step trade chain (sell → buy) | **PARTIAL** | `TradeChainTicket` + `RequirementResolver` | V2; D-VR-029 |
+| VR-31 | Hero villager gift collection | **REQUIRES MIXIN** (likely) | `GiveGiftToHero` / `throwGift` + floor pickup | V6; D-VR-031 |
+| VR-32 | Village founding vs discovery | **PARTIAL** | `VillageFoundingProject` + `FOUNDED` origin tag | V7; D-VR-032 |
 
 ### Integration option comparison (village trade case)
 
@@ -2040,15 +2041,275 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 | B-VR-35 | **Phase order is inverted at the raid end** | `NEW` (planning) | **PRODUCT DECISION** | Winning credit is nearly free; *starting* a raid is the hardest item in the RFC. Consider pulling hero credit forward, pushing initiation out of V6 |
 | B-VR-36 | **Reputation without a consumer is bookkeeping, not memory** | `NEW` (honesty) | **DEFERRED — probe before V3** | Golem anger + trade discount are both expected player-typed; do not describe as “villagers remember you” until a consumer exists |
 | B-VR-37 | **Village facts vs Opinion preference split** | User architecture | **→ Topic** | Director ranks legal candidates; Opinion soft-bias only. D-VR-025 |
-| B-VR-38 | **KnownVillage → Place opinion at anchor chunk** | User architecture | **→ Topic** | Reuse GAO-5B; no SETTLEMENT subject gen-1. D-VR-026 |
-| B-VR-39 | **SETTLEMENT Opinion subject** | User investigation | **DEFERRED** | Reopen only if Place@anchor + Entity trader prefs prove insufficient post-V4 |
+| B-VR-38 | **KnownVillage → Place opinion at anchor chunk** | User architecture | **→ D-VR-026 (HELD)** | Place@**current** anchor geography; no settlement-ID chunk key |
+| B-VR-39 | **SETTLEMENT Opinion subject** | User investigation | **DEFERRED** | Reopen when Place@current-anchor cannot express settlement-persistent pref across anchor moves |
 | B-VR-40 | **Stress → prefer familiar village anchor** | `NEW` | **PROMOTE → Opinion package** | Lives inside `SettlementOpinionBias`, not village director |
 | B-VR-41 | **Remembered pool vs perception refresh** | User pre-lock review | **→ D-VR-025** | Unloaded villages stay selectable |
-| B-VR-42 | **`placeOpinionChunkKey` frozen at discovery** | User pre-lock review | **→ D-VR-026** | Current anchor chunk alone is unsafe |
+| B-VR-42 | **Frozen `placeOpinionChunkKey`** | User pre-lock review | **REJECTED** | Turns Place into settlement-ID store; User amendment D-VR-026 |
 | B-VR-43 | **`SettlementOpinionBias` facade** | User pre-lock review | **→ D-VR-025** | Village consumes ±15 bias only |
+| B-VR-44 | **Ominous Bottle pickup HIGH + `OminousBottlePolicy`** | User request | **→ Topic** | Inventory knowledge; D-VR-027 |
+| B-VR-45 | **When/whether to drink Ominous Bottle** | User request | **→ Topic** | Profile + anchor gates; D-VR-028 |
+| B-VR-46 | **Sell resources for emeralds, then buy target** | User request | **→ Topic** | `TradeChainTicket`; D-VR-029 |
+| B-VR-47 | **Construct iron golem manually** | User request | **→ Topic** | Not VR-15 village spawn; D-VR-030 |
+| B-VR-48 | **Receive Hero-of-the-Village villager gifts** | User request | **→ Topic** | `throwGift` collection; D-VR-031 |
+| B-VR-49 | **Found village vs discover village** | User request | **→ Topic** | `FOUNDED` origin; D-VR-032 |
 
 **Rejected (dedup):** `ExploreForVillageGoal` (director + perception); villager profession brain clone
 (`D-VR-004`); client menu bot for trade (`D-VR-005`).
+
+---
+
+## Topic: Ominous Bottle pickup & inventory knowledge (`User`)
+
+**Author:** `User` (topic request, 2026-08-14)  
+**Status:** `PROPOSED` — **HIGH** priority relative to other raid-loot curios; extends inventory policy, not a new GoalSelector mega-goal.
+
+### Problem (observable)
+
+Raid and trial loot can drop **`Ominous Bottle`** items (`OminousBottleItem` — `CONFIRMED` in 1.21.1 Mojmap).
+Today SPM `ItemPickupPolicy` / Scavenger gather paths prioritize ammo, food, and a curated valuables
+set (diamond/emerald/ingot tier — `GatherResourcesGoal.java` comment). Ominous bottles are **not**
+first-class inventory knowledge: mob may ignore them, treat them as junk, or consume backpack slots
+without a retention policy.
+
+### Architectural rule (hard)
+
+**`OminousBottlePolicy`** is a **pure inventory-knowledge + pickup-ranking** module — not a drink
+executor and not a raid planner. Consumption timing is a **separate topic** (below).
+
+```text
+Raid/trial drop or floor item
+        ↓
+ItemPickupPolicy / CollectFloorItemsGoal eligibility
+        ↓
+OminousBottlePolicy.shouldRetain(stack, mob, profile)
+        ↓
+InventoryKnowledge slot (tagged ominous_bottle, amplifier, source)
+        ↓
+(later) OminousBottleConsumptionPolicy
+```
+
+### `OminousBottlePolicy` (`PROPOSED`)
+
+| Responsibility | Detail |
+| --- | --- |
+| **Pickup rank** | `HIGH` — prefer pickup over generic loot when backpack has space |
+| **Retention** | Keep N≥1 bottles when `RAID_HUNTER` / stockpiling profile; never auto-drop for "junk sweep" |
+| **Amplifier awareness** | Read bottle amplifier component (loot function `SetOminousBottleAmplifierFunction` exists in mappings) |
+| **Slot budget** | Cap retained count (e.g. 1–3) — 8-slot backpack constraint |
+| **Ally conflict** | `VILLAGE_ALLY` default: retain but **do not** auto-drink near `HOME_VILLAGE` (consumption topic) |
+
+**Must happen:** mob picks up ominous bottle from raid floor when space available.  
+**Must not happen:** bottle picked up then immediately dropped by unrelated junk policy.
+
+**NOT FOUND** (3 probes): `OminousBottle`, `ominous_bottle` in Scavenger `src` and SPM `src`.
+
+### Phased delivery
+
+| Phase | Scope |
+| --- | --- |
+| **V5** | Pickup rank + `InventoryKnowledge` record |
+| **V6** | Profile gates tied to raid-initiation policy |
+
+**Decision:** **D-VR-027** (`PROPOSED`).
+
+---
+
+## Topic: Ominous Bottle consumption — when to drink (`User`)
+
+**Author:** `User` (topic request, 2026-08-14)  
+**Status:** `PROPOSED` — depends on **D-VR-027** inventory knowledge; ties to **D-VR-002** Bad Omen bridge.
+
+### Problem (observable)
+
+Drinking an ominous bottle applies **Bad Omen** (via `OminousBottleItem.finishUsingItem` — `INFERRED`
+from potion-like item pattern; runtime `UNVERIFIED`). A human chooses **where and when** to drink:
+intentional raid farming vs accidental raid on an ally village. Autonomous mob needs explicit **utility
+admission**, not "drink on pickup."
+
+### `OminousBottleConsumptionPolicy` (`PROPOSED`)
+
+| Profile / state | Default |
+| --- | --- |
+| `RAID_HUNTER` | Drink only when **outside** `HOME_VILLAGE` / ally anchor envelope and target raid farm site selected |
+| `VILLAGE_ALLY` | **Refuse** autonomous drink gen-1 unless product overrides B-VR-14 |
+| `VILLAGE_RAIDER` | May drink near disliked village (`AVOID` tier) — **PRODUCT DECISION** |
+| Active raid at home | **Block** drink (already in raid) |
+| Low health / fleeing | **Defer** drink |
+
+**Executor:** reuse `CommandedUse` / `FakePlayerSource` item-use lifecycle (SPM prototype) or direct
+`LivingEntity#finishUsingItem` server path — **do not** invent parallel effect application.
+
+**Must happen:** `RAID_HUNTER` drinks at chosen farm site, then enters village to trigger raid.  
+**Must not happen:** ally mob drinks walking through home village square → raid on friends.
+
+**Strongest objection:** Bad Omen application may still be **player-centric** at effect layer even
+if item use succeeds — same bridge class as patrol-captain omen (D-VR-002 split).
+
+**Decision:** **D-VR-028** (`PROPOSED`).
+
+---
+
+## Topic: Two-step villager trade chains — sell for emeralds, then buy (`User`)
+
+**Author:** `User` (topic request, 2026-08-14)  
+**Status:** `PROPOSED` — extends `VillagerTradeAdapter` + `RequirementResolver`; not a second trade GUI.
+
+### Problem (observable)
+
+Human trade progression is rarely one hop:
+
+```text
+Want: mending book
+Have: carrots, coal, wheat
+Path: sell surplus → emeralds → buy book
+```
+
+RFC already sketches reverse chain in `VillagerTradeAdapter` topic (`BUY_MENDING_BOOK` example) but
+does not treat **sell-then-buy** as a **first-class planner contract** with ticket lifecycle.
+
+### Design (`PROPOSED`)
+
+```text
+ProgressGoal: ACQUIRE_ITEM(book_mending)
+  → RequirementResolver
+  → sub-goal: WEALTH_EMERALDS(deficit)
+  → TradeEvaluationPolicy:
+        phase SELL — pick best input→emerald offer (farm surplus, mine loot)
+        phase BUY  — pick emerald→target offer at known trader
+  → TaskLifecycle per phase (interruptible by D-VR-010 raid)
+```
+
+| Field | Purpose |
+| --- | --- |
+| `TradeChainTicket` | `{ targetOffer, emeraldBudget, sellPhaseComplete, traderId }` |
+| `consumerKey` | `"trade:chain:<goalId>"` on `WorkDemandPolicy.MaterialDemand` (D-VR-015) |
+| Backpack staging | Reserve slots for sell inputs **and** expected emerald output — 8-slot risk |
+
+**Must happen:** mob with carrots but no emeralds completes sell then buy in one directed visit or two commutes.  
+**Must not happen:** buys book offer without emerald budget; sells last food leaving starvation.
+
+**Cross-RFC:** `RFC-VANILLA-AUTONOMOUS-PROGRESSION` `RequirementResolver`; farm surplus from V3 harvest.
+
+**Decision:** **D-VR-029** (`PROPOSED`).
+
+---
+
+## Topic: Manual iron golem construction (`User`)
+
+**Author:** `User` (topic request, 2026-08-14)  
+**Status:** `PROPOSED` — **distinct from VR-15** (village-driven golem spawn is `NOT PRACTICAL`).
+
+### Problem (observable)
+
+A human **builds** an iron golem: place iron block pattern + carved pumpkin. This is player parity
+**construction**, not waiting for village mechanics to spawn one. RFC golem section only covers
+**relationship** with existing golems (neutral, assist, door repath).
+
+### Feasibility (`INFERRED`)
+
+| Step | Integration |
+| --- | --- |
+| Acquire 4 iron blocks + pumpkin | `WorkDemandPolicy` / gather / smelt chain |
+| Place pattern | Scavenger block placement (`PlaceTorchGoal` pattern) + griefing gate |
+| Trigger spawn | Vanilla `BlockPattern` / pumpkin placement on iron T (`CarvedPumpkinBlock` pattern methods exist in mappings: `getOrCreateIronGolemFull`) |
+| Post-spawn | Existing golem relationship table — hang near / assist vs raid |
+
+**Must happen:** mob with materials constructs golem near `HOME_VILLAGE` when defense utility high and no golem present.  
+**Must not happen:** griefing pumpkin on player builds; infinite iron sink without demand ticket.
+
+**Strongest objection:** 8-slot backpack + 5 blocks + pathing alignment is fiddly; failure modes
+(pattern off-by-one) look stupid without retry policy.
+
+**Phased delivery:** **V7** (advanced community) or late **V5** if raid defense demands it.
+
+**Decision:** **D-VR-030** (`PROPOSED`).
+
+---
+
+## Topic: Hero-of-the-Village villager gifts (`User`)
+
+**Author:** `User` (topic request, 2026-08-14)  
+**Status:** `PROPOSED` — reward **collection** behaviour; depends on hero **effect** credit (D-VR-020 / F1).
+
+### Problem (observable)
+
+After raid victory, villagers **throw gifts** at the hero (`GiveGiftToHero` behaviour;
+`Villager.throwGift` — `CONFIRMED` in Mojmap). PlayerMobs may receive **hero registration**
+(`addHeroOfTheVillage`) without ever **catching** gifts if the gift AI targets `Player` only
+(`UNVERIFIED` — body audit required before implementation).
+
+### Design (`PROPOSED`)
+
+```text
+Raid VICTORY + hero effect active on mob
+        ↓
+VillagePerception: villagers in gift range
+        ↓
+HeroGiftCollectionPolicy (stand in village center, collect floor items)
+        ↓
+ItemPickupPolicy respects gift items (bread, seeds, …)
+        ↓
+InventoryKnowledge / demand re-evaluation
+```
+
+**Must happen:** defender mob with hero credit receives thrown items within ~1 minute of victory.  
+**Must not happen:** gifts despawn while mob raids chests (`VR-20` ally gate).
+
+**If gift target is player-typed:** narrow mixin on `GiveGiftToHero` / hero lookup — same cost class
+as D-VR-020, not a new reputation system (contrast D-VR-021).
+
+**Phased delivery:** **V6** with hero credit; static tests mock `throwGift` eligibility.
+
+**Decision:** **D-VR-031** (`PROPOSED`).
+
+---
+
+## Topic: Village founding vs discovery (`User`)
+
+**Author:** `User` (topic request, 2026-08-14)  
+**Status:** `PROPOSED` — **first-class behaviour** missing today; distinct from V1 **perception of existing** settlements.
+
+### Problem (observable)
+
+V1 (`D-VR-019`) answers: *"What village is here?"* via `PoiManager` / occupied village POI.
+Humans also **found** settlements: place beds, workstations, bells; transport/cure villagers; create
+a new POI cluster that vanilla later recognizes. RFC treats villages as **discovered objects**, not
+**authored projects**.
+
+### Founding vs discovery (`PROPOSED` vocabulary)
+
+| Mode | Trigger | `KnownVillage` origin |
+| --- | --- | --- |
+| **DISCOVERED** | Mob enters existing POI cluster | `VillagePerception` snapshot (V1) |
+| **FOUNDED** | Mob places critical POI blocks + population criterion | `VillageFoundingProject` ticket → new anchor when vanilla POI qualifies |
+
+**Founding pipeline (high level):**
+
+```text
+VillageFoundingIntent (site selected — cave base, plains camp, etc.)
+        ↓
+RequirementResolver: beds, workstation, bell, housing, optional villager (cure/transport)
+        ↓
+Place blocks (griefing + StorageOwnership)
+        ↓
+Wait for POI registration / villager assignment
+        ↓
+KnownVillage.create(FOUNDED, anchor, founderMobId)
+        ↓
+SettlementTier → HOME_VILLAGE candidate
+```
+
+**Must happen:** mob that builds bed+lectern+bell cluster gets `FOUNDED` village in memory when POI
+query would return village at anchor (same predicate as D-VR-019 — **agreement required**).  
+**Must not happen:** single bed in wilderness tagged `HOME_VILLAGE` without village POI recognition.
+
+**Strongest objection:** overlaps `RFC-VANILLA-AUTONOMOUS-PROGRESSION` base-building; village RFC should
+own **POI/villager/economy** founding semantics only, delegating generic shelter to SCR-2.
+
+**Phased delivery:** **V7** primary; design stub in V4 when `HOME_VILLAGE` designation needs `FOUNDED` source tag.
+
+**Decision:** **D-VR-032** (`PROPOSED`).
 
 ---
 
@@ -2060,12 +2321,12 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 | --- | --- | --- | --- |
 | **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** (static) | VR-T1 pending: enter village → anchor agrees with `Raid.getCenter()` → leave → return → same settlement |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | moved to V2/V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
-| **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal` | **REQUIRES MIXIN** | VR-T2: trade input → correct villager → atomic inventory change |
+| **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **REQUIRES MIXIN** | VR-T2: trade input → correct villager → atomic inventory change; VR-T2b: sell carrots → buy book |
 | **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest |
-| **V4** | Factual site utility + **Place opinion bridge** (D-VR-025/026), known traders, home designation, return visits | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
-| **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
-| **V6** | Raid player-parity bridges: Omen, participation credit, hero/reputation | **REQUIRES MIXIN** | VR-T6: defend → credit (`UNVERIFIED` hero path) |
-| **V7** | Advanced community: rescue, repair, transport, settlement projects, group coop | **NOT PRACTICAL** gen-1 | Deferred |
+| **V4** | Factual site utility + **Place opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**), known traders, home designation, return visits | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
+| **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
+| **V6** | Raid player-parity bridges: Omen, participation credit, hero/reputation, **ominous bottle drink policy**, **hero gift collection** | **REQUIRES MIXIN** | VR-T6: defend → credit; VR-T6b: villager gifts |
+| **V7** | Advanced community: rescue, repair, transport, settlement projects, group coop, **village founding**, **manual golem build** | **NOT PRACTICAL** gen-1 | Deferred |
 
 ### Legacy phase map (superseded)
 
@@ -2160,7 +2421,8 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 | 48-block village identity radius | **UNVERIFIED** — our judgement, no vanilla constant exists. Upgrade path (POI-set overlap) designed and deferred pending runtime evidence (D-VR-022) |
 | Mobs removed without **any** lifecycle event, or in a dimension absent from `getAllLevels()` | **BOUNDED, not eliminated** — held by `MAX_TRACKED_MOBS` (256/dimension), which warns when it fires (D-VR-023) |
 | Monotone anchor following over a long observation sequence | **DOCUMENTED LIMITATION** — replacement tracks the newest equally-good view; separating "rebuilt" from "looks rebuilt" needs POI-set-overlap identity (D-VR-022). VR-T1 must report whether real sequences produce this shape |
-| Place opinion keyed to current anchor chunk | **REJECTED** — use frozen `placeOpinionChunkKey` (D-VR-026) |
+| Place opinion at current anchor chunk | **ACCEPTED** (D-VR-026 **HELD**) — geographic fidelity; cross-chunk anchor drift may split Place history |
+| Settlement-persistent preference across anchor moves | **SETTLEMENT evidence** — not solvable via frozen chunk key (B-VR-42 **REJECTED**) |
 | Vertically spread settlement splits into two | **VR-T1 SCENARIO** — `distSqr` is 3D; 30 horizontal + 40 vertical exceeds the 48 sphere. Not fixed on speculation: 2D would diverge from `RaidAssociationPolicy`, which is 3D because vanilla is (User, 2026-08-14) |
 | Reflection candidates | "structural tests must encode semantics, not incidental code shape"; "unload ≠ permanent removal" as a shared lifecycle rule **once a second persistent per-mob system needs it** — no framework built prematurely (User agreed, 2026-08-14) |
 | TACZ / vehicle mods | Out of scope |
@@ -2168,8 +2430,9 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 | Exploit-optimized trading hall AI | **Rejected** — emergent arbitrage only |
 | Iron golem as village centroid heuristic | **Deferred** (B-VR-12) |
 | GAO SOCIAL village browse | **Deferred** — Opinion discretionary `SOCIAL` + `FriendlyGreetGoal` |
-| SETTLEMENT Opinion subject | **Deferred** — try Place@anchor first (D-VR-026; B-VR-39) |
+| SETTLEMENT Opinion subject | **Deferred** — reopen if mob needs same-settlement pref when anchor geography moves (D-VR-026 **HELD**; B-VR-39) |
 | Patrol captain → auto-raid home village | **PRODUCT DECISION** open (B-VR-14) |
+| Ominous Bottle drink near ally village | **PRODUCT DECISION** — default refuse for `VILLAGE_ALLY` (D-VR-028) |
 | Raid EVACUATE threat hysteresis | **Deferred** — only if shelter flap observed (B-VR-21) |
 | Nearby non-home raid night commute | **PRODUCT DECISION** — matrix row 6 (day/night topic) |
 | Multi-night raid bed allowance | **PRODUCT DECISION** — between-waves sleep (day/night topic) |
@@ -2474,7 +2737,7 @@ that shrank or was rebuilt in place, silently breaking D-VR-019's agreement guar
 
 ### D-VR-025: Village factual utility vs Opinion preference (`User` + `Agent_Cursor`)
 
-**Status:** `LOCK RECOMMENDED` (amended — User pre-lock review, 2026-08-14)  
+**Status:** `LOCKED` (User, 2026-08-14)  
 **Accepted:**
 
 1. `VillageInteractionDirector` scores **legality and need fit** (`FactualVillageUtility`).
@@ -2487,20 +2750,22 @@ that shrank or was rebuilt in place, silently breaking D-VR-019's agreement guar
 **Rejected:** folding sociability/stress into `VillagePerception`; Opinion veto of the only legal trade
 source when `MaterialDemand` is blocking; requiring current perception for remembered-village selection.
 
-### D-VR-026: Place opinion via frozen chunk key; SETTLEMENT deferred (`User` + `Agent_Cursor`)
+### D-VR-026: Place opinion at current anchor geography; SETTLEMENT deferred (`User` + `Agent_Cursor`)
 
-**Status:** `LOCK RECOMMENDED` (amended — User pre-lock review, 2026-08-14)  
+**Status:** `HELD` (User amendment, 2026-08-14) — frozen chunk key rejected; geographic Place retained  
 **Accepted:**
 
-1. Each `KnownVillage` carries immutable **`placeOpinionChunkKey`** (`ChunkPos` at discovery) — survives
-   `withObservation` anchor replacement (`KnownVillage.java` replacement semantics, V1-R2 drift).
-2. `SettlementOpinionBias` reads Place preference at `placeOpinionChunkKey`; navigation targets current
-   `anchor()`.
-3. Terminal learning records at `placeOpinionChunkKey` (village outcome wrapper beside mining terminals).
-4. **SETTLEMENT** Opinion subject remains **deferred** until Place + Entity prefs prove insufficient.
+1. Place learning and ranking use **current** `KnownVillage.anchor()` chunk — geographic fidelity
+   (`PlaceOpinionRouteRanker.destinationBias` at current anchor coordinates).
+2. `SettlementOpinionBias` composes Opinion-owned personality/affect/Place math; village consumes
+   bounded `int` only (`D-VR-025`).
+3. **SETTLEMENT** Opinion subject remains **deferred**. Anchor-cross-chunk drift may split Place
+   history from settlement identity; factual `MobVillageMemory` (tier, home, trade) carries identity.
+4. Reopen SETTLEMENT when runtime needs *"I like this same village regardless of anchor movement"* —
+   that is evidence for a real settlement subject, not a chunk-key encoding.
 
-**Rejected:** using **current** `anchor()` chunk as the sole persistent Place key (orphans preference on
-anchor supersede); SETTLEMENT gen-1 without evidence; anchor-chunk migration gen-1 (defer).
+**Rejected:** immutable **`placeOpinionChunkKey`** (conflates Place with settlement ID);
+SETTLEMENT gen-1 without evidence; Place-entry migration on anchor supersede (defer).
 
 ### D-VR-020: Hero credit by widening one type check (`Agent_Claude`)
 
@@ -2530,11 +2795,49 @@ runs, the feature must not be described as “villagers remember you”.
 **Evidence:** `Villager#onReputationEventFrom` offsets 0–116; `setLastHurtByMob` offsets 21–50
 (the sole `instanceof Player` is a cosmetic particle broadcast); `tellWitnessesThatIWasMurdered` ungated.
 
+### D-VR-027: Ominous Bottle pickup is HIGH priority inventory knowledge (`User`)
+
+**Status:** `PROPOSED` (`User`, 2026-08-14)  
+**Accepted:** `OminousBottlePolicy` + `InventoryKnowledge` retention; extend pickup rank before consumption policy.  
+**Rejected:** Auto-drink on pickup; treating bottles as undifferentiated junk loot.
+
+### D-VR-028: Ominous Bottle consumption is profile- and site-gated (`User`)
+
+**Status:** `PROPOSED` (`User`, 2026-08-14)  
+**Accepted:** `OminousBottleConsumptionPolicy` separate from pickup; `RAID_HUNTER` drinks only outside ally/home envelope unless product overrides.  
+**Rejected:** Ally mob autonomously drinking in `HOME_VILLAGE` gen-1.
+
+### D-VR-029: Two-step trade chains are first-class planner tickets (`User`)
+
+**Status:** `PROPOSED` (`User`, 2026-08-14)  
+**Accepted:** `TradeChainTicket` + sell-phase then buy-phase via `RequirementResolver` / `WorkDemandPolicy` consumer keys.  
+**Rejected:** Hardcoded single-hop trades only; selling last food without starvation guard.
+
+### D-VR-030: Manual iron golem construction is distinct from village golem spawn (`User`)
+
+**Status:** `PROPOSED` (`User`, 2026-08-14)  
+**Accepted:** Player-parity **block pattern + pumpkin** construction goal; reuse placement + golem relationship topics.  
+**Rejected:** Equating with VR-15 village-driven summon; griefing pumpkins on foreign builds.
+
+### D-VR-031: Hero gift collection is post-raid reward behaviour (`User`)
+
+**Status:** `PROPOSED` (`User`, 2026-08-14)  
+**Accepted:** Stand/collect gifts after hero credit; narrow mixin if `GiveGiftToHero` is player-typed.  
+**Rejected:** New gift economy; looting villager inventories instead of thrown gifts.
+
+### D-VR-032: Village founding is distinct from village discovery (`User`)
+
+**Status:** `PROPOSED` (`User`, 2026-08-14)  
+**Accepted:** `KnownVillage` origin tag `FOUNDED` via `VillageFoundingProject`; POI agreement with D-VR-019 predicate.  
+**Rejected:** Single-bed wilderness camp as `HOME_VILLAGE` without village POI recognition.
+
 
 ## Contribution
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| User | 2026-08-14 | **Lock D-VR-025.** Hold D-VR-026: reject frozen `placeOpinionChunkKey` (settlement-ID in Place store); keep Place learning/ranking at **current** anchor geography; settlement-persistent pref across anchor moves → SETTLEMENT evidence. B-VR-42 **REJECTED**. **No implementation authorization.** |
+| User + Agent_Cursor | 2026-08-14 | **Six user-requested topics:** Ominous Bottle pickup (`OminousBottlePolicy`, HIGH), consumption policy, two-step sell→buy trade chains, manual iron golem construction, Hero gift collection, village founding vs discovery. VR-27…32; B-VR-44…49; D-VR-027…032; phased plan V2/V5/V6/V7 hooks. Fixed missing `VillagerTradeAdapter` topic header. **No implementation authorization.** |
 | Agent_Claude + User | 2026-08-14 | **V1-R3 — permanent removal now sweeps every dimension (P0).** Memory is per-dimension, a mob is not, and nothing reconciled them: a mob that learned villages in the Overworld and died in the Nether had `forget()` run against the *Nether* store, leaving the Overworld entry immortal. Since villages are an Overworld feature and PlayerMobs die in the Nether, this was the **common** path — and it would have made V1-R2's `MAX_TRACKED_MOBS` warning fire for an ordinary cause, destroying its signal value. UUID survival across `CHANGED_DIMENSION` confirmed from the pinned jar (`restoreFrom` copies all NBT but `"Dimension"`; `saveWithoutId` writes `"UUID"`) — which is why the dimension change must preserve memory *and* why the delete must be global. Added `forgetEverywhere(server, uuid)` using the **non-creating** `DimensionDataStorage#get`, so cleanup cannot materialise memory files for dimensions that never had one; single-dimension `forget` banned from production by a structural test. **864 tests, 0 failures; 2 new negative controls fire.** Third repair in one family: eviction written against the wrong event (R1), the wrong clock (R2), the wrong scope (R3) — RET-1 asks who evicts and when, never over what **extent**. |
 | User + Agent_Cursor | 2026-08-14 | **D-VR-025/026 pre-lock review.** (1) Remembered villages stay selectable while unloaded — pool = `MobVillageMemory`, not current perception. (2) Village consumes `SettlementOpinionBias` (±15); Opinion owns personality/affect math. (3) Current `anchor()` chunk unsafe as Place key — frozen `placeOpinionChunkKey` at discovery. D-VR-025/026 → `LOCK RECOMMENDED` (amended). VR-26; B-VR-41…43. **No implementation authorization.** |
 | Agent_Claude + User | 2026-08-14 | **V1-R2 — owner lifecycle separated from memory freshness (P0).** The V1-R1 TTL was the same mistake in a new place: `lastTouchedTick` measures how fresh a memory is, not whether its owner exists, so an alive PlayerMob that mined for thirty in-game days would lose its `HOME_VILLAGE` at the next restart. Replaced with the real seam — `RemovalReason.shouldDestroy()` (`KILLED`/`DISCARDED` delete; chunk unload, player unload and dimension change preserve), verified against `Entity#setRemoved` offsets 9/45 so the reason is populated when Fabric's event fires. `ENTITY_UNLOAD` is usable after all; treating the *event* as the decision instead of the *reason* was the error. `MAX_TRACKED_MOBS` demoted to a warning safety valve with an acknowledged heuristic ordering. **Locked corollary:** memory decay is a cognition policy, never garbage collection. Also added the two User-raised adversarial tests: alternating equal-completeness observations show **no accumulated drift** (replacement, not blending, is why) and stay inside the raid-association radius every step; a monotone sequence **does** follow the settlement — recorded as a documented limitation needing POI-set-overlap identity. Vertical-settlement split (3D `distSqr`) characterised as a VR-T1 scenario. **858 tests, 0 failures; 2 new negative controls fire.** |
