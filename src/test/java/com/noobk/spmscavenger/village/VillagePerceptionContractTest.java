@@ -165,23 +165,45 @@ class VillagePerceptionContractTest {
     }
 
     /**
-     * Gate RET-1a: the eviction call site must exist in production, not only in tests.
+     * Gate RET-1a: eviction must exist in production, not only as an API.
      *
-     * <p><b>V1-R1/R2.</b> The first version of this test asserted two call sites — unload and death —
-     * and so actively enforced the defect it was meant to guard against. The count is two again now,
-     * but for a different reason, which is exactly why counting was the wrong assertion: the
-     * semantics live in {@code mustNotHappen_unloadDeletesMemoryWithoutCheckingTheReason}, and this
-     * test only guards against a third, unreviewed call site appearing.
+     * <p><b>V1-R1/R2/R3.</b> The first version of this test counted call sites and asserted two —
+     * unload and death — thereby enforcing the very defect it guarded. Counting was always the wrong
+     * assertion. What matters is which <em>API</em> production uses, because that is what encodes the
+     * semantics: the global sweep, never the single-dimension primitive.
      */
     @Test
-    void mustHappen_villageMemoryIsEvictedOnPermanentRemovalOnly() throws IOException {
+    void mustHappen_permanentRemovalSweepsEveryDimension() throws IOException {
         String bootstrap = code(source(Path.of("SpmScavenger.java")));
-        assertTrue(bootstrap.contains("VillageMemorySavedData"),
-                "the bootstrap must reference the memory it is responsible for evicting");
 
-        int forgetCalls = bootstrap.split("\\.forget\\(mob\\.getUUID\\(\\)\\)", -1).length - 1;
-        assertEquals(2, forgetCalls,
-                "two permanent-removal call sites: AFTER_DEATH, and the shouldDestroy()-gated unload");
+        int sweeps = bootstrap.split(java.util.regex.Pattern.quote("forgetEverywhere("), -1).length - 1;
+        assertEquals(2, sweeps,
+                "two permanent-removal sites sweep all dimensions: AFTER_DEATH and the "
+                        + "shouldDestroy()-gated unload");
+
+        assertFalse(bootstrap.contains(".forget(mob.getUUID())"),
+                "production must not use the single-dimension primitive: memory is per-dimension but "
+                        + "a mob is not, so a per-level forget leaks every mob that dies away from "
+                        + "the dimension it explored");
+    }
+
+    /**
+     * The V1-R3 leak. A mob keeps its UUID across a dimension change, so Overworld memory outlives a
+     * Nether death unless the sweep is global — and since villages are an Overworld feature, that was
+     * the common path, not an edge case.
+     */
+    @Test
+    void mustHappen_theSweepIsNonCreating() throws IOException {
+        String savedData = code(source(Path.of("village/VillageMemorySavedData.java")));
+
+        int sweep = savedData.indexOf("forgetEverywhere");
+        assertTrue(sweep > 0, "the sweep exists");
+        String body = savedData.substring(sweep);
+        assertTrue(body.contains("peekIn("),
+                "the sweep must use the non-creating accessor");
+        assertFalse(body.contains("computeIfAbsent"),
+                "sweeping all dimensions with computeIfAbsent would materialise village-memory files "
+                        + "for the Nether and End of a world that never had one");
     }
 
     /**
@@ -202,7 +224,7 @@ class VillagePerceptionContractTest {
         if (unloadBody.contains("VillageMemorySavedData")) {
             assertTrue(unloadBody.contains("shouldDestroy()"),
                     "unload may only delete memory when RemovalReason.shouldDestroy() is true");
-            assertTrue(unloadBody.indexOf("shouldDestroy()") < unloadBody.indexOf("forget("),
+            assertTrue(unloadBody.indexOf("shouldDestroy()") < unloadBody.indexOf("forgetEverywhere("),
                     "the reason must be checked before the deletion, not after");
         }
     }

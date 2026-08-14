@@ -9,9 +9,9 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
-| **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (hardened through V1-R2); V2+ design-only; no VR-T* runtime |
+| **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (hardened through V1-R3); V2+ design-only; no VR-T* runtime |
 | **Nearest frontier** | **V1 perception driver** (cadence + mob-count budget), then **V4 Place-opinion bridge** design (D-VR-025/026); VR-T1 runtime |
-| **Last update** | 2026-08-14 (**V1-R2** — owner lifecycle separated from memory freshness; `RemovalReason.shouldDestroy()` replaces the staleness TTL; 858 tests. Prior: Opinion↔Village boundary — User + Agent_Cursor; D-VR-025/026) |
+| **Last update** | 2026-08-14 (**V1-R3** — permanent removal sweeps every dimension; 864 tests. Prior: D-VR-025/026 pre-lock review — User) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -184,7 +184,7 @@ Central coordinator in **`spmscavenger`**. **No Brain migration.** Does not repl
         └───────────────┼────────────────┘
                         ▼
          Opinion layer (soft rank only — D-VR-025)
-         Place @ anchor + personality + affect + Activity/Entity prefs
+         SettlementOpinionBias.request(...)  ← bounded int; Opinion owns math
                         ▼
                    Utility choice
                         │
@@ -305,28 +305,32 @@ FactualVillageUtility =
   - legalityPenalty(AVOID tier, blocked trade)
 ```
 
-**Layer 2 — Opinion (soft rank among legal candidates):**
+**Layer 2 — Opinion (soft rank among legal candidates; Village consumes, does not compute):**
 
 ```text
-OpinionVillageBias =
-    PlaceOpinionRouteRanker.destinationBias(placeMemory, anchor.x, anchor.z)
-  + personality.sociability * populatedSettlementFit(villagerDensity)
-  + personality.adventurousness * noveltyFit(firstSeenRecency)
-  + personality.curiosity * unexploredSettlementBonus
-  - affect.stress * familiarPlaceBonus(lastSeenTick)   // stressed → prefer known anchor
-  + EntityOpinionMemory for favourite traders (V2+, optional)
+settlementBias = SettlementOpinionBias.request(village, opinionInput, ctx)
+  // Opinion package owns Place chunk preference, personality, affect, Entity trader prefs
+  // Returns int clamped to ±PlaceOpinionRouteRanker.MAX_ROUTE_BIAS (15)
 ```
 
 **Combined ranking (V4+):**
 
 ```text
-foreach candidate in legalDestinations:
-  if !VillagePerception.isValid(candidate): continue   // not a village / not visible
-  if !TradePolicy.canExecute(candidate, offer): continue
-  if ShelterAuthority.mustHold(): continue              // mandatory systems first
-  score = FactualVillageUtility + OpinionVillageBias     // bias is tie-breaker scale (≤15 route)
+foreach village in MobVillageMemory.remembered():     // persisted; unload-safe
+  if village.tier == AVOID: continue                    // factual gate
+  if blockingDemand && !tradeReachable(village): continue
+  if ShelterAuthority.mustHold(): continue
+  factual = FactualVillageUtility(village, rememberedAnchor)
+  score = factual + SettlementOpinionBias.request(...)
 pick max score
+
+// Refresh pass (when mob present + loaded chunks):
+VillagePerception.observe → MobVillageMemory.remember
 ```
+
+**Must happen:** mob far from a remembered `HOME_VILLAGE` with unloaded chunks between can still select
+it for commute/defend when gates pass.  
+**Must not happen:** empty `VillagePerception.observe` (unloaded) **removes** the village from candidacy.
 
 **Example (User):**
 
@@ -413,10 +417,10 @@ subject type?
 | Raid history at anchor | **No** — village factual record | Either works; keep factual |
 | Sociability → populated settlements | **Yes** — personality × density heuristic in director bias | New subject unnecessary |
 
-**Decision (`D-VR-026` `PROPOSED`):** **Do not add SETTLEMENT gen-1.** Map each `KnownVillage` to
-`PlaceOpinionRouteRanker.destinationBias(placeMemory, anchor.getX(), anchor.getZ())`. Emit terminal
-place learning at village outcomes via `PlaceOpinionService` pattern (raid defend success/failure,
-pleasant trade, villager AOE accident — parallel `ExperienceEmitters` mining terminals).
+**Decision (`D-VR-026` `LOCK RECOMMENDED` amended):** **Do not add SETTLEMENT gen-1.** Map each
+`KnownVillage` to Place opinion via immutable **`placeOpinionChunkKey`** (frozen at discovery), read
+through `SettlementOpinionBias`. Terminal learning uses the same key — **not** the current mutable
+anchor chunk.
 
 **Evidence threshold to reopen SETTLEMENT:** Place at anchor chunk cannot express a settlement-specific
 preference that (a) cannot live in `KnownVillage`/`KnownVillager` facts and (b) cannot use Entity
@@ -442,6 +446,119 @@ idle fallback
 
 **Cross-link:** GAO-10 discretionary `SOCIAL` is the correct executor for "browse village socially" —
 Opinion picks **who** to greet; Village supplies **where** the settlement is.
+
+---
+
+## Topic: Pre-lock review — D-VR-025/026 (`User` + `Agent_Cursor`)
+
+**Author:** User (review criteria); `Agent_Cursor` (code evidence, 2026-08-14)  
+**Status:** `REVIEW` — amendments required before lock
+
+### Finding 1 — Remembered villages while unloaded/unperceived (`CONFIRMED` gap in draft)
+
+**User requirement:** remembered villages must remain **selectable** when chunks are not loaded and
+`VillagePerception` cannot run.
+
+**Evidence (`CODE_CONFIRMED`):**
+
+- `MobVillageMemory` persists across unload (`MobVillageMemory.java` javadoc — V1-R1; unload no longer
+  deletes).
+- `VillagePerception.observe` admits POIs only when `level.hasChunk(...)` (`VillagePerception.java`
+  L110–112) — **no perception without loaded chunks**.
+- Draft ranking loop incorrectly gated on `VillagePerception.isValid(candidate)` — that would drop every
+  remembered village the mob is not currently standing in.
+
+**Amendment (D-VR-025):** three-phase model:
+
+| Phase | Source | Unloaded OK? |
+| --- | --- | --- |
+| **Candidate pool** | `MobVillageMemory.villages()` | **Yes** — travel/defend intent |
+| **Refresh** | `VillagePerception.observe` when present | No — updates anchor/quality only |
+| **Execution** | trade/villager/path gates on arrival | Partial — needs loaded destination |
+
+Raid interrupt (`D-VR-010`) uses **remembered** `home.anchor()` with `getRaidAt` — does not require
+current perception (`INFERRED` — raid state is world-scoped).
+
+**Must-not-happen test (VR-T4b):** mob with two remembered villages, both chunks unloaded → director
+still returns a ranked commute target using remembered anchors + cached trade facts.
+
+### Finding 2 — Village must consume bounded Opinion bias, not own personality/affect math (`DISAGREE` with draft formula)
+
+**User requirement:** Village code calls a bounded bias; **Opinion package** owns sociability,
+stress, curiosity, Place memory composition.
+
+**Evidence (`CODE_CONFIRMED`):** `PlaceOpinionRouteRanker` javadoc — *"Place memory ranks among
+already-valid candidate destinations. It must never veto mandatory mining..."* (`PlaceOpinionRouteRanker.java`
+L8–9). `DiscretionaryScoringInput` already bundles `AffectiveState`, `OpinionMemory`, personality
+fields for discretionary scoring (`DiscretionaryScoringInput.java`).
+
+**Amendment (D-VR-025):** add **`SettlementOpinionBias`** (Opinion package, name TBD):
+
+```java
+/** Bounded soft bias for a remembered settlement. Village director adds; never vetoes. */
+public static int request(
+        KnownVillage village,
+        DiscretionaryScoringInput opinionInput,
+        SettlementOpinionContext ctx) {
+    // internally: PlaceOpinionRouteRanker + personality/affect/trader prefs
+    // clamp to ±PlaceOpinionRouteRanker.MAX_ROUTE_BIAS
+}
+```
+
+`VillageInteractionDirector` **must not** import `PersonalityModel` / `AffectiveState` math directly
+(SPM-2 boundary + single owner for discretionary composition).
+
+**Rejected:** `OpinionVillageBias` formula inlined in village package (superseded draft).
+
+### Finding 3 — Mutable anchor unsafe as persistent Place key (`CONFIRMED` — not safe without frozen key)
+
+**User question:** Is `KnownVillage.anchor()` safe as the Place opinion key when anchor recomputation
+crosses chunks?
+
+**Answer: `NO`** — not when keyed by **current** anchor chunk alone.
+
+**Evidence (`CODE_CONFIRMED`):**
+
+- Anchor is `final` per object but **replaced** via `withObservation` → new `KnownVillage`
+  (`KnownVillage.java` L90–109) when `ObservationQuality.supersedes`.
+- V1-R2: monotone observation sequence can move anchor **400 blocks** (`RFC` V1-R2 table) — routinely
+  crosses chunk boundaries.
+- `PlaceOpinionMemory` keys by `ChunkPos.toLong()` only (`PlaceOpinionMemory.java` L17–30) — no
+  settlement identity.
+- Using current `anchor` chunk for learning then later reading after anchor replacement **orphans**
+  preference on the old chunk (silent reset).
+
+**Amendment (D-VR-026):** add immutable **`placeOpinionChunkKey`** on `KnownVillage`:
+
+```text
+discovered(anchor, tick, quality):
+  placeOpinionChunkKey = ChunkPos(anchor).toLong()   // frozen for life of settlement row
+
+withObservation(newAnchor, ...):
+  copy placeOpinionChunkKey unchanged               // anchor may move; preference identity does not
+```
+
+- **Learning:** `PlaceOpinionService` (or village terminal wrapper) records at `placeOpinionChunkKey`.
+- **Ranking:** `SettlementOpinionBias` reads Place preference at `placeOpinionChunkKey`.
+- **Navigation:** path target remains **current** `anchor()` block (raid-centre agreement, D-VR-019).
+
+**Viable alternative rejected gen-1:** migrate Place entries on every anchor supersede when chunk
+changes — correct but requires new `PlaceOpinionMemory.migrate(long oldKey, long newKey)` and couples
+village refresh to opinion bookkeeping; defer unless frozen-key drift proves confusing in VR-T4.
+
+**SETTLEMENT subject:** still **deferred** — frozen chunk key solves anchor-cross-chunk orphaning, not
+trader-specific or tier-specific preference (Entity opinion + factual tier remain separate).
+
+### Lock recommendation
+
+| Decision | Prior | After review |
+| --- | --- | --- |
+| **D-VR-025** | `PROPOSED` | **`LOCK RECOMMENDED` (amended)** — remembered pool + `SettlementOpinionBias` consumer |
+| **D-VR-026** | `PROPOSED` | **`LOCK RECOMMENDED` (amended)** — frozen `placeOpinionChunkKey`; SETTLEMENT still deferred |
+
+**Blockers before implementation:** V4 adds `placeOpinionChunkKey` to `KnownVillage` NBT (migration:
+default from saved anchor chunk for pre-V4 rows). `SettlementOpinionBias` ships in Opinion package
+before director wiring.
 
 ---
 
@@ -1082,14 +1199,60 @@ model on speculation.
 
 ---
 
+### V1-R3 — permanent removal must clear every dimension (**P0**, User review)
+
+Memory is per-dimension. A mob is not. Nothing reconciled the two, so the ordinary sequence leaked:
+
+```text
+Overworld : perceives villages       -> entry written to the OVERWORLD store
+-> Nether : CHANGED_DIMENSION        -> shouldDestroy() false, memory preserved   [correct]
+-> Nether : KILLED                   -> forget() ran against the NETHER store
+                                        which never had an entry
+Overworld : entry survives forever, owner permanently gone
+```
+
+**This was the common path, not an edge case.** Villages are overwhelmingly an Overworld feature and
+PlayerMobs die in the Nether and End, so a long-running server accumulated one immortal Overworld
+entry per such death. Worse, it would have made the `MAX_TRACKED_MOBS` warning added in V1-R2 fire
+for a completely ordinary cause — destroying the signal value of a warning whose entire purpose is to
+mean *something abnormal has happened*.
+
+**The UUID survives the transition**, which is both why preserving memory on `CHANGED_DIMENSION` is
+right and why the eventual deletion has to be global (`CODE_CONFIRMED`, pinned jar):
+`Entity#changeDimension` creates a new entity and calls `restoreFrom`, which copies the full NBT via
+`saveWithoutId` and removes only `"Dimension"`; `saveWithoutId` writes `"UUID"`.
+
+**Fix:** `VillageMemorySavedData.forgetEverywhere(server, uuid)` sweeps `server.getAllLevels()`,
+wired to both permanent-removal call sites. `forget(UUID)` survives as the single-dimension primitive
+and is now banned from production by a structural test.
+
+**The sweep must not create what it is sweeping.** `computeIfAbsent` across every dimension would
+materialise village-memory files for the Nether and End of a world that never had one — cleaning up
+by writing files. `DimensionDataStorage#get` returns the cached instance, else reads from disk *only
+if the file exists*, else returns and caches `null` (pinned jar, offsets 0–58). Enforced by
+`mustHappen_theSweepIsNonCreating`.
+
+**Residual:** a dimension absent from `getAllLevels()` at removal time retains its entry. Vanilla
+creates all registered levels at startup so this should not arise; it is covered by the
+`MAX_TRACKED_MOBS` valve, which is now once again reserved for genuinely abnormal causes.
+
+**Third repair in the same family, and the pattern is worth naming.** Each time, an eviction was
+written against the *dimension the code happened to be holding* rather than against *the thing whose
+lifetime it is*: the wrong event (R1), the wrong clock (R2), the wrong scope (R3). Gate RET-1 asks
+who evicts and when; it does not ask **over what extent**, and all three defects lived in that gap.
+
+---
+
 ### Verification
 
-858 tests, 0 failures. Three negative controls, each restoring the original defect:
+864 tests, 0 failures. Three negative controls, each restoring the original defect:
 
 | Control | Fails |
 | --- | --- |
 | ungate the unload deletion (delete on any unload) | `mustNotHappen_unloadDeletesMemoryWithoutCheckingTheReason` |
 | reinstate the staleness TTL | `mustNotHappen_memoryAgeIsUsedAsAnOrphanCollectionSignal` |
+| revert to per-level eviction | `mustHappen_permanentRemovalSweepsEveryDimension`, `mustNotHappen_unloadDeletesMemoryWithoutCheckingTheReason` |
+| sweep with `computeIfAbsent` | `mustHappen_theSweepIsNonCreating` |
 | identity radius back to `9216` | `mustHappen_twoSettlements85BlocksApartStaySeparate`, `mustHappen_oneRaidCanCoverBothRememberedVillages`, `mustHappen_identityIsTighterThanRaidAssociation` |
 | acceptance rule back to `admitted > stored.admitted()` | `mustHappen_shrunkenVillageUpdatesItsAnchor`, `mustHappen_rebuiltVillageUpdatesItsAnchor`, `mustHappen_moreCompleteViewWinsOverLargerCount` |
 
@@ -1717,7 +1880,8 @@ Director admission uses **`VillageScenarioProfile`** (`PROPOSED` — B-VR-24) �
 | VR-22 | Day/night director arbitration | **PARTIAL** | `VillageDayNightContext` + director priority matrix | V1 read model; V2/V5 admission; D-VR-018 |
 | VR-23 | Anchor agreement with `Raid.getCenter()` | **FULL** | Derive `KnownVillage.anchor` from the same POI query the raid system uses | `Agent_Claude` F3; prerequisite for D-VR-010 firing at all |
 | VR-24 | Reputation readout (gossip accessor) | **PARTIAL** | Accessor mixin on `Villager.gossips`; no reputation bridge | `Agent_Claude` F2; consumer still `UNVERIFIED` |
-| VR-25 | Place opinion at village anchor | **PARTIAL** | `PlaceOpinionRouteRanker` on `KnownVillage.anchor` chunk; no SETTLEMENT subject (D-VR-026) | V4; mirrors `ExploringGoal` GAO-5B |
+| VR-25 | Place opinion at village anchor | **PARTIAL** | `placeOpinionChunkKey` + `SettlementOpinionBias` (D-VR-026); not current anchor chunk | V4 |
+| VR-26 | Remembered-village candidacy while unloaded | **PARTIAL** | Candidate pool = `MobVillageMemory`; perception refresh separate (D-VR-025) | VR-T4b |
 
 ### Integration option comparison (village trade case)
 
@@ -1878,7 +2042,10 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 | B-VR-37 | **Village facts vs Opinion preference split** | User architecture | **→ Topic** | Director ranks legal candidates; Opinion soft-bias only. D-VR-025 |
 | B-VR-38 | **KnownVillage → Place opinion at anchor chunk** | User architecture | **→ Topic** | Reuse GAO-5B; no SETTLEMENT subject gen-1. D-VR-026 |
 | B-VR-39 | **SETTLEMENT Opinion subject** | User investigation | **DEFERRED** | Reopen only if Place@anchor + Entity trader prefs prove insufficient post-V4 |
-| B-VR-40 | **Stress → prefer familiar village anchor** | `NEW` | **PROMOTE** | `AffectiveState.stress` + `lastSeenTick` in `OpinionVillageBias`; must not veto blocking trade |
+| B-VR-40 | **Stress → prefer familiar village anchor** | `NEW` | **PROMOTE → Opinion package** | Lives inside `SettlementOpinionBias`, not village director |
+| B-VR-41 | **Remembered pool vs perception refresh** | User pre-lock review | **→ D-VR-025** | Unloaded villages stay selectable |
+| B-VR-42 | **`placeOpinionChunkKey` frozen at discovery** | User pre-lock review | **→ D-VR-026** | Current anchor chunk alone is unsafe |
+| B-VR-43 | **`SettlementOpinionBias` facade** | User pre-lock review | **→ D-VR-025** | Village consumes ±15 bias only |
 
 **Rejected (dedup):** `ExploreForVillageGoal` (director + perception); villager profession brain clone
 (`D-VR-004`); client menu bot for trade (`D-VR-005`).
@@ -1991,8 +2158,9 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 | Runtime VR-T* tests | **UNVERIFIED** — VR-T1 datapack planned (B-VR-28). V1 is `STATIC_CONFIRMED` only: no PlayerMob has yet perceived a village in a running world |
 | V1 perception **driver** (what calls `VillagePerception.observe`) | **NEXT** — design with a real cadence and a 1/10/50/100-PlayerMob budget, not a 64-block POI query per tick (User, 2026-08-14) |
 | 48-block village identity radius | **UNVERIFIED** — our judgement, no vanilla constant exists. Upgrade path (POI-set overlap) designed and deferred pending runtime evidence (D-VR-022) |
-| Mobs removed without **any** lifecycle event | **BOUNDED, not eliminated** — held by `MAX_TRACKED_MOBS` (256/dimension), which warns when it fires (D-VR-023) |
+| Mobs removed without **any** lifecycle event, or in a dimension absent from `getAllLevels()` | **BOUNDED, not eliminated** — held by `MAX_TRACKED_MOBS` (256/dimension), which warns when it fires (D-VR-023) |
 | Monotone anchor following over a long observation sequence | **DOCUMENTED LIMITATION** — replacement tracks the newest equally-good view; separating "rebuilt" from "looks rebuilt" needs POI-set-overlap identity (D-VR-022). VR-T1 must report whether real sequences produce this shape |
+| Place opinion keyed to current anchor chunk | **REJECTED** — use frozen `placeOpinionChunkKey` (D-VR-026) |
 | Vertically spread settlement splits into two | **VR-T1 SCENARIO** — `distSqr` is 3D; 30 horizontal + 40 vertical exceeds the 48 sphere. Not fixed on speculation: 2D would diverge from `RaidAssociationPolicy`, which is 3D because vanilla is (User, 2026-08-14) |
 | Reflection candidates | "structural tests must encode semantics, not incidental code shape"; "unload ≠ permanent removal" as a shared lifecycle rule **once a second persistent per-mob system needs it** — no framework built prematurely (User agreed, 2026-08-14) |
 | TACZ / vehicle mods | Out of scope |
@@ -2269,9 +2437,23 @@ leaving a world; **and** a staleness TTL over memory age — `lastTouchedTick` m
 not owner existence, so an alive mob that spends a month away from villages would lose its home at the
 next restart. RET-1 demands a bound, not a lifecycle violation, and both attempts produced a bound
 that deleted the feature.
-**Residual, bounded not eliminated:** a mob removed with no lifecycle event at all. Held by
-`MAX_TRACKED_MOBS` = 256/dimension, which warns when it fires and whose victim ordering is an
-acknowledged heuristic.
+**Amended again V1-R3 (User review):** the deletion's **extent** is every dimension, not the one
+holding the entity.
+
+```text
+memory is per-dimension   +   a mob is not   =>   permanent removal sweeps all levels
+```
+
+Villages are an Overworld feature and PlayerMobs die in the Nether, so a per-level `forget` leaked on
+the *common* path. The UUID survives `CHANGED_DIMENSION` (`restoreFrom` copies all NBT but
+`"Dimension"`; `saveWithoutId` writes `"UUID"`), which is simultaneously why the dimension change must
+preserve memory and why the eventual delete must be global. The sweep uses the **non-creating**
+`DimensionDataStorage#get`, so cleaning up cannot materialise memory files for dimensions that never
+had one.
+
+**Residual, bounded not eliminated:** a mob removed with no lifecycle event at all, or a dimension
+absent from `getAllLevels()` at removal time. Held by `MAX_TRACKED_MOBS` = 256/dimension, which warns
+when it fires and whose victim ordering is an acknowledged heuristic.
 **Corollary locked:** memory decay, if ever wanted, is a **cognition policy** with its own design and
 player-visible behaviour — never garbage collection.
 **Evidence:** `Entity$RemovalReason` constructor flags (KILLED/DISCARDED `destroy=true`; the three
@@ -2292,21 +2474,33 @@ that shrank or was rebuilt in place, silently breaking D-VR-019's agreement guar
 
 ### D-VR-025: Village factual utility vs Opinion preference (`User` + `Agent_Cursor`)
 
-**Status:** `PROPOSED` (`User`, 2026-08-14)  
-**Accepted:** `VillageInteractionDirector` scores **legality and need fit** (`FactualVillageUtility`);
-Opinion supplies **soft rank** among already-valid destinations (`OpinionVillageBias`). Central rule:
-*preference does not create permission* (`docs/wiki/Opinion-System.md`).  
-**Rejected:** folding sociability, stress, or "I like this village" into `VillagePerception`; Opinion
-veto of the only legal trade source when `MaterialDemand` is blocking.
+**Status:** `LOCK RECOMMENDED` (amended — User pre-lock review, 2026-08-14)  
+**Accepted:**
 
-### D-VR-026: Place opinion at village anchor; SETTLEMENT subject deferred (`User` + `Agent_Cursor`)
+1. `VillageInteractionDirector` scores **legality and need fit** (`FactualVillageUtility`).
+2. Opinion supplies **bounded soft bias** via `SettlementOpinionBias.request(...)` in the Opinion
+   package — village code **consumes** `int` bias only; no direct personality/affect math in village.
+3. **Candidate pool** = `MobVillageMemory.remembered()` settlements — persists while chunks unloaded;
+   `VillagePerception` is a **refresh** path when present, not a membership gate.
+4. Central rule: *preference does not create permission* (`docs/wiki/Opinion-System.md`).
 
-**Status:** `PROPOSED` (`User`, 2026-08-14)  
-**Accepted:** Map each `KnownVillage` to `PlaceOpinionRouteRanker.destinationBias` at anchor chunk
-coordinates; terminal learning via `PlaceOpinionService` on village outcomes.  
-**Deferred:** dedicated **SETTLEMENT** Opinion subject until Place + Entity trader prefs prove
-insufficient after V2/V4 runtime.  
-**Rejected:** adding SETTLEMENT gen-1 without evidence of gap.
+**Rejected:** folding sociability/stress into `VillagePerception`; Opinion veto of the only legal trade
+source when `MaterialDemand` is blocking; requiring current perception for remembered-village selection.
+
+### D-VR-026: Place opinion via frozen chunk key; SETTLEMENT deferred (`User` + `Agent_Cursor`)
+
+**Status:** `LOCK RECOMMENDED` (amended — User pre-lock review, 2026-08-14)  
+**Accepted:**
+
+1. Each `KnownVillage` carries immutable **`placeOpinionChunkKey`** (`ChunkPos` at discovery) — survives
+   `withObservation` anchor replacement (`KnownVillage.java` replacement semantics, V1-R2 drift).
+2. `SettlementOpinionBias` reads Place preference at `placeOpinionChunkKey`; navigation targets current
+   `anchor()`.
+3. Terminal learning records at `placeOpinionChunkKey` (village outcome wrapper beside mining terminals).
+4. **SETTLEMENT** Opinion subject remains **deferred** until Place + Entity prefs prove insufficient.
+
+**Rejected:** using **current** `anchor()` chunk as the sole persistent Place key (orphans preference on
+anchor supersede); SETTLEMENT gen-1 without evidence; anchor-chunk migration gen-1 (defer).
 
 ### D-VR-020: Hero credit by widening one type check (`Agent_Claude`)
 
@@ -2341,6 +2535,8 @@ runs, the feature must not be described as “villagers remember you”.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Claude + User | 2026-08-14 | **V1-R3 — permanent removal now sweeps every dimension (P0).** Memory is per-dimension, a mob is not, and nothing reconciled them: a mob that learned villages in the Overworld and died in the Nether had `forget()` run against the *Nether* store, leaving the Overworld entry immortal. Since villages are an Overworld feature and PlayerMobs die in the Nether, this was the **common** path — and it would have made V1-R2's `MAX_TRACKED_MOBS` warning fire for an ordinary cause, destroying its signal value. UUID survival across `CHANGED_DIMENSION` confirmed from the pinned jar (`restoreFrom` copies all NBT but `"Dimension"`; `saveWithoutId` writes `"UUID"`) — which is why the dimension change must preserve memory *and* why the delete must be global. Added `forgetEverywhere(server, uuid)` using the **non-creating** `DimensionDataStorage#get`, so cleanup cannot materialise memory files for dimensions that never had one; single-dimension `forget` banned from production by a structural test. **864 tests, 0 failures; 2 new negative controls fire.** Third repair in one family: eviction written against the wrong event (R1), the wrong clock (R2), the wrong scope (R3) — RET-1 asks who evicts and when, never over what **extent**. |
+| User + Agent_Cursor | 2026-08-14 | **D-VR-025/026 pre-lock review.** (1) Remembered villages stay selectable while unloaded — pool = `MobVillageMemory`, not current perception. (2) Village consumes `SettlementOpinionBias` (±15); Opinion owns personality/affect math. (3) Current `anchor()` chunk unsafe as Place key — frozen `placeOpinionChunkKey` at discovery. D-VR-025/026 → `LOCK RECOMMENDED` (amended). VR-26; B-VR-41…43. **No implementation authorization.** |
 | Agent_Claude + User | 2026-08-14 | **V1-R2 — owner lifecycle separated from memory freshness (P0).** The V1-R1 TTL was the same mistake in a new place: `lastTouchedTick` measures how fresh a memory is, not whether its owner exists, so an alive PlayerMob that mined for thirty in-game days would lose its `HOME_VILLAGE` at the next restart. Replaced with the real seam — `RemovalReason.shouldDestroy()` (`KILLED`/`DISCARDED` delete; chunk unload, player unload and dimension change preserve), verified against `Entity#setRemoved` offsets 9/45 so the reason is populated when Fabric's event fires. `ENTITY_UNLOAD` is usable after all; treating the *event* as the decision instead of the *reason* was the error. `MAX_TRACKED_MOBS` demoted to a warning safety valve with an acknowledged heuristic ordering. **Locked corollary:** memory decay is a cognition policy, never garbage collection. Also added the two User-raised adversarial tests: alternating equal-completeness observations show **no accumulated drift** (replacement, not blending, is why) and stay inside the raid-association radius every step; a monotone sequence **does** follow the settlement — recorded as a documented limitation needing POI-set-overlap identity. Vertical-settlement split (3D `distSqr`) characterised as a VR-T1 scenario. **858 tests, 0 failures; 2 new negative controls fire.** |
 | User + Agent_Cursor | 2026-08-14 | **Opinion↔Village boundary (User architecture).** Village produces facts/legal candidates; Opinion soft-ranks among valid options only (*preference does not create permission*). Split `VillageSiteScore` → `FactualVillageUtility` + `OpinionVillageBias`; new topic with Place vs SETTLEMENT investigation (**SETTLEMENT deferred** — use `PlaceOpinionRouteRanker` at `KnownVillage.anchor`). Updated director diagram; VR-16/25; V4 phase; B-VR-37…40; D-VR-025/026 `PROPOSED`. **No implementation authorization.** |
 | Agent_Claude + User | 2026-08-14 | **V1-R1 — three corrections from User review of V1.** **P0 (blocker):** `ENTITY_UNLOAD` deleted persisted village memory; Fabric fires it for any entity leaving a world, so a mob wandering out of range erased its own memory. Root cause: copied the shape of neighbouring *runtime*-state releases without checking semantics. **The structural test asserted two call sites and so enforced the defect** — a structural test locks in a wrong invariant as firmly as a right one; it now encodes semantics, not shape. RET-1 re-satisfied by a load-time TTL (30 in-game days) + cap (256/dimension) with a `SERVER_STARTED` caller. **P1a:** identity split from raid association — `VillageIdentityPolicy` (48, ours, `UNVERIFIED`) vs `RaidAssociationPolicy` (`9216`, vanilla, must not drift); one raid may now cover several remembered villages, so a HOME_VILLAGE and a TRADING_POST 85 blocks apart are representable. **P1b:** anchor evidence moved from POI *quantity* to observation *completeness* — `withheldPoiCount` was already computed and discarded; the old `newCount > oldCount` froze the anchor of any village that shrank (20→16) or was rebuilt in place (20→20). D-VR-022/023/024 `LOCKED`. **852 tests, 0 failures; 3 negative controls all fire.** Runtime still `UNVERIFIED`. |

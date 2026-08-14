@@ -122,8 +122,11 @@ public class SpmScavenger implements ModInitializer {
                 // on, so it is populated here.
                 net.minecraft.world.entity.Entity.RemovalReason reason = mob.getRemovalReason();
                 if (reason != null && reason.shouldDestroy()) {
-                    com.noobk.spmscavenger.village.VillageMemorySavedData.get(world)
-                            .forget(mob.getUUID());
+                    // V1-R3: every dimension, not just this one. The mob keeps its UUID across a
+                    // dimension change, so memory written in the Overworld outlives a death in the
+                    // Nether unless the sweep is global.
+                    com.noobk.spmscavenger.village.VillageMemorySavedData.forgetEverywhere(
+                            world.getServer(), mob.getUUID());
                 }
             }
         });
@@ -161,8 +164,9 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
                 if (mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
-                    com.noobk.spmscavenger.village.VillageMemorySavedData.get(serverLevel)
-                            .forget(mob.getUUID());
+                    // V1-R3: global sweep - see the ENTITY_UNLOAD note above.
+                    com.noobk.spmscavenger.village.VillageMemorySavedData.forgetEverywhere(
+                            serverLevel.getServer(), mob.getUUID());
                 }
             }
         });

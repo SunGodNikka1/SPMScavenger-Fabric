@@ -9,7 +9,11 @@ import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.DimensionDataStorage;
 
+import net.minecraft.server.MinecraftServer;
+
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,8 +30,9 @@ import java.util.UUID;
  *   <tr><th>Key</th><td>mob {@code UUID} (stable, not minted)</td></tr>
  *   <tr><th>Bound</th><td>{@link #MAX_TRACKED_MOBS} safety valve; each entry internally bounded
  *       by {@link MobVillageMemory#MAX_KNOWN_VILLAGES}</td></tr>
- *   <tr><th>Eviction owner</th><td>{@link #forget}, on <b>permanent removal</b>: {@code AFTER_DEATH},
- *       and {@code ENTITY_UNLOAD} when {@code RemovalReason.shouldDestroy()}</td></tr>
+ *   <tr><th>Eviction owner</th><td>{@link #forgetEverywhere} (<b>all dimensions</b>), on permanent
+ *       removal: {@code AFTER_DEATH}, and {@code ENTITY_UNLOAD} when
+ *       {@code RemovalReason.shouldDestroy()}</td></tr>
  *   <tr><th>Death / discard</th><td>deleted — the mob is gone</td></tr>
  *   <tr><th>Chunk unload, dimension change</th><td><b>preserved</b> — see below</td></tr>
  *   <tr><th>Server stop</th><td>flushed with the level's data storage</td></tr>
@@ -93,11 +98,25 @@ public final class VillageMemorySavedData extends SavedData {
     public VillageMemorySavedData() {
     }
 
+    private static Factory<VillageMemorySavedData> factory() {
+        return new Factory<>(VillageMemorySavedData::new, VillageMemorySavedData::load, DataFixTypes.LEVEL);
+    }
+
     public static VillageMemorySavedData get(ServerLevel level) {
         DimensionDataStorage storage = level.getDataStorage();
-        return storage.computeIfAbsent(
-                new Factory<>(VillageMemorySavedData::new, VillageMemorySavedData::load, DataFixTypes.LEVEL),
-                DATA_NAME);
+        return storage.computeIfAbsent(factory(), DATA_NAME);
+    }
+
+    /**
+     * Existing memory for this level, or {@code null} — <b>never created</b>.
+     *
+     * <p>{@code DimensionDataStorage#get} returns the cached instance, else reads from disk only if
+     * the file exists, else returns and caches {@code null} (verified in the pinned jar, offsets
+     * 0–58). So sweeping every dimension for a dead mob cannot materialise village-memory files for
+     * the Nether and End of a world that never had one.
+     */
+    private static VillageMemorySavedData peekIn(ServerLevel level) {
+        return level.getDataStorage().get(factory(), DATA_NAME);
     }
 
     /** Non-allocating read. */
@@ -151,10 +170,64 @@ public final class VillageMemorySavedData extends SavedData {
      * {@code ENTITY_UNLOAD} with {@code RemovalReason.shouldDestroy()}. A plain unload is not
      * permanent removal, and a structural test asserts the unload handler checks the reason.
      */
-    public void forget(UUID mob) {
+    public boolean forget(UUID mob) {
         if (mob != null && byMob.remove(mob) != null) {
             setDirty();
+            return true;
         }
+        return false;
+    }
+
+    /**
+     * V1-R3 — permanent removal must clear <b>every</b> dimension, not the one the mob died in.
+     *
+     * <h2>The leak this closes</h2>
+     *
+     * Memory is per-dimension, but a mob is not. Villages are overwhelmingly an Overworld feature and
+     * PlayerMobs die in the Nether and End, so the ordinary sequence was:
+     *
+     * <pre>
+     * Overworld : perceives villages          -> entry written to the Overworld store
+     * -> Nether : CHANGED_DIMENSION           -> shouldDestroy() false, memory correctly preserved
+     * -> Nether : KILLED                      -> forget() ran against the NETHER store
+     *                                            (which never had an entry)
+     * Overworld : entry survives forever, owner permanently gone
+     * </pre>
+     *
+     * The mob keeps its UUID across the transition — {@code Entity#restoreFrom} copies the full NBT
+     * and removes only {@code "Dimension"}, and {@code saveWithoutId} writes {@code "UUID"} — which is
+     * exactly why preserving the memory on {@code CHANGED_DIMENSION} is right, and exactly why the
+     * eventual deletion has to be global.
+     *
+     * <p>This was not a rare edge case but the <b>common</b> path, and it would have made the
+     * {@link #MAX_TRACKED_MOBS} warning fire for an ordinary cause — destroying the signal value of a
+     * warning whose whole purpose is to mean "something abnormal happened".
+     *
+     * @return how many dimensions actually held memory for this mob
+     */
+    public static int forgetEverywhere(MinecraftServer server, UUID mob) {
+        if (server == null || mob == null) {
+            return 0;
+        }
+        List<VillageMemorySavedData> stores = new ArrayList<>();
+        for (ServerLevel level : server.getAllLevels()) {
+            VillageMemorySavedData existing = peekIn(level);
+            if (existing != null) {
+                stores.add(existing);
+            }
+        }
+        return forgetIn(stores, mob);
+    }
+
+    /** Testable core of {@link #forgetEverywhere}, free of server plumbing. */
+    static int forgetIn(Iterable<VillageMemorySavedData> stores, UUID mob) {
+        int cleared = 0;
+        for (VillageMemorySavedData store : stores) {
+            if (store != null && store.forget(mob)) {
+                cleared++;
+            }
+        }
+        return cleared;
     }
 
     public int trackedMobCount() {
