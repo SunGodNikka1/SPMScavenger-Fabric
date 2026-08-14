@@ -184,6 +184,14 @@ skips**. Its SHA-256 was:
 
 That hash changes whenever source or packaged resources change.
 
+## Project wiki
+
+Durable feature and architecture documentation lives in [`docs/wiki/`](docs/wiki/Home.md):
+
+- [`Opinion System`](docs/wiki/Opinion-System.md) — how the finished Opinion feature works.
+- [`Extending Opinion`](docs/wiki/Extending-Opinion.md) — how to add future discretionary activities without reopening GA-OPINION.
+- [`Compatibility Contracts`](docs/wiki/Compatibility-Contracts.md) — reusable host-mod and optional integration rules.
+
 ## Development documentation
 
 - [`plans/RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md`](plans/RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md) — active mining/wealth architecture and tasks.
