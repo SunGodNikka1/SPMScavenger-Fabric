@@ -5,9 +5,9 @@ Canonical location for **MRFC-1** engineering RFCs (Gate MRFC-1).
 | Path | Purpose |
 | --- | --- |
 | `plans/RFC-TOOL-TIER-UPGRADES.md` | Wood → stone → iron → **diamond** (Phase 3 minimal: break + craft) |
-| `plans/RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` | Mining WHERE + wealth system + cave-first strategy (deferred after Phase 3) |
+| `plans/RFC-VANILLA-AUTONOMOUS-PROGRESSION.md` | **United** vanilla survival → endgame architecture — includes mining intelligence deferred/partial backlog, advanced site selection, wealth extensions |
 | `plans/RFC-FURNACE-SMELTING.md` | Furnace smelting — charcoal + iron ingots (`test-datapacks/phase2-furnace/`) |
-| `plans/RFC-VANILLA-AUTONOMOUS-PROGRESSION.md` | Vanilla survival → endgame architecture (design-only; recursive planner + capability gaps) |
+| `plans/RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` | **SUPERSEDED** — archive only; planning lives in `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md` |
 | `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` | Village/villager economy + illager **raid event** parity & progression (design-only) |
 | `plans/RFC-*.md` | Other long-lived multi-agent RFCs |
 | `docs/porting/` | Port evidence (`DECISIONS.md`, `TEST_MATRIX.md`, reflection) — not new RFCs |

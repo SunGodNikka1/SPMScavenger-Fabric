@@ -1,47 +1,26 @@
-# Social Player Mobs: Scavenger Wiki
+# SPM Scavenger
 
-This wiki is the durable reference for **implemented Scavenger features and architecture**.
+SPM Scavenger is a Fabric addon that gives Social Player Mobs (SPM) practical survival behavior without replacing the host mod. PlayerMobs can gather resources, progress through tools, craft, use furnaces, light dark areas, seek shelter, explore, escape environmental hazards, and develop bounded opinions that influence eligible discretionary choices.
 
-Planning RFCs explain how a feature was designed. The wiki explains how the finished system works, what contracts future code must preserve, and where a new feature should integrate.
+The source code is authoritative. This Wiki documents the durable architecture and extension contracts. RFCs under `plans/` are collaborative planning records: they preserve decisions, objections, and evidence, but may contain superseded proposals or stale status text.
 
-## Feature guides
+## Feature index
 
-- [Opinion System](Opinion-System.md) — personality, affect, learned opinions, discretionary choice, EXPLORE / REST / SOCIAL, causal learning, and SPM execution handoff.
-- [Extending Opinion](Extending-Opinion.md) — how to add another discretionary activity without reopening the original GA-OPINION RFC or creating a mega-goal.
+- **Scavenging and progression** — resource demand, gathering, crafting, tool upgrades, and furnace work.
+- **Exploration and mining** — local wandering, directional expeditions, mining projects, interruption handling, and bounded recovery.
+- **Survival behavior** — environmental escape, lighting, campfires, and structural nighttime shelter.
+- **Opinion system** — personality, affect, learned activity/entity/place/environment preferences, and discretionary EXPLORE, REST, and SOCIAL choices.
+- **SPM compatibility** — optional, fail-closed integration that preserves host behavior when unavailable or disabled.
 
-## Architecture guides
+## Architecture index
 
-- [Compatibility Contracts](Compatibility-Contracts.md) — generic rules for optional host-mod integration, ownership, parity, Mixins, lifecycle, cleanup, and fail-closed behavior.
+- [[Opinion System|Opinion-System]] — current Opinion architecture and behavior.
+- [[Extending Opinion|Extending-Opinion]] — how to add another discretionary activity safely.
+- [[Compatibility Contracts|Compatibility-Contracts]] — reusable host/addon integration rules.
+- [[Mod Support|Mod-Support]] — current compatibility surface and the preferred extension ladder.
 
-## Scavenger in one paragraph
+For builds, configuration, installation, and current limitations, use the [main repository](https://github.com/SunGodNikka1/SPMScavenger-Fabric).
 
-Scavenger is an **addon intelligence layer** for Social Player Mobs (SPM). It does not replace SPM's PlayerMob entity framework, combat, orders, relationships, backpack, or native host behaviors. Scavenger adds survival, progression, exploration, shelter, opinion, mining and other autonomous decision systems around that host. Mandatory survival, combat, explicit player authority, shelter/safety, and progression remain authoritative; Opinion only chooses among legitimate discretionary options.
+## Documentation rule for future agents
 
-## Authority model
-
-A useful high-level ordering is:
-
-```text
-Immediate survival / self-defense
-    > explicit player authority
-    > shelter and environmental safety
-    > survival recovery
-    > progression / work
-    > Opinion / discretionary activity
-```
-
-The exact subsystem may refine this ordering, but a lower layer must never manufacture permission to override a higher one.
-
-**Core rule:** preference affects choice; preference does not create permission.
-
-## Documentation roles
-
-| Location | Purpose |
-| --- | --- |
-| `docs/wiki/` | Current feature and architecture reference |
-| `plans/RFC-*.md` | Active design/planning work |
-| `docs/porting/DECISIONS.md` | Important implementation decisions and failure history |
-| `docs/porting/TEST_MATRIX.md` | Behavioral contracts and regression scenarios |
-| `.superpowers/sdd/` | Task briefs, reports, and progress ledger |
-
-When an RFC is finished, move durable product and architecture knowledge here. Historical planning detail can remain in Git history instead of staying permanently active in `plans/`.
+Read the current source before changing this Wiki. When source and an RFC disagree, verify the source and update the durable documentation rather than copying RFC chronology. Record plans in the RFC; record stable current truth here.

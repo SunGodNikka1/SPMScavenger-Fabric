@@ -1,12 +1,8 @@
-# Scavenger Wiki
+## SPM Scavenger
 
-- [Home](Home.md)
-- [Opinion System](Opinion-System.md)
-- [Extending Opinion](Extending-Opinion.md)
-- [Compatibility Contracts](Compatibility-Contracts.md)
-
----
-
-- [Repository README](../../README.md)
-- [Development decisions](../porting/DECISIONS.md)
-- [Test matrix](../porting/TEST_MATRIX.md)
+- [[Home]]
+- [[Opinion System|Opinion-System]]
+- [[Extending Opinion|Extending-Opinion]]
+- [[Compatibility Contracts|Compatibility-Contracts]]
+- [[Mod Support|Mod-Support]]
+- [Main Repository](https://github.com/SunGodNikka1/SPMScavenger-Fabric)

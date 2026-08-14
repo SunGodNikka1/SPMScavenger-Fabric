@@ -1,0 +1,30 @@
+name: Wiki drift check
+
+on:
+  pull_request:
+    paths:
+      - 'docs/wiki/**'
+      - 'scripts/sync-wiki.ps1'
+      - '.github/workflows/wiki-drift-check.yml'
+  push:
+    paths:
+      - 'docs/wiki/**'
+      - 'scripts/sync-wiki.ps1'
+      - '.github/workflows/wiki-drift-check.yml'
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-wiki-mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main repository
+        uses: actions/checkout@v4
+
+      - name: Verify docs/wiki matches the GitHub Wiki
+        shell: pwsh
+        run: ./scripts/sync-wiki.ps1 -Check

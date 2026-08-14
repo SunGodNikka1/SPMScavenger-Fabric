@@ -1,213 +1,89 @@
 # Extending Opinion
 
-This guide explains how to add a new discretionary activity to the finished Opinion architecture **without reopening the original GA-OPINION RFC**.
+Adding a fourth discretionary activity is an incremental extension. Do **not** reopen GAO-0 through GAO-10, duplicate the observation stack, or build a mega-goal that perceives, scores, navigates, acts, and learns by itself.
 
-The current built-in discretionary activities are:
+First confirm that the activity is genuinely discretionary. Emergency survival, self-defence, explicit player orders, mandatory shelter, required progression, and competence recovery belong to their owning authority. Opinion may express preference only among choices that authority has already permitted.
 
-```text
-EXPLORE
-REST
-SOCIAL
-```
+## Extension checklist
 
-A future activity should join this system only if it is genuinely discretionary: something the mob may choose because it appeals to them when nothing more important requires action.
+### 1. Define the activity and candidate identity
 
-## 1. First ask whether the activity belongs in Opinion
+Add the activity kind used by utility and intent lifecycle. Decide whether one enum value identifies the candidate or whether it needs a stable subject/resource/site key.
 
-Opinion is the wrong layer for:
+Use a candidate key whenever two choices of the same activity are not interchangeable. Reject invalid combinations at construction time. Never defer identity recovery to class-name matching after execution starts.
 
-- emergency survival;
-- combat/self-defense;
-- explicit player orders;
-- mandatory shelter/environmental safety;
-- required progression/work;
-- competence repair.
+### 2. Define availability
 
-If the behavior is required for survival or progression, implement it in the owning subsystem and let Opinion influence only optional preferences among valid alternatives.
+Create a cheap, bounded observation that answers whether a real opportunity exists. Availability may observe; it must not reserve, navigate, mutate inventories, call impure continuation methods, or create authority.
 
-## 2. Model the candidate identity
+Prefer an existing shared observation or host-provided candidate. Do not add a new world scan unless the feature genuinely requires one and has a defined cadence and budget.
 
-If the activity has no subject, a singleton activity key may be enough.
+### 3. Define utility
 
-If it targets an entity, place, project, resource, structure, route, or other specific subject, the candidate identity must include that subject.
+Add a complete utility breakdown using relevant usefulness, preference, affect fit, novelty/reward/repetition/failure pressure, and cost terms. Keep scoring pure.
 
-Examples:
+Utility answers **which legal candidate is preferred**. It must not bypass safety, player authority, shelter, project control, simulation boundaries, or executor prerequisites.
 
-```text
-EXPLORE
-REST
-SOCIAL/Bob
-VISIT/Place-17
-BUILD/Project-4
-```
+### 4. Define admission and continuation separately
 
-Do not let activity type alone stand in for a target-bearing candidate.
+Admission answers whether new work can start now. Continuation answers whether an exact already-running instance may continue. Do not call an executor's potentially impure `canContinueToUse()` merely to explain or classify it.
 
-## 3. Add scoring, not permission
+Record the blocker or reason so the Inspector can explain suppression without inventing causality.
 
-The utility scorer answers:
+### 5. Issue an exact intent
 
-> "How appealing is this legal candidate right now?"
+The winning decision must issue an intent containing its decision ID, activity, exact candidate identity, utility context, and timestamps. If the candidate has a subject, store the immutable subject value that was actually scored.
 
-It does **not** answer:
+An old intent for another subject cannot satisfy or retain the new winner.
 
-> "Am I allowed to do this?"
+### 6. Use safe yield
 
-A score may use:
+If an incumbent discretionary executor must yield, create a bounded transaction that names the exact incumbent and exact challenger. Reconcile acknowledgement, expiry, mandatory invalidation, and supersession. Never clear an incumbent and assume the new executor will start.
 
-- stable personality traits;
-- short-term affect;
-- learned activity preference;
-- learned entity/place/environment affinity when causally appropriate;
-- repetition/novelty effects.
+### 7. Adopt at the executor boundary
 
-Keep authority and feasibility in admission/continuation logic.
+The executor must adopt the exact pending candidate at the causal handoff, then mark it running only when physical execution really starts. Activity-only adoption must fail closed when the activity requires subject identity.
 
-## 4. Define admission and continuation separately
+Keep the executor focused. Reuse Minecraft navigation and a small Goal or host executor rather than creating a parallel scheduler.
 
-A fresh candidate may be adoptable while a currently-running episode has different continuation rules.
+### 8. Preserve exact ownership
 
-Do not reuse a fresh `canUse`-style probe as a running continuation predicate unless the host API is explicitly pure and semantically correct for both.
+Across delays, Mixins, animation phases, chunk lifecycle, or host callbacks, correlate mob ID, intent ID, candidate key/subject, and an admission generation where needed. Store identifiers and immutable values, not live entity references.
 
-The director should know:
+Native host behavior may still execute when no Opinion intent exists. In that case it remains host-owned and must not receive Opinion credit.
 
-- whether a candidate can be selected/adopted;
-- whether the exact incumbent can continue;
-- when an incumbent may safely yield;
-- whether the challenger may actually start.
+### 9. Capture terminal evidence
 
-## 5. Reuse an executor when possible
+Identify the observable success boundary and non-success stop paths. Stamp success only while exact ownership is live at that boundary. Once validly stamped, the historical completion may survive a later cleanup event.
 
-Opinion should usually decide **what to want**, while an existing goal/system performs **how**.
+Do not infer success from goal disappearance, `stop()`, proximity, a display label, or a probe that changes host state.
 
-Preferred shape:
+### 10. Define learning
 
-```text
-Opinion chooses candidate
-    ↓
-small adapter resolves exact execution subject
-    ↓
-existing executor starts
-    ↓
-terminal evidence returns to Opinion
-```
+Map terminal evidence to an `ExperienceEvent`/episode outcome and cause. State which evidence is eligible for activity, entity, place, or environment learning. Normalize frequency so chatty executors do not learn faster merely because they emit more milestones.
 
-Avoid creating a broad `DoEverythingForThisActivityGoal` if several existing executors already perform the physical behavior.
+Personality may scale an eligible nonzero subjective delta. It may not create, invert, or authorize learning.
 
-## 6. Establish ownership at the handoff
+### 11. Extend the Inspector
 
-If the executor is shared with native/host behavior, create exact ownership only when the host accepts the exact active intent/candidate.
+Expose availability, suppression, complete utility terms, selected candidate identity, intent/yield/adoption/execution lifecycle, terminal evidence, and actual learning receipt. Keep snapshots bounded, immutable, server-validated, and read-only.
 
-Never infer ownership later because both systems happened to be interested in the same activity.
+### 12. Clean up ownership
 
-For target-bearing activities, verify exact target identity at that boundary.
+Declare the key and bound of every registry or cache. Add production cleanup for stop, unload, death, dimension/lifecycle changes where applicable, and server shutdown. Avoid freshly generated map keys with no deterministic eviction path.
 
-## 7. Preserve generic yield
+## Required tests
 
-Do not add pairwise flags such as:
+At minimum protect these invariants:
 
-```text
-restYieldToSocial
-socialYieldToExplore
-exploreYieldToBuild
-```
+- The new activity cannot start without availability and admission.
+- A high preference cannot override a hard legality blocker.
+- Candidate A cannot borrow candidate B's intent, continuation, completion, or learning.
+- Adoption does not imply continuation, and request does not imply authority.
+- Host-native execution without exact handoff remains host-owned.
+- Terminal learning requires exact causal ownership and eligible evidence.
+- Feature-disabled and optional-integration-missing paths preserve host behavior.
+- Cleanup removes stale ownership without cancelling a newer generation.
+- Existing EXPLORE, REST, and SOCIAL behavior remains unchanged.
 
-Use the generic discretionary yield transaction and exact challenger identity.
-
-The expected flow is:
-
-```text
-incumbent running
-→ challenger wins by sufficient margin
-→ yield requested
-→ incumbent reaches a safe yield point
-→ incumbent terminates/yields
-→ challenger receives start permission
-```
-
-A selected challenger must not physically preempt an incumbent before yield acknowledgment.
-
-## 8. Define causal completion
-
-Before implementation, specify exactly what host/world evidence means:
-
-- success;
-- interruption;
-- invalidation;
-- neutral termination.
-
-Do not use `stop()` alone as success.
-
-If the executor belongs to another mod, prefer host-produced terminal evidence over calling impure host predicates yourself.
-
-## 9. Define learning eligibility
-
-Ask what the mob actually experienced.
-
-A meaningful successful or negative episode may update Opinion. Authority failures generally should not.
-
-Examples that usually should **not** teach dislike:
-
-- player command superseded the activity;
-- combat interrupted it;
-- shelter authority blocked it;
-- executor unavailable;
-- path could not be started;
-- optional host compatibility was missing.
-
-## 10. Extend observation and Inspector last
-
-Once execution semantics are stable, expose the activity through shared classification and readout.
-
-The Inspector should explain:
-
-- candidate utility;
-- exact subject when relevant;
-- admission blocker;
-- incumbent/challenger relationship;
-- running/terminal state;
-- whether any learning occurred and why.
-
-The readout remains read-only.
-
-## 11. Preserve disabled-mode parity
-
-When Opinion is disabled, the new adapter must not accidentally suppress or claim equivalent host/native behavior.
-
-If the executor existed before Opinion, it should normally return to its legacy behavior when Opinion is off.
-
-## 12. Keep the change proportional
-
-A new activity should not require another GAO-0 through GAO-10 program.
-
-A normal extension should be a focused feature slice:
-
-```text
-candidate model
-+ utility
-+ admission/continuation
-+ executor adapter
-+ terminal evidence
-+ learning eligibility
-+ classifier/readout
-+ focused tests
-```
-
-Create a new RFC only if the activity introduces genuinely new architecture, not merely because the existing Opinion framework is being used again.
-
-## Definition of done
-
-A new discretionary activity is ready when:
-
-- its candidate identity is unambiguous;
-- scoring cannot create permission;
-- admission and continuation are distinct where needed;
-- executor ownership is causal;
-- yield cannot be bypassed;
-- success evidence is real and attributable;
-- interruption cannot manufacture preference learning;
-- feature OFF preserves parity;
-- cleanup and retained state are bounded;
-- ordinary gameplay can proceed without mandatory diagnostic rituals.
-
-For generic host-mod integration rules, see [Compatibility Contracts](Compatibility-Contracts.md).
+Then perform a behavioral simulation from perception through several minutes of world feedback: interruptions, resumption, target change, path failure, chunk/ticking boundaries, multiple PlayerMobs, and long-duration repetition. Runtime claims require runtime evidence; a clean build proves packaging and compilation only.

@@ -194,7 +194,7 @@ Durable feature and architecture documentation lives in [`docs/wiki/`](docs/wiki
 
 ## Development documentation
 
-- [`plans/RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md`](plans/RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md) — active mining/wealth architecture and tasks.
+- [`plans/RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`](plans/RFC-VANILLA-AUTONOMOUS-PROGRESSION.md) — united vanilla progression + mining intelligence deferred/partial backlog.
 - [`plans/RFC-TOOL-TIER-UPGRADES.md`](plans/RFC-TOOL-TIER-UPGRADES.md) — tool progression decisions and parity.
 - [`plans/RFC-FURNACE-SMELTING.md`](plans/RFC-FURNACE-SMELTING.md) — furnace ownership, transactions, and recovery.
 - [`docs/porting/TEST_MATRIX.md`](docs/porting/TEST_MATRIX.md) — must-happen/must-not-happen checks.

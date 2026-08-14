@@ -1,213 +1,51 @@
 # Compatibility Contracts
 
-This page is the generic integration contract for Scavenger compatibility with **Social Player Mobs and future optional mods**.
-
-The goal is to avoid re-solving the same integration bugs for every host system.
-
-## 1. Host authority stays with the host
-
-When another mod already owns a mechanic, Scavenger should normally **adapt to it rather than recreate it**.
-
-Examples:
-
-- SPM owns PlayerMob relationship legality and FriendlyGreet execution;
-- SPM owns its entity framework, combat/flee/order behavior, backpack and native goals;
-- Minecraft owns navigation/path semantics, world rules, inventory semantics and entity lifecycle.
-
-Scavenger may add policy around those systems, but it should not silently fork their semantics.
-
-## 2. Preference does not create permission
-
-A lower-level preference system can choose among legal options. It cannot make an illegal or higher-priority action legal.
-
-```text
-preference → choose among permitted alternatives
-permission → comes from the owning authority
-```
-
-This applies well beyond Opinion.
-
-## 3. Desire, request, admission, start, continuation and completion are different facts
-
-Do not collapse lifecycle states.
-
-A system wanting an action does not mean:
-
-- the target is still legal;
-- the host accepted it;
-- the executor started;
-- the executor is still running;
-- the action completed successfully.
-
-Use the narrowest fact available at each boundary.
-
-## 4. Exact identity must survive handoffs
-
-When an action is target-specific or project-specific, carry its identity through the whole control path.
-
-Examples:
-
-- SOCIAL/Bob must not become SOCIAL/Alice;
-- one mining project must not inherit another project's completion;
-- one reserved furnace/door/shelter claim must not be credited to an unrelated episode.
-
-Activity kind alone is not enough when the candidate has a subject.
-
-## 5. Ownership must be established at the causal handoff
-
-Do not reconstruct ownership afterward from coincident state.
-
-Bad pattern:
-
-```text
-host behavior happened
-+ Opinion also wanted that activity
-= therefore Opinion owned it
-```
-
-Good pattern:
-
-```text
-exact intent is startable
-+ host returns the exact target/resource
-→ establish binding
-→ host start confirms adoption/running
-```
-
-This prevents native host behavior from being credited to Scavenger after the fact.
-
-## 6. Observation must be observational
-
-Inspection and feasibility probes should not alter the world or the host AI.
-
-Avoid read paths that:
-
-- decrement cooldowns;
-- assign targets;
-- mutate relationship caches;
-- start or stop goals;
-- issue navigation;
-- modify inventory;
-- allocate/rehydrate runtime control state merely because a UI opened.
-
-If a host predicate is impure, observe evidence produced by the host's own normal evaluation instead.
-
-## 7. Optional compatibility fails closed
-
-An absent or changed optional API should disable only the affected optional integration.
-
-It must not:
-
-- crash the whole mod;
-- invent authority or success;
-- assume a default target/relationship;
-- globally disable unrelated host behavior.
-
-Where possible, preserve vanilla/host behavior when the bridge cannot prove compatibility.
-
-## 8. Feature OFF should preserve host parity
-
-If a Scavenger feature is disabled, its integration hooks should preserve the host's original behavior unless another independent Scavenger safety rule applies.
-
-For example, disabling Opinion must not turn native SPM greetings into Opinion-owned behavior or globally suppress them.
-
-## 9. Optional Mixins must be genuinely optional
-
-For host-mod Mixins:
-
-- prefer `@Pseudo` when the target class may be absent;
-- use non-required injection where appropriate (`require = 0`);
-- do not place ordinary helper classes inside packages that the Mixin runtime treats as Mixin classes;
-- account for the actual shipped namespace/mappings, not just named development symbols;
-- when required by the target environment, support both readable and intermediary method names;
-- fail closed if an injection point disappears in a host update.
-
-A successful compile does not prove an optional Mixin actually applied to the shipped host JAR.
-
-## 10. Runtime classification should use one semantic source
-
-If multiple systems need to know what a host goal means, centralize that interpretation.
-
-Examples include scheduler observation, shelter arbitration, movement ownership and diagnostics.
-
-Do not let each subsystem independently decide that the same goal is `SOCIAL_REFLEX`, `DISCRETIONARY_SOCIAL`, work, safety, etc. A shared classifier prevents policy drift.
-
-## 11. Completion evidence must be causal
-
-Success should be credited only when the exact owned episode produced real terminal evidence.
-
-Do not equate:
-
-- `stop()` with success;
-- disappearance of a goal with success;
-- elapsed time with success;
-- host behavior that continued after ownership ended with success.
-
-If valid completion occurs while ownership is still live, that completion can remain historical evidence even if authority changes afterward.
-
-## 12. Interruptions are not automatically preferences
-
-Combat, commands, shelter, world invalidation, unloads, scheduler loss and compatibility failure are control-plane outcomes.
-
-They should not teach "I dislike this activity" unless the mob actually experienced a meaningful negative outcome attributable to the activity itself.
-
-## 13. Clean up every runtime binding
-
-Temporary compatibility state must have explicit cleanup for the relevant lifecycle:
-
-- normal executor stop;
-- entity unload/removal;
-- death;
-- dimension/lifecycle replacement when applicable;
-- server shutdown.
-
-Never retain entity object references when UUID/value state is sufficient.
-
-## 14. Bound work must remain bounded
-
-Compatibility scans, reflection, target resolution, diagnostics and arbitration should be bounded in radius, candidates, cadence, retries and retained history.
-
-Do not turn optional integration into an unbounded per-tick world scan.
-
-## 15. Reuse host execution before creating a mega-goal
-
-Before adding a new goal that reimplements another mod's behavior, ask:
-
-1. Can Scavenger decide **what/why** while the host still performs **how**?
-2. Can a small adapter supply exact intent/target/resource information?
-3. Can host terminal evidence be observed without probing impure methods?
-
-A thin adapter is usually safer than a parallel copy of host AI.
-
-## 16. Escalation rule for repeated patches
-
-If the same integration keeps needing narrow repairs, stop adding one-off checks and identify the shared invariant.
-
-Typical escalation:
-
-```text
-narrow symptom repair
-→ shared invariant
-→ centralized arbitration / binding / classifier
-→ subsystem-boundary redesign only if still necessary
-```
-
-Do not create a new subsystem just because one edge case exists.
-
-## Checklist for a new compatibility adapter
-
-Before considering a new adapter complete, answer:
-
-- Who owns legality?
-- Who chooses the exact subject/resource?
-- Where is causal ownership established?
-- What proves START/RUNNING/COMPLETION?
-- Are observation probes pure?
-- What happens when the host is absent or changed?
-- Does feature OFF preserve host parity?
-- How is state cleaned up?
-- Are target identity and episode identity exact?
-- Is scanning/reflection/history bounded?
-- Can the host executor be reused instead of copied?
-
-These contracts are intended to be reused for SPM integration and future mod compatibility work.
+These contracts apply to SPM and future host/content-mod integrations. They are deliberately generic.
+
+## Core contracts
+
+1. **Prefer addon architecture.** Extend the host through supported APIs, data, tags, or narrow seams. Do not replace or fork the host unless a verified missing capability makes that unavoidable.
+2. **Host legality remains authoritative.** Preserve host targeting, relationship, ownership, safety, and lifecycle rules. The addon may add policy only within the authority it actually owns.
+3. **Optional integrations fail closed.** Missing classes, changed methods, rejected reflection, or an unavailable executor must disable only the optional feature—not crash startup or silently grant behavior.
+4. **Disabled means host parity.** When an addon feature is disabled, preserve the host's target, decision, and execution path. Cleanup needed for old addon state may remain active but must not create new work.
+5. **Observation is not ownership.** Seeing a host activity does not make it addon-owned.
+6. **Adoption is not continuation.** New-work admission and exact running-instance continuation are separate contracts.
+7. **Request is not authority.** A request, candidate, score, or intent cannot move an entity until the executor accepts the exact handoff.
+8. **Desire is not start permission.** Preference affects choice among legal candidates; it never creates legality.
+9. **Activity kind is not always candidate identity.** Include stable subject/resource/site identity when two candidates of one kind are not interchangeable.
+10. **Establish ownership at causal handoff.** Do not reconstruct ownership afterward from a class name, visual similarity, proximity, or terminal event.
+11. **Carry exact identity across async/lifecycle boundaries.** Correlate mob, intent, subject/candidate, and generation. Avoid long-lived entity references.
+12. **Do not use impure observation probes.** A readout or classifier must not call methods that advance timers, reroll targets, mutate navigation, or consume host state.
+13. **Keep reflection bridges bounded.** Pin expected classes/methods, cache successful resolution, fail closed, log actionable diagnostics once, and test absence/shape change.
+14. **Use optional Mixins narrowly.** For an optional host, `@Pseudo`, string targets, and `require = 0` are appropriate when the target method may be absent. If production mapping requires it, cover both readable and intermediary method names. The optional hook's failure must preserve host startup and fallback behavior.
+15. **Keep ordinary helpers out of Mixin-only packages.** Some loaders/classloaders treat those packages specially. Policy, DTOs, and reflection helpers belong in normal common/compat packages.
+16. **Clean up retained state.** Every binding, claim, cache, or per-entity context needs a key, bound, and production removal path for stop, unload, death, and server shutdown; include dimension changes where the integration retains cross-world identity.
+17. **Classify semantics centrally.** Reuse the shared activity taxonomy/classifier. Host-specific suffix knowledge must not drift across multiple scanners.
+18. **Native host behavior may remain native.** A host goal can execute normally without an addon intent. Do not award addon learning or claim control unless the exact handoff occurred.
+19. **Test invariants, not rituals.** Unit/static tests should protect identity, authority, fallback, and cleanup contracts. Use runtime only for behavior that truly requires Minecraft rendering, scheduling, networking, persistence, or cross-mod execution evidence.
+20. **Keep compatibility work bounded.** Scans, reflection, target resolution, retries, diagnostics, and retained histories need explicit limits and cadence.
+21. **Escalate repeated symptom patches.** If an integration repeatedly needs one-off guards, identify and centralize the shared invariant before adding another Mixin or special case.
+
+## Compatibility ladder
+
+Use the lowest layer that expresses the required semantics:
+
+1. Host/native API or configuration.
+2. Minecraft registry, recipe, attribute, capability, or tag data.
+3. A project-owned generic adapter interface.
+4. A narrow host-specific adapter.
+5. Bounded reflection or optional Mixin only when no stable extension seam exists.
+
+Do not copy another mod's dependency set or compatibility technique without proving it fits this target.
+
+## How to add compatibility for another mod
+
+1. **Pin and inspect both sides.** Record exact mod, Minecraft, loader, mapping, and source/artifact versions. Verify the real host lifecycle and the feature's actual semantics.
+2. **Map native support first.** Determine what already works through vanilla APIs, recipes, tags, attributes, interfaces, or config. Record at least three relevant negative probes before declaring a seam absent.
+3. **Choose the integration layer.** Compare at least two viable designs—usually data/generic adapter versus host-specific hook—and document tradeoffs and switch evidence.
+4. **Define authority and identity.** State who observes, requests, admits, executes, continues, terminates, and learns. Define exact candidate identity and disabled/missing-host behavior.
+5. **Implement the smallest seam.** Keep host-specific code at the boundary and generic policy in normal addon classes. Do not duplicate the host's AI or inventory.
+6. **Bound lifecycle state.** Add stop/unload/death/server-shutdown cleanup before treating the integration as complete.
+7. **Verify fallbacks and behavior.** Must happen: the compatible feature executes only after the verified handoff. Must not happen: absent/disabled/incompatible host code crashes startup, changes native behavior, or manufactures addon ownership. Add runtime evidence only where static tests cannot prove the claim.
+
+For content-focused integrations, continue with [[Mod Support|Mod-Support]].

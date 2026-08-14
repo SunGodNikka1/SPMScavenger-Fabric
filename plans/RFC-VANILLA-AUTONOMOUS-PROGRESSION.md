@@ -11,10 +11,10 @@
 | **Mode** | `WORKING_FROM_PLAN` — `SCR-2R5` implemented and statically accepted; runtime confirmation remains separate |
 | **Status** | `RESEARCHING`; `SCR-1 RUNTIME_CONFIRMED`; `SCR-2R4 SUPERSEDED IN PART BY SCR-2R5`; `SCR-2R5 IMPLEMENTED / STATIC ACCEPT / RUNTIME UNVERIFIED`; `SCR-3 DEFERRED` |
 | **User constraint** | The RFC was originally design-only; the user has now separately authorized `SCR-1` and `SCR-2` implementation. Minecraft launches, commits, pushes, and `SCR-3` remain separately gated |
-| **Related** | `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `progression/TaskLifecycle.java` |
+| **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `progression/TaskLifecycle.java` |
 | **Owners** | User (product); architecture TBD |
-| **Last update** | 2026-08-13 (GTH-1 bounded natural tree harvest proposed — Still Life / wide-tree geometry) |
-| **Nearest frontier** | Peer review **GTH-1** (TreeDetector + TreeHarvest); shelter runtime matrix remains separate |
+| **Last update** | 2026-08-14 (mining intelligence deferred/partial absorbed from former MI RFC) |
+| **Nearest frontier** | Peer review **GTH-1** (TreeDetector + TreeHarvest); **RT-MI-TS1** runtime falsification; shelter runtime matrix remains separate |
 | **Gate** | MRFC-1 |
 
 ### Naming note
@@ -100,7 +100,10 @@ Progression edges are derived from **Minecraft 1.21.1 packaged data**, not item-
 | Bucket | Table + iron | Water placement, lava pickup |
 | Shield | Table + iron + planks | Ranged mitigation (SPM `BlockArrowsGoal` exists) |
 
-**Scavenger today:** Smelt path `CODE_CONFIRMED`; iron **craft/gather** `PLANNING` (`RFC-TOOL-TIER-UPGRADES` Phase 2).
+**Scavenger today:** Smelt + iron craft/gather **IMPLEMENTED** (`CODE_CONFIRMED`); controlled descent,
+tunnel search, and wealth gather policy **IMPLEMENTED** static (`MiningDirector`, `MiningProject`,
+`GatherIntentPolicy`, `ResourceWealthPolicy`); **advanced site selection**, `MiningMemory`, and
+runtime falsification remain **PARTIAL** — see [Mining intelligence backlog](#topic-mining-intelligence--deferred-and-partial-backlog).
 
 ### Tier 3 — Diamond / overworld power
 
@@ -111,7 +114,8 @@ Progression edges are derived from **Minecraft 1.21.1 packaged data**, not item-
 | Obsidian | Water + lava contact | Nether portal frame |
 | Nether portal | 10+ obsidian + flint&steel | Nether dimension |
 
-**Scavenger today:** **Absent** — no branch mining, no lava/water casting, no enchanting interaction.
+**Scavenger today:** Diamond craft + Y-gated gather consumer **IMPLEMENTED** static; no clairvoyant ore
+seek; sustained branch mine **NOT PRACTICAL** gen-1. Enchanting, obsidian cast, portal — still absent.
 
 ### Tier 4 — Nether
 
@@ -1371,11 +1375,233 @@ another datapack tomorrow: intelligence adapts to **shape**, not mod identity.
 
 ---
 
+## Topic: Mining intelligence — layered architecture
+
+**Status:** `CONSENSUS` skeleton (`D-VP-MI-001`, absorbed from former MI RFC)
+
+Mining is not a separate goal stack. Progression names deficit; policy chooses legitimate targets;
+one physical dig executor breaks blocks.
+
+```text
+ProgressGoal / ResourceWealthPolicy     ← WHAT & HOW MUCH (need vs wealth)
+        ↓
+MiningDirector                       ← site selection, project start/stop
+        ↓
+MiningProject (session)              ← mode, budget, anchors, vein frontier
+        ↓
+GatherIntentPolicy + GatherTargetPolicy  ← legitimate next break target
+        ↓
+GatherResourcesGoal (DigAction)      ← ONE physical excavation + drop keep
+        ↓
+TaskLifecycle (RUNNING…INTERRUPTED)
+```
+
+| Component | Role | Separate Goal? |
+| --- | --- | --- |
+| `MiningDirector` | Chooses cave vs tunnel vs return; raises explore pressure | **No** — pure policy |
+| `MiningProject` | Session: mode, budget, `origin`, `lastSafeAnchor` | **No** — `SavedData` / mob slice |
+| `MiningMemory` | Bounded cave/ore/hazard recollections | **No** — policy store (**DEFERRED**) |
+| `GatherResourcesGoal` | Break loop, protection, drops | **Yes** — existing executor |
+| `ExploringGoal` | Travel when director requests opportunity | **Yes** — unchanged |
+
+**Rejected gen-1:** `ExploreForDiamondsGoal`, `DiamondVeinGoal`, clairvoyant ore scan (`D-VP-MI-008`),
+Baritone-style `ActionAwareNavigation`, sustained branch mine at Y≈−59.
+
+---
+
+## Topic: MiningDirector and advanced site selection
+
+**Status:** `PARTIAL` — basic modes (`CONTROLLED_DESCENT`, `TUNNEL_SEARCH`, cave handoff) ship in code;
+**advanced site selection** (memory-driven return, ranked cave choice, portfolio-aware detours) is
+**DEFERRED**.
+
+**Do not make `ExploreForDiamondsGoal`.** Progression names diamond deficit; the director names
+expedition mode; explore moves; gather digs.
+
+```text
+Progression: need diamond
+  ↓
+MiningDirector: need mining opportunity
+  ↓
+Exploration pressure rises (ExploringGoal hook)
+  ↓
+Cave / sighting appears → MiningProject.start(mode)
+```
+
+### Advanced site selection decision tree (`PROPOSED` — not fully wired)
+
+```text
+Diamond / deepslate demand active?
+  ├─ Known legitimate MEMORY target worth detour? → TARGETED_RETURN
+  ├─ Known promising cave (MiningMemory)? → CAVE_EXPLORATION
+  ├─ Already underground in useful terrain? → LOCAL_SEARCH / VEIN / TUNNEL
+  └─ Else → explore for opportunity → then project
+```
+
+**Gen-1 today:** natural descent exhaustion → `CONTROLLED_DESCENT`; band reached → `TUNNEL_SEARCH`
+creates **exposure** (not ore targets); gather consumes exposed ore; cave breakthrough → `CAVE_FOUND`
+handoff. **Missing:** `MiningMemory` queues, `TARGETED_RETURN` utility gate, ranked cave comparator
+(MI-6E), extended `CaveContextSnapshot` classifier (MI-6G).
+
+### Cave-first depth strategy (`CONSENSUS`)
+
+Human-optimal play is **cave-first**, then bounded descent — not dig-through-dirt to Y=−1.
+
+| Strategy | Human practice | Mob design |
+| --- | --- | --- |
+| Dig straight down / through dirt to Y=−1 | Avoided — lava, gravel, wrong band | **REJECT** gen-1 |
+| Find cave / ravine | Primary — exposed ores, less digging | **PREFERRED** |
+| Staircase / shaft | When no cave — controlled descent + torches | **BOUNDED** (`CONTROLLED_DESCENT`) |
+| Branch mine at Y≈−59 | Endgame efficiency after depth | **NOT PRACTICAL** gen-1 |
+
+| Ore | Typical band (1.21) |
+| --- | --- |
+| Coal | Surface → Y 0–256 |
+| Iron | Y −64 → 72 (peaks ~16) |
+| Diamond | Y −64 → 16 (**peak ≈ −59**) |
+
+```text
+Need deep ore (diamond / deepslate iron)?
+  │
+  ├─ Legitimate target (VISIBLE / MEMORY / LOOT)? ──YES──► mine (GatherResourcesGoal)
+  ├─ Known promising cave (MiningMemory)? ──YES──► CAVE_EXPLORATION  [DEFERRED]
+  ├─ In cave/ravine? ──YES──► explore branches + opportunistic ore
+  ├─ Y > prospectMaxY? ──YES──► explore bias downward
+  ├─ NaturalDescentStatus?
+  │     AVAILABLE / SEARCHING     → cave seek
+  │     TEMPORARILY_BLOCKED       → reposition; do not start descent
+  │     EXHAUSTED                 → CONTROLLED_DESCENT if still blocking
+  ├─ In target band, caves dry, demand blocking? ──YES──► TUNNEL_SEARCH (budgeted)
+  └─ Budget exhausted / no safe step? ──► SEARCH_BUDGET_EXHAUSTED
+```
+
+**Unblock advanced site selection:** ship `MiningMemory` (MI-15) + `TARGETED_RETURN` utility gate
+(MI-17) + MI-6E ranked cave comparator; runtime RT-MI-TS1 pass.
+
+---
+
+## Topic: Mining intelligence — deferred and partial backlog
+
+**Author:** absorbed from former `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` (2026-08-14)
+
+### Partial — shipped with known gaps
+
+| Item | What ships | Gap | Blocks VP claim |
+| --- | --- | --- | --- |
+| Iron / diamond gather | Exposure-in-range + Y gate + wealth policy | No dedicated ore seek | Reliable ore in flat biomes |
+| Deep reach | MI-5/6/7/14 stack static | No sustained branch mine | Phase 3 "reliable diamond" |
+| Site selection | Band + descent + tunnel modes | No memory-driven return / ranked caves | Smart expedition reuse |
+| `RequirementResolver` v1 | Stubs | Not wired to `WorkDemandPolicy` | Full backward-chaining planner |
+| Torch-gated shaft lighting | `PlaceTorchGoal` exists | Not tied to mine shaft | Long underground without coal bias |
+| Hazards + durability | Lava/water stop dig | Preemptive swap / full interrupt resume | Long mining sessions |
+| `CaveContextSnapshot` | Partial `classify` | MI-6G extended fields deferred | "Cave under house" edge cases |
+| F-2 progression-demand split | `CONSENSUS` | Not fully wired | Clean NEED vs band signal |
+| Runtime loop | 387+ unit/chain tests | **RT-MI-TS1** not run | Any behavioural `CONFIRMED` claim |
+
+### Deferred — explicit gen-1 non-goals
+
+#### MiningMemory (`PROPOSED` — MI-15)
+
+Bounded coarse store — **must not** store every mined block.
+
+```text
+MiningMemory
+├── caveEntrances: Queue<BlockPos>              (cap N)
+├── exploredBranchRegions: Set<region-id>       (cap N)
+├── deadEnds: Queue<region-id>
+├── oreSightings: Queue<OreSighting>
+├── hazardLocations: Queue<Hazard>
+├── lastMiningOrigin: BlockPos
+├── lastSafeAnchor: BlockPos
+└── knownReturnRoute: Deque<BlockPos> optional coarse
+```
+
+`OreSighting` in MEMORY may justify `TARGETED_RETURN` only when `utility(detour) > cost`.
+
+#### Resource portfolio (`DEFERRED` — D-VP-MI-022)
+
+Evaluate resources **relative to pack composition**, not in isolation. Portfolio imbalance shifts
+marginal utility without new goals. Example: 32 iron, 0 coal → coal marginal value rises.
+
+#### Scarcity pressure (`DEFERRED` — D-VP-MI-023)
+
+Bounded `lastAcquired(category)` + `recentAcquisitionRate`. Haven't seen iron in a long time → take
+more when finally found. No ML.
+
+#### Consumption velocity reserves (`DEFERRED` — D-VP-MI-024)
+
+`expectedDemand = recentConsumptionRate × planningHorizon`. High torch use → coal reserve rises.
+Promising extension; not early wealth rollout.
+
+#### Greed trait — SPM hook (`DEFERRED` — D-VP-MI-019)
+
+Config `greed ∈ [0,1]` ships; SPM disposition→greed map **deferred** — trait API `NOT FOUND` in
+SPM v0.86.0 (three probes). Greed modifies **wealth only**, never blocking progression minimums.
+
+#### Mining personalities (`DEFERRED` — D-VP-MI-014)
+
+CAVER / TUNNELER / etc. as **weight presets only**, not ML. Distinct from greed trait.
+
+#### MI-6E ranked cave comparator (`DEFERRED`)
+
+Replace flat +15 cave bonus with ranked dimensions; prep for ore-utility detours (MI-17).
+
+#### Action-aware pathmaking (`DEFERRED`)
+
+Walk/jump/break/place edge navigation — not Baritone gen-1.
+
+#### Modpack ore capability SPI (`DEFERRED` — D-VP-MI-005)
+
+Per-mod adapters after second consumer proves the interface.
+
+#### Project resumption semantics (`OPEN`)
+
+Combat interrupts tunnel → survive → **remember** unfinished project → return → resume is better than
+retire-and-forget. Must not fake resumption: stored record nothing can resume is a blocker, not
+memory. Build capability first, then change retirement rule.
+
+### NOT PRACTICAL — align with Phase 4–5 ceilings
+
+| Item | VP phase |
+| --- | --- |
+| Branch mining at Y=−59 | 3+ |
+| Nether ancient debris | 4 |
+| Autonomous fortress blaze farm | 4 |
+| Stronghold / eye automation | 5 |
+| Ender dragon fight | 5 |
+
+### Rejected permanently
+
+| Item | Decision |
+| --- | --- |
+| Clairvoyant ore scan | D-VP-MI-008 |
+| `wealthRawIron` push config | D-VP-MI-004 — hoard without consumer |
+| `ExploreForDiamondsGoal` | Director + explore hook instead |
+
+### Runtime validation backlog
+
+| ID | Pack / probe | Status |
+| --- | --- | --- |
+| RT-MI-TS1 | `phase3-mining-tunnel` — descent → tunnel → exposure → gather → resume | Spec ready; launch not authorized |
+| RT-MI-TS1a | `HANDOFF_TUNNEL_SEARCH` consumed; mob digs at Y≤16 | `UNVERIFIED` |
+| RT-MI-TS1b | Side-wall diamond exposed by cut gathered by existing gather | `UNVERIFIED` |
+| RT-MI-TS1c | After gather, same tunnel project + heading resume | `UNVERIFIED` |
+| RT-MI-TS1d | Cave breakthrough → `CAVE_FOUND` handoff | `UNVERIFIED` |
+| VP-1a–c | Phase 1 torch/stone matrix | `UNVERIFIED` |
+| VP-2a–b | Iron smelt + death recovery | `UNVERIFIED` |
+| VP-3a | First diamond / portal frame | `UNVERIFIED` |
+
+**Open design question:** `CraftTorchesGoal` yields under `CONTROLLED_DESCENT` — torch supply is a
+descent prerequisite; mob that runs dry mid-staircase cannot craft until descent ends. Not a
+deadlock, but unresolved product choice.
+
+---
+
 ## Topic: Missing AI behaviors
 
 | # | Behavior | Needed for | Feasibility | Integration method |
 | --- | --- | --- | --- | --- |
-| M1 | Branch / vein mining | Iron, diamonds | **PARTIAL** | Extend `GatherResourcesGoal` + `MiningPolicy`; scan downward strips |
+| M1 | Branch / vein mining | Iron, diamonds | **PARTIAL** | `TUNNEL_SEARCH` + gather vein-follow; **advanced site selection** + `MiningMemory` deferred; sustained branch mine **NOT PRACTICAL** |
 | M1b | **Bounded natural tree harvest** | Still Life / wide trees, full trunk yield | **PROPOSED** | **GTH-1** — `TreeDetector` + `TreeHarvest`; replaces vertical-only `continueFelling` |
 | M2 | Lava/water obsidian cast | Nether portal | **REQUIRES MIXIN** or block-place goal | Custom `FluidInteractionGoal`; `mobGriefing` |
 | M3 | Underground shelter | Mining safety | **PARTIAL** | Reuse `SeekShelterGoal` patterns |
@@ -1461,8 +1687,9 @@ Phases are **dependency-ordered**. Each phase lists runtime tests that must pass
 | --- | --- |
 | Stone gather/craft | `IMPLEMENTED` (`RFC-TOOL-TIER-UPGRADES` P1) |
 | Furnace + charcoal | `IMPLEMENTED` (`RFC-FURNACE-SMELTING`) |
-| Iron craft + iron ore gather | `PLANNING` (P2) |
+| Iron craft + iron ore gather | `IMPLEMENTED` static (`TT-2c`, `MAKE_IRON_*`); runtime `UNVERIFIED` |
 | `need_charcoal` runtime datapack | **Missing** — add under `test-datapacks/` |
+| Controlled descent + tunnel search | `IMPLEMENTED` static (`MI-7`, `MI-TS`); **RT-MI-TS1** runtime pending |
 
 **Runtime matrix:**
 
@@ -1476,13 +1703,13 @@ Phases are **dependency-ordered**. Each phase lists runtime tests that must pass
 
 ### Phase 2 — Iron age
 
-| Task | Deliverable |
-| --- | --- |
-| 2a | `GatherProtection` iron ores + deepslate |
-| 2b | `MAKE_IRON_*` in `ScavengerCrafting` |
-| 2c | `ToolTierPolicy` iron cap (config) |
-| 2d | Branch mining heuristic (exposed → shallow strip) |
-| 2e | Planner nodes: `IRON_PICKAXE`, `IRON_AXE`, `BUCKET` |
+| Task | Deliverable | Status |
+| --- | --- | --- |
+| 2a | `GatherProtection` iron ores + deepslate | `IMPLEMENTED` |
+| 2b | `MAKE_IRON_*` in `ScavengerCrafting` | `IMPLEMENTED` |
+| 2c | `ToolTierPolicy` iron cap (config) | `IMPLEMENTED` |
+| 2d | Shallow strip / tunnel exposure (not sustained branch mine) | **PARTIAL** — MI-TS creates exposure; branch Y=−59 **NOT PRACTICAL** |
+| 2e | Planner nodes: `IRON_PICKAXE`, `IRON_AXE`, `BUCKET` | **PARTIAL** — craft steps exist; full `RequirementResolver` deferred |
 
 **Feasibility:** **PARTIAL** — 8-slot backpack pressures ingot + tool + fuel coexistence.
 
@@ -1490,12 +1717,14 @@ Phases are **dependency-ordered**. Each phase lists runtime tests that must pass
 
 ### Phase 3 — Diamond + overworld power
 
-| Task | Feasibility |
-| --- | --- |
-| Deep mining (Y-level policy) | **PARTIAL** |
-| Iron pick gate for diamond ore | **FULL** (policy) |
-| Enchanting table use | **REQUIRES MIXIN** |
-| Obsidian cast + portal frame | **REQUIRES MIXIN** |
+| Task | Feasibility | Child RFC notes |
+| --- | --- | --- |
+| Deep mining (Y-level policy) | **PARTIAL** | MI-5/6/7/14 implemented static; runtime `UNVERIFIED` |
+| Iron pick gate for diamond ore | **FULL** (policy) | `GatherProtection` + tool tier |
+| Diamond gather consumer | **PARTIAL** | Exposure-in-range only (MI-13a, Y gate) |
+| Controlled descent + cave handoff | **PARTIAL** | MI-6F/14C2-R2; MI-6G snapshot deferred |
+| Enchanting table use | **REQUIRES MIXIN** | — |
+| Obsidian cast + portal frame | **REQUIRES MIXIN** | — |
 
 **Tests:** VP-3a first diamond; VP-3a portal frame placed (flat test world).
 
@@ -1531,7 +1760,7 @@ Per `docs/agent-workflows/RUNTIME_TEST_DATAPACK.md`:
 | `test-datapacks/phase1-tool-tier/` | `spm_phase1` | Stone + coal path (`EXISTS`) |
 | `test-datapacks/shelter-commitment/` | `spm_shelter` | SCR-1 occupied-bed/closed-door and free-bed claim-resume runtime gate (`READY; RUNTIME PENDING`) |
 | `test-datapacks/phase2-furnace/` | `spm_phase2` | Charcoal + iron smelt (`PLANNED` — not in repo) |
-| `test-datapacks/phase-vp-iron/` | `spm_vp3` | Iron loop presets (`PROPOSED`) |
+| `test-datapacks/phase3-mining-tunnel/` | `spm_phase3` | RT-MI-TS1 tunnel→exposure→gather (`SPEC READY`; launch pending) |
 | `test-datapacks/phase-vp-nether/` | `spm_vp4` | Portal + fortress fixtures (`PROPOSED`, cheat anchors) |
 
 Each scenario row: **Must happen / Must not** + backpack inspect function.
@@ -1539,6 +1768,10 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 ---
 
 ## Topic: Deferred and unverified
+
+Mining deferred/partial items (advanced site selection, `MiningMemory`, portfolio, scarcity, greed
+SPM hook, project resumption, etc.) are documented in
+[Mining intelligence backlog](#topic-mining-intelligence--deferred-and-partial-backlog).
 
 | Item | Reason |
 | --- | --- |
@@ -1549,6 +1782,15 @@ Each scenario row: **Must happen / Must not** + backpack inspect function.
 | Cross-mod tech mods (Create, TACZ, etc.) | Out of scope — use `social-player-mobs-integration` skill per mod |
 | `DescribableGoal` readout | PolyForm compile concern — product decision |
 | Runtime VP-1–VP-5 | **UNVERIFIED** — no approved `runClient` in this mission |
+| **RT-MI-TS1** tunnel→exposure→gather | Spec ready (`phase3-mining-tunnel`); launch not authorized |
+| Branch mining at Y=−59 | **NOT PRACTICAL** gen-1 (MI RFC) — griefing/product |
+| Mining personalities / portfolio / scarcity memory | **DEFERRED** gen-1 (D-MIW-014/022/023) |
+| SPM disposition → greed trait | **DEFERRED** — trait API `NOT FOUND` in SPM v0.86.0 |
+| Modpack ore capability SPI | **DEFERRED** (D-MIW-005) until second mod consumer |
+| `RequirementResolver` v1 full wiring | **PARTIAL** — stubs only; blocks Phase 0a planner claim |
+| `MiningMemory` (MI-15) | **DEFERRED** with cave package |
+| Project resumption semantics | **OPEN** — reload mid-project |
+| Full `MiningProject` interruption recovery | Design present; gate unchecked |
 
 ---
 
@@ -1583,12 +1825,41 @@ rejected.
 **Evidence:** `GatherResourcesGoal#continueFelling`, `GatherProtection.isHorizontalLogWall`,
 `MAX_FELL_LOGS = 12`; user Still Life geometry report 2026-08-13.
 
+### D-VP-MI-001: Mining inside gather (`CONSENSUS`)
+
+Physical dig stays in `GatherResourcesGoal`; director/project are policy only.
+
+### D-VP-MI-004: Config-first wealth (`CONSENSUS`)
+
+Config `greed` / `wealthLevel`; **reject** `wealthRawIron` push — hoard without consumer.
+
+### D-VP-MI-006: Cave-first mining (`CONSENSUS`)
+
+Not dig-to-Y=−1; cave → bounded descent → budgeted tunnel.
+
+### D-VP-MI-008: Legitimate discovery (`CONSENSUS`)
+
+No clairvoyant ore targeting; exposure required before gather candidate.
+
+### D-VP-MI-014: Mining personalities (`DEFERRED`)
+
+Weight presets only (CAVER, TUNNELER, …); no ML.
+
+### D-VP-MI-019: Greed trait (`CONSENSUS` config / `DEFERRED` SPM hook)
+
+Wealth params only; SPM disposition map deferred.
+
+### D-VP-MI-022 / D-VP-MI-023 / D-VP-MI-024: Portfolio, scarcity, consumption velocity (`DEFERRED`)
+
+After NEED/WEALTH split proves useful in runtime.
+
 ---
 
 ## Contribution
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Cursor | 2026-08-14 | **Mining intelligence absorbed into united RFC.** Replaced child-RFC cross-link with substantive topics: layered architecture, **MiningDirector + advanced site selection** (decision tree, cave-first strategy), deferred/partial backlog (`MiningMemory`, portfolio, scarcity, greed SPM hook, personalities, project resumption, RT-MI-TS1), D-VP-MI-* decisions. Tier 2–3 status reconciled. Former `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` superseded for planning. **No implementation authorization.** |
 | Agent_Cursor | 2026-08-13 | **GTH-1 proposed (user design).** Captured bounded natural tree harvest architecture: `TreeDetector` claim + `TreeHarvest` progressive execution; shelter-parallel "recognize object once"; refactor `GatherProtection` to claim-time only; remove horizontal≥3 as top-level per-log reject; bounded BFS not unlimited flood fill; code evidence from `continueFelling`/`MAX_FELL_LOGS`/`isHorizontalLogWall`; MAIBS table; D-VP-004; M1b row. **No implementation authorization.** No Java edit, build, runtime launch, commit, push, or PR |
 | Agent_Codex | 2026-08-12 | Replaced fragile SPM door `Path`-object encounter identity with fixed-size physical identity (mob UUID, door position, initial approach side, wrapping generation), 2.5-block separation reset, and two-attempt bound. Added replan/separation/side/generation tests; 681 tests and clean build pass; artifact `DB403E...7CF`; runtime remains unverified. No Minecraft launch, commit, push, or PR |
 | Agent_Codex | 2026-08-12 | Implemented the SPM Door Passage Episode Repair: reject already-open/no-op OPEN, pause crossing budget during deliberate operation, close only after observed passage, and correlate same door/path completion to prevent immediate reopen. All 680 tests and clean build pass; artifact `253B5E...C221`; runtime remains unverified. No Minecraft launch, commit, push, or PR |

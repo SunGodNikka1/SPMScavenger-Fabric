@@ -1,183 +1,113 @@
 # Opinion System
 
-The Opinion system gives a PlayerMob a deterministic, experience-driven answer to:
+The Opinion system gives PlayerMobs stable differences and experience-informed preferences while preserving Minecraft's authority, safety, and executor constraints.
 
-> **"Nothing more important requires me right now. What do I feel like doing?"**
+It is deterministic/classical game AI. It does not use an LLM, machine learning model, or external AI service at runtime.
 
-It is not a survival controller, combat AI, progression planner, or replacement for SPM. It is a **discretionary decision layer** that chooses among already-legitimate free-time activities.
+Its central rule is:
 
-## Mental model
+> **Preference affects choice. Preference does not create permission.**
 
-```text
-Personality
-    ↓
-Learned opinions
-    ↓
-Short-term affect
-    ↓
-Discretionary utility
-    ↓
-Director chooses an activity
-    ↓
-Existing executor performs it
-    ↓
-Outcome feeds experience back into Opinion
-```
+Opinion may rank activities that are already legal and executable. It cannot override combat, environmental escape, player commands, nighttime shelter authority, progression ownership, path safety, simulation boundaries, or an executor's hard admission rules.
 
-The implementation is deterministic/classical AI. It does not use an LLM or machine learning.
+## Data model
 
-## Main layers
+### PersonalityModel
 
-### Personality
+Each PlayerMob receives a stable, bounded profile with curiosity, sociability, risk tolerance, persistence, materialism, and adventurousness. Personality scales an already-eligible subjective learning delta. It cannot create learning from zero, invert a delta, make ineligible evidence eligible, or directly order an activity.
 
-`PersonalityModel` stores relatively stable traits such as curiosity, sociability, persistence, materialism, adventurousness, and risk tolerance.
+### AffectiveState
 
-Personality should influence how strongly a mob values or learns from an experience. It should not directly grant authority to perform an otherwise-illegal action.
+The short-term state tracks engagement, boredom, satisfaction, stress, novelty, time since meaningful progress, and frozen state. It reacts to bounded experience pulses and observation cadence. It supplies context to utility scoring; it does not own GoalSelector authority.
 
-### Opinion memory
+### OpinionMemory
 
-Opinion memory stores learned preferences from attributable experiences.
+Longer-term memory stores bounded preferences and recent experience pressure. Opinion is separated by subject:
 
-Current target families include:
+- **Activity** — feelings about kinds of work or leisure, such as exploration, rest, or socializing.
+- **Entity** — supplemental preference for a particular entity; this does not replace SPM's relationship graph.
+- **Place** — bounded memory associated with coarse locations.
+- **Environment** — weak, multi-label affinity for semantic environments such as forest, ocean, snowy terrain, Nether, and End.
 
-- **ACTIVITY** — e.g. exploring, resting, socializing, mining-related experiences;
-- **ENTITY** — how experience with a particular entity affects later preference;
-- **PLACE** — learned affinity for previously experienced locations;
-- **ENVIRONMENT** — semantic affinity such as forest, ocean, snowy, Nether, and End contexts.
+Environment preference ranks already-valid routes only. Loving snowy terrain never weakens powder-snow avoidance or any other survival rule.
 
-Learning is causal. A path failure, authority refusal, scheduler conflict, or missing executor must not automatically become "I dislike this activity."
+## Observation and causal learning
 
-### Affective state
+`ActivityObservationService` performs the shared scheduler-wide observation pass and reuses `MoveHolderClassifier` for semantic classification. An unknown running goal is fail-safe active, not idle. Observation reports what is happening; it does not claim ownership.
 
-`AffectiveState` tracks short-term channels such as boredom, engagement, stress, satisfaction, and novelty desire.
+Raw `ExperienceEvent`s are routed into `ActivityEpisode`s. Episodes preserve causal ownership, normalize high-frequency milestones, provide bounded short-term affect pulses, and commit long-term learning only when the terminal outcome and cause make learning eligible. Commands, protected interruptions, simulation frontiers, and unrelated failures do not manufacture dislikes.
 
-Affect changes the current utility of discretionary choices. It is not a second authority system.
+Learning is attributed at the actual terminal boundary. Host behavior that merely looks similar to an Opinion activity does not become Opinion-owned retroactively.
 
-### Discretionary director
+## Discretionary choice
 
-`DiscretionaryDirectorState` owns the intent lifecycle for discretionary activities.
+`DiscretionaryActivityDirector` currently compares three activities:
 
-The director distinguishes:
+- **EXPLORE** — a voluntary overland expedition.
+- **REST** — discretionary downtime backed by a valid rest claim.
+- **SOCIAL** — an optional SPM FriendlyGreet interaction with one exact subject.
 
-- candidate selection;
-- pending intent;
-- adoption;
-- running execution;
-- safe yield to a challenger;
-- terminal success/interruption/invalidation.
+Availability and admission are established before utility can win. Utility combines usefulness, learned preference, affect fit, novelty/reward/repetition/failure pressure, and cost. A high score is desire, not start permission.
 
-Important distinction:
+### Candidate identity
 
-> **Adoption is not continuation. Request is not authority. Desire is not start permission.**
-
-## Current discretionary activities
-
-### EXPLORE
-
-The director may choose a real exploration expedition when exploration is legal and attractive.
-
-Opinion can influence which legitimate route/environment is preferred, but it does not override route construction, chunk/ticking safety, environmental safety, commands, combat, or progression work.
-
-### REST
-
-Discretionary REST uses the camp/rest-session path. Nighttime shelter is not an Opinion choice: shelter is a higher safety authority.
-
-Therefore:
+Activity kind is not enough to identify every choice. `DiscretionaryCandidateKey` uses:
 
 ```text
-REST = "I feel like resting"
-SHELTER = "I need to remain safe here"
+EXPLORE      = (EXPLORE, no subject)
+REST         = (REST, no subject)
+SOCIAL/Bob   = (SOCIAL, Bob's UUID)
+SOCIAL/Alice = (SOCIAL, Alice's UUID)
 ```
 
-These are deliberately separate.
+`SocialIntent` carries the exact immutable subject identity that participated in scoring. SOCIAL without a subject, or a non-SOCIAL activity with a subject, fails closed.
 
-### SOCIAL
+## Authority and lifecycle
 
-SOCIAL is target-specific. The director does not merely choose `SOCIAL`; it chooses an exact candidate such as `SOCIAL/Bob`.
-
-The lifecycle is:
+The practical hierarchy is:
 
 ```text
-Opinion chooses SOCIAL/Bob
-    ↓
-Social target resolver supplies Bob
-    ↓
-SPM independently decides whether Bob is a legal GREET target
-    ↓
-exact target match establishes the binding
-    ↓
-SPM FriendlyGreetGoal executes the physical greeting
-    ↓
-host-produced completion evidence is accepted only while the exact Opinion intent still owns execution
-    ↓
-causal success may update Opinion
+world safety and immediate survival
+        ↓
+attributable combat threat
+        ↓
+explicit player authority
+        ↓
+nighttime shelter hold / project control
+        ↓
+executor feasibility and admission
+        ↓
+Opinion utility and learned preference
+        ↓
+idle fallback
 ```
 
-SPM remains authoritative for its own relationship/greeting legality. Scavenger does not recreate FriendlyGreet behavior.
+Important lifecycle distinctions:
 
-An unbound native FriendlyGreet remains a host `SOCIAL_REFLEX`. An exact Opinion-owned running greeting is classified as `DISCRETIONARY_SOCIAL`.
+- **Request is not authority.** A candidate or intent cannot move the mob by itself.
+- **Adoption is not continuation.** Starting requires new-work admission; an already-running executor uses a separate continuation contract.
+- **Activity kind is not candidate identity.** SOCIAL/Bob and SOCIAL/Alice are different transactions.
+- **Yield is transactional.** The incumbent, challenger, and causal intent are correlated exactly; stale or superseded requests cannot borrow authority.
+- **Ownership begins at causal handoff.** It is never reconstructed afterward from similar visible behavior.
 
-## Candidate identity
+`SHELTER_HOLD` is mandatory nighttime safety that happens to provide rest benefits. It is not optional REST and cannot be abandoned because EXPLORE scored higher.
 
-Activity type alone is not enough for target-bearing decisions.
+## SPM FriendlyGreet integration
 
-`SOCIAL/Bob` and `SOCIAL/Alice` are different candidates. A pending or running Bob intent must never be inherited by Alice merely because both are SOCIAL.
+The optional FriendlyGreet seam leaves SPM's native target unchanged when Opinion is disabled. When enabled, the host-selected subject must match an exact startable SOCIAL candidate. Adoption and running state bind mob UUID, intent UUID, subject UUID, and admission generation without retaining entity references.
 
-This principle applies to future target-bearing activities as well.
+SPM's exact DONE transition is treated as completion evidence only while the director still owns that exact running intent and subject. A stop without DONE is non-completion. Cleanup occurs on stop, unload, death, and server shutdown.
 
-## Yield and switching
+## Inspector and readout
 
-The director uses generic discretionary yield instead of pairwise activity flags.
+The read-only Opinion Inspector requests one bounded immutable snapshot. The server validates permission and the targeted PlayerMob. The snapshot explains candidate availability, complete utility components, selection or abstention, intent and yield lifecycle, executor handoff, terminal evidence, learning receipts, affect, personality, and bounded memories. Refresh is manual; it is not a per-tick synchronization stream.
 
-A challenger may be selected while another discretionary activity is running, but the challenger does not physically start until the incumbent has yielded at a valid boundary.
+The causal trace retains whole decisions rather than loose events, so eviction cannot leave a convincing but incomplete half-decision.
 
-This prevents a third activity from bypassing an already-running executor.
+## Disabled behavior
 
-## Learning rules
+With Opinion disabled, SPM behavior remains host-owned. Opinion does not redirect FriendlyGreet, issue discretionary activity, or gain scheduler authority. Existing non-Opinion Scavenger behavior and required cleanup remain active according to their own contracts.
 
-Positive or negative Opinion learning should represent a meaningful attributable experience.
+## Evidence boundary
 
-Good examples:
-
-- a completed discretionary expedition;
-- a real successful social greeting;
-- a meaningful completed/rest experience;
-- a directly experienced place/environment outcome.
-
-Bad examples:
-
-- "the scheduler would not let me start";
-- "combat interrupted me";
-- "the player ordered me elsewhere";
-- "shelter authority blocked the activity";
-- "the compatibility bridge was unavailable".
-
-Those are feasibility or authority facts, not preferences.
-
-## Observation purity
-
-Read-only probes must stay read-only.
-
-Inspection, scoring, admission observation, and compatibility checks should not consume cooldowns, assign host targets, start/stop goals, move navigation, mutate inventory, or warm host caches as a side effect.
-
-If a host API is impure, prefer observing evidence that the host already produced instead of calling the predicate yourself.
-
-## Feature disabled
-
-When Opinion is disabled, existing SPM/Scavenger behavior should preserve legacy parity as closely as possible. Opinion-owned gates must not globally disable native SPM social behavior or other host features.
-
-## Inspector/readout
-
-The Opinion readout is explanatory, not an activity controller. It can expose what the director chose, why a candidate won, what was suppressed, current affect/opinion context, and recent outcome/learning information. It must not mutate runtime state.
-
-## Source landmarks
-
-The main implementation lives under:
-
-```text
-src/main/java/com/noobk/spmscavenger/opinion/
-```
-
-Important integration points also exist in the activity classifier, exploration/camp executors, SPM compatibility bridges, optional Mixins, and readout package.
-
-For adding a new discretionary activity, see [Extending Opinion](Extending-Opinion.md).
+The architecture above is source-confirmed and covered by static/unit/build evidence in the repository. In-world timing, feel, and cross-mod behavior still require the specific runtime evidence named by the project's test matrix; compilation alone is not behavioral proof.
