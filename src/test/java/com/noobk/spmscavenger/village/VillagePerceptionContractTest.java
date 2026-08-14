@@ -164,17 +164,52 @@ class VillagePerceptionContractTest {
         }
     }
 
-    /** Gate RET-1a: the eviction call site must exist in production, not only in tests. */
+    /**
+     * Gate RET-1a: the eviction call site must exist in production, not only in tests.
+     *
+     * <p><b>V1-R1.</b> The previous version of this test asserted <i>two</i> call sites — unload and
+     * death — and so actively enforced the defect it was meant to guard against. A structural test
+     * locks in a wrong invariant exactly as firmly as a right one. The lesson: the assertion must
+     * encode the <i>semantics</i> ("only permanent removal deletes memory"), not the <i>shape</i>
+     * that happened to be in the file when it was written.
+     */
     @Test
-    void mustHappen_villageMemoryHasProductionEvictionCallers() throws IOException {
+    void mustHappen_villageMemoryIsEvictedOnDeathOnly() throws IOException {
         String bootstrap = code(source(Path.of("SpmScavenger.java")));
         assertTrue(bootstrap.contains("VillageMemorySavedData"),
                 "the bootstrap must reference the memory it is responsible for evicting");
 
-        // The two call sites are formatted differently (one fits on a line, one does not), so count
-        // the call itself rather than a line shape a formatter is free to change.
         int forgetCalls = bootstrap.split("\\.forget\\(mob\\.getUUID\\(\\)\\)", -1).length - 1;
-        assertEquals(2, forgetCalls,
-                "expected exactly the ENTITY_UNLOAD and AFTER_DEATH eviction call sites");
+        assertEquals(1, forgetCalls, "exactly one eviction call site: AFTER_DEATH");
+    }
+
+    /**
+     * The P0 blocker itself. Fabric's {@code ENTITY_UNLOAD} fires for any entity leaving a server
+     * world — a chunk unloading, the player walking away — so deleting persisted settlement memory
+     * there erased it whenever the mob wandered out of range, before the memory could ever matter.
+     */
+    @Test
+    void mustNotHappen_unloadHandlerDeletesVillageMemory() throws IOException {
+        String bootstrap = code(source(Path.of("SpmScavenger.java")));
+
+        int unload = bootstrap.indexOf("ENTITY_UNLOAD");
+        assertTrue(unload > 0, "the unload handler exists");
+        int nextHandler = bootstrap.indexOf("ServerLifecycleEvents", unload);
+        assertTrue(nextHandler > unload, "found the end of the unload handler");
+
+        assertFalse(bootstrap.substring(unload, nextHandler).contains("VillageMemorySavedData"),
+                "ENTITY_UNLOAD must not touch persisted village memory at all");
+    }
+
+    /** Losing the unload call site must not lose the RET-1 bound. */
+    @Test
+    void mustHappen_savedDataStillBoundedWithoutTheUnloadCallSite() throws IOException {
+        String savedData = code(source(Path.of("village/VillageMemorySavedData.java")));
+        assertTrue(savedData.contains("MEMORY_TTL_TICKS"), "a staleness bound exists");
+        assertTrue(savedData.contains("MAX_TRACKED_MOBS"), "a hard ceiling exists");
+
+        String bootstrap = code(source(Path.of("SpmScavenger.java")));
+        assertTrue(bootstrap.contains(".prune("),
+                "the bound needs a production caller, not just an API (RET-1a)");
     }
 }

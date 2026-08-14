@@ -127,15 +127,26 @@ class VillageAnchorPolicyTest {
         assertTrue(VillageAnchorPolicy.isSettlement(List.of(new BlockPos(1, 1, 1))));
     }
 
-    /** Merge radius is vanilla's raid-association radius, so the two systems agree about identity. */
+    /**
+     * V1-R1: settlement identity is no longer this class's business.
+     *
+     * <p>It used to answer "same village?" with vanilla's 96-block raid radius, which collapsed a
+     * HOME_VILLAGE and a TRADING_POST 85 blocks apart into a single entry that could not hold both
+     * tiers. Identity moved to {@code VillageIdentityPolicy} and raid compatibility to
+     * {@code RaidAssociationPolicy}; this class is now purely the anchor derivation, which is the one
+     * thing that must match vanilla exactly. Asserted structurally so the two cannot silently
+     * re-merge here.
+     */
     @Test
-    void mustHappen_mergeRadiusMatchesGetRaidAt() {
-        assertEquals(9216, VillageAnchorPolicy.SAME_SETTLEMENT_RADIUS_SQR,
-                "ServerLevel#getRaidAt calls getNearbyRaid(pos, 9216)");
-
-        BlockPos a = new BlockPos(0, 64, 0);
-        assertTrue(VillageAnchorPolicy.sameSettlement(a, new BlockPos(95, 64, 0)));
-        assertFalse(VillageAnchorPolicy.sameSettlement(a, new BlockPos(97, 64, 0)));
-        assertFalse(VillageAnchorPolicy.sameSettlement(a, null));
+    void mustNotHappen_anchorPolicyRegainsSettlementIdentity() {
+        for (java.lang.reflect.Method method : VillageAnchorPolicy.class.getDeclaredMethods()) {
+            String name = method.getName();
+            assertTrue(name.equals("anchorOf") || name.equals("isSettlement"),
+                    "identity belongs to VillageIdentityPolicy, not here: " + name);
+        }
+        for (java.lang.reflect.Field field : VillageAnchorPolicy.class.getDeclaredFields()) {
+            assertFalse(field.getName().contains("RADIUS"),
+                    "no radius constant belongs to the anchor derivation: " + field.getName());
+        }
     }
 }

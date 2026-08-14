@@ -93,23 +93,9 @@ public final class VillageAnchorPolicy {
         return admittedPoiPositions != null && !admittedPoiPositions.isEmpty();
     }
 
-    /**
-     * Whether two anchors name the same settlement.
-     *
-     * <p>Deliberately the same radius {@code ServerLevel#getRaidAt} uses — it calls
-     * {@code raids.getNearbyRaid(pos, 9216)}, i.e. 96 blocks squared, and
-     * {@code Raids#getOrCreateRaid} reuses any raid found within it rather than creating a second
-     * one. So vanilla already considers two anchors this close to be one settlement for raid
-     * purposes, and adopting a different merge radius would reintroduce exactly the disagreement
-     * D-VR-019 removes — merely at a different scale.
-     *
-     * <p><b>Accepted cost:</b> two genuinely distinct villages 90 blocks apart merge into one
-     * {@code KnownVillage}. That is a real loss of fidelity, and it is the correct one: vanilla will
-     * also run a single raid across both.
-     */
-    public static final int SAME_SETTLEMENT_RADIUS_SQR = 9216;
-
-    public static boolean sameSettlement(BlockPos a, BlockPos b) {
-        return a != null && b != null && a.distSqr(b) <= SAME_SETTLEMENT_RADIUS_SQR;
-    }
+    // V1-R1: settlement identity used to live here, answered with vanilla's 96-block raid radius.
+    // That conflated "one raid neighbourhood" with "one place I remember" and made a HOME_VILLAGE and
+    // a TRADING_POST 85 blocks apart unrepresentable. Split into VillageIdentityPolicy (cognitive,
+    // ours) and RaidAssociationPolicy (vanilla-compatible, must not drift). This class is now purely
+    // the anchor derivation, which is the one thing that must match vanilla exactly.
 }

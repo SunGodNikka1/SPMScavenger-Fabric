@@ -24,27 +24,25 @@ public final class KnownVillage {
     private long lastSeenTick;
 
     /**
-     * How many POIs were admitted when the anchor was last recomputed.
+     * How good a look produced the stored anchor.
      *
-     * <p>Kept because it is the honest confidence signal for the anchor: an anchor derived from
-     * three admitted POIs at the edge of perception is a worse estimate of the settlement centre
-     * than one derived from thirty, and a later re-observation with more POIs should win. Without
-     * it, "seen more recently" would be the only tiebreak and a glancing pass at the village edge
-     * would overwrite a good anchor with a bad one.
+     * <p>V1-R1: this replaced a bare {@code poiCount}. Quantity was a proxy for "better view" that
+     * stopped being true the moment the settlement itself changed — see {@link ObservationQuality}.
+     * The count survives inside the quality as {@code admitted}, so village size is still readable.
      */
-    private int poiCount;
+    private ObservationQuality quality;
 
     public KnownVillage(BlockPos anchor, SettlementTier tier, long firstSeenTick, long lastSeenTick,
-            int poiCount) {
+            ObservationQuality quality) {
         this.anchor = Objects.requireNonNull(anchor, "anchor").immutable();
         this.tier = Objects.requireNonNull(tier, "tier");
         this.firstSeenTick = firstSeenTick;
         this.lastSeenTick = lastSeenTick;
-        this.poiCount = poiCount;
+        this.quality = Objects.requireNonNull(quality, "quality");
     }
 
-    public static KnownVillage discovered(BlockPos anchor, long tick, int poiCount) {
-        return new KnownVillage(anchor, SettlementTier.PASSING_THROUGH, tick, tick, poiCount);
+    public static KnownVillage discovered(BlockPos anchor, long tick, ObservationQuality quality) {
+        return new KnownVillage(anchor, SettlementTier.PASSING_THROUGH, tick, tick, quality);
     }
 
     public BlockPos anchor() {
@@ -63,8 +61,13 @@ public final class KnownVillage {
         return lastSeenTick;
     }
 
+    public ObservationQuality quality() {
+        return quality;
+    }
+
+    /** POIs admitted when the anchor was derived — the settlement's perceived size. */
     public int poiCount() {
-        return poiCount;
+        return quality.admitted();
     }
 
     public boolean isHome() {
@@ -82,23 +85,28 @@ public final class KnownVillage {
     }
 
     /**
-     * Re-observation with a better-supported anchor.
+     * Re-observation, accepted when it is a better or equally good view.
      *
      * <p>Returns a replacement rather than mutating {@code anchor}, because the anchor is the
      * settlement's identity: a mutable anchor could drift far enough across successive partial
      * observations that the village silently becomes a different village, which is the failure
      * D-VR-019 exists to prevent — reintroduced from the inside.
      *
-     * @return {@code this} when the new observation is not better supported
+     * <p>V1-R1: the acceptance rule moved from POI <em>quantity</em> to observation
+     * <em>completeness</em> (see {@link ObservationQuality#supersedes}). Under the old rule a village
+     * that lost buildings (20 POIs to 16) or was rebuilt in place (20 to a different 20) could never
+     * update its anchor again, because both fail {@code newCount > oldCount}.
+     *
+     * @return {@code this} when the new observation is a worse view than the stored one
      */
-    KnownVillage withStrongerObservation(BlockPos newAnchor, long tick, int newPoiCount) {
+    KnownVillage withObservation(BlockPos newAnchor, long tick, ObservationQuality newQuality) {
+        long previousSeen = lastSeenTick;
         observedAt(tick);
-        if (newPoiCount <= poiCount) {
+        if (!newQuality.supersedes(quality, tick, previousSeen)) {
             return this;
         }
-        KnownVillage replacement =
-                new KnownVillage(newAnchor, tier, firstSeenTick, Math.max(tick, lastSeenTick), newPoiCount);
-        return replacement;
+        return new KnownVillage(
+                newAnchor, tier, firstSeenTick, Math.max(tick, previousSeen), newQuality);
     }
 
     public CompoundTag save() {
@@ -107,7 +115,7 @@ public final class KnownVillage {
         tag.putString("tier", tier.name());
         tag.putLong("firstSeen", firstSeenTick);
         tag.putLong("lastSeen", lastSeenTick);
-        tag.putInt("poiCount", poiCount);
+        tag.put("quality", quality.save());
         return tag;
     }
 
@@ -131,12 +139,20 @@ public final class KnownVillage {
         } catch (IllegalArgumentException unknownTier) {
             return null;
         }
+        // Rows written before V1-R1 carry a bare poiCount. Load them as a complete observation of
+        // that size rather than as worthless: treating every pre-upgrade anchor as unusable would let
+        // the first partial glance after the update overwrite a good anchor with a bad one, which is
+        // the defect the acceptance rule exists to prevent.
+        ObservationQuality quality = tag.contains("quality")
+                ? ObservationQuality.load(tag.getCompound("quality"))
+                : new ObservationQuality(tag.getInt("poiCount"), 0);
         return new KnownVillage(
-                anchor, tier, tag.getLong("firstSeen"), tag.getLong("lastSeen"), tag.getInt("poiCount"));
+                anchor, tier, tag.getLong("firstSeen"), tag.getLong("lastSeen"), quality);
     }
 
     @Override
     public String toString() {
-        return "KnownVillage[" + anchor.toShortString() + " " + tier + " poi=" + poiCount + "]";
+        return "KnownVillage[" + anchor.toShortString() + " " + tier
+                + " poi=" + quality.admitted() + "/" + quality.totalVisible() + "]";
     }
 }

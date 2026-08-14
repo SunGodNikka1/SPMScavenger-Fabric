@@ -115,15 +115,31 @@ public class SpmScavenger implements ModInitializer {
                 OpinionExperienceRegistry.parkOnUnload(mob.getUUID(), world.getGameTime());
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
-                // V1 / Gate RET-1a - settlement memory is per-level SavedData, so the eviction owner
-                // needs the level the mob is leaving, not a static map.
-                com.noobk.spmscavenger.village.VillageMemorySavedData.get(world).forget(mob.getUUID());
+                // V1-R1: village memory is deliberately NOT released here. ENTITY_UNLOAD fires for
+                // any entity leaving a server world, so evicting persisted settlement memory on it
+                // erased the record whenever the mob wandered out of range. Generic unload parks
+                // runtime state; only permanent removal deletes semantic memory. See
+                // VillageMemorySavedData. Its bound is a load-time TTL + cap instead.
             }
         });
         // Gate RET-1 - release per-world experience state when the server stops. Without this a
         // singleplayer session that opens world A, leaves, and opens world B keeps world A's
         // contexts reachable through a static map for the rest of the JVM's life. Deliberately not
         // clearAll(), which is test-only and also resets sink wiring.
+        // V1-R1 / Gate RET-1a - village memory's eviction owner is death, and death alone cannot
+        // reach a mob that was removed without one (discarded, or killed while unloaded). Prune at
+        // load: a stale entry belongs to a mob that is not ticking, so a per-tick sweep would only
+        // ever be looking for something that cannot appear between loads.
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
+                int evicted = com.noobk.spmscavenger.village.VillageMemorySavedData.get(level)
+                        .prune(level.getGameTime());
+                if (evicted > 0) {
+                    LOGGER.info("Pruned {} stale village memories in {}", evicted,
+                            level.dimension().location());
+                }
+            }
+        });
         ServerLifecycleEvents.SERVER_STOPPED.register(
                 server -> {
                     OpinionExperienceRegistry.shutdownServerState();

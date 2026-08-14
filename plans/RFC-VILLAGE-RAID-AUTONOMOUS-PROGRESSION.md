@@ -10,8 +10,8 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
 | **Status** | `RESEARCHING` — V1 perception + site selection **PROPOSED**; no VR-T* runtime |
-| **Nearest frontier** | **VR-T1 runtime proof of V1** (needs a launch approval), then the V1 perception driver. D-VR-019 `LOCKED`; V1 `IMPLEMENTED` static, 837 tests |
-| **Last update** | 2026-08-14 (**V1 implemented**: village perception & identity; D-VR-019 `LOCKED` with the User's reproduce-don't-resemble contract) |
+| **Nearest frontier** | **The V1 perception driver** — cadence + 1/10/50/100-PlayerMob budget (User-set boundary), then VR-T1 runtime proof. V1-R1 corrections `IMPLEMENTED`, 852 tests |
+| **Last update** | 2026-08-14 (**V1-R1**: unload no longer deletes memory; identity split from raid association; anchor evidence is completeness. D-VR-022/023/024 `LOCKED`) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -755,6 +755,145 @@ Ordinary village, bell at the south edge, bed cluster to the north; mob's home a
 **Must happen:** `KnownVillage.anchor` and `Raid.getCenter()` for the same settlement agree within the
 `getNearbyRaid` radius.
 **Must not happen:** the mob knows about a village whose chunks it has never had loaded.
+
+---
+
+## Topic: V1-R1 — memory lifecycle, settlement identity, anchor evidence (`Agent_Claude` + User)
+
+**Status:** `IMPLEMENTED` (static) — 852 tests, 3 negative controls
+**Origin:** User review of V1, 2026-08-14. One blocker, two redesigns. All three confirmed in code
+before repair.
+
+---
+
+### P0 — generic unload deleted persistent memory (**BLOCKER**)
+
+`SpmScavenger` called `VillageMemorySavedData.get(world).forget(mob.getUUID())` from
+`ServerEntityEvents.ENTITY_UNLOAD`, and `forget` removes the mob's entry from persisted `SavedData`.
+Fabric defines `ENTITY_UNLOAD` as **any** entity leaving a server world — a chunk unloading, a player
+walking away. Not death.
+
+So the lifecycle contract was backwards: a PlayerMob could remember villages through NBT and have
+the record erased by wandering out of range, before the memory ever had a chance to matter.
+
+**Root cause worth recording.** The call was written by copying the shape of its neighbours —
+`SocialAdmissionSeam.release`, `OpinionExperienceRegistry.parkOnUnload` — without checking their
+semantics. Those release **runtime** state, which genuinely should die on unload. This is persisted
+`SavedData`. The rule now written into the class:
+
+> **Generic unload parks or releases runtime state. Only permanent removal deletes semantic memory.**
+
+**The test was part of the defect.** `VillagePerceptionContractTest` asserted *exactly two* `forget`
+call sites — unload and death — so the structural test **enforced** the bug it was meant to guard.
+A structural test locks in a wrong invariant exactly as firmly as a right one. The assertion now
+encodes the semantics (*only permanent removal deletes*), not the shape that happened to be in the
+file when it was written. This generalises beyond this repo and is a candidate for Reflection.
+
+**RET-1 still has to hold without that call site.** Death alone cannot reach a mob removed without a
+death event (discarded, killed while unloaded, removed by another mod). Two load-time bounds close
+it, both with production callers:
+
+| Bound | Value | Rationale |
+| --- | --- | --- |
+| `MEMORY_TTL_TICKS` | 30 in-game days | long enough to outlive the absence unload causes — the whole point of the repair — short enough that a vanished mob does not persist forever |
+| `MAX_TRACKED_MOBS` | 256 per dimension | hard ceiling, stalest evicted first |
+
+Pruned at `SERVER_STARTED`, not per tick: a stale entry belongs to a mob that is not ticking, so a
+per-tick sweep would be looking for something that cannot appear between loads. **Residual, stated
+honestly:** such an entry survives until the next world load, bounded by the cap.
+
+---
+
+### P1a — raid association had been promoted into village identity
+
+`sameSettlement()` treated anchors within 96 blocks as one `KnownVillage`, justified by vanilla's
+raid lookup radius. The User's counter-example is decisive and was unrepresentable:
+
+```text
+Village A  — HOME_VILLAGE, where the mob sleeps and stores
+Village B  — 85 blocks away, TRADING_POST, has the good librarian
+```
+
+One entry cannot hold two tiers. Every later feature keyed on identity — affinity, storage ownership,
+trade routing, community projects — would have inherited the collapse.
+
+**Vanilla considering two centres one raid neighbourhood is a statement about raids.** It is not a
+statement about what the mob should treat as one place. Split:
+
+| Policy | Question | Radius | Owner |
+| --- | --- | --- | --- |
+| `VillageIdentityPolicy` | "is this the same village I remember?" | **48** (ours, `UNVERIFIED`) | cognitive model |
+| `RaidAssociationPolicy` | "is vanilla's raid here my village's raid?" | **96** (`9216`, must not drift) | vanilla compatibility |
+
+`RaidAssociationPolicy.associatedVillages` returns **every** match rather than the nearest, so one
+raid covering a HOME_VILLAGE and a nearby TRADING_POST is now representable. The natural consumer
+rule — highest tier wins — is a decision the collapsed model could not even pose.
+
+**The 48 is a judgement, labelled as one.** There is no vanilla constant for "one settlement" because
+vanilla has no settlement identity; villages are emergent POI density, which is exactly why the value
+has to be ours. It is village-scale and sits below the 64-block query radius so two views of one
+settlement converge rather than fork (regression: same settlement seen from two sides, 25 blocks
+apart, still merges). **Too small** produces duplicate entries inside one village — visible and
+cheap to fix. **Too large** collapses distinct settlements irreversibly and is invisible. Erring
+small is the recoverable direction.
+
+**The evidence-backed upgrade, deferred:** identity by admitted-POI-set overlap rather than anchor
+distance — exact and radius-free. Deferred because it means storing POI positions per remembered
+village rather than a count, and there is no runtime evidence yet that a radius is insufficient.
+
+---
+
+### P1b — POI quantity was the only confidence score
+
+`withStrongerObservation` accepted a new anchor only when `newPoiCount > oldPoiCount`. That protected
+a good anchor from an edge glance — the real risk it was written for — but froze the anchor of any
+settlement that genuinely changed:
+
+| Case | Old rule | Consequence |
+| --- | --- | --- |
+| village loses buildings, 20 POIs → 16 | `16 <= 20` → rejected | anchor **never** updates again |
+| village rebuilt in place, 20 → different 20 | `20 <= 20` → rejected | same |
+
+Both drift out of agreement with `Raid.getCenter()` — D-VR-019's failure reached from the opposite
+direction. *"More POIs"* is a proxy for *"better view"* that stops being true the moment the
+settlement is the thing that changed.
+
+**The right signal was already being computed and thrown away.** `VillagePerception.Observation`
+carries `withheldPoiCount` — POIs inside the query radius whose chunks the boundary refused — and
+`VillageMemorySavedData.record()` passed only `admittedPoiCount`. That is a direct measure of *how
+much of the settlement the mob could see*, independent of settlement size.
+
+`ObservationQuality(admitted, withheld)` → `completeness()`, and the acceptance rule becomes:
+
+```text
+better view                 -> replace   (strictly more of the settlement was seen)
+equally good view + newer   -> replace   (the settlement itself may have changed)
+worse view                  -> keep      (an edge glance must not degrade a good anchor)
+```
+
+The middle line is the repair: under quantity comparison, *"equally good and newer"* was
+indistinguishable from *"no new information"*. A 3-admitted/25-withheld rim glance still cannot
+overwrite a complete view however recent, and a 9/9-complete view now correctly beats an
+18-admitted/12-withheld partial one.
+
+**NBT migration:** rows written before V1-R1 carry a bare `poiCount` and load as *complete*
+observations of that size — deliberately optimistic, because treating every pre-upgrade anchor as
+worthless would let the first partial glance after the update overwrite a good anchor, which is the
+defect the rule exists to prevent.
+
+---
+
+### Verification
+
+852 tests, 0 failures. Three negative controls, each restoring the original defect:
+
+| Control | Fails |
+| --- | --- |
+| re-add the `ENTITY_UNLOAD` deletion | `mustNotHappen_unloadHandlerDeletesVillageMemory`, `mustHappen_villageMemoryIsEvictedOnDeathOnly` |
+| identity radius back to `9216` | `mustHappen_twoSettlements85BlocksApartStaySeparate`, `mustHappen_oneRaidCanCoverBothRememberedVillages`, `mustHappen_identityIsTighterThanRaidAssociation` |
+| acceptance rule back to `admitted > stored.admitted()` | `mustHappen_shrunkenVillageUpdatesItsAnchor`, `mustHappen_rebuiltVillageUpdatesItsAnchor`, `mustHappen_moreCompleteViewWinsOverLargerCount` |
+
+Still `STATIC_CONFIRMED` only — no PlayerMob has perceived a village in a running world.
 
 ---
 
@@ -1645,7 +1784,9 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 | `MaterialDemandPolicy` class name | **NOT FOUND** — ship trade via `WorkDemandPolicy` facade (B-VR-20) |
 | Storage RFC (full personal/village chest system) | **Deferred** — `StorageOwnership` minimum in V3 |
 | Runtime VR-T* tests | **UNVERIFIED** — VR-T1 datapack planned (B-VR-28). V1 is `STATIC_CONFIRMED` only: no PlayerMob has yet perceived a village in a running world |
-| V1 perception **driver** (what calls `VillagePerception.observe`) | **DEFERRED by design** — V1 ships the service, not a goal. Binding it to a tick cadence is the first task of the next slice |
+| V1 perception **driver** (what calls `VillagePerception.observe`) | **NEXT** — design with a real cadence and a 1/10/50/100-PlayerMob budget, not a 64-block POI query per tick (User, 2026-08-14) |
+| 48-block village identity radius | **UNVERIFIED** — our judgement, no vanilla constant exists. Upgrade path (POI-set overlap) designed and deferred pending runtime evidence (D-VR-022) |
+| Mobs removed without a death event | **BOUNDED, not eliminated** — survive until the next world load, capped by `MAX_TRACKED_MOBS` (D-VR-023) |
 | TACZ / vehicle mods | Out of scope |
 | PlayerMob-as-villager lifecycle | **Rejected** (`D-VR-004`) |
 | Exploit-optimized trading hall AI | **Rejected** — emergent arbitrage only |
@@ -1886,6 +2027,45 @@ the disagreement this decision removes, merely at a different scale.
 50+ mobs, or runtime evidence that the 96-block merge collapses settlements players consider
 distinct often enough to matter.
 
+### D-VR-022: Village identity is ours; raid association is vanilla's (`Agent_Claude` + User)
+
+**Status:** `LOCKED` (User review, 2026-08-14) — **splits** the identity half out of D-VR-019
+**Accepted:** `VillageIdentityPolicy` (48 blocks, cognitive, ours) and `RaidAssociationPolicy`
+(`9216`, vanilla-compatible, must not drift) are separate concerns. A raid may cover several
+remembered villages without collapsing them into one identity; `associatedVillages` returns all
+matches.
+**Rejected:** one radius for both (the shipped V1 behaviour) — it made a HOME_VILLAGE and a
+TRADING_POST 85 blocks apart unrepresentable, and every identity-keyed feature downstream would have
+inherited that.
+**`UNVERIFIED`:** the 48-block value itself. Vanilla has no settlement-identity constant, so this is
+necessarily our judgement. Erring small is the recoverable direction — duplicates are visible,
+collapse is not.
+**Would change my mind:** runtime evidence of duplicate entries inside one real village → move to
+POI-set-overlap identity (already designed, deferred for lack of evidence).
+
+### D-VR-023: Unload parks, only removal deletes (`Agent_Claude` + User)
+
+**Status:** `LOCKED` (User review, 2026-08-14) — repository-wide lifecycle rule for this addon
+**Accepted:** generic `ENTITY_UNLOAD` releases **runtime** state only. Persisted semantic memory is
+deleted solely on permanent removal (`AFTER_DEATH`), and is bounded instead by a load-time TTL and
+cap with production callers.
+**Rejected:** evicting `SavedData` on unload to satisfy Gate RET-1. RET-1 demands a bound, not a
+lifecycle violation — and the convenient call site produced a bound that deleted the feature.
+**Evidence:** Fabric `ServerEntityEvents.ENTITY_UNLOAD` is defined for any entity leaving a server
+world; `VillageMemorySavedData` is `DimensionDataStorage`-backed.
+**Generalises:** any future per-mob `SavedData` in this addon inherits this rule.
+
+### D-VR-024: Anchor evidence is completeness, not count (`Agent_Claude` + User)
+
+**Status:** `LOCKED` (User review, 2026-08-14)
+**Accepted:** `ObservationQuality(admitted, withheld)`; an anchor is replaced on a strictly better
+view, or an equally good and newer one. The memory layer retains observation quality rather than POI
+quantity.
+**Rejected:** `newPoiCount > oldPoiCount` (the shipped V1 rule) — it froze the anchor of any village
+that shrank or was rebuilt in place, silently breaking D-VR-019's agreement guarantee.
+**Evidence:** `withheldPoiCount` was already computed by `VillagePerception` and discarded by
+`record()`.
+
 ### D-VR-020: Hero credit by widening one type check (`Agent_Claude`)
 
 **Status:** `PROPOSED` (`Agent_Claude`, 2026-08-14) — narrows D-VR-014's implementation, does not reopen it  
@@ -1919,6 +2099,7 @@ runs, the feature must not be described as “villagers remember you”.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Claude + User | 2026-08-14 | **V1-R1 — three corrections from User review of V1.** **P0 (blocker):** `ENTITY_UNLOAD` deleted persisted village memory; Fabric fires it for any entity leaving a world, so a mob wandering out of range erased its own memory. Root cause: copied the shape of neighbouring *runtime*-state releases without checking semantics. **The structural test asserted two call sites and so enforced the defect** — a structural test locks in a wrong invariant as firmly as a right one; it now encodes semantics, not shape. RET-1 re-satisfied by a load-time TTL (30 in-game days) + cap (256/dimension) with a `SERVER_STARTED` caller. **P1a:** identity split from raid association — `VillageIdentityPolicy` (48, ours, `UNVERIFIED`) vs `RaidAssociationPolicy` (`9216`, vanilla, must not drift); one raid may now cover several remembered villages, so a HOME_VILLAGE and a TRADING_POST 85 blocks apart are representable. **P1b:** anchor evidence moved from POI *quantity* to observation *completeness* — `withheldPoiCount` was already computed and discarded; the old `newCount > oldCount` froze the anchor of any village that shrank (20→16) or was rebuilt in place (20→20). D-VR-022/023/024 `LOCKED`. **852 tests, 0 failures; 3 negative controls all fire.** Runtime still `UNVERIFIED`. |
 | Agent_Claude + User | 2026-08-14 | **V1 implemented — Village Perception & Identity.** D-VR-019 `LOCKED` with the User's strengthened contract: the anchor must *reproduce* vanilla's raid-centre derivation, not merely share its input predicate. Reading `Raids#createOrExtendRaid` offsets 72–171 disproved the section-conversion hypothesis but found **four** properties a natural rewrite gets wrong (raw coords not block centres; floor not round; Y participates; duplicates significant) — three of which the original one-line wording would have shipped. Perception boundary made a **construction invariant**: `VillagePerception` is the addon's only `PoiManager` reference, the raw stream never escapes, `hasChunk` cannot load. *Storage availability is not perception* — the hidden-ore rule. Ships `VillageAnchorPolicy`, `VillagePerception`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData`; RET-1 bounded (16, LRU, home exempt) with production eviction on unload + death. **28 new tests, 837 total, 0 failures; 4 negative controls all fire.** V1 got *smaller* under review — no bell, no `KnownVillager`, no site score, no goal. Runtime `UNVERIFIED`. |
 | Agent_Claude | 2026-08-14 | **Vanilla player-gate audit + independent peer review.** Read method *bodies* from the pinned 1.21.1 jar rather than signatures: hero credit is gated by **one `EntityType` comparison** in `Raider#die` while `Raid#tick` awards to any `LivingEntity` (VR-11 downgraded, D-VR-020); villager gossip is **entity-agnostic and already running**, so B-VR-13 is a live behaviour not a feature (VR-4 reclassified, D-VR-021); vanilla defines “village” as a `PoiTypeTags.VILLAGE` + `IS_OCCUPIED` query that also places `Raid.getCenter()`, so a hand-rolled anchor would **silently disable D-VR-010** (D-VR-019, **contests D-VR-009's detection half**); raid *initiation* confirmed hard at the entity level (`ServerPlayer`-owned omen state). **D-VR-010/011/012 → `LOCKED`** on this review. B-VR-30–36; VR-23/24. **No implementation authorization.** |
 | Agent_Cursor | 2026-08-14 | **Day/night director arbitration topic** (user request). `VillageDayNightContext`, priority matrix, shelter/raid/trade integration with `SeekShelterGoal` dusk window + `ShelterInterruptionPolicy`; MAIBS V5b; VR-22; B-VR-29; D-VR-018. **No implementation authorization.** |

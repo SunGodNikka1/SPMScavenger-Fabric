@@ -15,11 +15,14 @@ import java.util.Optional;
  * <h2>Gate RET-1</h2>
  *
  * <table>
- *   <tr><th>Key</th><td>settlement anchor, merged at {@link VillageAnchorPolicy#SAME_SETTLEMENT_RADIUS_SQR}</td></tr>
+ *   <tr><th>Key</th><td>settlement anchor, merged at {@link VillageIdentityPolicy#SAME_SETTLEMENT_RADIUS_SQR}</td></tr>
  *   <tr><th>Bound</th><td>{@link #MAX_KNOWN_VILLAGES}, LRU by {@code lastSeenTick}</td></tr>
  *   <tr><th>Eviction owner</th><td>{@link #remember} (LRU, every call) and
- *       {@code VillageMemorySavedData#forget} on entity unload and death</td></tr>
- *   <tr><th>Death / unload</th><td>memory released with the mob</td></tr>
+ *       {@code VillageMemorySavedData#forget} on <b>death only</b></td></tr>
+ *   <tr><th>Death</th><td>deleted — the mob is permanently gone</td></tr>
+ *   <tr><th>Unload</th><td><b>preserved</b>. V1-R1: this is persistent semantic memory, not runtime
+ *       state. Deleting it on a generic unload meant a mob could remember villages through NBT and
+ *       still have the record erased before it ever mattered.</td></tr>
  *   <tr><th>Server stop</th><td>persisted with the level; not runtime state</td></tr>
  * </table>
  *
@@ -56,7 +59,7 @@ public final class MobVillageMemory {
 
     public Optional<KnownVillage> at(BlockPos anchor) {
         return villages.stream()
-                .filter(v -> VillageAnchorPolicy.sameSettlement(v.anchor(), anchor))
+                .filter(v -> VillageIdentityPolicy.sameSettlement(v.anchor(), anchor))
                 .findFirst();
     }
 
@@ -65,17 +68,17 @@ public final class MobVillageMemory {
      *
      * @return the settlement the observation belongs to
      */
-    public KnownVillage remember(BlockPos anchor, long tick, int poiCount) {
+    public KnownVillage remember(BlockPos anchor, long tick, ObservationQuality quality) {
         KnownVillage existing = at(anchor).orElse(null);
         if (existing != null) {
-            KnownVillage updated = existing.withStrongerObservation(anchor, tick, poiCount);
+            KnownVillage updated = existing.withObservation(anchor, tick, quality);
             if (updated != existing) {
                 villages.set(villages.indexOf(existing), updated);
             }
             evictBeyondBound();
             return updated;
         }
-        KnownVillage discovered = KnownVillage.discovered(anchor, tick, poiCount);
+        KnownVillage discovered = KnownVillage.discovered(anchor, tick, quality);
         villages.add(discovered);
         evictBeyondBound();
         return discovered;
@@ -127,6 +130,15 @@ public final class MobVillageMemory {
             }
             villages.remove(stalest);
         }
+    }
+
+    /** Newest sighting across all remembered settlements — the staleness clock for this mob. */
+    public long lastTouchedTick() {
+        long newest = Long.MIN_VALUE;
+        for (KnownVillage village : villages) {
+            newest = Math.max(newest, village.lastSeenTick());
+        }
+        return newest == Long.MIN_VALUE ? 0L : newest;
     }
 
     public CompoundTag save() {

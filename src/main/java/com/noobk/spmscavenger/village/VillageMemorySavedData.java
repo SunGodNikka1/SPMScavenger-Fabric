@@ -24,12 +24,32 @@ import java.util.UUID;
  *
  * <table>
  *   <tr><th>Key</th><td>mob {@code UUID} (stable, not minted)</td></tr>
- *   <tr><th>Bound</th><td>live mobs; each entry internally bounded by
+ *   <tr><th>Bound</th><td>{@link #MAX_TRACKED_MOBS} (LRU by newest sighting) and
+ *       {@link #MEMORY_TTL_TICKS}; each entry internally bounded by
  *       {@link MobVillageMemory#MAX_KNOWN_VILLAGES}</td></tr>
- *   <tr><th>Eviction owner</th><td>{@link #forget} — called from {@code SpmScavenger}'s
- *       {@code ENTITY_UNLOAD} and {@code AFTER_DEATH} handlers</td></tr>
+ *   <tr><th>Eviction owner</th><td>{@link #forget} on <b>death only</b>, plus {@link #prune} at load</td></tr>
+ *   <tr><th>Death</th><td>deleted — permanent removal</td></tr>
+ *   <tr><th>Unload</th><td><b>preserved</b> — see below</td></tr>
  *   <tr><th>Server stop</th><td>flushed with the level's data storage</td></tr>
  * </table>
+ *
+ * <h2>V1-R1 — unload must not delete semantic memory</h2>
+ *
+ * The first version evicted from {@code ServerEntityEvents.ENTITY_UNLOAD}. Fabric defines that event
+ * as <b>any</b> entity leaving a server world — a chunk unloading, the player walking away — not as
+ * death. So a PlayerMob could remember a village across a save/load and still have the record erased
+ * simply by wandering out of range, before the memory ever had a chance to matter.
+ *
+ * <p>The mistake was copying the shape of the neighbouring unload calls without checking their
+ * semantics. Those release <b>runtime</b> state — the admission-seam pulse, the parked experience
+ * context — which genuinely should die on unload. This is persisted {@code SavedData}. The rule:
+ * <b>generic unload parks or releases runtime state; only permanent removal deletes semantic
+ * memory.</b>
+ *
+ * <p>Gate RET-1 still has to hold without that call site, and death alone does not cover a mob
+ * removed without a death event (discarded, {@code /kill} on an unloaded entity, a mod removing it).
+ * Two load-time bounds close it: a staleness TTL and a total cap. Both are honest about the residual
+ * — such an entry survives until the next world load, bounded by {@link #MAX_TRACKED_MOBS}.
  *
  * <p>Reads use {@link #peek}, which never creates an entry. A mob that has never seen a village must
  * not acquire a memory object merely because something asked whether it had one — the same
@@ -38,6 +58,16 @@ import java.util.UUID;
 public final class VillageMemorySavedData extends SavedData {
 
     public static final String DATA_NAME = "spmscavenger_village_memory";
+
+    /**
+     * 30 in-game days since the mob last saw any village. Long enough that memory outlives the kind
+     * of absence unload causes — which is the whole point of the V1-R1 repair — and short enough that
+     * a mob which vanished without a death event does not persist forever.
+     */
+    public static final long MEMORY_TTL_TICKS = 30L * 24_000L;
+
+    /** Hard ceiling per dimension, applied after the TTL, evicting the stalest first. */
+    public static final int MAX_TRACKED_MOBS = 256;
 
     private final Map<UUID, MobVillageMemory> byMob = new HashMap<>();
 
@@ -72,8 +102,13 @@ public final class VillageMemorySavedData extends SavedData {
         if (observation == null || !observation.isSettlement()) {
             return Optional.empty();
         }
-        KnownVillage village =
-                memoryOf(mob).remember(observation.anchor(), tick, observation.admittedPoiCount());
+        // V1-R1: the full quality, not just the admitted count. withheldPoiCount is how much of the
+        // settlement the boundary refused, and it is the only signal that distinguishes "small
+        // village seen whole" from "big village glimpsed from the edge".
+        KnownVillage village = memoryOf(mob).remember(
+                observation.anchor(),
+                tick,
+                new ObservationQuality(observation.admittedPoiCount(), observation.withheldPoiCount()));
         setDirty();
         return Optional.of(village);
     }
@@ -90,7 +125,12 @@ public final class VillageMemorySavedData extends SavedData {
         return changed;
     }
 
-    /** RET-1a — the production eviction call site. */
+    /**
+     * RET-1a — the production eviction call site, for <b>permanent removal only</b>.
+     *
+     * <p>Deliberately not wired to {@code ENTITY_UNLOAD}: see the class note. A structural test
+     * asserts the unload handler does not reach this class.
+     */
     public void forget(UUID mob) {
         if (mob != null && byMob.remove(mob) != null) {
             setDirty();
@@ -99,6 +139,40 @@ public final class VillageMemorySavedData extends SavedData {
 
     public int trackedMobCount() {
         return byMob.size();
+    }
+
+    /**
+     * RET-1a — the bound that survives losing the unload call site.
+     *
+     * <p>Runs at load rather than per tick: both limits are about entries whose owning mob is gone,
+     * and a gone mob does not produce ticks. Returns the number evicted so a caller can log it.
+     */
+    public int prune(long now) {
+        int before = byMob.size();
+        byMob.entrySet().removeIf(entry -> {
+            long lastSeen = entry.getValue().lastTouchedTick();
+            return entry.getValue().size() == 0 || now - lastSeen > MEMORY_TTL_TICKS;
+        });
+        while (byMob.size() > MAX_TRACKED_MOBS) {
+            UUID stalest = null;
+            long stalestTick = Long.MAX_VALUE;
+            for (Map.Entry<UUID, MobVillageMemory> entry : byMob.entrySet()) {
+                long touched = entry.getValue().lastTouchedTick();
+                if (touched < stalestTick) {
+                    stalestTick = touched;
+                    stalest = entry.getKey();
+                }
+            }
+            if (stalest == null) {
+                break;
+            }
+            byMob.remove(stalest);
+        }
+        int evicted = before - byMob.size();
+        if (evicted > 0) {
+            setDirty();
+        }
+        return evicted;
     }
 
     public static VillageMemorySavedData load(CompoundTag tag, HolderLookup.Provider registries) {
