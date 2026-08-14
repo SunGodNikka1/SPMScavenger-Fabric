@@ -9,9 +9,9 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
-| **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (V1-R1); V2+ design-only; no VR-T* runtime |
+| **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (hardened through V1-R2); V2+ design-only; no VR-T* runtime |
 | **Nearest frontier** | **V1 perception driver** (cadence + mob-count budget), then **V4 Place-opinion bridge** design (D-VR-025/026); VR-T1 runtime |
-| **Last update** | 2026-08-14 (Opinion↔Village boundary — User + Agent_Cursor; D-VR-025/026) |
+| **Last update** | 2026-08-14 (**V1-R2** — owner lifecycle separated from memory freshness; `RemovalReason.shouldDestroy()` replaces the staleness TTL; 858 tests. Prior: Opinion↔Village boundary — User + Agent_Cursor; D-VR-025/026) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -1001,13 +1001,95 @@ defect the rule exists to prevent.
 
 ---
 
+### V1-R2 — memory age is not an owner-liveness signal (**P0**, User review)
+
+The V1-R1 repair removed the unload deletion and replaced it with a staleness TTL: prune, at load,
+any entry whose newest sighting was over 30 in-game days old. **That was the same mistake in a new
+place.**
+
+```text
+lastTouchedTick  measures  how fresh the memory is
+                 NOT       whether the mob still exists
+```
+
+An alive PlayerMob that spends thirty in-game days mining, then crosses a server restart, loses every
+settlement it knows — including its `HOME_VILLAGE`. The first version deleted memory on the wrong
+*event*; the second deleted it on the wrong *clock*. Both came from reaching for whatever signal was
+nearest to hand to satisfy Gate RET-1, rather than asking what the gate actually requires: a bound,
+not a lifecycle violation.
+
+**The real seam exists and vanilla publishes it.**
+
+| `RemovalReason` | `shouldDestroy()` | Village memory |
+| --- | --- | --- |
+| `KILLED` | `true` | delete |
+| `DISCARDED` | `true` | delete |
+| `UNLOADED_TO_CHUNK` | `false` | **keep** |
+| `UNLOADED_WITH_PLAYER` | `false` | **keep** |
+| `CHANGED_DIMENSION` | `false` | **keep** (and memory is per-dimension anyway) |
+
+`Entity#setRemoved` assigns `removalReason` at offset 9 and invokes `levelCallback.onRemove` at
+offset 45, and Fabric's `ENTITY_UNLOAD` fires downstream of that callback — so the reason is populated
+when the handler reads it (`CODE_CONFIRMED`, pinned jar). `ENTITY_UNLOAD` is therefore usable after
+all; what was wrong was treating the *event* as the decision instead of the *reason*.
+
+**What remains, and what it is honestly for.** `MAX_TRACKED_MOBS` (256/dimension) survives purely as a
+safety valve for a mob that vanishes without any lifecycle event reaching us. It should never fire in
+normal play, so it now logs a **warning** when it does, and its victim ordering (least-recently-active)
+is documented as a known-imperfect last resort rather than a correctness mechanism — because least
+recently active still is not the same as gone. Reaching the cap is a signal that something is wrong,
+not a routine maintenance event.
+
+**Locked as a principle:** if village forgetting is ever wanted, it is a **cognition feature** — a
+memory-decay policy with its own design, tests and player-visible behaviour — not a side effect of
+garbage collection. Deleting a mob's home because it was busy elsewhere is not memory management.
+
+---
+
+### V1-R2 — adversarial anchor stability (User-raised, D-VR-024)
+
+The equal-completeness-and-newer rule replaces an anchor, so a sequence of individually legal
+sub-48-block observations could in principle walk it across the map. Tested rather than assumed:
+
+| Sequence | Result |
+| --- | --- |
+| alternating opposite sides ×40, equal completeness | **no accumulated drift** — the anchor oscillates between the two reported positions and returns exactly to each |
+| the same, checked every step against a raid centre | **stays inside the raid-association radius throughout** — D-VR-010's trigger cannot become intermittent from oscillation |
+| repeated edge glances ×50 against a stored complete view | **anchor never moves** |
+| monotone 20-block steps ×20 | **the anchor follows, ending 400 blocks away** |
+
+The first three are `must` assertions. **The fourth is a real limitation, recorded rather than papered
+over.** Replacement means the anchor tracks the most recent equally-good observation — correct when a
+settlement is genuinely rebuilt progressively, wrong when an observation sequence merely looks like
+that. Distinguishing them requires the POI-set-overlap identity already deferred under D-VR-022.
+
+Why no drift in the alternating case: `withObservation` **replaces** the stored anchor rather than
+blending toward the new one. An averaging or nudging implementation would have drifted; replacement
+cannot. That is a property worth knowing was load-bearing, not a lucky accident.
+
+**VR-T1 must report** whether real observation sequences produce the monotone shape at all — the mob's
+POI set depends on where it stands, so the answer is empirical.
+
+---
+
+### V1-R2 — vertical settlement exposure (User-raised, D-VR-022)
+
+`BlockPos.distSqr` is 3D. A mountainside village 30 blocks horizontally and 40 vertically apart is
+`2500 > 2304` — **one village to a player, two to us**. Characterised in
+`AnchorStabilityTest`, not fixed: going 2D would diverge from `RaidAssociationPolicy`, which is 3D
+because vanilla's `getNearbyRaid` is. Added as a named VR-T1 runtime scenario instead of changing the
+model on speculation.
+
+---
+
 ### Verification
 
-852 tests, 0 failures. Three negative controls, each restoring the original defect:
+858 tests, 0 failures. Three negative controls, each restoring the original defect:
 
 | Control | Fails |
 | --- | --- |
-| re-add the `ENTITY_UNLOAD` deletion | `mustNotHappen_unloadHandlerDeletesVillageMemory`, `mustHappen_villageMemoryIsEvictedOnDeathOnly` |
+| ungate the unload deletion (delete on any unload) | `mustNotHappen_unloadDeletesMemoryWithoutCheckingTheReason` |
+| reinstate the staleness TTL | `mustNotHappen_memoryAgeIsUsedAsAnOrphanCollectionSignal` |
 | identity radius back to `9216` | `mustHappen_twoSettlements85BlocksApartStaySeparate`, `mustHappen_oneRaidCanCoverBothRememberedVillages`, `mustHappen_identityIsTighterThanRaidAssociation` |
 | acceptance rule back to `admitted > stored.admitted()` | `mustHappen_shrunkenVillageUpdatesItsAnchor`, `mustHappen_rebuiltVillageUpdatesItsAnchor`, `mustHappen_moreCompleteViewWinsOverLargerCount` |
 
@@ -1909,7 +1991,10 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 | Runtime VR-T* tests | **UNVERIFIED** — VR-T1 datapack planned (B-VR-28). V1 is `STATIC_CONFIRMED` only: no PlayerMob has yet perceived a village in a running world |
 | V1 perception **driver** (what calls `VillagePerception.observe`) | **NEXT** — design with a real cadence and a 1/10/50/100-PlayerMob budget, not a 64-block POI query per tick (User, 2026-08-14) |
 | 48-block village identity radius | **UNVERIFIED** — our judgement, no vanilla constant exists. Upgrade path (POI-set overlap) designed and deferred pending runtime evidence (D-VR-022) |
-| Mobs removed without a death event | **BOUNDED, not eliminated** — survive until the next world load, capped by `MAX_TRACKED_MOBS` (D-VR-023) |
+| Mobs removed without **any** lifecycle event | **BOUNDED, not eliminated** — held by `MAX_TRACKED_MOBS` (256/dimension), which warns when it fires (D-VR-023) |
+| Monotone anchor following over a long observation sequence | **DOCUMENTED LIMITATION** — replacement tracks the newest equally-good view; separating "rebuilt" from "looks rebuilt" needs POI-set-overlap identity (D-VR-022). VR-T1 must report whether real sequences produce this shape |
+| Vertically spread settlement splits into two | **VR-T1 SCENARIO** — `distSqr` is 3D; 30 horizontal + 40 vertical exceeds the 48 sphere. Not fixed on speculation: 2D would diverge from `RaidAssociationPolicy`, which is 3D because vanilla is (User, 2026-08-14) |
+| Reflection candidates | "structural tests must encode semantics, not incidental code shape"; "unload ≠ permanent removal" as a shared lifecycle rule **once a second persistent per-mob system needs it** — no framework built prematurely (User agreed, 2026-08-14) |
 | TACZ / vehicle mods | Out of scope |
 | PlayerMob-as-villager lifecycle | **Rejected** (`D-VR-004`) |
 | Exploit-optimized trading hall AI | **Rejected** — emergent arbitrage only |
@@ -2170,14 +2255,29 @@ POI-set-overlap identity (already designed, deferred for lack of evidence).
 ### D-VR-023: Unload parks, only removal deletes (`Agent_Claude` + User)
 
 **Status:** `LOCKED` (User review, 2026-08-14) — repository-wide lifecycle rule for this addon
-**Accepted:** generic `ENTITY_UNLOAD` releases **runtime** state only. Persisted semantic memory is
-deleted solely on permanent removal (`AFTER_DEATH`), and is bounded instead by a load-time TTL and
-cap with production callers.
-**Rejected:** evicting `SavedData` on unload to satisfy Gate RET-1. RET-1 demands a bound, not a
-lifecycle violation — and the convenient call site produced a bound that deleted the feature.
-**Evidence:** Fabric `ServerEntityEvents.ENTITY_UNLOAD` is defined for any entity leaving a server
-world; `VillageMemorySavedData` is `DimensionDataStorage`-backed.
-**Generalises:** any future per-mob `SavedData` in this addon inherits this rule.
+**Amended V1-R2 (User review):** the *reason*, not the event, is the decision.
+
+```text
+persisted semantic memory is deleted  <=>  RemovalReason.shouldDestroy()
+                                           (KILLED, DISCARDED)
+```
+
+**Accepted:** `ENTITY_UNLOAD` may delete, but only when `shouldDestroy()` is true; `AFTER_DEATH` is
+the other call site. Chunk unload, player-unload and dimension change preserve memory.
+**Rejected (twice, for different reasons):** deleting on any unload — Fabric fires it for any entity
+leaving a world; **and** a staleness TTL over memory age — `lastTouchedTick` measures memory freshness,
+not owner existence, so an alive mob that spends a month away from villages would lose its home at the
+next restart. RET-1 demands a bound, not a lifecycle violation, and both attempts produced a bound
+that deleted the feature.
+**Residual, bounded not eliminated:** a mob removed with no lifecycle event at all. Held by
+`MAX_TRACKED_MOBS` = 256/dimension, which warns when it fires and whose victim ordering is an
+acknowledged heuristic.
+**Corollary locked:** memory decay, if ever wanted, is a **cognition policy** with its own design and
+player-visible behaviour — never garbage collection.
+**Evidence:** `Entity$RemovalReason` constructor flags (KILLED/DISCARDED `destroy=true`; the three
+UNLOADED/CHANGED reasons `false`); `Entity#setRemoved` sets `removalReason` (offset 9) before
+`levelCallback.onRemove` (offset 45), and Fabric's event fires downstream. Pinned 1.21.1 jar.
+**Generalises:** any future per-mob `SavedData` in this addon inherits both halves of this rule.
 
 ### D-VR-024: Anchor evidence is completeness, not count (`Agent_Claude` + User)
 
@@ -2241,6 +2341,7 @@ runs, the feature must not be described as “villagers remember you”.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Claude + User | 2026-08-14 | **V1-R2 — owner lifecycle separated from memory freshness (P0).** The V1-R1 TTL was the same mistake in a new place: `lastTouchedTick` measures how fresh a memory is, not whether its owner exists, so an alive PlayerMob that mined for thirty in-game days would lose its `HOME_VILLAGE` at the next restart. Replaced with the real seam — `RemovalReason.shouldDestroy()` (`KILLED`/`DISCARDED` delete; chunk unload, player unload and dimension change preserve), verified against `Entity#setRemoved` offsets 9/45 so the reason is populated when Fabric's event fires. `ENTITY_UNLOAD` is usable after all; treating the *event* as the decision instead of the *reason* was the error. `MAX_TRACKED_MOBS` demoted to a warning safety valve with an acknowledged heuristic ordering. **Locked corollary:** memory decay is a cognition policy, never garbage collection. Also added the two User-raised adversarial tests: alternating equal-completeness observations show **no accumulated drift** (replacement, not blending, is why) and stay inside the raid-association radius every step; a monotone sequence **does** follow the settlement — recorded as a documented limitation needing POI-set-overlap identity. Vertical-settlement split (3D `distSqr`) characterised as a VR-T1 scenario. **858 tests, 0 failures; 2 new negative controls fire.** |
 | User + Agent_Cursor | 2026-08-14 | **Opinion↔Village boundary (User architecture).** Village produces facts/legal candidates; Opinion soft-ranks among valid options only (*preference does not create permission*). Split `VillageSiteScore` → `FactualVillageUtility` + `OpinionVillageBias`; new topic with Place vs SETTLEMENT investigation (**SETTLEMENT deferred** — use `PlaceOpinionRouteRanker` at `KnownVillage.anchor`). Updated director diagram; VR-16/25; V4 phase; B-VR-37…40; D-VR-025/026 `PROPOSED`. **No implementation authorization.** |
 | Agent_Claude + User | 2026-08-14 | **V1-R1 — three corrections from User review of V1.** **P0 (blocker):** `ENTITY_UNLOAD` deleted persisted village memory; Fabric fires it for any entity leaving a world, so a mob wandering out of range erased its own memory. Root cause: copied the shape of neighbouring *runtime*-state releases without checking semantics. **The structural test asserted two call sites and so enforced the defect** — a structural test locks in a wrong invariant as firmly as a right one; it now encodes semantics, not shape. RET-1 re-satisfied by a load-time TTL (30 in-game days) + cap (256/dimension) with a `SERVER_STARTED` caller. **P1a:** identity split from raid association — `VillageIdentityPolicy` (48, ours, `UNVERIFIED`) vs `RaidAssociationPolicy` (`9216`, vanilla, must not drift); one raid may now cover several remembered villages, so a HOME_VILLAGE and a TRADING_POST 85 blocks apart are representable. **P1b:** anchor evidence moved from POI *quantity* to observation *completeness* — `withheldPoiCount` was already computed and discarded; the old `newCount > oldCount` froze the anchor of any village that shrank (20→16) or was rebuilt in place (20→20). D-VR-022/023/024 `LOCKED`. **852 tests, 0 failures; 3 negative controls all fire.** Runtime still `UNVERIFIED`. |
 | Agent_Claude + User | 2026-08-14 | **V1 implemented — Village Perception & Identity.** D-VR-019 `LOCKED` with the User's strengthened contract: the anchor must *reproduce* vanilla's raid-centre derivation, not merely share its input predicate. Reading `Raids#createOrExtendRaid` offsets 72–171 disproved the section-conversion hypothesis but found **four** properties a natural rewrite gets wrong (raw coords not block centres; floor not round; Y participates; duplicates significant) — three of which the original one-line wording would have shipped. Perception boundary made a **construction invariant**: `VillagePerception` is the addon's only `PoiManager` reference, the raw stream never escapes, `hasChunk` cannot load. *Storage availability is not perception* — the hidden-ore rule. Ships `VillageAnchorPolicy`, `VillagePerception`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData`; RET-1 bounded (16, LRU, home exempt) with production eviction on unload + death. **28 new tests, 837 total, 0 failures; 4 negative controls all fire.** V1 got *smaller* under review — no bell, no `KnownVillager`, no site score, no goal. Runtime `UNVERIFIED`. |

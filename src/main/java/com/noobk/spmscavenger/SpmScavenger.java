@@ -115,25 +115,30 @@ public class SpmScavenger implements ModInitializer {
                 OpinionExperienceRegistry.parkOnUnload(mob.getUUID(), world.getGameTime());
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
-                // V1-R1: village memory is deliberately NOT released here. ENTITY_UNLOAD fires for
-                // any entity leaving a server world, so evicting persisted settlement memory on it
-                // erased the record whenever the mob wandered out of range. Generic unload parks
-                // runtime state; only permanent removal deletes semantic memory. See
-                // VillageMemorySavedData. Its bound is a load-time TTL + cap instead.
+                // V1-R2: ENTITY_UNLOAD covers both "the chunk unloaded" and "the entity was
+                // destroyed", so the reason - not the event - decides. shouldDestroy() is true only
+                // for KILLED and DISCARDED; a chunk unload or dimension change keeps the memory.
+                // Entity#setRemoved assigns removalReason before the callback chain this event sits
+                // on, so it is populated here.
+                net.minecraft.world.entity.Entity.RemovalReason reason = mob.getRemovalReason();
+                if (reason != null && reason.shouldDestroy()) {
+                    com.noobk.spmscavenger.village.VillageMemorySavedData.get(world)
+                            .forget(mob.getUUID());
+                }
             }
         });
         // Gate RET-1 - release per-world experience state when the server stops. Without this a
         // singleplayer session that opens world A, leaves, and opens world B keeps world A's
         // contexts reachable through a static map for the rest of the JVM's life. Deliberately not
         // clearAll(), which is test-only and also resets sink wiring.
-        // V1-R1 / Gate RET-1a - village memory's eviction owner is death, and death alone cannot
-        // reach a mob that was removed without one (discarded, or killed while unloaded). Prune at
-        // load: a stale entry belongs to a mob that is not ticking, so a per-tick sweep would only
-        // ever be looking for something that cannot appear between loads.
+        // V1-R2 / Gate RET-1a - the safety valve only. Memory age is NOT an orphan signal: an alive
+        // mob that spends a month away from villages must keep its home. Permanent removal is handled
+        // by RemovalReason.shouldDestroy() above; this exists purely for mobs that vanish without any
+        // lifecycle event, and it warns when it fires because that should not happen.
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
                 int evicted = com.noobk.spmscavenger.village.VillageMemorySavedData.get(level)
-                        .prune(level.getGameTime());
+                        .prune();
                 if (evicted > 0) {
                     LOGGER.info("Pruned {} stale village memories in {}", evicted,
                             level.dimension().location());

@@ -24,12 +24,12 @@ import java.util.UUID;
  *
  * <table>
  *   <tr><th>Key</th><td>mob {@code UUID} (stable, not minted)</td></tr>
- *   <tr><th>Bound</th><td>{@link #MAX_TRACKED_MOBS} (LRU by newest sighting) and
- *       {@link #MEMORY_TTL_TICKS}; each entry internally bounded by
- *       {@link MobVillageMemory#MAX_KNOWN_VILLAGES}</td></tr>
- *   <tr><th>Eviction owner</th><td>{@link #forget} on <b>death only</b>, plus {@link #prune} at load</td></tr>
- *   <tr><th>Death</th><td>deleted — permanent removal</td></tr>
- *   <tr><th>Unload</th><td><b>preserved</b> — see below</td></tr>
+ *   <tr><th>Bound</th><td>{@link #MAX_TRACKED_MOBS} safety valve; each entry internally bounded
+ *       by {@link MobVillageMemory#MAX_KNOWN_VILLAGES}</td></tr>
+ *   <tr><th>Eviction owner</th><td>{@link #forget}, on <b>permanent removal</b>: {@code AFTER_DEATH},
+ *       and {@code ENTITY_UNLOAD} when {@code RemovalReason.shouldDestroy()}</td></tr>
+ *   <tr><th>Death / discard</th><td>deleted — the mob is gone</td></tr>
+ *   <tr><th>Chunk unload, dimension change</th><td><b>preserved</b> — see below</td></tr>
  *   <tr><th>Server stop</th><td>flushed with the level's data storage</td></tr>
  * </table>
  *
@@ -46,10 +46,30 @@ import java.util.UUID;
  * <b>generic unload parks or releases runtime state; only permanent removal deletes semantic
  * memory.</b>
  *
- * <p>Gate RET-1 still has to hold without that call site, and death alone does not cover a mob
- * removed without a death event (discarded, {@code /kill} on an unloaded entity, a mod removing it).
- * Two load-time bounds close it: a staleness TTL and a total cap. Both are honest about the residual
- * — such an entry survives until the next world load, bounded by {@link #MAX_TRACKED_MOBS}.
+ * <h2>V1-R2 — memory age is not an owner-liveness signal</h2>
+ *
+ * The first repair replaced the unload call site with a staleness TTL: prune, at load, any entry whose
+ * newest sighting was over 30 in-game days old. That was <b>the same mistake in a new place</b>. Time
+ * since a mob last saw a village measures <i>memory freshness</i>; it says nothing about whether the
+ * mob still exists. An alive PlayerMob that spends thirty days mining and then crosses a server
+ * restart would lose every settlement it knew — including its {@code HOME_VILLAGE}.
+ *
+ * <p>The correct signal is the owner's own lifecycle, and vanilla publishes it.
+ * {@code Entity.RemovalReason.shouldDestroy()} is {@code true} for {@code KILLED} and
+ * {@code DISCARDED}, {@code false} for {@code UNLOADED_TO_CHUNK}, {@code UNLOADED_WITH_PLAYER} and
+ * {@code CHANGED_DIMENSION} — precisely "this entity is permanently gone". {@code Entity#setRemoved}
+ * assigns {@code removalReason} <em>before</em> invoking {@code levelCallback.onRemove} (pinned jar,
+ * offsets 9 and 45), and Fabric's {@code ENTITY_UNLOAD} fires downstream of that, so the reason is
+ * populated when the handler reads it.
+ *
+ * <p><b>If village forgetting is ever wanted it is a cognition feature</b> — a memory-decay policy
+ * with its own design, tests and player-visible behaviour — not a side effect of garbage collection.
+ * Deleting a mob's home because it was busy elsewhere is not memory management.
+ *
+ * <p>{@link #MAX_TRACKED_MOBS} survives only as a safety valve for the residual case: a mob removed
+ * without any lifecycle event reaching us. It should never fire in normal play, so it warns when it
+ * does, and its victim ordering is an acknowledged last-resort heuristic, not a correctness
+ * mechanism.
  *
  * <p>Reads use {@link #peek}, which never creates an entry. A mob that has never seen a village must
  * not acquire a memory object merely because something asked whether it had one — the same
@@ -60,13 +80,12 @@ public final class VillageMemorySavedData extends SavedData {
     public static final String DATA_NAME = "spmscavenger_village_memory";
 
     /**
-     * 30 in-game days since the mob last saw any village. Long enough that memory outlives the kind
-     * of absence unload causes — which is the whole point of the V1-R1 repair — and short enough that
-     * a mob which vanished without a death event does not persist forever.
+     * Safety valve only, reached solely when mobs vanish without any lifecycle event reaching us.
+     *
+     * <p>Deliberately generous: 256 memory-holding PlayerMobs in one dimension is already unusual,
+     * the cost of an over-large cap is a few kilobytes, and the cost of an over-small one is deleting
+     * a live mob's home.
      */
-    public static final long MEMORY_TTL_TICKS = 30L * 24_000L;
-
-    /** Hard ceiling per dimension, applied after the TTL, evicting the stalest first. */
     public static final int MAX_TRACKED_MOBS = 256;
 
     private final Map<UUID, MobVillageMemory> byMob = new HashMap<>();
@@ -128,8 +147,9 @@ public final class VillageMemorySavedData extends SavedData {
     /**
      * RET-1a — the production eviction call site, for <b>permanent removal only</b>.
      *
-     * <p>Deliberately not wired to {@code ENTITY_UNLOAD}: see the class note. A structural test
-     * asserts the unload handler does not reach this class.
+     * <p>Callers must first establish that the owner is gone for good: {@code AFTER_DEATH}, or
+     * {@code ENTITY_UNLOAD} with {@code RemovalReason.shouldDestroy()}. A plain unload is not
+     * permanent removal, and a structural test asserts the unload handler checks the reason.
      */
     public void forget(UUID mob) {
         if (mob != null && byMob.remove(mob) != null) {
@@ -142,17 +162,29 @@ public final class VillageMemorySavedData extends SavedData {
     }
 
     /**
-     * RET-1a — the bound that survives losing the unload call site.
+     * RET-1a — the safety valve, and nothing more.
      *
-     * <p>Runs at load rather than per tick: both limits are about entries whose owning mob is gone,
-     * and a gone mob does not produce ticks. Returns the number evicted so a caller can log it.
+     * <p>Drops entries holding no villages (no semantic content to lose) and, if the map has somehow
+     * exceeded {@link #MAX_TRACKED_MOBS}, sheds least-recently-active entries until it fits.
+     *
+     * <p><b>The cap's victim ordering is a known-imperfect heuristic.</b> Least recently active is not
+     * the same as gone — that is the entire lesson of V1-R2. It is acceptable only because reaching
+     * the cap already means something abnormal has happened, and bounded loss beats unbounded growth.
+     * Hence the warning rather than silent proceeding.
+     *
+     * @return the number of entries evicted
      */
-    public int prune(long now) {
+    public int prune() {
         int before = byMob.size();
-        byMob.entrySet().removeIf(entry -> {
-            long lastSeen = entry.getValue().lastTouchedTick();
-            return entry.getValue().size() == 0 || now - lastSeen > MEMORY_TTL_TICKS;
-        });
+        byMob.entrySet().removeIf(entry -> entry.getValue().size() == 0);
+
+        if (byMob.size() > MAX_TRACKED_MOBS) {
+            com.noobk.spmscavenger.SpmScavenger.LOGGER.warn(
+                    "Village memory holds {} mobs, above the {} safety cap. Entries are released only"
+                            + " on permanent removal, so this means mobs are vanishing without a"
+                            + " lifecycle event reaching us. Shedding least-recently-active entries.",
+                    byMob.size(), MAX_TRACKED_MOBS);
+        }
         while (byMob.size() > MAX_TRACKED_MOBS) {
             UUID stalest = null;
             long stalestTick = Long.MAX_VALUE;

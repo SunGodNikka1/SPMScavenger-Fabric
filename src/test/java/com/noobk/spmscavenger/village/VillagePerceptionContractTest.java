@@ -167,46 +167,72 @@ class VillagePerceptionContractTest {
     /**
      * Gate RET-1a: the eviction call site must exist in production, not only in tests.
      *
-     * <p><b>V1-R1.</b> The previous version of this test asserted <i>two</i> call sites — unload and
-     * death — and so actively enforced the defect it was meant to guard against. A structural test
-     * locks in a wrong invariant exactly as firmly as a right one. The lesson: the assertion must
-     * encode the <i>semantics</i> ("only permanent removal deletes memory"), not the <i>shape</i>
-     * that happened to be in the file when it was written.
+     * <p><b>V1-R1/R2.</b> The first version of this test asserted two call sites — unload and death —
+     * and so actively enforced the defect it was meant to guard against. The count is two again now,
+     * but for a different reason, which is exactly why counting was the wrong assertion: the
+     * semantics live in {@code mustNotHappen_unloadDeletesMemoryWithoutCheckingTheReason}, and this
+     * test only guards against a third, unreviewed call site appearing.
      */
     @Test
-    void mustHappen_villageMemoryIsEvictedOnDeathOnly() throws IOException {
+    void mustHappen_villageMemoryIsEvictedOnPermanentRemovalOnly() throws IOException {
         String bootstrap = code(source(Path.of("SpmScavenger.java")));
         assertTrue(bootstrap.contains("VillageMemorySavedData"),
                 "the bootstrap must reference the memory it is responsible for evicting");
 
         int forgetCalls = bootstrap.split("\\.forget\\(mob\\.getUUID\\(\\)\\)", -1).length - 1;
-        assertEquals(1, forgetCalls, "exactly one eviction call site: AFTER_DEATH");
+        assertEquals(2, forgetCalls,
+                "two permanent-removal call sites: AFTER_DEATH, and the shouldDestroy()-gated unload");
     }
 
     /**
-     * The P0 blocker itself. Fabric's {@code ENTITY_UNLOAD} fires for any entity leaving a server
-     * world — a chunk unloading, the player walking away — so deleting persisted settlement memory
-     * there erased it whenever the mob wandered out of range, before the memory could ever matter.
+     * The original P0. Fabric's {@code ENTITY_UNLOAD} fires for any entity leaving a server world — a
+     * chunk unloading, a player walking away — so the handler must decide on the removal
+     * <em>reason</em>, never on the event alone.
      */
     @Test
-    void mustNotHappen_unloadHandlerDeletesVillageMemory() throws IOException {
+    void mustNotHappen_unloadDeletesMemoryWithoutCheckingTheReason() throws IOException {
         String bootstrap = code(source(Path.of("SpmScavenger.java")));
 
         int unload = bootstrap.indexOf("ENTITY_UNLOAD");
         assertTrue(unload > 0, "the unload handler exists");
         int nextHandler = bootstrap.indexOf("ServerLifecycleEvents", unload);
         assertTrue(nextHandler > unload, "found the end of the unload handler");
+        String unloadBody = bootstrap.substring(unload, nextHandler);
 
-        assertFalse(bootstrap.substring(unload, nextHandler).contains("VillageMemorySavedData"),
-                "ENTITY_UNLOAD must not touch persisted village memory at all");
+        if (unloadBody.contains("VillageMemorySavedData")) {
+            assertTrue(unloadBody.contains("shouldDestroy()"),
+                    "unload may only delete memory when RemovalReason.shouldDestroy() is true");
+            assertTrue(unloadBody.indexOf("shouldDestroy()") < unloadBody.indexOf("forget("),
+                    "the reason must be checked before the deletion, not after");
+        }
     }
 
-    /** Losing the unload call site must not lose the RET-1 bound. */
+    /**
+     * V1-R2. Memory age is not an owner-liveness signal: an alive PlayerMob that spends a month
+     * mining must not lose its HOME_VILLAGE at the next restart. If village forgetting is ever
+     * wanted it is a cognition/memory-decay feature with its own design — not garbage collection.
+     */
     @Test
-    void mustHappen_savedDataStillBoundedWithoutTheUnloadCallSite() throws IOException {
+    void mustNotHappen_memoryAgeIsUsedAsAnOrphanCollectionSignal() throws IOException {
         String savedData = code(source(Path.of("village/VillageMemorySavedData.java")));
-        assertTrue(savedData.contains("MEMORY_TTL_TICKS"), "a staleness bound exists");
+        assertFalse(savedData.contains("MEMORY_TTL_TICKS"),
+                "a staleness TTL over semantic memory deletes live mobs' homes");
+        assertFalse(savedData.contains("lastTouchedTick() >") || savedData.contains("> MEMORY_TTL"),
+                "no age comparison may gate deletion");
+
+        int prune = savedData.indexOf("public int prune(");
+        assertTrue(prune > 0, "the safety valve exists");
+        assertFalse(savedData.substring(prune).contains("now"),
+                "prune must not take or consult a clock — its only inputs are emptiness and the cap");
+    }
+
+    /** The residual bound must still exist, and still have a production caller. */
+    @Test
+    void mustHappen_theSafetyValveExistsAndIsCalled() throws IOException {
+        String savedData = code(source(Path.of("village/VillageMemorySavedData.java")));
         assertTrue(savedData.contains("MAX_TRACKED_MOBS"), "a hard ceiling exists");
+        assertTrue(savedData.contains("LOGGER.warn"),
+                "reaching the cap is abnormal and must be reported, not silently absorbed");
 
         String bootstrap = code(source(Path.of("SpmScavenger.java")));
         assertTrue(bootstrap.contains(".prune("),

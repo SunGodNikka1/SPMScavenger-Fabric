@@ -132,7 +132,14 @@ public final class MobVillageMemory {
         }
     }
 
-    /** Newest sighting across all remembered settlements — the staleness clock for this mob. */
+    /**
+     * Newest sighting across all remembered settlements.
+     *
+     * <p><b>Not a liveness signal.</b> V1-R2: this was briefly used as an orphan-collection TTL, which
+     * would have deleted an alive mob's home for the crime of mining for a month. It measures memory
+     * freshness only, and its sole remaining consumer is the last-resort victim ordering of the
+     * {@code MAX_TRACKED_MOBS} safety valve.
+     */
     public long lastTouchedTick() {
         long newest = Long.MIN_VALUE;
         for (KnownVillage village : villages) {
