@@ -15,6 +15,7 @@ The source code is authoritative. This Wiki documents the durable architecture a
 ## Architecture index
 
 - [[Opinion System|Opinion-System]] — current Opinion architecture and behavior.
+- [[Mining and Wealth System|Mining-and-Wealth-System]] — resource demand, optional stockpiling, legitimate discovery, and bounded mining ownership.
 - [[Extending Opinion|Extending-Opinion]] — how to add another discretionary activity safely.
 - [[Compatibility Contracts|Compatibility-Contracts]] — reusable host/addon integration rules.
 - [[Mod Support|Mod-Support]] — current compatibility surface and the preferred extension ladder.

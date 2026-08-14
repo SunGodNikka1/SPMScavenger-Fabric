@@ -2,6 +2,7 @@
 
 - [[Home]]
 - [[Opinion System|Opinion-System]]
+- [[Mining and Wealth System|Mining-and-Wealth-System]]
 - [[Extending Opinion|Extending-Opinion]]
 - [[Compatibility Contracts|Compatibility-Contracts]]
 - [[Mod Support|Mod-Support]]

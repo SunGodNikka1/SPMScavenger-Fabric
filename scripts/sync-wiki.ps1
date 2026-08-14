@@ -30,6 +30,12 @@ function Get-NormalizedText([string]$Path) {
     return $text.Replace("`r`n", "`n").Replace("`r", "`n")
 }
 
+function Copy-NormalizedWikiPage([string]$Source, [string]$Destination) {
+    $text = Get-NormalizedText $Source
+    $utf8WithoutBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($Destination, $text, $utf8WithoutBom)
+}
+
 try {
     & git clone --quiet --depth 1 $WikiRemote $tempWiki
     if ($LASTEXITCODE -ne 0) {
@@ -79,7 +85,7 @@ try {
 
     New-Item -ItemType Directory -Force -Path $localWiki | Out-Null
     foreach ($file in $remoteFiles) {
-        Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $localWiki $file.Name) -Force
+        Copy-NormalizedWikiPage $file.FullName (Join-Path $localWiki $file.Name)
     }
 
     foreach ($file in $localFiles) {
