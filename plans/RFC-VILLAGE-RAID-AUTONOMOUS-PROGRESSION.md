@@ -8,10 +8,10 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `PLANNING` — design-only; **no mod implementation** authorized |
+| **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
 | **Status** | `RESEARCHING` — V1 perception + site selection **PROPOSED**; no VR-T* runtime |
-| **Nearest frontier** | **Implementation authorization for V1** — D-VR-010/011/012 now `LOCKED` (peer review `Agent_Claude`); D-VR-009 detection half `CONTESTED` → D-VR-019 awaiting acceptance |
-| **Last update** | 2026-08-14 (vanilla player-gate audit; D-VR-019/020/021; D-VR-010/011/012 `LOCKED`; D-VR-009 `CONTESTED`) |
+| **Nearest frontier** | **VR-T1 runtime proof of V1** (needs a launch approval), then the V1 perception driver. D-VR-019 `LOCKED`; V1 `IMPLEMENTED` static, 837 tests |
+| **Last update** | 2026-08-14 (**V1 implemented**: village perception & identity; D-VR-019 `LOCKED` with the User's reproduce-don't-resemble contract) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -1547,7 +1547,8 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 
 | Phase | Scope | Feasibility | Runtime proof |
 | --- | --- | --- | --- |
-| **V1** | Village awareness: `KnownVillage`, `KnownVillager`, `VillagePerception`, `RingVillageBellGoal`, **settlement tiers + site score** | **FULL** | VR-T1: enter village → remember bell + villagers → leave → return |
+| **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** (static) | VR-T1 pending: enter village → anchor agrees with `Raid.getCenter()` → leave → return → same settlement |
+| ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | moved to V2/V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal` | **REQUIRES MIXIN** | VR-T2: trade input → correct villager → atomic inventory change |
 | **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest |
 | **V4** | Persistent relationship: affinity, known traders, home-village, return visits | **PARTIAL** | VR-T4: prefer home village trader |
@@ -1643,7 +1644,8 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 | `PoiManager` unloaded-chunk leakage | **P0 constraint** — bound to loaded chunks or D-VR-019 becomes omniscience (B-VR-33) |
 | `MaterialDemandPolicy` class name | **NOT FOUND** — ship trade via `WorkDemandPolicy` facade (B-VR-20) |
 | Storage RFC (full personal/village chest system) | **Deferred** — `StorageOwnership` minimum in V3 |
-| Runtime VR-T* tests | **UNVERIFIED** — VR-T1 datapack planned (B-VR-28) |
+| Runtime VR-T* tests | **UNVERIFIED** — VR-T1 datapack planned (B-VR-28). V1 is `STATIC_CONFIRMED` only: no PlayerMob has yet perceived a village in a running world |
+| V1 perception **driver** (what calls `VillagePerception.observe`) | **DEFERRED by design** — V1 ships the service, not a goal. Binding it to a tick cadence is the first task of the next slice |
 | TACZ / vehicle mods | Out of scope |
 | PlayerMob-as-villager lifecycle | **Rejected** (`D-VR-004`) |
 | Exploit-optimized trading hall AI | **Rejected** — emergent arbitrage only |
@@ -1728,8 +1730,11 @@ merge clusters by anchor distance”. Superseded by **D-VR-019**: vanilla alread
 **silently disabling D-VR-010** with no crash and no log line.  
 **Rejected:** nearest-chunk default; full vanilla POI *graph* clone (still rejected — D-VR-019 uses the
 flat query, not the graph).  
-**Lock criterion:** re-lock as `LOCKED` once D-VR-019 is accepted and the detection paragraph is
-rewritten to reference it.
+**Resolved 2026-08-14 (User).** D-VR-019 accepted and locked; the detection half of this decision is
+**`SUPERSEDED`** by it. The scoring half — settlement tiers, `VillageSiteScore`, home anchor NBT — is
+**`LOCKED`**. V1 ships the tier vocabulary and the `HOME_VILLAGE` identity; utility-driven promotion
+and demotion remain V4, because their inputs (affinity, remembered traders, raid history) do not exist
+yet and inventing them now would mean scoring zeros dressed as judgements.
 
 ### D-VR-010: Raid interrupt via `TaskLifecycle` snapshot
 
@@ -1804,23 +1809,82 @@ Implementation shape is now D-VR-020.
 
 ---
 
-### D-VR-019: Village detection mirrors vanilla's own POI predicate (`Agent_Claude`)
+### D-VR-019: One canonical settlement coordinate system (`Agent_Claude`)
 
-**Status:** `PROPOSED` (`Agent_Claude`, 2026-08-14) — supersedes the detection half of D-VR-009  
-**Accepted:** `VillagePerception` identifies a settlement with
-`PoiManager.getInRange(h -> h.is(PoiTypeTags.VILLAGE), pos, 64, IS_OCCUPIED)` and derives
-`KnownVillage.anchor` from that POI centroid — the same query and the same occupancy filter
-`Raids#createOrExtendRaid` uses to place `Raid.getCenter()`.  
+**Status:** `LOCKED` (`Agent_Claude` proposed; **User accepted and strengthened, 2026-08-14**)  
+**Implemented:** V1 — `village/` package, 28 tests, 4 negative controls.
+
+**Accepted (four-part contract, as strengthened by the User):**
+
+```text
+Village membership:
+    vanilla PoiTypeTags.VILLAGE
+    + IS_OCCUPIED
+
+Perception boundary:
+    loaded/perceivable chunks only
+    no chunk loads
+    no persisted-unloaded POI knowledge
+
+Canonical anchor:
+    reproduce vanilla raid-center derivation
+    from the bounded POI set
+
+KnownVillage:
+    stores that canonical anchor
+```
+
+**The User's strengthening was the load-bearing part.** My proposal said "derive from that POI
+centroid — the same query". Same input predicate does **not** imply same output coordinate: any
+section conversion, dedup, averaging or centring vanilla performs must be reproduced, or the
+anchor is subtly wrong in exactly the way this decision exists to prevent. Reading
+`Raids#createOrExtendRaid` at offsets 72–171 settled it — vanilla does **no** section conversion
+(the hypothesis was wrong) but does four things a natural rewrite gets wrong, each a silent
+one-block error:
+
+| # | Vanilla | The idiomatic rewrite | Consequence |
+| --- | --- | --- | --- |
+| 1 | accumulates `p.getX()` (raw int) | `Vec3.atCenterOf(p)` | every component biased `+0.5`; survives the floor |
+| 2 | `BlockPos.containing` = **floor** | `Math.round` | agree on positive coords, differ on negative — invisible in a world built at spawn |
+| 3 | Y participates in the average | XZ-only anchor | changes the `distSqr` that `getNearbyRaid` compares |
+| 4 | duplicates significant (one record per POI) | dedupe "to be tidy" | 20 beds vs 3 workstations is a real 20:3 weighting |
+
+The single sentence "derive from the POI centroid" would have passed review and shipped three of
+these four. **Reproduce, do not resemble** is now the written contract, and each property has a
+regression test that computes the wrong answer alongside the right one.  
+**Anchor is `VillageAnchorPolicy.anchorOf`.**  
 **Why:** correctness first, elegance second. Agreement with the raid centre is what makes D-VR-010 fire at
 all; tag-extensibility (SPM-0 level 3–4) is the bonus.  
 **Rejected:** hand-rolled bed/villager cluster heuristics (enumerate what a tag expresses, and drift from
 the raid centre); the full vanilla POI *graph*; `/locate`.  
-**Hard constraint:** the query **must** be bounded to loaded / simulation-distance chunks. `PoiManager`
-extends `SectionStorage` and will return persisted POIs for unloaded chunks — unbounded use is worse
-omniscience than the heuristic it replaces.  
-**Evidence:** `Raids#createOrExtendRaid` offsets 44–65; `village.json` POI tag; both from the pinned jar.  
-**Would change my mind:** a measured `PoiManager` query cost that exceeds the block-scan it replaces at
-50+ mobs, or a loaded-chunk bound that proves impossible to express cleanly.
+**Hard constraint — a construction invariant, not a test (User, 2026-08-14):**
+
+```text
+VillagePerception may inspect remembered POI storage,
+but MUST NOT admit a POI into perception unless its
+chunk is currently within the allowed loaded/perception boundary.
+The check itself must not cause a chunk load.
+```
+
+**Memory/storage availability is not perception** — the same philosophy as hidden ore in Mining
+Intelligence: the server knows it is there; the mob does not necessarily know it is there.
+Enforced structurally, not by convention: `VillagePerception` holds the addon's only `PoiManager`
+reference (asserted across the whole package), the raw record stream never escapes the method, and
+every record passes `withinPerception` before an `Observation` exists. The check is
+`ServerLevel#hasChunk` on section coordinates — it resolves against the loaded chunk map and
+cannot trigger a load or generation, so asking the question cannot manufacture its own answer
+(same rule as D-GAO-057).  
+**Merge radius:** two anchors within `9216` (96²) are one settlement — the same radius
+`ServerLevel#getRaidAt` passes to `getNearbyRaid`, and the same one `getOrCreateRaid` uses to reuse
+an existing raid instead of creating a second. **Accepted cost:** two genuinely distinct villages
+90 blocks apart merge into one `KnownVillage`. That is a real fidelity loss and it is the correct
+one — vanilla will also run a single raid across both. Adopting any other radius would reintroduce
+the disagreement this decision removes, merely at a different scale.  
+**Evidence:** `Raids#createOrExtendRaid` offsets 44–171; `Raids#getOrCreateRaid`;
+`ServerLevel#getRaidAt` (offset 5, `sipush 9216`); `village.json` POI tag. All from the pinned jar.  
+**Would change my mind:** a measured `PoiManager` query cost exceeding the block scan it replaces at
+50+ mobs, or runtime evidence that the 96-block merge collapses settlements players consider
+distinct often enough to matter.
 
 ### D-VR-020: Hero credit by widening one type check (`Agent_Claude`)
 
@@ -1855,6 +1919,7 @@ runs, the feature must not be described as “villagers remember you”.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Claude + User | 2026-08-14 | **V1 implemented — Village Perception & Identity.** D-VR-019 `LOCKED` with the User's strengthened contract: the anchor must *reproduce* vanilla's raid-centre derivation, not merely share its input predicate. Reading `Raids#createOrExtendRaid` offsets 72–171 disproved the section-conversion hypothesis but found **four** properties a natural rewrite gets wrong (raw coords not block centres; floor not round; Y participates; duplicates significant) — three of which the original one-line wording would have shipped. Perception boundary made a **construction invariant**: `VillagePerception` is the addon's only `PoiManager` reference, the raw stream never escapes, `hasChunk` cannot load. *Storage availability is not perception* — the hidden-ore rule. Ships `VillageAnchorPolicy`, `VillagePerception`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData`; RET-1 bounded (16, LRU, home exempt) with production eviction on unload + death. **28 new tests, 837 total, 0 failures; 4 negative controls all fire.** V1 got *smaller* under review — no bell, no `KnownVillager`, no site score, no goal. Runtime `UNVERIFIED`. |
 | Agent_Claude | 2026-08-14 | **Vanilla player-gate audit + independent peer review.** Read method *bodies* from the pinned 1.21.1 jar rather than signatures: hero credit is gated by **one `EntityType` comparison** in `Raider#die` while `Raid#tick` awards to any `LivingEntity` (VR-11 downgraded, D-VR-020); villager gossip is **entity-agnostic and already running**, so B-VR-13 is a live behaviour not a feature (VR-4 reclassified, D-VR-021); vanilla defines “village” as a `PoiTypeTags.VILLAGE` + `IS_OCCUPIED` query that also places `Raid.getCenter()`, so a hand-rolled anchor would **silently disable D-VR-010** (D-VR-019, **contests D-VR-009's detection half**); raid *initiation* confirmed hard at the entity level (`ServerPlayer`-owned omen state). **D-VR-010/011/012 → `LOCKED`** on this review. B-VR-30–36; VR-23/24. **No implementation authorization.** |
 | Agent_Cursor | 2026-08-14 | **Day/night director arbitration topic** (user request). `VillageDayNightContext`, priority matrix, shelter/raid/trade integration with `SeekShelterGoal` dusk window + `ShelterInterruptionPolicy`; MAIBS V5b; VR-22; B-VR-29; D-VR-018. **No implementation authorization.** |
 | Agent_Cursor | 2026-08-14 | **Brainstorm continuation (2).** Mojmap verify: `BellBlock.attemptToRing`, `Raid.addHeroOfTheVillage`; `MaterialDemandPolicy` NOT FOUND → `WorkDemandPolicy` facade topic; `ShelterThreatPolicy` ↔ raider aggro coupling (B-VR-21); MAIBS V2 trade table; B-VR-19…28; D-VR-013…017; D-VR-008/009…012 **LOCK RECOMMENDED**. **No implementation authorization.** |

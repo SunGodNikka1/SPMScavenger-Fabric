@@ -115,6 +115,9 @@ public class SpmScavenger implements ModInitializer {
                 OpinionExperienceRegistry.parkOnUnload(mob.getUUID(), world.getGameTime());
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
+                // V1 / Gate RET-1a - settlement memory is per-level SavedData, so the eviction owner
+                // needs the level the mob is leaving, not a static map.
+                com.noobk.spmscavenger.village.VillageMemorySavedData.get(world).forget(mob.getUUID());
             }
         });
         // Gate RET-1 - release per-world experience state when the server stops. Without this a
@@ -136,6 +139,10 @@ public class SpmScavenger implements ModInitializer {
                 OpinionExperienceRegistry.onDeath(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
+                if (mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                    com.noobk.spmscavenger.village.VillageMemorySavedData.get(serverLevel)
+                            .forget(mob.getUUID());
+                }
             }
         });
     }
