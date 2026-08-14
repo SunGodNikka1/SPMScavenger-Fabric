@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.opinion;
 
+import com.noobk.spmscavenger.activity.ActivityClass;
 import com.noobk.spmscavenger.experience.ExperienceEmitters;
 import net.minecraft.world.entity.Mob;
 
@@ -157,8 +158,14 @@ public final class SocialExecutionBindingRegistry {
     }
 
     static void completionObserved(UUID mobId) {
-        BINDINGS.computeIfPresent(mobId, (ignored, binding) ->
-                binding.phase() == Phase.RUNNING ? binding.completed() : binding);
+        BINDINGS.computeIfPresent(mobId, (ignored, binding) -> {
+            if (binding.phase() != Phase.RUNNING) {
+                return binding;
+            }
+            // DONE is causal evidence only while this exact intent/subject still owns execution.
+            // Returning null fails closed and prevents stop() from crediting stale host behavior.
+            return exactLiveRunningIntent(binding) ? binding.completed() : null;
+        });
     }
 
     /** Reject only a not-yet-started episode; never erase a genuinely running greet. */
@@ -222,17 +229,33 @@ public final class SocialExecutionBindingRegistry {
         if (binding == null || binding.phase() != Phase.RUNNING) {
             return false;
         }
-        var context = com.noobk.spmscavenger.experience.OpinionExperienceRegistry.find(mobId);
-        boolean exactLiveIntent = context != null
+        boolean exactLiveIntent = exactLiveRunningIntent(binding);
+        if (!exactLiveIntent) {
+            // A completion marker validated at the DONE boundary is historical evidence. It no
+            // longer grants scheduler ownership, but must survive until stop() consumes it.
+            if (!binding.completionObserved()) {
+                BINDINGS.remove(mobId, binding);
+            }
+        }
+        return exactLiveIntent;
+    }
+
+    /** One semantic source for exact-bound FriendlyGreet observation across scheduler adapters. */
+    public static ActivityClass friendlyGreetActivityClass(UUID mobId) {
+        return isRunning(mobId)
+                ? ActivityClass.DISCRETIONARY_SOCIAL
+                : ActivityClass.SOCIAL_REFLEX;
+    }
+
+    private static boolean exactLiveRunningIntent(Binding binding) {
+        var context = com.noobk.spmscavenger.experience.OpinionExperienceRegistry.find(
+                binding.mobId());
+        return context != null
                 && context.discretionaryDirector().runningIntent()
                         .filter(DiscretionaryIntent::isActive)
                         .filter(intent -> intent.intentId().equals(binding.intentId()))
                         .filter(intent -> intent.candidateKey().equals(binding.candidateKey()))
                         .isPresent();
-        if (!exactLiveIntent) {
-            BINDINGS.remove(mobId, binding);
-        }
-        return exactLiveIntent;
     }
 
     public static Optional<Binding> binding(UUID mobId) {

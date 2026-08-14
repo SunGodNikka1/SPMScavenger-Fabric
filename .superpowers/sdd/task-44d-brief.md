@@ -71,3 +71,33 @@ server stop.
    multiple candidates.
 
 Minecraft runtime remains `UNVERIFIED`; no launch is authorized.
+
+## 44D-R1 addendum — causal completion ownership
+
+Post-implementation review found that `completionObserved(UUID)` accepted host `DONE` while the
+binding merely remained in registry phase `RUNNING`; it did not prove that the director still owned
+the exact intent and `SOCIAL/subject` candidate at that instant. Three negative probes confirmed the
+gap: the method had no live-director lookup, no invalidated-before-DONE test existed, and the shelter
+continuation hook still hardcoded `SOCIAL_REFLEX` instead of consulting the exact binding.
+
+### Behavioral prediction
+
+At a valid DONE boundary the registry revalidates mob + intent + candidate before stamping success.
+If mandatory authority invalidated the exact intent first, DONE is ignored and the stale binding is
+cleared, so later `stop()` cannot manufacture positive learning. If DONE was valid first, its
+historical completion marker survives a later authority change until `stop()` consumes it. A bound
+FriendlyGreet continuation reports `DISCRETIONARY_SOCIAL`; admission remains `SOCIAL_REFLEX`.
+
+Credible weird cases: DONE and invalidation in the same server tick are ordered by the actual call
+sequence (`ACCEPTABLE_STEPPING_STONE`); a host update may remove the DONE seam and suppress positive
+learning (`RUNTIME_QUESTION`, fail closed); a missing stop could retain a completed marker until the
+existing unload/death/server-stop cleanup (`RUNTIME_QUESTION`, RET-1 lifecycle unchanged).
+
+Alternatives: (1) validate exact live ownership atomically at DONE and preserve only an already
+valid marker (**selected**); (2) call `isRunning()` then stamp in a second operation (rejected due to
+TOCTOU); (3) validate only at stop (rejected because authority may legitimately change after a
+successful DONE and would erase historical success).
+
+**Must happen:** valid exact ownership at DONE stamps one success and remains historical evidence
+through later invalidation. **Must not happen:** invalidation before DONE produces completion credit,
+or shelter continuation classifies a bound greet as `SOCIAL_REFLEX`.

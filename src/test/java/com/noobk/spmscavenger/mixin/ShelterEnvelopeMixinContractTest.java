@@ -31,5 +31,11 @@ class ShelterEnvelopeMixinContractTest {
                 "HarvestCropsGoal", "AdvanceCarriageGoal", "CrossGroupGapGoal")) {
             assertTrue(greet.contains(pinnedTravel), pinnedTravel);
         }
+        assertTrue(greet.contains("friendlyGreetActivityClass"),
+                "continuation must share exact binding-aware FriendlyGreet semantics");
+        assertTrue(greet.contains("method = {\"canUse\", \"method_6264\"}"),
+                "admission remains an unbound SOCIAL_REFLEX");
+        assertTrue(greet.contains("method = {\"canContinueToUse\", \"method_6266\"}"),
+                "continuation has its own binding-aware policy hook");
     }
 }

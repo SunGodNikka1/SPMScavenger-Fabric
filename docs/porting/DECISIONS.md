@@ -1406,3 +1406,18 @@ greet becomes discretionary, or FETCH counts as completion. Static MAIBS:
 `PASS — BEHAVIORALLY_PLAUSIBLE`; Minecraft runtime remains `UNVERIFIED`. Full suite and clean build:
 807 tests, zero failures/errors/skips. Artifact SHA-256:
 `A9803703B020D8F2DD739BB11654AAE5B4809B0AB3412A57ECD17C286B4DEDE8`.
+
+#### 44D-R1 — DONE-time causal ownership repair
+
+`Phase.DONE` is accepted only if the registry binding still matches the director's exact active
+intent ID and `DiscretionaryCandidateKey(SOCIAL, subject)` at that instant. A stale pre-DONE binding
+is cleared; an already-valid completion marker remains historical evidence through later authority
+changes until stop consumes it. FriendlyGreet admission remains `SOCIAL_REFLEX`, while continuation
+uses the same exact-binding helper as scheduler observation.
+
+Alternatives rejected: a two-call `isRunning()`→stamp sequence has a TOCTOU gap; validating only at
+stop erases valid completion when authority changes after DONE. **Must happen:** valid DONE survives
+later invalidation as history. **Must not happen:** invalidation before DONE earns positive SOCIAL
+learning. Full suite and clean build: 809 tests, zero failures/errors/skips. Artifact SHA-256:
+`DA017011A280DB38F390890B8104E64E59DBB213A33BA1BADBE2175C1430BF5C`. Runtime remains
+`UNVERIFIED`.

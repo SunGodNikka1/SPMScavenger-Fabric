@@ -47,3 +47,33 @@ Remaining runtime questions: physical Mixin application, visible target correlat
 stickiness from the intentional issue-time incumbent utility, and multi-mob greet cadence.
 
 No Minecraft launch, commit, push, or PR occurred.
+
+## 44D-R1 fix report — exact DONE-time ownership
+
+Post-acceptance review found a causal hole: `completionObserved(UUID)` trusted registry phase
+`RUNNING` without revalidating the exact live director intent and SOCIAL subject. The repair now
+uses the same exact intent/candidate predicate at the DONE boundary. Invalidation before DONE
+clears the stale binding and cannot teach; a marker validly stamped before later invalidation is
+retained as historical evidence until `stop()` consumes it, but no longer reports current running
+ownership.
+
+FriendlyGreet activity semantics now have one shared binding-aware helper. Admission remains
+`SOCIAL_REFLEX`; continuation becomes `DISCRETIONARY_SOCIAL` only for the exact live binding. Other
+host travel goals retain the existing conservative `SOCIAL_REFLEX` envelope behavior.
+
+### Verification
+
+- RED: 3/10 focused tests failed against the accepted 44D implementation (stale DONE credited,
+  valid completed history evicted, continuation classification not shared).
+- GREEN focused tests: pass.
+- Full suite and clean build: **809 tests, 0 failures/errors/skips**.
+- Remapped JAR packages the repaired registry, optional shelter Mixin, and Mixin config.
+- Artifact: `build/libs/spmscavenger-1.9.4.jar`.
+- SHA-256: `DA017011A280DB38F390890B8104E64E59DBB213A33BA1BADBE2175C1430BF5C`.
+- Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`. The repair changes bookkeeping/classification at
+  causal boundaries only; it does not alter Goal priority, flags, pathing, movement, or host phases.
+- Runtime remains `UNVERIFIED`; no Minecraft launch occurred.
+
+Predicted loop: exact SOCIAL/Bob owns execution → DONE validates Bob's live intent → completion is
+stamped once → later scheduler invalidation cannot rewrite that past event → stop consumes it.
+Invalidation before DONE → no live exact intent → binding cleared → no positive learning.

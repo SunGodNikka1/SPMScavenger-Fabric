@@ -128,6 +128,50 @@ class SocialExecutionBindingTest {
     }
 
     @Test
+    void mustNotHappen_doneAfterExactDirectorOwnershipEndedCreatesCompletion() {
+        DiscretionaryDirectorState director = pendingSocial(BOB);
+        SocialExecutionBindingRegistry.Binding admitted = SocialExecutionBindingRegistry
+                .admitExact(MOB, BOB, 1_001L, director).orElseThrow();
+        assertTrue(SocialExecutionBindingRegistry.startedExact(MOB, director, 1_002L));
+
+        director.markTerminalForIntent(
+                admitted.intentId(),
+                IntentLifecycle.INVALIDATED,
+                InvalidationCause.MANDATORY_AUTHORITY,
+                1_003L,
+                "test-mandatory-authority");
+        SocialExecutionBindingRegistry.completionObserved(MOB);
+
+        assertTrue(SocialExecutionBindingRegistry.binding(MOB).isEmpty(),
+                "stale running binding must be cleared rather than credited");
+    }
+
+    @Test
+    void mustHappen_validDoneRemainsHistoricalAfterLaterAuthorityChange() {
+        DiscretionaryDirectorState director = pendingSocial(BOB);
+        SocialExecutionBindingRegistry.Binding admitted = SocialExecutionBindingRegistry
+                .admitExact(MOB, BOB, 1_001L, director).orElseThrow();
+        assertTrue(SocialExecutionBindingRegistry.startedExact(MOB, director, 1_002L));
+        SocialExecutionBindingRegistry.completionObserved(MOB);
+
+        director.markTerminalForIntent(
+                admitted.intentId(),
+                IntentLifecycle.INVALIDATED,
+                InvalidationCause.MANDATORY_AUTHORITY,
+                1_003L,
+                "test-post-completion-authority");
+
+        assertFalse(SocialExecutionBindingRegistry.isRunning(MOB),
+                "completed history is not current scheduler ownership");
+        SocialExecutionBindingRegistry.Binding historical =
+                SocialExecutionBindingRegistry.binding(MOB).orElseThrow();
+        assertTrue(historical.completionObserved(),
+                "a valid DONE marker must survive until stop consumes it");
+        assertEquals(SocialExecutionBindingRegistry.Terminal.COMPLETED,
+                SocialExecutionBindingRegistry.terminalOf(historical, true));
+    }
+
+    @Test
     void mustHappen_optionalMixinUsesOnlyHostProducedDoneEvidence() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/com/noobk/spmscavenger/mixin/FriendlyGreetAdmissionSeamMixin.java"));

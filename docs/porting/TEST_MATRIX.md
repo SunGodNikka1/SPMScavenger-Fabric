@@ -451,3 +451,16 @@ JAR packages the binding registry and optional common Mixin. Static MAIBS:
 `PASS — BEHAVIORALLY_PLAUSIBLE`; target choice, bow/gift animation, interruption, optional-Mixin
 application, and learning in a real world remain runtime `UNVERIFIED`. SHA-256:
 `A9803703B020D8F2DD739BB11654AAE5B4809B0AB3412A57ECD17C286B4DEDE8`.
+
+#### Task 44D-R1 — causal completion ownership
+
+| Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Mandatory authority ends SOCIAL/Bob before host DONE | DONE rejects/clears the stale binding | stale physical host progress becomes positive Bob learning | `SocialExecutionBindingTest` `CODE_CONFIRMED` |
+| Exact Bob intent owns host at DONE, authority changes afterward | completed marker remains historical until stop | observer reports stale binding as currently running or erases valid history | `SocialExecutionBindingTest` `CODE_CONFIRMED` |
+| FriendlyGreet admission vs continuation | admission is `SOCIAL_REFLEX`; exact running continuation is `DISCRETIONARY_SOCIAL` | shelter and observer invent separate binding semantics | binding + Mixin contract tests `CODE_CONFIRMED` |
+
+Focused tests, full suite, and clean build: **809 tests, 0 failures/errors/skips**. Packaged JAR
+inspection: pass. Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`; physical SPM execution remains
+runtime `UNVERIFIED`. SHA-256:
+`DA017011A280DB38F390890B8104E64E59DBB213A33BA1BADBE2175C1430BF5C`.

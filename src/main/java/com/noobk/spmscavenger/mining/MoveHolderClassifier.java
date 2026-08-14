@@ -77,9 +77,8 @@ public final class MoveHolderClassifier {
             return ActivityClass.SCAVENGE_WORK;
         }
         if (base == ActivityClass.SOCIAL_REFLEX
-                && goal.getClass().getName().endsWith("FriendlyGreetGoal")
-                && SocialExecutionBindingRegistry.isRunning(mobId)) {
-            return ActivityClass.DISCRETIONARY_SOCIAL;
+                && goal.getClass().getName().endsWith("FriendlyGreetGoal")) {
+            return SocialExecutionBindingRegistry.friendlyGreetActivityClass(mobId);
         }
         return base;
     }
