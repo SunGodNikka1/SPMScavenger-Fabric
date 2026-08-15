@@ -191,6 +191,12 @@ class VillagePerceptionContractTest {
         String observer = code(source(Path.of("goal/VillagePerceptionObserver.java")));
         assertTrue(observer.contains("EnumSet.noneOf(Goal.Flag.class)"),
                 "observer must not claim Goal flags");
+        assertTrue(observer.contains("VillagePerceptionEnqueueDebounce"),
+                "observer must use explicit enqueue debounce state");
+        assertFalse(observer.contains("gameTime - lastEnqueueTick <"),
+                "observer must not subtract a sentinel lastEnqueueTick");
+        assertFalse(observer.contains("lastEnqueueTick = Long.MIN_VALUE"),
+                "observer must not use Long.MIN_VALUE as enqueue sentinel");
         assertFalse(observer.contains("getPoiManager") && observer.contains("PoiRecord"),
                 "observer must not touch POI storage");
     }

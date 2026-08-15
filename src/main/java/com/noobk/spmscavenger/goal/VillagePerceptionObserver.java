@@ -10,6 +10,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.entity.ai.goal.Goal;
 
 import java.util.EnumSet;
+import java.util.function.BooleanSupplier;
 
 /**
  * Flagless per-mob eligibility observer for V1-D village perception (D-VR-033).
@@ -24,20 +25,25 @@ public final class VillagePerceptionObserver extends Goal {
 
     private final Mob mob;
     private final PhasedScanClock heartbeatClock;
+    private final VillagePerceptionEnqueueDebounce enqueueDebounce;
     private boolean dirty;
-    private long lastEnqueueTick = Long.MIN_VALUE;
     private int lastChunkX = Integer.MIN_VALUE;
     private int lastChunkZ = Integer.MIN_VALUE;
     private ResourceKey<Level> lastDimension;
 
     public VillagePerceptionObserver(Mob mob) {
-        this.mob = mob;
-        setFlags(EnumSet.noneOf(Goal.Flag.class));
-        this.heartbeatClock = new PhasedScanClock(
+        this(mob, new VillagePerceptionEnqueueDebounce(), new PhasedScanClock(
                 mob.getId(),
                 VillagePerceptionTuning.HEARTBEAT_TICKS,
-                VillagePerceptionTuning.OBSERVER_GOAL_SALT);
-        this.lastDimension = mob.level().dimension();
+                VillagePerceptionTuning.OBSERVER_GOAL_SALT));
+    }
+
+    VillagePerceptionObserver(Mob mob, VillagePerceptionEnqueueDebounce enqueueDebounce, PhasedScanClock heartbeatClock) {
+        this.mob = mob;
+        this.enqueueDebounce = enqueueDebounce;
+        this.heartbeatClock = heartbeatClock;
+        setFlags(EnumSet.noneOf(Goal.Flag.class));
+        this.lastDimension = mob == null ? Level.OVERWORLD : mob.level().dimension();
         markDirty();
     }
 
@@ -79,17 +85,27 @@ public final class VillagePerceptionObserver extends Goal {
         if (heartbeatClock.claim(gameTime)) {
             markDirty();
         }
+        enqueueIfDirty(gameTime, () -> VillagePerceptionScheduler.forServer(level.getServer())
+                .requestObservation(level, mob.getUUID()));
+    }
+
+    /**
+     * Enqueue path extracted for unit tests. Returns {@code true} when a request was admitted and the
+     * dirty marker cleared.
+     */
+    boolean enqueueIfDirty(long gameTime, BooleanSupplier requestObservation) {
         if (!dirty) {
-            return;
+            return false;
         }
-        if (gameTime - lastEnqueueTick < VillagePerceptionTuning.DEBOUNCE_TICKS) {
-            return;
+        if (enqueueDebounce.shouldBlock(gameTime, VillagePerceptionTuning.DEBOUNCE_TICKS)) {
+            return false;
         }
-        lastEnqueueTick = gameTime;
-        if (VillagePerceptionScheduler.forServer(level.getServer())
-                .requestObservation(level, mob.getUUID())) {
+        enqueueDebounce.recordEnqueue(gameTime);
+        if (requestObservation.getAsBoolean()) {
             clearDirtyAfterEnqueue();
+            return true;
         }
+        return false;
     }
 
     void markDirty() {
@@ -101,7 +117,9 @@ public final class VillagePerceptionObserver extends Goal {
     }
 
     public long lastEnqueueTickForDiagnostics() {
-        return lastEnqueueTick;
+        return enqueueDebounce.hasEnqueuedForDiagnostics()
+                ? enqueueDebounce.lastEnqueueTickForDiagnostics()
+                : Long.MIN_VALUE;
     }
 
     public boolean isDirtyForDiagnostics() {
