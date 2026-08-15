@@ -1,6 +1,5 @@
 package com.noobk.spmscavenger.goal;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -19,8 +18,7 @@ class VillagePerceptionEnqueueDebounceTest {
 
     @Test
     void mustNotHappen_legacySentinelArithmeticBlocksForever() {
-        assertTrue(VillagePerceptionEnqueueDebounce.legacyBrokenShouldBlock(
-                100_000L, Long.MIN_VALUE, DEBOUNCE),
+        assertTrue(legacyBrokenShouldBlock(100_000L, Long.MIN_VALUE, DEBOUNCE),
                 "pre-fix subtraction overflow must block the first enqueue forever");
     }
 
@@ -41,7 +39,6 @@ class VillagePerceptionEnqueueDebounceTest {
 
         observer.markDirty();
         assertTrue(observer.isDirty());
-        assertEquals(Long.MIN_VALUE, observer.lastEnqueueTickForDiagnostics());
 
         boolean[] attempted = {false};
         assertTrue(observer.enqueueIfDirty(100_000L, () -> {
@@ -51,7 +48,7 @@ class VillagePerceptionEnqueueDebounceTest {
 
         assertTrue(attempted[0], "first positive gameTime must attempt observation request");
         assertFalse(observer.isDirty(), "admitted request clears dirty");
-        assertEquals(100_000L, observer.lastEnqueueTickForDiagnostics());
+        assertTrue(debounce.shouldBlock(100_001L, DEBOUNCE), "enqueue tick recorded for debounce");
     }
 
     @Test
@@ -71,6 +68,11 @@ class VillagePerceptionEnqueueDebounceTest {
         assertFalse(secondAttempt[0], "tick + 1 must be debounced");
 
         assertTrue(observer.enqueueIfDirty(120L, () -> true), "tick + 20 eligible when dirty again");
+    }
+
+    /** Pre-fix debounce: sentinel {@code Long.MIN_VALUE} made every first enqueue block forever. */
+    private static boolean legacyBrokenShouldBlock(long gameTime, long lastEnqueueTick, int debounceTicks) {
+        return gameTime - lastEnqueueTick < debounceTicks;
     }
 
     private static PhasedScanClock heartbeatClock(int entityId) {

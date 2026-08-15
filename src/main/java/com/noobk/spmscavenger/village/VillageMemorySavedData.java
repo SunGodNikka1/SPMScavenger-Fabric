@@ -124,17 +124,6 @@ public final class VillageMemorySavedData extends SavedData {
         return Optional.ofNullable(byMob.get(mob));
     }
 
-    /**
-     * VR-T1 debug read — non-creating at both the saved-data and mob layers.
-     *
-     * <p>Uses {@link #peekIn} so a mob that has never perceived a village does not materialise an
-     * empty memory file. Does not call {@link VillagePerception#observe} or refresh memory.
-     */
-    public static Optional<MobVillageMemory> peekMobMemory(ServerLevel level, UUID mob) {
-        VillageMemorySavedData data = peekIn(level);
-        return data == null ? Optional.empty() : data.peek(mob);
-    }
-
     /** Allocating: only call when there is something to record. */
     public MobVillageMemory memoryOf(UUID mob) {
         return byMob.computeIfAbsent(mob, ignored -> new MobVillageMemory());

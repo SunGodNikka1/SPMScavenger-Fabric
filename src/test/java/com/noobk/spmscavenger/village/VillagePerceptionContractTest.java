@@ -238,15 +238,6 @@ class VillagePerceptionContractTest {
                 "ensureVillagePerceptionObserver must be called from install paths and reload guard");
     }
 
-    @Test
-    void mustHappen_peekMobMemoryForNonCreatingReads() throws IOException {
-        String savedData = code(source(Path.of("village/VillageMemorySavedData.java")));
-        assertTrue(savedData.contains("peekMobMemory"),
-                "peekMobMemory must exist for non-creating reads");
-        assertTrue(savedData.contains("peekIn(level)"),
-                "peekMobMemory must use non-creating saved-data access");
-    }
-
     /**
      * Gate RET-1a: eviction must exist in production, not only as an API.
      *

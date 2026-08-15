@@ -116,16 +116,6 @@ public final class VillagePerceptionObserver extends Goal {
         return dirty;
     }
 
-    public long lastEnqueueTickForDiagnostics() {
-        return enqueueDebounce.hasEnqueuedForDiagnostics()
-                ? enqueueDebounce.lastEnqueueTickForDiagnostics()
-                : Long.MIN_VALUE;
-    }
-
-    public boolean isDirtyForDiagnostics() {
-        return dirty;
-    }
-
     void clearDirtyAfterEnqueue() {
         dirty = false;
     }

@@ -17,17 +17,4 @@ final class VillagePerceptionEnqueueDebounce {
         hasEnqueued = true;
         lastEnqueueTick = gameTime;
     }
-
-    boolean hasEnqueuedForDiagnostics() {
-        return hasEnqueued;
-    }
-
-    long lastEnqueueTickForDiagnostics() {
-        return lastEnqueueTick;
-    }
-
-    /** Pre-fix expression kept only for regression negative control. */
-    static boolean legacyBrokenShouldBlock(long gameTime, long lastEnqueueTick, int debounceTicks) {
-        return gameTime - lastEnqueueTick < debounceTicks;
-    }
 }
