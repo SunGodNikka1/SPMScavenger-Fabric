@@ -14,6 +14,8 @@ import com.noobk.spmscavenger.goal.GatherResourcesGoal;
 import com.noobk.spmscavenger.goal.ExplorationActivityGoal;
 import com.noobk.spmscavenger.goal.ExplorationReadiness;
 import com.noobk.spmscavenger.goal.ExploringGoal;
+import com.noobk.spmscavenger.goal.VillagePerceptionObserver;
+import com.noobk.spmscavenger.village.VillagePerceptionScheduler;
 import com.noobk.spmscavenger.goal.EnvironmentalEscapeGoal;
 import com.noobk.spmscavenger.goal.PlaceTorchGoal;
 import com.noobk.spmscavenger.goal.SeekShelterGoal;
@@ -24,6 +26,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.GoalSelector;
@@ -100,6 +103,8 @@ public class SpmScavenger implements ModInitializer {
                             + "PathfinderMob; scavenging disabled. This mod likely needs an update.");
         }
 
+        ServerTickEvents.END_SERVER_TICK.register(
+                server -> VillagePerceptionScheduler.forServer(server).onServerTick(server));
         ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
                 OpinionExperienceRegistry.resumeOnLoad(mob);
@@ -115,6 +120,10 @@ public class SpmScavenger implements ModInitializer {
                 OpinionExperienceRegistry.parkOnUnload(mob.getUUID(), world.getGameTime());
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
+                if (world.getServer() != null) {
+                    VillagePerceptionScheduler.forServer(world.getServer())
+                            .unregisterObserver(mob.getUUID());
+                }
                 // V1-R2: ENTITY_UNLOAD covers both "the chunk unloaded" and "the entity was
                 // destroyed", so the reason - not the event - decides. shouldDestroy() is true only
                 // for KILLED and DISCARDED; a chunk unload or dimension change keeps the memory.
@@ -155,6 +164,7 @@ public class SpmScavenger implements ModInitializer {
                     SeekShelterGoal.shutdownServerState();
                     com.noobk.spmscavenger.opinion.SocialAdmissionSeam.shutdownServerState();
                     com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.shutdownServerState();
+                    VillagePerceptionScheduler.shutdown(server);
                 });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
@@ -164,6 +174,8 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
                 if (mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                    VillagePerceptionScheduler.forServer(serverLevel.getServer())
+                            .unregisterObserver(mob.getUUID());
                     // V1-R3: global sweep - see the ENTITY_UNLOAD note above.
                     com.noobk.spmscavenger.village.VillageMemorySavedData.forgetEverywhere(
                             serverLevel.getServer(), mob.getUUID());
@@ -193,6 +205,7 @@ public class SpmScavenger implements ModInitializer {
             // escape goal immediately yields whenever the mob catches fire.
             selector.addGoal(0, new EnvironmentalEscapeGoal(pathfinderMob));
         }
+        installVillagePerceptionObserver(mob, selector);
         SeekShelterGoal shelterGoal = new SeekShelterGoal(mob, 1.0);
         selector.addGoal(2, shelterGoal);
         selector.addGoal(4, new PlaceTorchGoal(mob, 1.0));
@@ -212,6 +225,7 @@ public class SpmScavenger implements ModInitializer {
         if (!(mob instanceof PathfinderMob pathfinderMob)) {
             return;
         }
+        installVillagePerceptionObserver(mob, selector);
         ExplorationReadiness readiness = new ExplorationReadiness();
         selector.addGoal(9, new ExplorationActivityGoal(
                 pathfinderMob, selector, readiness, false, null, null));
@@ -290,11 +304,24 @@ public class SpmScavenger implements ModInitializer {
                     || goal instanceof ControlledDescentGoal
                     || goal instanceof ExploringGoal
                     || goal instanceof TrackedLocalWanderGoal
-                    || goal instanceof ExplorationActivityGoal) {
+                    || goal instanceof ExplorationActivityGoal
+                    || goal instanceof VillagePerceptionObserver) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static void installVillagePerceptionObserver(Mob mob, GoalSelector selector) {
+        ScavengerConfig cfg = ScavengerConfig.get();
+        if (!cfg.enabled) {
+            return;
+        }
+        selector.addGoal(VillagePerceptionObserver.PRIORITY, new VillagePerceptionObserver(mob));
+        if (mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            VillagePerceptionScheduler.forServer(serverLevel.getServer())
+                    .registerObserver(mob.getUUID());
+        }
     }
 
     /** Cancel the per-entity commitment before the static claim fallback is swept. */

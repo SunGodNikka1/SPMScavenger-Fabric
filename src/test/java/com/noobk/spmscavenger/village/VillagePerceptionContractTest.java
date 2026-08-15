@@ -156,16 +156,43 @@ class VillagePerceptionContractTest {
     }
 
     /**
-     * V1 must not add a goal. The user's slice stops at persistent identity; a goal would make the
-     * mob act on it, and nothing has yet decided what acting means.
+     * V1-D adds a flagless observer in {@code goal}, not in {@code village}. The village package
+     * remains perception + memory only.
      */
     @Test
-    void mustNotHappen_v1AddsAnExecutor() throws IOException {
+    void mustNotHappen_villagePackageAddsAnExecutor() throws IOException {
         for (Path file : villageSources()) {
             String body = code(Files.readString(file));
             assertFalse(body.contains("extends Goal") || body.contains("registerGoals"),
                     file.getFileName() + " must not be an executor in V1");
         }
+    }
+
+    /** V1-D production path: scheduler services {@link VillagePerception#observe} via the service. */
+    @Test
+    void mustHappen_v1DProductionObservePathExists() throws IOException {
+        String service = code(source(Path.of("village/VillagePerceptionService.java")));
+        assertTrue(service.contains("VillagePerception.observe"),
+                "service must call the sole POI touch point");
+        assertTrue(service.contains("VillageMemorySavedData"),
+                "service must write memory through saved data");
+        String bootstrap = code(source(Path.of("SpmScavenger.java")));
+        assertTrue(bootstrap.contains("VillagePerceptionObserver"),
+                "observer must be installed on PlayerMob load");
+        assertTrue(bootstrap.contains("ServerTickEvents.END_SERVER_TICK"),
+                "scheduler must hook server tick end");
+        assertTrue(bootstrap.contains("VillagePerceptionScheduler"),
+                "scheduler must be wired in bootstrap");
+    }
+
+    /** Observer must remain flagless — no MOVE/LOOK authority. */
+    @Test
+    void mustHappen_v1DObserverIsFlagless() throws IOException {
+        String observer = code(source(Path.of("goal/VillagePerceptionObserver.java")));
+        assertTrue(observer.contains("EnumSet.noneOf(Goal.Flag.class)"),
+                "observer must not claim Goal flags");
+        assertFalse(observer.contains("getPoiManager") && observer.contains("PoiRecord"),
+                "observer must not touch POI storage");
     }
 
     /**

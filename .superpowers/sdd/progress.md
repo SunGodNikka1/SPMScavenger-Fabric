@@ -5,7 +5,7 @@
 | Item | Status | Artifact |
 | --- | --- | --- |
 | **RT-MI-TS1** | Open — runtime falsification; launch not authorized | `task-33-brief.md` |
-| **V1-D village perception driver** | **READY** — D-VR-033 locked; **awaiting authorization** → 1.10.0 | RFC V1-D task contract |
+| **V1-D village perception driver** | **DONE** (1.10.0 static) — VR-T1 runtime `UNVERIFIED` | `task-45-report.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -52,6 +52,7 @@ Task 39: complete with concerns — GAO-7 PersonalityModel static accept (581 te
 Task 40: complete with concerns — GAO-8A passive physical expression (593 tests; runtime visual cadence unverified)
 Task 41: complete with concerns — GAO-9 overland environment affinity (618 tests; runtime distribution/performance unverified)
 Task 44D: complete with concerns — exact FriendlyGreet binding + 44D-R1 causal completion repair (809 tests; physical runtime unverified)
+Task 45: complete with concerns — V1-D production village perception driver (872 tests; VR-T1 runtime unverified)
 
 Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 

@@ -10,8 +10,8 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
 | **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (through V1-R4 / 1.9.5 **APPROVED**); V2+ design-only; no VR-T* runtime |
-| **Nearest frontier** | **Authorize V1-D** (1.10.0) — D-VR-033 scheduler contracts **LOCK RECOMMENDED**; P0 **CLOSED** (V1-R4) |
-| **Last update** | 2026-08-14 (D-VR-033 P1 closure + scheduler API lock; V1-D task contract; **awaiting V1-D authorization**) |
+| **Nearest frontier** | **VR-T1** runtime village perception (launch approval required) — V1-D **IMPLEMENTED** (1.10.0 static) |
+| **Last update** | 2026-08-14 (V1-D production perception driver shipped — 1.10.0) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -1947,7 +1947,7 @@ Director admission uses **`VillageScenarioProfile`** (`PROPOSED` — B-VR-24) �
 | VR-24 | Reputation readout (gossip accessor) | **PARTIAL** | Accessor mixin on `Villager.gossips`; no reputation bridge | `Agent_Claude` F2; consumer still `UNVERIFIED` |
 | VR-25 | Place opinion at village anchor | **PARTIAL** | `SettlementOpinionBias` at **current** anchor chunk (D-VR-026 **HELD**); no frozen chunk key | V4 |
 | VR-26 | Remembered-village candidacy while unloaded | **PARTIAL** | Candidate pool = `MobVillageMemory`; perception refresh separate (D-VR-025) | VR-T4b |
-| VR-33 | Village perception scheduler (B2) | **PARTIAL** | `VillagePerceptionScheduler` + fair admission + global budget | V1-D; D-VR-033 |
+| VR-33 | Village perception scheduler (B2) | **IMPLEMENTED** (V1-D) | `VillagePerceptionScheduler` + observer + service | VR-T1 |
 | VR-27 | Ominous Bottle pickup & retention | **PARTIAL** | Strategic pickup value + separately bounded inventory retention | V5; D-VR-027 lock candidate |
 | VR-28 | Manual iron golem construction | **PARTIAL** | Defense policy + structured placement, pumpkin last; repair existing first when comparable | V7; D-VR-030 lock candidate |
 | VR-29 | Ominous Event intent and bottle consumption | **PARTIAL + REQUIRES BRIDGE** | Cross-domain `OminousEventPolicy`; Village contributes RAID intent; self-use executor plus exact effect bridges | V6; D-VR-028 redesigned |
@@ -2962,7 +2962,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | Phase | Scope | Feasibility | Runtime proof |
 | --- | --- | --- | --- |
 | **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** (static) | VR-T1 pending: enter village → anchor agrees with `Raid.getCenter()` → leave → return → same settlement |
-| **V1-D** | Bounded production perception driver (D-VR-033) | **READY** — authorize implementation → **1.10.0** | VR-T1 + VR-T1b after ship |
+| **V1-D** | Bounded production perception driver (D-VR-033) | **IMPLEMENTED** (static, 1.10.0) | VR-T1 + VR-T1b after ship |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | moved to V2/V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **REQUIRES MIXIN** | VR-T2: trade input → correct villager → atomic inventory change; VR-T2b: sell carrots → buy book |
 | **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest |
@@ -3540,7 +3540,7 @@ camp becoming `HOME_VILLAGE`; treating one mob's founding history as settlement 
 ### D-VR-033: Bounded individual village-perception scheduling (`Agent_Codex` + User review)
 
 **Status:** `LOCK RECOMMENDED` (2026-08-14) — P0 **CLOSED** (V1-R4 1.9.5); P1 scheduler contracts
-**CLOSED** in RFC (B-VR-56/57/60). **Implementation authorization:** pending User ack for V1-D.
+**CLOSED** in RFC (B-VR-56/57/60). **V1-D IMPLEMENTED** (1.10.0 static); runtime VR-T1 **UNVERIFIED**.
 
 **Accepted:**
 
