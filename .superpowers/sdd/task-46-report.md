@@ -1,12 +1,12 @@
 # Task 46 report — V1.5 Settlement attachment & return
 
-**Status:** `DONE_WITH_CONCERNS`  
+**Status:** `DONE`  
 **Target version:** 1.11.0  
 **RFC:** `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` — D-VR-034…052
 
 ## Summary
 
-Shipped V1.5 slices **A–D + F** only. **V1.5-E rejected** per User D-VR-052 (deferred to V3 `StorageOwnership`). Mob-owned `SettlementRelationship` map, accumulation service, commute expeditions, village-aware SOCIAL bias, and temporary `designate-home` command.
+Shipped V1.5 slices **A–D** only. **V1.5-E rejected** per User D-VR-052 (deferred to V3 `StorageOwnership`). Mob-owned `SettlementRelationship` map, accumulation service, commute expeditions, village-aware SOCIAL bias, bounded greet claim window, runtime authority inspector, and V1-D taxonomy repair. Temporary VR-T1.5 debug commands **removed** per D-VR-051.
 
 ## Files created or changed
 
@@ -14,8 +14,9 @@ Shipped V1.5 slices **A–D + F** only. **V1.5-E rejected** per User D-VR-052 (d
 - `village/SettlementRelationshipService.java`, `SettlementReturnPolicy.java`
 - `village/MobVillageMemory.java`, `VillageMemorySavedData.java`
 - `goal/ExpeditionKind.java`, `ExploringGoal.java`, `VillagePerceptionObserver.java`
-- `opinion/SettlementSocialBias.java`, `SocialExecutionBindingRegistry.java`, `DiscretionaryScoringInput.java`, `ActivityUtilityScorer.java`, `DiscretionaryActivityDirector.java`, `ExplorationActivityGoal.java`
-- `debug/VillageDesignateHomeCommand.java`, `SpmScavenger.java`
+- `opinion/SettlementSocialBias.java`, `SocialExecutionBindingRegistry.java`, `SocialGreetClaimWindow.java`, `opinion/readout/OpinionRuntimeAuthorityProbe.java`, `DiscretionaryScoringInput.java`, `ActivityUtilityScorer.java`, `DiscretionaryActivityDirector.java`, `ExplorationActivityGoal.java`
+- `mining/MoveHolderClassifier.java` — `VillagePerceptionObserver` → `PASSIVE_OBSERVER`
+- `SpmScavenger.java`
 - `test/.../SettlementRelationshipTest.java`, `SettlementReturnPolicyTest.java`
 - `gradle.properties` → `1.11.0`
 
@@ -33,11 +34,11 @@ BUILD SUCCESSFUL — 905 tests
 | --- | --- | --- |
 | Compile + unit tests | **CONFIRMED** | `clean build` output above |
 | No V1.5-E / RaidContainersGoal mixin | **CONFIRMED** | grep — no production mixin added |
-| No village-memory/probe/driver | **CONFIRMED** | only `designate-home` under `debug/` |
-| VR-T1.5a runtime | **CONFIRMED** | User Bob session 2026-08-15 — far start, autonomous return, entered village ~`-11666`, hostile resume |
-| VR-T1.5b runtime | **CONFIRMED** | User God session 2026-08-15 — **CLOSED**; see checklist below |
-| VR-T1.5c runtime | **UNVERIFIED** | God fixture ready: 350/MEDIUM, 0 social, inside bounds |
-| Multi-leg commute in world | **CONFIRMED** | VR-T1.5a Bob session; dead-zone repair pass 3 validated |
+| No village debug commands post-close | **CONFIRMED** | `designate-home` / `settlement-status` removed; D-VR-051 satisfied |
+| VR-T1.5a runtime | **CONFIRMED** | User Bob session 2026-08-15 |
+| VR-T1.5b runtime | **CONFIRMED** | User God session 2026-08-15 — **CLOSED** |
+| VR-T1.5c runtime | **CONFIRMED** | User God 2026-08-15 — familiarity `350→390`, social events `0→1`, taxonomy repaired |
+| Multi-leg commute in world | **CONFIRMED** | VR-T1.5a Bob session |
 
 ## Self-review (brief mapping)
 
@@ -48,13 +49,11 @@ BUILD SUCCESSFUL — 905 tests
 | C COMMUTE + multi-leg | Yes (static) |
 | D social anchor + bias | Yes |
 | E ally loot gate | **Not shipped** (D-VR-052) |
-| F designate-home | Yes (temporary) |
+| F designate-home (temporary) | **Removed** post VR-T1.5 (D-VR-051) |
 
 ## Concerns
 
-- VR-T1.5c runtime still required before full V1.5 runtime closure.
-- `designate-home` / `settlement-status` eligible for removal per D-VR-051 after VR-T1.5c or user directs cleanup.
-- `designate-home` picks nearest remembered village to target mob — operator must ensure Bob has memory.
+None — V1.5 runtime **CLOSED** per User 2026-08-15.
 
 ## Repair pass (2026-08-15, pre-VR-T1.5)
 
@@ -170,3 +169,23 @@ claim window.
 (build + tests); greet-bias / `DISCRETIONARY_SOCIAL` runtime **UNVERIFIED** pending retest.
 
 `.\gradlew.bat clean build` — **BUILD SUCCESSFUL** after repair.
+
+## VR-T1.5c runtime (`CLOSED PASS`, User, 2026-08-15)
+
+**Mob:** God @ `-11671, 82, 7713`. **User directive:** no further V1.5 runtime tests.
+
+| Must happen | Result |
+| --- | --- |
+| Opinion evaluates (not `UNKNOWN_ACTIVE` blocker) | **PASS** — `VillagePerceptionObserver → PASSIVE_OBSERVER` |
+| Village-aware social credit | **PASS** — familiarity `350 → 390`; `Social events: 0 → 1` |
+| Runtime authority diagnostics | **PASS** — identified taxonomy root cause pre-fix |
+
+**Post-fix idle inspector:** `latestDispositionCause=NONE`; no discretionary blocker from observers.
+
+## Production cleanup (2026-08-15, D-VR-051)
+
+Removed temporary `/spmscavenger designate-home` and `/spmscavenger settlement-status` plus
+`PlayerMobDebugTargets` helper. Retained O Opinion inspector (runtime authority section) and all
+V1.5 regression tests (taxonomy, greet claim window, target churn).
+
+`.\gradlew.bat clean build` — **BUILD SUCCESSFUL** — V1.5 **CLOSED**.

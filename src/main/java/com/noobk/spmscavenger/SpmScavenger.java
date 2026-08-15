@@ -23,8 +23,6 @@ import com.noobk.spmscavenger.goal.SmeltAtFurnaceGoal;
 import com.noobk.spmscavenger.goal.TrackedLocalWanderGoal;
 import com.noobk.spmscavenger.mixin.MobGoalSelectorAccessor;
 import net.fabricmc.api.ModInitializer;
-import com.noobk.spmscavenger.debug.VillageDesignateHomeCommand;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -91,9 +89,6 @@ public class SpmScavenger implements ModInitializer {
     @Override
     public void onInitialize() {
         OpinionInspectNetworking.registerServer();
-        CommandRegistrationCallback.EVENT.register(
-                (dispatcher, registryAccess, environment) ->
-                        VillageDesignateHomeCommand.register(dispatcher));
         ScavengerConfig cfg = ScavengerConfig.get();
 
         switch (PlayerMobs.state()) {

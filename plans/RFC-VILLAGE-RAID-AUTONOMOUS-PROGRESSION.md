@@ -8,10 +8,10 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + VR-T1A CLOSED**. **V1.5 / 1.11.0** task-46 shipped |
-| **Status** | `IMPLEMENTING` — V1.5 **VR-T1.5a–b CLOSED**; **VR-T1.5c** runtime next |
-| **Nearest frontier** | **VR-T1.5c** village-aware social (overworld) → V2 Trading |
-| **Last update** | 2026-08-15 (User VR-T1.5b **CLOSED** — God taiga familiarity) |
+| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + V1.5 CLOSED** |
+| **Status** | `IMPLEMENTING` — **V2 Trading** next |
+| **Nearest frontier** | **V2 Trading** (`VillagerTradeAdapter`, sell→buy chains) |
+| **Last update** | 2026-08-15 (User VR-T1.5c **CLOSED** — God social credit; V1.5 runtime complete) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -650,7 +650,7 @@ visible "my village" play.
 | --- | --- | --- | --- |
 | VR-T1.5a | After 10+ min away, mob with HOME paths toward home anchor | Treats home same as never-seen cluster | **PASS** (User, Bob, 2026-08-15) |
 | VR-T1.5b | Repeated visits increase familiarity in saved data | Single visit maxes attachment; standing-still HIGH farm | **CLOSED PASS** (User, God, 2026-08-15) |
-| VR-T1.5c | Village-aware greet fires more near familiar settlement | Greet mistaken for trade completion | **UNVERIFIED** — fixture: God @ `-11666,82,7709`, 350/MEDIUM, 0 social |
+| VR-T1.5c | Village-aware greet fires more near familiar settlement | Greet mistaken for trade completion | **CLOSED PASS** (User, God, 2026-08-15) — `350→390`, social events `0→1`; taxonomy repair |
 | ~~VR-T1.5d~~ | **DEFERRED → VR-T3** (`D-VR-052`) | — | — |
 
 ### Decisions
@@ -680,7 +680,7 @@ visible "my village" play.
 **Authorized:** task-46 / V1.5 slices A–D + temporary F → **1.11.0**. **Not authorized:** V1.5-E,
 Minecraft launch.
 
-**Next frontier:** VR-T1.5c runtime (overworld-only); then V2 Trading.
+**Next frontier:** **V2 Trading** (V1.5 runtime **CLOSED** 2026-08-15).
 
 ### Task-46 peer review — User P1 closure (`AUTHORIZED`, 2026-08-14)
 
@@ -3201,7 +3201,7 @@ regression when Pipeline A lives outside `VillagePerception`.
 
 **Cosmetic (deferred):** `KnownVillage` Javadoc duplicated word — not a release blocker.
 
-**Next gate:** ~~V1-D~~ **DONE** → ~~VR-T1A~~ **PASS** → ~~task-46 / 1.11.0~~ **DONE** → ~~VR-T1.5a~~ **PASS** → ~~VR-T1.5b~~ **CLOSED** → VR-T1.5c → V2 Trading.
+**Next gate:** ~~V1-D~~ **DONE** → ~~VR-T1A~~ **PASS** → ~~task-46 / 1.11.0~~ **DONE** → ~~VR-T1.5a–c~~ **CLOSED** → **V2 Trading**.
 
 **Status (2026-08-14 continuation):** P1 contracts **CLOSED** in RFC — see `Topic: V1 perception driver`
 scheduler contracts section. D-VR-033 → **`LOCK RECOMMENDED`**. **Awaiting V1-D implementation authorization.**
@@ -3490,7 +3490,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | --- | --- | --- | --- |
 | **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** | VR-T1A **PASS** |
 | **V1-D** | Bounded production perception driver (D-VR-033) | **IMPLEMENTED** (1.10.0) | VR-T1A **PASS**; VR-T1b **DEFERRED** |
-| **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social | **IMPLEMENTED** — task-46 / 1.11.0 (A–D + F) | VR-T1.5a–b **CLOSED**; VR-T1.5c **UNVERIFIED** |
+| **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social | **IMPLEMENTED + RUNTIME CLOSED** — task-46 / 1.11.0 (A–D) | VR-T1.5a–c **CLOSED** (2026-08-15) |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | moved to V2/V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **REQUIRES MIXIN** — **after V1.5** | VR-T2: trade input → correct villager → atomic inventory change; VR-T2b: sell carrots → buy book |
 | **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest (**VR-T1.5d deferred here**, `D-VR-052`) |
@@ -4087,7 +4087,7 @@ as primary fairness; unconditional prompt observation guarantee.
 
 **Provisional tuning constants:** `HEARTBEAT_TICKS=200`, `DEBOUNCE_TICKS=20`, `GLOBAL_QUERY_BUDGET=1`.
 
-**Sequence:** ~~V1-R4~~ **DONE** → ~~V1-D~~ **DONE** → ~~VR-T1A~~ **PASS** → **V1.5 Settlement attachment** (next) → V2 Trading.
+**Sequence:** ~~V1-R4~~ **DONE** → ~~V1-D~~ **DONE** → ~~VR-T1A~~ **PASS** → ~~V1.5~~ **CLOSED** → **V2 Trading** (next).
 
 ### VR-T1A — runtime closure (`PASS`, User, 2026-08-14)
 
@@ -4139,9 +4139,9 @@ village-aware social, not auto-home (`D-VR-042`).
 **Deferred (not VR-T1.5a gates):**
 
 - ~~VR-T1.5b~~ **CLOSED** (2026-08-15)
-- VR-T1.5c runtime
+- ~~VR-T1.5c~~ **CLOSED** (2026-08-15)
 - Auto-home production policy (`D-VR-042` — `PRODUCT DECISION`)
-- Remove temporary `designate-home` — eligible per **D-VR-051** after VR-T1.5a PASS; cleanup when VR-T1.5b–c close or user directs
+- ~~Remove temporary `designate-home`~~ **DONE** (D-VR-051, 2026-08-15)
 
 **Reflection (PROVEN):** `COMMUTE_MIN_DISTANCE` (128) is a **start** gate only; in-flight commute legs
 must chain until `SettlementBoundsPolicy` (64) — applying 128 to chain legs creates a dead zone.
@@ -4170,14 +4170,27 @@ expedition if the mob survives; resume after threat clearance is observable with
 **Tuning shipped (repair passes 4–5):** visit +50; presence +5/200t capped at 250; `lastVisitTick` /
 `lastPresenceTick` / `lastOutsideTick` split; re-entry visit only after departure.
 
-**VR-T1.5c fixture (`INFERRED`):** God @ `-11666, 82, 7709` — `350/MEDIUM`, `0` social events,
-`Home: false`, inside bounds. Ready for village-aware greet bias probe.
+### VR-T1.5c — runtime closure (`CLOSED PASS`, User, 2026-08-15)
 
+**Scope:** village-aware discretionary SOCIAL + settlement social credit — not V2 trading.
+
+**Mob:** God @ `-11671, 82, 7713`. **User directive:** no further V1.5 runtime tests.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Opinion not blocked by observer taxonomy | **PASS** | Post-fix: `VillagePerceptionObserver → PASSIVE_OBSERVER`; `latestDispositionCause=NONE` |
+| Village social credit | **PASS** | Familiarity `350 → 390`; `Social events: 0 → 1` |
+| Root cause identified | **CONFIRMED** | Pre-fix: `UNKNOWN_ACTIVE` from unclassified `VillagePerceptionObserver` suppressed director |
+| Repairs shipped | **CONFIRMED** | `MoveHolderClassifier` taxonomy; bounded greet claim window; runtime authority inspector |
+
+**Reflection (PROVEN):** every flagless background observer must be pinned in `MoveHolderClassifier`
+beside `ExplorationActivityGoal` or it fail-closes the entire discretionary director.
 
 ## Contribution
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| User + Agent_Cursor | 2026-08-15 | **V1.5 RUNTIME CLOSED.** VR-T1.5c **PASS** — God: `350→390`, social events `0→1`; taxonomy + claim window repaired; debug commands removed (D-VR-051). Frontier → **V2 Trading**. |
 | User + Agent_Cursor | 2026-08-15 | **VR-T1.5b CLOSED PASS.** God (taiga): bootstrap, presence to 250 cap, MEDIUM at 300, standing-still exploit blocked, leave→re-entry +50 (`300→350`, `lastVisit` advanced), HOME independent. **No further VR-T1.5b testing.** Frontier → VR-T1.5c; God fixture ready (350/MEDIUM, 0 social). |
 | User + Agent_Cursor | 2026-08-15 | **VR-T1.5a PASS.** Bob (overworld taiga): started far from home; autonomous multi-leg return; entered village at ~`-11666`; hostile interrupt + explore resume **CONFIRMED**. Prior ~74-block dead-zone stop **REPAIRED** (repair pass 3). Frontier → VR-T1.5b–c. `designate-home` removal eligible per D-VR-051; not executed this turn. |
 | Agent_Cursor | 2026-08-14 | **D-VR-052 REJECT — task-46 AUTHORIZED.** User: V1.5-E **DEFER → V3** `StorageOwnership`; VR-T1.5d **DEFER → VR-T3**. Release scope: V1.5-A/B/C/D + temporary F only (1.11.0). Attachment ≠ container ownership. No `village-memory`/probe/driver resurrection. |
