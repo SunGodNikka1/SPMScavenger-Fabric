@@ -1,6 +1,6 @@
 # Task 46 — V1.5 Settlement attachment & return
 
-**Status:** authorized (User: D-VR-052 REJECT V1.5-E; task-46 AUTHORIZED)  
+**Status:** authorized (User: D-VR-052 REJECT V1.5-E; A–D + F only)  
 **Target version:** 1.11.0  
 **RFC:** `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` — V1.5 implementation contract, D-VR-034…052
 

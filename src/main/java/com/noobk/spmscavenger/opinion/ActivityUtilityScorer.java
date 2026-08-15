@@ -82,6 +82,15 @@ public final class ActivityUtilityScorer {
             ActivityOpinionMemory memory,
             float sociability,
             float subjectPreference) {
+        return scoreSocial(affect, memory, sociability, subjectPreference, 0f);
+    }
+
+    public static ActivityUtilityBreakdown scoreSocial(
+            AffectiveState affect,
+            ActivityOpinionMemory memory,
+            float sociability,
+            float subjectPreference,
+            float settlementSocialBias) {
         float preference =
                 UtilityNormalizer.channel(memory.preference()) * ActivityUtilityWeights.PREFERENCE;
         float repetition = -UtilityNormalizer.repetitionPressure(memory.repetition())
@@ -97,7 +106,8 @@ public final class ActivityUtilityScorer {
         float subjectFit =
                 UtilityNormalizer.channel(sociability) * ActivityUtilityWeights.SOCIAL_SOCIABILITY_FIT
                         + UtilityNormalizer.channel(subjectPreference)
-                                * ActivityUtilityWeights.SOCIAL_SUBJECT_PREFERENCE;
+                                * ActivityUtilityWeights.SOCIAL_SUBJECT_PREFERENCE
+                        + settlementSocialBias;
         float cost = -ActivityUtilityWeights.SOCIAL_COST;
 
         return ActivityUtilityBreakdown.social(
@@ -123,7 +133,8 @@ public final class ActivityUtilityScorer {
                     input.affectiveState(),
                     memory,
                     input.sociability(),
-                    input.subjectPreference());
+                    input.subjectPreference(),
+                    input.settlementSocialBias());
         };
     }
 }

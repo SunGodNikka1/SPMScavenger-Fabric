@@ -25,6 +25,19 @@ public final class DiscretionaryActivityDirector {
                 null);
     }
 
+    public static void tick(
+            UUID mobId,
+            long gameTime,
+            ActivityObservationService.Observation observation,
+            DiscretionaryAvailability availability,
+            boolean combatTarget,
+            ActivityAdmissions admissions,
+            ActivityContinuations continuations,
+            SocialIntent socialOpportunity) {
+        tick(mobId, gameTime, observation, availability, combatTarget, admissions, continuations,
+                socialOpportunity, 0f);
+    }
+
     /**
      * GAO-10 — the form that can offer SOCIAL.
      *
@@ -43,7 +56,8 @@ public final class DiscretionaryActivityDirector {
             boolean combatTarget,
             ActivityAdmissions admissions,
             ActivityContinuations continuations,
-            SocialIntent socialOpportunity) {
+            SocialIntent socialOpportunity,
+            float settlementSocialBias) {
         if (!OpinionFeatureGate.isEnabled()) {
             MobExperienceContext existing = OpinionExperienceRegistry.find(mobId);
             if (existing == null) {
@@ -86,7 +100,8 @@ public final class DiscretionaryActivityDirector {
                 true,
                 java.util.Optional.ofNullable(socialOpportunity),
                 sociability,
-                subjectPreference);
+                subjectPreference,
+                settlementSocialBias);
         context.discretionaryDirector().tick(new DirectorTickInput(
                 gameTime,
                 true,

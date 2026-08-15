@@ -15,7 +15,8 @@ public record DiscretionaryScoringInput(
         boolean opinionEnabled,
         java.util.Optional<SocialIntent> socialOpportunity,
         float sociability,
-        float subjectPreference) {
+        float subjectPreference,
+        float settlementSocialBias) {
 
     public DiscretionaryScoringInput {
         java.util.Objects.requireNonNull(socialOpportunity, "socialOpportunity");
@@ -33,7 +34,20 @@ public record DiscretionaryScoringInput(
             boolean discretionaryEligible,
             boolean opinionEnabled) {
         this(affectiveState, opinionMemory, availability, discretionaryEligible, opinionEnabled,
-                java.util.Optional.empty(), 0f, 0f);
+                java.util.Optional.empty(), 0f, 0f, 0f);
+    }
+
+    public DiscretionaryScoringInput(
+            AffectiveState affectiveState,
+            OpinionMemory opinionMemory,
+            DiscretionaryAvailability availability,
+            boolean discretionaryEligible,
+            boolean opinionEnabled,
+            java.util.Optional<SocialIntent> socialOpportunity,
+            float sociability,
+            float subjectPreference) {
+        this(affectiveState, opinionMemory, availability, discretionaryEligible, opinionEnabled,
+                socialOpportunity, sociability, subjectPreference, 0f);
     }
 
     /**

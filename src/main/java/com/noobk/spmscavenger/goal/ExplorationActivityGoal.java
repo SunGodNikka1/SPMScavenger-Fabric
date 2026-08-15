@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.goal;
 
+import com.noobk.spmscavenger.opinion.SettlementSocialBias;
 import com.noobk.spmscavenger.opinion.SocialIntent;
 import com.noobk.spmscavenger.activity.ActivityObservationService;
 import com.noobk.spmscavenger.DescentPressurePolicy;
@@ -204,6 +205,9 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
                         ? ActivityContinuation.notRunning()
                         : ActivityContinuation.valid());
 
+        float settlementBias = mob.level() instanceof ServerLevel serverLevel
+                ? SettlementSocialBias.socialBias(serverLevel, mob.getUUID(), mob.blockPosition())
+                : 0f;
         DiscretionaryActivityDirector.tick(
                 mob.getUUID(),
                 now,
@@ -212,7 +216,8 @@ public final class ExplorationActivityGoal extends RandomLookAroundGoal {
                 mob.getTarget() != null,
                 admissions,
                 continuations,
-                socialOpportunity);
+                socialOpportunity,
+                settlementBias);
 
         boolean mayCreateWork = permitsNewMiningWork(cfg.enabled, allowNewMiningWork);
         if (mayCreateWork) {

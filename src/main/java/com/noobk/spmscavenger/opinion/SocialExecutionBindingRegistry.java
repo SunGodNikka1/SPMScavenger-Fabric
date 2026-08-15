@@ -2,6 +2,9 @@ package com.noobk.spmscavenger.opinion;
 
 import com.noobk.spmscavenger.activity.ActivityClass;
 import com.noobk.spmscavenger.experience.ExperienceEmitters;
+import com.noobk.spmscavenger.village.SettlementRelationshipService;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 
 import java.util.Map;
@@ -32,12 +35,22 @@ public final class SocialExecutionBindingRegistry {
             long admissionGeneration,
             long admittedAtTick,
             Phase phase,
-            boolean completionObserved) {
+            boolean completionObserved,
+            Optional<BlockPos> settlementAnchorAtStart) {
 
         public Binding {
             if (admissionGeneration <= 0L) {
                 throw new IllegalArgumentException("admissionGeneration must be positive");
             }
+            settlementAnchorAtStart = settlementAnchorAtStart == null
+                    ? Optional.empty()
+                    : settlementAnchorAtStart;
+        }
+
+        Binding withoutSettlementAnchor() {
+            return new Binding(
+                    mobId, intentId, subjectId, admissionGeneration, admittedAtTick,
+                    phase, completionObserved, Optional.empty());
         }
 
         DiscretionaryCandidateKey candidateKey() {
@@ -47,13 +60,13 @@ public final class SocialExecutionBindingRegistry {
         Binding running() {
             return new Binding(
                     mobId, intentId, subjectId, admissionGeneration, admittedAtTick,
-                    Phase.RUNNING, completionObserved);
+                    Phase.RUNNING, completionObserved, settlementAnchorAtStart);
         }
 
         Binding completed() {
             return new Binding(
                     mobId, intentId, subjectId, admissionGeneration, admittedAtTick,
-                    phase, true);
+                    phase, true, settlementAnchorAtStart);
         }
     }
 
@@ -81,8 +94,11 @@ public final class SocialExecutionBindingRegistry {
         if (context == null) {
             return Optional.empty();
         }
-        return admitExact(
-                mob.getUUID(), targetId, gameTime, context.discretionaryDirector());
+        return admitExact(mob.getUUID(), targetId, gameTime, context.discretionaryDirector(),
+                mob.level() instanceof ServerLevel level
+                        ? SettlementRelationshipService.nearestSettlementAnchorAt(
+                                level, mob.getUUID(), mob.blockPosition())
+                        : Optional.empty());
     }
 
     /** Pure-control overload used by contract tests; production supplies a live context above. */
@@ -91,6 +107,15 @@ public final class SocialExecutionBindingRegistry {
             UUID targetId,
             long gameTime,
             DiscretionaryDirectorState director) {
+        return admitExact(mobId, targetId, gameTime, director, Optional.empty());
+    }
+
+    static Optional<Binding> admitExact(
+            UUID mobId,
+            UUID targetId,
+            long gameTime,
+            DiscretionaryDirectorState director,
+            Optional<BlockPos> settlementAnchorAtStart) {
         if (mobId == null || targetId == null || director == null) {
             return Optional.empty();
         }
@@ -107,7 +132,8 @@ public final class SocialExecutionBindingRegistry {
         }
         Binding binding = new Binding(
                 mobId, intent.intentId(), targetId,
-                GENERATIONS.incrementAndGet(), gameTime, Phase.ADMITTED, false);
+                GENERATIONS.incrementAndGet(), gameTime, Phase.ADMITTED, false,
+                settlementAnchorAtStart);
         BINDINGS.put(mobId, binding);
         return Optional.of(binding);
     }
@@ -201,6 +227,12 @@ public final class SocialExecutionBindingRegistry {
                     binding.admittedAtTick(),
                     gameTime,
                     true);
+            binding.settlementAnchorAtStart().ifPresent(anchor -> {
+                if (mob.level() instanceof ServerLevel level) {
+                    SettlementRelationshipService.onSocialEpisode(
+                            level, mob.getUUID(), anchor, gameTime);
+                }
+            });
         } else if (context != null && OpinionFeatureGate.isEnabled()) {
             ExperienceEmitters.socialGreetTerminal(
                     mob,

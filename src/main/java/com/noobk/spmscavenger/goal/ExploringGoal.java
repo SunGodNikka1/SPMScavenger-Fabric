@@ -15,6 +15,9 @@ import com.noobk.spmscavenger.mining.MiningGoalKind;
 import com.noobk.spmscavenger.mining.MiningTransition;
 import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.SpmScavenger;
+import com.noobk.spmscavenger.village.SettlementBoundsPolicy;
+import com.noobk.spmscavenger.village.SettlementRelationshipService;
+import com.noobk.spmscavenger.village.SettlementReturnPolicy;
 import com.noobk.spmscavenger.experience.ExpeditionEndAttribution;
 import com.noobk.spmscavenger.experience.ExperienceEmitters;
 import com.noobk.spmscavenger.experience.MobExperienceContext;
@@ -211,29 +214,40 @@ public final class ExploringGoal extends Goal {
         }
 
         if (expedition == null) {
-            if (!readiness.eligibleForNewExpedition(
-                    now,
-                    cfg.exploreLocalTripsThreshold,
-                    ExploreReadinessThresholds.idleTicks(cfg, mob.getUUID()))) {
-                return false;
-            }
-            if (isDiscretionaryExplorePath()
-                    && !DiscretionaryAuthority.mayStartDiscretionaryExplore(mob.getUUID())) {
-                return false;
-            }
-            expedition = createExpedition(level, cfg);
-            if (expedition == null) {
-                if (isDiscretionaryExplorePath()) {
-                    DiscretionaryAuthority.onExploreFailedToStart(mob.getUUID(), now);
+            if (!trySeedCommuteExpedition(level, now, cfg)) {
+                if (!readiness.eligibleForNewExpedition(
+                        now,
+                        cfg.exploreLocalTripsThreshold,
+                        ExploreReadinessThresholds.idleTicks(cfg, mob.getUUID()))) {
+                    return false;
                 }
+                if (isDiscretionaryExplorePath()
+                        && !DiscretionaryAuthority.mayStartDiscretionaryExplore(mob.getUUID())) {
+                    return false;
+                }
+                expedition = createExpedition(level, cfg);
+                if (expedition == null) {
+                    if (isDiscretionaryExplorePath()) {
+                        DiscretionaryAuthority.onExploreFailedToStart(mob.getUUID(), now);
+                    }
+                    readiness.consume(now + COOLDOWN_TICKS);
+                    return false;
+                }
+                emitExpeditionUnlocked(expedition, now);
                 readiness.consume(now + COOLDOWN_TICKS);
+            } else {
+                emitExpeditionUnlocked(expedition, now);
+            }
+        } else if (expeditionExpired(expedition.startedTick, now, MAX_EXPEDITION_TICKS)) {
+            if (expedition.kind == ExpeditionKind.COMMUTE) {
+                completeExpedition(now, mob.blockPosition());
+                if (expedition == null) {
+                    return false;
+                }
+            } else {
+                abandon(EndReason.STALE, now);
                 return false;
             }
-            emitExpeditionUnlocked(expedition, now);
-            readiness.consume(now + COOLDOWN_TICKS);
-        } else if (expeditionExpired(expedition.startedTick, now, MAX_EXPEDITION_TICKS)) {
-            abandon(EndReason.STALE, now);
-            return false;
         }
 
         rebaseAfterInterruption(level);
@@ -262,7 +276,37 @@ public final class ExploringGoal extends Goal {
     }
 
     private boolean isDiscretionaryExplorePath() {
+        if (expedition != null && expedition.kind == ExpeditionKind.COMMUTE) {
+            return false;
+        }
         return DiscretionaryAuthority.opinionGatesConsumers() && !readiness.hasDescentPressure();
+    }
+
+    private boolean trySeedCommuteExpedition(ServerLevel level, long now, ScavengerConfig cfg) {
+        if (!SettlementReturnPolicy.shouldCommute(level, mob)) {
+            return false;
+        }
+        var target = SettlementReturnPolicy.commuteTarget(level, mob);
+        if (target.isEmpty()) {
+            return false;
+        }
+        BlockPos anchor = target.get();
+        double dx = anchor.getX() + 0.5 - mob.getX();
+        double dz = anchor.getZ() + 0.5 - mob.getZ();
+        double dist = Math.hypot(dx, dz);
+        if (dist < 1e-3) {
+            return false;
+        }
+        double legBudget = Math.min(dist, MAX_EXPEDITION_DISTANCE);
+        ExpeditionState seeded = createExpedition(
+                level, cfg, dx / dist, dz / dist, legBudget, 0.0);
+        if (seeded == null) {
+            return false;
+        }
+        seeded.kind = ExpeditionKind.COMMUTE;
+        seeded.commuteAnchor = anchor.immutable();
+        expedition = seeded;
+        return true;
     }
 
     @Override
@@ -415,7 +459,8 @@ public final class ExploringGoal extends Goal {
      * the road is this mod's own decision to make; who counts as a real friend stays SPM's.
      */
     private void inviteCompanions(ServerLevel level, ScavengerConfig cfg, long now) {
-        if (!cfg.exploreCompanions || expedition == null || expedition.waypoints.isEmpty()) {
+        if (!cfg.exploreCompanions || expedition == null || expedition.waypoints.isEmpty()
+                || expedition.kind == ExpeditionKind.COMMUTE) {
             return;
         }
         int slots = Math.min(4, cfg.exploreCompanionMax);
@@ -1183,10 +1228,24 @@ public final class ExploringGoal extends Goal {
         if (expedition == null) {
             return;
         }
+        ExpeditionKind kind = expedition.kind;
+        BlockPos commuteAnchor = expedition.commuteAnchor;
         boolean discretionaryTerminal = isDiscretionaryExplorePath() && !expedition.caveHandoffContinuation;
         emitExpeditionTerminal(expedition, now, ExpeditionEndAttribution.completed());
         if (mob.level() instanceof ServerLevel level) {
             clearCaveContinuationCommitment(level);
+            if (kind == ExpeditionKind.COMMUTE
+                    && commuteAnchor != null
+                    && !SettlementBoundsPolicy.within(actualEnd, commuteAnchor)
+                    && SettlementReturnPolicy.shouldCommute(level, mob)
+                    && trySeedCommuteExpedition(level, now, ScavengerConfig.get())) {
+                rebaseAfterInterruption(level);
+                PlanResult result = planCurrentStage(level, now);
+                if (result == PlanResult.READY && navigationState != null) {
+                    mob.getNavigation().moveTo(navigationState.path, exploreSpeed());
+                }
+                return;
+            }
         }
         remember(recentExpeditionDestinations,
                 ExplorationPolicy.regionKey(actualEnd.getX(), actualEnd.getZ(), REGION_SIZE_CHUNKS),
@@ -1365,6 +1424,8 @@ public final class ExploringGoal extends Goal {
         boolean lastPlanHadReachableLanding;
         boolean lastPlanHadBlockedOpportunity;
         boolean caveHandoffContinuation;
+        ExpeditionKind kind = ExpeditionKind.DISCRETIONARY;
+        BlockPos commuteAnchor;
 
         ExpeditionState(
                 ExplorationIntent intent,

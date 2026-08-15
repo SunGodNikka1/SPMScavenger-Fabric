@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.goal;
 
 import com.noobk.spmscavenger.ScavengerConfig;
+import com.noobk.spmscavenger.village.SettlementRelationshipService;
 import com.noobk.spmscavenger.village.VillagePerceptionScheduler;
 import com.noobk.spmscavenger.village.VillagePerceptionTuning;
 import net.minecraft.resources.ResourceKey;
@@ -84,6 +85,8 @@ public final class VillagePerceptionObserver extends Goal {
         long gameTime = level.getGameTime();
         if (heartbeatClock.claim(gameTime)) {
             markDirty();
+            SettlementRelationshipService.onPresenceHeartbeat(
+                    level, mob.getUUID(), mob.blockPosition(), gameTime);
         }
         enqueueIfDirty(gameTime, () -> VillagePerceptionScheduler.forServer(level.getServer())
                 .requestObservation(level, mob.getUUID()));

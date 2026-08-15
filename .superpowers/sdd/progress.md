@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | **RT-MI-TS1** | Open — runtime falsification; launch not authorized | `task-33-brief.md` |
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
-| **V1.5 Settlement attachment & return** | **AUTHORIZED** — task-46 / 1.11.0 (A–D + F); V1.5-E deferred V3 | `task-46-brief.md` |
+| **V1.5 Settlement attachment & return** | **DONE (static)** — 1.11.0; VR-T1.5a–c runtime **UNVERIFIED** | `task-46-report.md` |
 | **V2 Trading** | **BLOCKED on V1.5** | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
@@ -54,7 +54,7 @@ Task 39: complete with concerns — GAO-7 PersonalityModel static accept (581 te
 Task 40: complete with concerns — GAO-8A passive physical expression (593 tests; runtime visual cadence unverified)
 Task 41: complete with concerns — GAO-9 overland environment affinity (618 tests; runtime distribution/performance unverified)
 Task 44D: complete with concerns — exact FriendlyGreet binding + 44D-R1 causal completion repair (809 tests; physical runtime unverified)
-Task 45: complete — V1-D production village perception driver; VR-T1A **PASS** (Bob, 2026-08-14); VR-T1b profiling deferred; diagnostics removed
+Task 46: complete with concerns — V1.5 A–D + F (1.11.0); V1.5-E rejected; 905 tests; VR-T1.5 runtime unverified
 
 Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 

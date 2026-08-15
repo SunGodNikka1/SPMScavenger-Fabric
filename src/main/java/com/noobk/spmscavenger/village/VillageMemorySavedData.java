@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.village;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -136,7 +137,8 @@ public final class VillageMemorySavedData extends SavedData {
      *     empty observation must not create a memory entry, or every mob standing in open terrain
      *     would acquire one
      */
-    public Optional<KnownVillage> record(UUID mob, VillagePerception.Observation observation, long tick) {
+    public Optional<KnownVillage> record(
+            ServerLevel level, UUID mob, VillagePerception.Observation observation, long tick) {
         if (observation == null || !observation.isSettlement()) {
             return Optional.empty();
         }
@@ -144,10 +146,26 @@ public final class VillageMemorySavedData extends SavedData {
                 observation.anchor(),
                 tick,
                 ObservationQuality.of(observation.coverage(), observation.admittedPoiCount()));
+        SettlementRelationshipService.onVillageRecorded(level, mob, village, tick);
         setDirty();
         return Optional.of(village);
     }
 
+    public boolean designateHome(ServerLevel level, UUID mob, BlockPos anchor, long tick) {
+        MobVillageMemory memory = byMob.get(mob);
+        if (memory == null) {
+            return false;
+        }
+        boolean changed = memory.designateHome(anchor);
+        if (changed) {
+            SettlementRelationshipService.onHomeDesignated(level, mob, anchor, tick);
+            setDirty();
+        }
+        return changed;
+    }
+
+    /** @deprecated tests only; production uses {@link #designateHome(ServerLevel, UUID, BlockPos, long)} */
+    @Deprecated
     public boolean designateHome(UUID mob, net.minecraft.core.BlockPos anchor) {
         MobVillageMemory memory = byMob.get(mob);
         if (memory == null) {
@@ -158,6 +176,10 @@ public final class VillageMemorySavedData extends SavedData {
             setDirty();
         }
         return changed;
+    }
+
+    void markDirty() {
+        setDirty();
     }
 
     /**

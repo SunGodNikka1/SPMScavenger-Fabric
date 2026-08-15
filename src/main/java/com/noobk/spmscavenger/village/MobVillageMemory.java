@@ -3,10 +3,13 @@ package com.noobk.spmscavenger.village;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -44,9 +47,77 @@ public final class MobVillageMemory {
     public static final int MAX_KNOWN_VILLAGES = 16;
 
     private final List<KnownVillage> villages = new ArrayList<>();
+    private final Map<BlockPos, SettlementRelationship> relationships = new HashMap<>();
 
     public List<KnownVillage> villages() {
         return List.copyOf(villages);
+    }
+
+    public Optional<SettlementRelationship> relationshipAt(BlockPos anchor) {
+        BlockPos key = canonicalRelationshipKey(anchor);
+        if (key == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(relationships.get(key));
+    }
+
+    public void putRelationship(BlockPos anchor, SettlementRelationship relationship) {
+        BlockPos key = canonicalRelationshipKey(anchor);
+        if (key != null && relationship != null) {
+            relationships.put(key.immutable(), relationship);
+        }
+    }
+
+    /**
+     * D-VR-049 — move relationship row when village anchor supersedes.
+     */
+    public void rekeyRelationship(BlockPos oldAnchor, BlockPos newAnchor) {
+        if (oldAnchor == null || newAnchor == null || oldAnchor.equals(newAnchor)) {
+            return;
+        }
+        SettlementRelationship existing = relationships.remove(oldAnchor.immutable());
+        if (existing == null) {
+            return;
+        }
+        BlockPos newKey = canonicalRelationshipKey(newAnchor);
+        if (newKey == null) {
+            relationships.put(oldAnchor.immutable(), existing);
+            return;
+        }
+        SettlementRelationship merged = relationships.get(newKey);
+        if (merged != null) {
+            relationships.put(newKey.immutable(), SettlementRelationship.clampMerged(merged, existing));
+        } else {
+            relationships.put(newKey.immutable(), existing);
+        }
+    }
+
+    private BlockPos canonicalRelationshipKey(BlockPos anchor) {
+        if (anchor == null) {
+            return null;
+        }
+        return at(anchor).map(KnownVillage::anchor).orElse(anchor.immutable());
+    }
+
+    private void mergeRelationshipOnIdentity(BlockPos anchor, BlockPos mergedAnchor) {
+        if (anchor == null || mergedAnchor == null) {
+            return;
+        }
+        BlockPos fromKey = anchor.immutable();
+        BlockPos toKey = canonicalRelationshipKey(mergedAnchor);
+        if (toKey == null || fromKey.equals(toKey)) {
+            return;
+        }
+        SettlementRelationship absorbed = relationships.remove(fromKey);
+        if (absorbed == null) {
+            return;
+        }
+        SettlementRelationship target = relationships.get(toKey);
+        if (target != null) {
+            relationships.put(toKey, SettlementRelationship.clampMerged(target, absorbed));
+        } else {
+            relationships.put(toKey, absorbed);
+        }
     }
 
     public int size() {
@@ -71,15 +142,20 @@ public final class MobVillageMemory {
     public KnownVillage remember(BlockPos anchor, long tick, ObservationQuality quality) {
         KnownVillage existing = at(anchor).orElse(null);
         if (existing != null) {
+            BlockPos oldAnchor = existing.anchor();
             KnownVillage updated = existing.withObservation(anchor, tick, quality);
             if (updated != existing) {
                 villages.set(villages.indexOf(existing), updated);
+                rekeyRelationship(oldAnchor, updated.anchor());
+            } else {
+                mergeRelationshipOnIdentity(anchor, existing.anchor());
             }
             evictBeyondBound();
             return updated;
         }
         KnownVillage discovered = KnownVillage.discovered(anchor, tick, quality);
         villages.add(discovered);
+        mergeRelationshipOnIdentity(anchor, discovered.anchor());
         evictBeyondBound();
         return discovered;
     }
@@ -128,6 +204,7 @@ public final class MobVillageMemory {
                 // corrupt save could produce it. Breaking beats spinning forever.
                 return;
             }
+            relationships.remove(stalest.anchor());
             villages.remove(stalest);
         }
     }
@@ -155,6 +232,14 @@ public final class MobVillageMemory {
             list.add(village.save());
         }
         tag.put("villages", list);
+        ListTag relationshipList = new ListTag();
+        for (Map.Entry<BlockPos, SettlementRelationship> entry : relationships.entrySet()) {
+            CompoundTag row = new CompoundTag();
+            row.put("anchor", NbtUtils.writeBlockPos(entry.getKey()));
+            row.put("relationship", entry.getValue().save());
+            relationshipList.add(row);
+        }
+        tag.put("relationships", relationshipList);
         return tag;
     }
 
@@ -182,6 +267,17 @@ public final class MobVillageMemory {
             memory.villages.add(village);
         }
         memory.evictBeyondBound();
+        ListTag relationshipList = tag.getList("relationships", Tag.TAG_COMPOUND);
+        for (int i = 0; i < relationshipList.size(); i++) {
+            CompoundTag row = relationshipList.getCompound(i);
+            BlockPos anchor = NbtUtils.readBlockPos(row, "anchor").orElse(null);
+            if (anchor == null) {
+                continue;
+            }
+            memory.relationships.put(
+                    anchor,
+                    SettlementRelationship.load(row.getCompound("relationship")));
+        }
         return memory;
     }
 }
