@@ -11,7 +11,7 @@
 | **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + VR-T1A CLOSED**. **V1.5 Settlement attachment** is the active frontier; **V2 Trading** follows |
 | **Status** | `RESEARCHING` — V1 perception **COMPLETE**; V1.5 attachment/return/social design next |
 | **Nearest frontier** | **V1.5 Settlement attachment & return** — then **V2 Trading** |
-| **Last update** | 2026-08-14 (V1.5 design closure — storage Option A, return architecture, task contract; **authorization pending**) |
+| **Last update** | 2026-08-14 (V1.5 brainstorm continuation 5 — bounds, hooks, commute arbitration) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -663,8 +663,16 @@ visible "my village" play.
 | **D-VR-037** | V1.5 MVP excludes `VillagerTradeAdapter` and raid interrupt | **`LOCKED`** — scope guard |
 | **D-VR-038** | Return commute via **ExploringGoal / discretionary bias**, not priority-3 gather competitor | **`LOCK RECOMMENDED`** — see implementation contract |
 | **D-VR-039** | `designateHome()` needs a **production caller** for VR-T1.5a (debug command minimum) | **`LOCK RECOMMENDED`** — **CONFIRMED** gap: API exists, zero production callers |
+| **D-VR-040** | Presence/familiarity bounds = **64-block** perception radius (`SettlementBoundsPolicy`) | **`LOCK RECOMMENDED`** |
+| **D-VR-041** | Single `SettlementRelationshipService` write path (record / presence / social) | **`LOCK RECOMMENDED`** |
+| **D-VR-042** | Auto-home when HIGH familiarity + sleeps (config default off) | **`PRODUCT DECISION`** — manual debug ships first |
+| **D-VR-043** | Commute blocked during mining/cave handoff; forced-heading `ExploringGoal` seed | **`LOCK RECOMMENDED`** |
+| **D-VR-044** | Merge relationship rows when `remember()` merges village identity | **`LOCK RECOMMENDED`** |
+| **D-VR-045** | Village SOCIAL via `SettlementSocialBias`, not global FriendlyGreet hack | **`LOCK RECOMMENDED`** |
 
 **Not authorized:** V1.5 implementation, mixin work beyond ally-gate precursor, or Minecraft launch.
+
+**Next frontier:** **authorize V1.5 / task-46** for **1.11.0** — brief at `.superpowers/sdd/task-46-brief.md` on approval.
 
 ### V1.5 implementation contract (`LOCK RECOMMENDED` — authorize for **1.11.0**)
 
@@ -673,8 +681,8 @@ visible "my village" play.
 | Slice | Deliverable |
 | --- | --- |
 | **V1.5-A** | `SettlementRelationship` record + parallel map on `MobVillageMemory`; NBT codec; RET-1 evict with village LRU |
-| **V1.5-B** | Gen-1 accumulation (`D-VR-036`): presence ticks in settlement bounds, visit on perception `record`, social episode hooks |
-| **V1.5-C** | `SettlementReturnPolicy` + `ExploringGoal` commute destination (HOME first, else highest familiarity) |
+| **V1.5-B** | Gen-1 accumulation (`D-VR-036`): presence via `SettlementBoundsPolicy` @ 64, visit on `record`, social via `SettlementRelationshipService` |
+| **V1.5-C** | `SettlementReturnPolicy` + forced-heading `ExploringGoal` commute (`D-VR-043`); blocked during mining/cave handoff |
 | **V1.5-D** | Village-aware discretionary SOCIAL weighting near familiar anchor (GAO bridge; no trade confusion) |
 | **V1.5-E** | VR-T1.5d precursor: `RaidContainersGoal` suppress when `HOME_VILLAGE` or attachment ≥ HIGH (mixin predicate) |
 | **V1.5-F** | Debug: `/spmscavenger designate-home <PlayerMob>` (factual tier only) + read-only `village-memory` for VR-T1.5 probes |
@@ -743,6 +751,78 @@ Admission: `HOME_VILLAGE` **or** familiarity HIGH; mob farther than `COMMUTE_MIN
 
 **Artifact:** `.superpowers/sdd/task-46-brief.md` on authorization.
 
+### Brainstorm continuation 5 — V1.5 binding gaps (`Agent_Cursor`, 2026-08-14)
+
+Deduplicated against V1.5 implementation contract, D-VR-038/039, B-VR-61…65, and pinned source.
+Advances the **nearest unresolved** V1.5 frontiers: presence geometry, write-path hooks, commute
+arbitration, relationship merge, and auto-home product choice.
+
+#### Settlement bounds for presence (`D-VR-040`)
+
+Three radii, three jobs — do not collapse:
+
+| Radius | Source | Job |
+| --- | --- | --- |
+| 48² | `VillageIdentityPolicy` | Merge remembered settlements |
+| 64 | `VillagePerception.VILLAGE_QUERY_RADIUS` | **Presence / familiarity accumulation** |
+| 96² | `RaidAssociationPolicy` | Raid association (V5) |
+
+Add `SettlementBoundsPolicy.within(mobPos, anchor)` → `distSqr ≤ 64²`.
+
+**Must not happen:** use identity radius for presence and stall attachment because the mob stands in
+a valid POI field 50 blocks from anchor.
+
+#### Single relationship write path (`D-VR-041`)
+
+```text
+SettlementRelationshipService
+  ├─ onVillageRecorded(mob, KnownVillage, tick)   // VillageMemorySavedData.record
+  ├─ onPresenceHeartbeat(mob, anchor, tick)      // observer when within bounds
+  └─ onSocialEpisode(mob, anchor, tick)            // SocialExecutionBindingRegistry COMPLETED
+```
+
+**`CODE_CONFIRMED` hooks:** `VillageMemorySavedData.record` L139–148;
+`VillagePerceptionObserver.tick`; `SocialExecutionBindingRegistry` terminal `COMPLETED` L221–224.
+
+#### Commute vs mining / cave handoff (`D-VR-043`)
+
+`SettlementReturnPolicy.shouldCommute` must refuse when:
+
+- `MiningExecutionCommitment` active
+- Cave handoff claimed on `ExploringGoal` (`acceptCaveHandoff`, L514+)
+- `readiness.hasDescentPressure()` true (descent route wins L586–588)
+
+Commute uses **forced heading** toward anchor (`createExpedition` L570–572) — same as companion
+expeditions. Terminate when mob enters `SettlementBoundsPolicy` around target.
+
+#### Relationship merge on village merge (`D-VR-044`)
+
+When `remember()` merges via `at(anchor)`, fold relationship rows: `max` familiarity,
+`sum` event counts (capped), `max` lastVisit, re-derive band.
+
+#### Village-aware SOCIAL (`D-VR-045`)
+
+**Rejected:** global `FriendlyGreetGoal` mixin (VR-T1.5c trade confusion).
+
+**Accepted:** `SettlementSocialBias` in Opinion package — bounded bump to discretionary `SOCIAL`
+when within bounds of MEDIUM+ familiarity settlement. `onSocialEpisode` only when greet
+`COMPLETED` **and** mob was in bounds at episode start.
+
+#### Auto-home (`D-VR-042` — `PRODUCT DECISION`)
+
+Ship **V1.5-F** debug `designate-home` for VR-T1.5a. Auto-familiar (HIGH + sleeps, config **off**
+by default) is **V1.5-G stretch**, not MVP.
+
+#### Camp near home (`B-VR-66` — stretch)
+
+`SeekShelterGoal` bias toward shelter within bounds of home when attachment HIGH — after commute
+slice lands.
+
+#### No full director in V1.5 (`B-VR-67`)
+
+`SettlementReturnPolicy` + `SettlementRelationshipService` + `ExploringGoal` + optional
+`SettlementSocialBias` suffice. Full `VillageInteractionDirector` ranking waits for V4.
+
 ### MAIBS — V1.5 (implementation-ready)
 
 | Minute | Predicted observable | Failure mode |
@@ -754,18 +834,7 @@ Admission: `HOME_VILLAGE` **or** familiarity HIGH; mob farther than `COMMUTE_MIN
 
 **Implementation binding:** return must route through `ExploringGoal` expedition seed (`D-VR-038`), not a new priority-3 executor.
 
-**Weirdness watch:** without `designateHome` production caller, VR-T1.5a needs debug home designation (`D-VR-039`) until auto-home policy exists.
-
-### Decisions
-
-| ID | Decision | Status |
-| --- | --- | --- |
-| **D-VR-034** | Insert **V1.5** (attachment + return + village social) **before V2 Trading** | `PROPOSED` — User |
-| **D-VR-035** | `SettlementRelationship` is mob-owned, separate from factual `KnownVillage` | `PROPOSED` — User |
-| **D-VR-036** | Attachment accumulates from events; no single-visit max | `PROPOSED` — User |
-| **D-VR-037** | V1.5 MVP excludes `VillagerTradeAdapter` and raid interrupt | `PROPOSED` — scope guard |
-
-**Not authorized:** implementation, mixin work, or Minecraft launch.
+**Weirdness watch:** without `designateHome` production caller, VR-T1.5a needs debug home designation (`D-VR-039`) until auto-home policy exists (`D-VR-042`). Commute must yield to active mining/cave handoff (`D-VR-043`).
 
 ---
 
@@ -2438,6 +2507,12 @@ advance the existing **V1 perception-driver** frontier; they do not add V2/V5 be
 | B-VR-63 | **Accumulating attachment (no one-visit max)** | User design | **→ D-VR-036 PROPOSED** | Personality-modulated familiarity |
 | B-VR-64 | **Return / commute-to-home goal** | User behavior | **→ V1.5-C** (`D-VR-038`) | `SettlementReturnPolicy` + `ExploringGoal` seed, not priority-3 goal |
 | B-VR-65 | **Village-aware FriendlyGreet weighting** | User + B-VR-17 | **→ V1.5** | GAO SOCIAL + settlement context |
+| B-VR-66 | **Camp near home (shelter bias)** | `NEW` | **V1.5 stretch** | SeekShelter within bounds of home anchor |
+| B-VR-67 | **V1.5 without full VillageInteractionDirector** | `CONSENSUS` | **ACCEPTED** | Policy + ExploringGoal sufficient gen-1 |
+| B-VR-68 | **`SettlementBoundsPolicy` @ 64** | continuation 5 | **→ D-VR-040** | Presence ≠ identity ≠ raid radii |
+| B-VR-69 | **`SettlementRelationshipService`** | continuation 5 | **→ D-VR-041** | Single write path |
+| B-VR-70 | **Forced-heading commute expedition** | continuation 5 | **→ D-VR-043** | Reuse `ExploringGoal` companion pattern |
+| B-VR-71 | **Auto-home on HIGH familiarity** | continuation 5 | **→ D-VR-042** | Config default off; debug home first |
 
 **Rejected alternatives:** put the 64-block POI query in the existing 10-tick
 `ExplorationActivityGoal` observer (unnecessarily couples expensive perception to control-plane
@@ -3892,6 +3967,7 @@ use explicit boolean state (`VillagePerceptionEnqueueDebounce`).
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Cursor | 2026-08-14 | **V1.5 brainstorm continuation 5.** `SettlementBoundsPolicy` @ 64 (`D-VR-040`); `SettlementRelationshipService` write path (`D-VR-041`); commute/mining arbitration + forced-heading expedition (`D-VR-043`); relationship merge on village merge (`D-VR-044`); `SettlementSocialBias` not FriendlyGreet hack (`D-VR-045`); auto-home product decision (`D-VR-042`). B-VR-66…71. **Authorize task-46 / 1.11.0** is the only remaining frontier. |
 | Agent_Cursor | 2026-08-14 | **PROGRESSIVE_CONTINUATION — V1.5 design closure.** Code audit: `designateHome()` **zero production callers** (`CONFIRMED`); `FriendlyGreetShelterHoldMixin` does not block `RaidContainersGoal` loot. Locked D-VR-034…037; added D-VR-038 (return via `ExploringGoal` not priority-3 goal), D-VR-039 (home designation gap). V1.5 implementation contract (slices A–F, Option A storage, accumulation bands, VR-T1.5d mixin note). Phased plan V1.5 → **READY**. Fixed stale V1-D / sequence lines. **No implementation authorization.** |
 | User + Agent_Cursor | 2026-08-14 | **Village attachment brainstorm → V1.5 phase.** User model: KnownVillage (factual) → settlement experience → `SettlementRelationship` (mob-owned attachment/history) → Opinion/Director → behavior. Attachment accumulates; home stays factual `designateHome()`. **D-VR-034…037 PROPOSED:** V1.5 (return, social, manners precursor) **before V2 Trading**. Deduped against D-VR-025/026, V4 return/home, B-VR-17/40/39. Frontier → **V1.5**. **No implementation authorization.** |
 | User + Agent_Cursor | 2026-08-14 | **VR-T1A PASS; frontier → V2 Trading.** User closed VR-T1A: autonomous discovery, full driver path, same-village identity, save/reload, cross-dimension persistence **CONFIRMED**. Debounce overflow root cause + repair runtime-confirmed. Removed `village-probe` / `village-driver` / `village-memory` and trace plumbing. VR-T1b 10/50/100 profiling **DEFERRED**. Permanent-removal sweep static-confirmed, runtime-deferred. |
