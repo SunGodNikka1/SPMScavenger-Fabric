@@ -12,6 +12,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -207,12 +208,26 @@ public final class VillagePerceptionScheduler {
         }
     }
 
+    /**
+     * Drop every pending request for a mob, retiring lanes that empty as a result.
+     *
+     * <p><b>Iterator removal is required, not stylistic.</b> The first version called
+     * {@code lanes.remove(entry.getKey())} inside an enhanced-for over {@code lanes.entrySet()},
+     * which structurally modifies the map its own iterator is walking. {@code HashMap}'s iterator is
+     * fail-fast in {@code next()}, so with a <b>single</b> lane the removal happened on the final
+     * entry, {@code hasNext()} returned false, {@code next()} was never called again, and nothing
+     * threw — which is exactly why the single-Overworld-lane regression passed. With two or more
+     * dimension lanes and a removal on any but the last, the following advance throws
+     * {@code ConcurrentModificationException} on a server tick.
+     */
     private void removePendingFor(UUID mobId) {
-        for (Map.Entry<ResourceKey<Level>, Deque<UUID>> entry : lanes.entrySet()) {
-            entry.getValue().removeIf(id -> id.equals(mobId));
+        Iterator<Map.Entry<ResourceKey<Level>, Deque<UUID>>> lane = lanes.entrySet().iterator();
+        while (lane.hasNext()) {
+            Map.Entry<ResourceKey<Level>, Deque<UUID>> entry = lane.next();
+            entry.getValue().removeIf(mobId::equals);
             if (entry.getValue().isEmpty()) {
-                lanes.remove(entry.getKey());
                 laneOrder.remove(entry.getKey());
+                lane.remove();
             }
         }
         pending.removeIf(key -> key.mobId().equals(mobId));

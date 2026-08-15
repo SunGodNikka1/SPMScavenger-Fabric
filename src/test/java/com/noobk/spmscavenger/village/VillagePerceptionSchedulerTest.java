@@ -22,6 +22,76 @@ class VillagePerceptionSchedulerTest {
     private static final ResourceKey<Level> OVERWORLD = Level.OVERWORLD;
     private static final ResourceKey<Level> NETHER = Level.NETHER;
 
+    /**
+     * P1 regression (User audit): {@code removePendingFor} removed from {@code lanes} while iterating
+     * {@code lanes.entrySet()}.
+     *
+     * <p><b>Why the existing unregister test could not catch it.</b> {@code HashMap}'s iterator is
+     * fail-fast in {@code next()}, not in {@code hasNext()}. With a single Overworld lane the removal
+     * happened on the final entry, {@code hasNext()} then returned false, {@code next()} was never
+     * called again, and no exception was thrown. The defect needs <b>two or more</b> dimension lanes
+     * with the emptied one visited first — which is a property of the fixture, not of the assertion,
+     * and no amount of strengthening the single-lane test would have found it.
+     */
+    @Test
+    void mustNotHappen_unregisterConcurrentlyModifiesTheLaneMap() {
+        VillagePerceptionScheduler scheduler = VillagePerceptionScheduler.createForTest(
+                (dimension, level, mobId) -> {}, VillagePerceptionTuning.MAX_EMERGENCY_PENDING);
+
+        UUID soleOverworldMob = UUID.randomUUID();
+        scheduler.registerObserver(soleOverworldMob);
+        scheduler.requestObservation(OVERWORLD, soleOverworldMob);
+
+        // Several other lanes so the emptied one is not the last entry the iterator reaches.
+        for (ResourceKey<Level> dimension : List.of(NETHER, Level.END)) {
+            for (int i = 0; i < 3; i++) {
+                UUID other = UUID.randomUUID();
+                scheduler.registerObserver(other);
+                scheduler.requestObservation(dimension, other);
+            }
+        }
+
+        // Threw ConcurrentModificationException before the repair.
+        scheduler.unregisterObserver(soleOverworldMob);
+
+        // And the emptied lane is genuinely retired, not merely survived.
+        AtomicInteger overworldServiced = new AtomicInteger();
+        VillagePerceptionScheduler after = VillagePerceptionScheduler.createForTest(
+                (dimension, level, mobId) -> {
+                    if (dimension.equals(OVERWORLD)) {
+                        overworldServiced.incrementAndGet();
+                    }
+                }, VillagePerceptionTuning.MAX_EMERGENCY_PENDING);
+        UUID gone = UUID.randomUUID();
+        after.registerObserver(gone);
+        after.requestObservation(OVERWORLD, gone);
+        after.unregisterObserver(gone);
+        after.serviceUpToForTest(8, dimension -> null);
+        assertEquals(0, overworldServiced.get(), "an unregistered mob must not be serviced");
+    }
+
+    /** Every lane emptying at once is the shape most likely to trip an iterator. */
+    @Test
+    void mustNotHappen_unregisterBreaksWhenItEmptiesEveryLane() {
+        VillagePerceptionScheduler scheduler = VillagePerceptionScheduler.createForTest(
+                (dimension, level, mobId) -> {}, VillagePerceptionTuning.MAX_EMERGENCY_PENDING);
+
+        UUID everywhere = UUID.randomUUID();
+        scheduler.registerObserver(everywhere);
+        for (ResourceKey<Level> dimension : List.of(OVERWORLD, NETHER, Level.END)) {
+            scheduler.requestObservation(dimension, everywhere);
+        }
+
+        scheduler.unregisterObserver(everywhere);
+
+        AtomicInteger serviced = new AtomicInteger();
+        VillagePerceptionScheduler probe = VillagePerceptionScheduler.createForTest(
+                (dimension, level, mobId) -> serviced.incrementAndGet(),
+                VillagePerceptionTuning.MAX_EMERGENCY_PENDING);
+        probe.serviceUpToForTest(4, dimension -> null);
+        assertEquals(0, serviced.get());
+    }
+
     @Test
     void mustHappen_allDirtyMobsAdmittedWithinObserverBound() {
         AtomicInteger queries = new AtomicInteger();

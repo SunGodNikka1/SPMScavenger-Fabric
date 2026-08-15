@@ -114,6 +114,13 @@ public final class FurnaceStations {
                 ? FurnaceJobSavedData.get(server)
                 : null;
 
+        // RET-1e: the search cube is loaded by construction, so stale ownership markers inside it
+        // can be validated for free. Markers outside every search cube are held by the cap.
+        if (data != null) {
+            data.pruneOwnedNear(origin, r,
+                    pos -> isFurnaceState(level.getBlockState(pos)));
+        }
+
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
                 for (int dy = -3; dy <= 3; dy++) {

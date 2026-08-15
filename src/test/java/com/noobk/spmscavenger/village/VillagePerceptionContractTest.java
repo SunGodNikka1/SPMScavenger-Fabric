@@ -260,10 +260,18 @@ class VillagePerceptionContractTest {
     void mustHappen_permanentRemovalSweepsEveryDimension() throws IOException {
         String bootstrap = code(source(Path.of("SpmScavenger.java")));
 
-        int sweeps = bootstrap.split(java.util.regex.Pattern.quote("forgetEverywhere("), -1).length - 1;
+        // SUPERSEDED, not deleted: the handler now calls one rule covering every per-mob store
+        // (PerMobSavedData.forgetAll), because village memory turned out to be the first of three
+        // stores with this defect. PerMobRemovalContractTest owns the stronger assertion - including
+        // that the handler must NOT call any single store directly. Kept here so the village-specific
+        // guarantee still fails if that rule stops covering it.
+        int sweeps = bootstrap.split(java.util.regex.Pattern.quote("PerMobSavedData.forgetAll("), -1)
+                .length - 1;
         assertEquals(2, sweeps,
-                "two permanent-removal sites sweep all dimensions: AFTER_DEATH and the "
+                "two permanent-removal sites sweep every store: AFTER_DEATH and the "
                         + "shouldDestroy()-gated unload");
+        assertTrue(code(source(Path.of("PerMobSavedData.java"))).contains("VillageMemorySavedData"),
+                "village memory must remain registered in the shared removal rule");
 
         assertFalse(bootstrap.contains(".forget(mob.getUUID())"),
                 "production must not use the single-dimension primitive: memory is per-dimension but "

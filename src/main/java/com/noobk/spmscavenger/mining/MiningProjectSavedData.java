@@ -386,6 +386,44 @@ public final class MiningProjectSavedData extends SavedData {
         return Optional.of(finished);
     }
 
+    /**
+     * RET-1e — permanent owner removal across every per-mob structure this store holds.
+     *
+     * <p>Five maps are keyed by mob UUID and several are persisted. Each had its own {@code clear*}
+     * method driven by <em>task</em> transitions; none of them ran when the mob itself ceased to
+     * exist, so a dead scavenger's project, transition, exposure, lease and commitment all survived
+     * in the save. Individually scoped cleanup is not owner lifecycle.
+     *
+     * @return {@code true} when anything was released
+     */
+    public boolean forgetMob(UUID mobId) {
+        if (mobId == null) {
+            return false;
+        }
+        boolean changed = byMob.remove(mobId) != null;
+        changed |= pendingTransitions.remove(mobId) != null;
+        changed |= exposures.remove(mobId) != null;
+        changed |= leases.remove(mobId) != null;
+        changed |= commitments.remove(mobId) != null;
+        if (changed) {
+            setDirty();
+        }
+        return changed;
+    }
+
+    /** RET-1e — extent: mining state is per-dimension, a mob is not. */
+    public static int forgetEverywhere(net.minecraft.server.MinecraftServer server, UUID mobId) {
+        return com.noobk.spmscavenger.PerMobSavedData.sweep(
+                server, mobId, MiningProjectSavedData::peekIn, MiningProjectSavedData::forgetMob);
+    }
+
+    private static MiningProjectSavedData peekIn(ServerLevel level) {
+        return level.getDataStorage().get(
+                new Factory<>(MiningProjectSavedData::new, MiningProjectSavedData::load,
+                        DataFixTypes.LEVEL),
+                DATA_NAME);
+    }
+
     public void clearProject(UUID mobId) {
         if (byMob.remove(mobId) != null) {
             setDirty();

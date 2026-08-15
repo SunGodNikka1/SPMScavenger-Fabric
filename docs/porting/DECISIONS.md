@@ -1522,3 +1522,58 @@ this project of a structural test locking in a wrong invariant as firmly as a ri
 **Runtime `UNVERIFIED`.** Both repairs are static; the reported symptom is a live-play observation
 and its resolution must be confirmed the same way — a crowd of Friendly PlayerMobs visibly
 crouch-greeting with Opinion enabled.
+
+## 2026-08-15 — RET-1e sweep: one permanent-removal rule for every per-mob store (P1 x3)
+
+User audit before starting V2 Trading. Three P1s, all verified in code before repair.
+
+### P1-1 — `VillagePerceptionScheduler.removePendingFor` modified `lanes` while iterating it
+
+`lanes.remove(entry.getKey())` inside an enhanced-for over `lanes.entrySet()`. Real
+`ConcurrentModificationException` on a server tick.
+
+**Why the existing unregister regression could not catch it:** `HashMap`'s iterator is fail-fast in
+`next()`, not `hasNext()`. With a single Overworld lane the removal lands on the final entry,
+`hasNext()` returns false, `next()` is never called again, nothing throws. The defect needs **two or
+more lanes with the emptied one visited first** — a property of the *fixture*, not the assertion. No
+strengthening of the single-lane test would have found it.
+
+Repaired with `Iterator.remove()`. Two regressions added (multi-lane, and all-lanes-empty); both
+throw against the old code.
+
+### P1-2 / P1-3 — per-mob persisted state with no owner-lifecycle path
+
+| Store | State | Removal path before |
+| --- | --- | --- |
+| `MiningProjectSavedData` | 5 maps keyed by mob UUID, several persisted | task-scoped `clear*` only — nothing on owner death |
+| `FurnaceJobSavedData` | tickets keyed by `BlockPos`, claimed by mob UUID | task transitions only; `reclaimOrClose` had **zero production callers** (RET-1a's classic shape — 1 occurrence in `src/main`, its own declaration) |
+| `FurnaceJobSavedData.scavengerOwned` | `Set<BlockPos>`, persisted | `recordPlaced` added; **nothing ever removed** (3x `NOT FOUND`) |
+
+**The correction is the rule, not three patches.** `PerMobSavedData.forgetAll(server, uuid)` is now
+the single permanent-removal entry point, wired into both sites (`AFTER_DEATH`, and `ENTITY_UNLOAD`
+gated on `RemovalReason.shouldDestroy()`), sweeping every dimension through a **non-creating**
+accessor. `PerMobRemovalContractTest` fails the build when a `*SavedData` mentioning `UUID` lacks
+`forgetEverywhere` or is not registered — so V2's `KnownVillager`, trade sessions and per-villager
+relationships cannot repeat this silently.
+
+`scavengerOwned` is different in kind: its owner is a **block**, so its signal is "the block is gone".
+`pruneOwnedNear` validates markers inside the search cube the station scan already walks (loaded by
+construction, no chunk load), with `MAX_OWNED_STATIONS = 512` as the backstop for markers never
+revisited. Markers are deliberately **not** cleared on mob death — a furnace a dead scavenger placed
+is still a scavenger-placed furnace.
+
+**Detector defect worth recording:** the contract test first looked for `Map<UUID,` and therefore
+missed `FurnaceJobSavedData` — the store that most needed the rule — because it keys by `BlockPos`
+and holds the mob id inside the value. Widened to any `UUID` mention. A structural test is only as
+good as the property it detects, and "keyed by" was the wrong property.
+
+**Verification:** 947 tests, 0 failures. Negative controls: restoring the concurrent modification
+fails both new lane regressions; removing mining from the shared rule fails the registration test.
+
+### Deferred with evidence (User audit P2/P3)
+
+| Item | Disposition |
+| --- | --- |
+| Gather/shelter/table/furnace block-volume scans (~9.8k–16.8k positions per due scan) | **Profile before rewriting.** Phased scan clocks, 24-candidate protection cap, 3-probe path budget and furnace caching are already in place. The 14-mob profile (median MSPT 6.96, p95 29.67) predates them; the 10/50/100 rows are empty, so high-population scaling is `UNVERIFIED`. A shared chunk-aware workstation cache is the answer **only if** 50/100 shows these dominating again. |
+| `ShaderReadoutOverlay` per-label `level.clip(...)` terrain raycast | `UNVERIFIED` client cost. Capture list capped at 512 and cleared per frame, so no leak; profile with a 50–100 mob crowd before changing. |
+| Village scheduler copies a dimension queue on fair insertion | P3 allocation only; revisit if profiling shows it. |

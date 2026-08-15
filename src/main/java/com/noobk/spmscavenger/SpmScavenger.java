@@ -135,7 +135,7 @@ public class SpmScavenger implements ModInitializer {
                     // V1-R3: every dimension, not just this one. The mob keeps its UUID across a
                     // dimension change, so memory written in the Overworld outlives a death in the
                     // Nether unless the sweep is global.
-                    com.noobk.spmscavenger.village.VillageMemorySavedData.forgetEverywhere(
+                    com.noobk.spmscavenger.PerMobSavedData.forgetAll(
                             world.getServer(), mob.getUUID());
                 }
             }
@@ -179,8 +179,8 @@ public class SpmScavenger implements ModInitializer {
                 if (mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
                     VillagePerceptionScheduler.forServer(serverLevel.getServer())
                             .unregisterObserver(mob.getUUID());
-                    // V1-R3: global sweep - see the ENTITY_UNLOAD note above.
-                    com.noobk.spmscavenger.village.VillageMemorySavedData.forgetEverywhere(
+                    // V1-R3 / RET-1e: one sweep covering every per-mob SavedData in the mod.
+                    com.noobk.spmscavenger.PerMobSavedData.forgetAll(
                             serverLevel.getServer(), mob.getUUID());
                 }
             }

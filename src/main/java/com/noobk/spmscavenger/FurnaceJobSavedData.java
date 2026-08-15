@@ -106,7 +106,15 @@ public final class FurnaceJobSavedData extends SavedData {
         }
     }
 
-    private final Set<BlockPos> scavengerOwned = new HashSet<>();
+    /**
+     * Stations a scavenger placed. Gate RET-1e: this is <b>persisted world state whose owner is a
+     * block</b>, so its removal signal is "the block is gone" — not a mob lifecycle event and not a
+     * clock. {@code recordPlaced} used to be the only writer, so a player breaking a scavenger's
+     * furnace left the position remembered for the life of the save.
+     *
+     * <p>Insertion-ordered so the cap below evicts the oldest marker rather than an arbitrary one.
+     */
+    private final Set<BlockPos> scavengerOwned = new java.util.LinkedHashSet<>();
     private final Map<BlockPos, FurnaceJobTicket> tickets = new HashMap<>();
 
     public FurnaceJobSavedData() {
@@ -159,9 +167,83 @@ public final class FurnaceJobSavedData extends SavedData {
         return tag;
     }
 
+    /**
+     * Backstop for markers whose block is never revisited, so {@link #pruneOwnedNear} can never reach
+     * them. Generous: a world where scavengers have placed 512 surviving furnaces in one dimension is
+     * already unusual, and the cost of an over-large cap is a few kilobytes of NBT.
+     */
+    public static final int MAX_OWNED_STATIONS = 512;
+
     public void recordPlaced(BlockPos pos) {
         scavengerOwned.add(pos.immutable());
+        while (scavengerOwned.size() > MAX_OWNED_STATIONS) {
+            java.util.Iterator<BlockPos> oldest = scavengerOwned.iterator();
+            oldest.next();
+            oldest.remove();
+        }
         setDirty();
+    }
+
+    /**
+     * RET-1e — the production removal path for ownership markers.
+     *
+     * <p>Only inspects positions inside a cube the caller has already established is loaded, so it
+     * cannot force a chunk load, and it costs nothing beyond the search that was happening anyway.
+     * A marker outside every future search cube is handled by {@link #MAX_OWNED_STATIONS}.
+     *
+     * @param stillAStation answers whether the block at that position is still a cooking station
+     * @return how many stale markers were dropped
+     */
+    public int pruneOwnedNear(BlockPos origin, int radius, java.util.function.Predicate<BlockPos> stillAStation) {
+        int dropped = 0;
+        java.util.Iterator<BlockPos> it = scavengerOwned.iterator();
+        while (it.hasNext()) {
+            BlockPos pos = it.next();
+            if (Math.abs(pos.getX() - origin.getX()) > radius
+                    || Math.abs(pos.getZ() - origin.getZ()) > radius
+                    || Math.abs(pos.getY() - origin.getY()) > radius) {
+                continue;
+            }
+            if (!stillAStation.test(pos)) {
+                it.remove();
+                dropped++;
+            }
+        }
+        if (dropped > 0) {
+            setDirty();
+        }
+        return dropped;
+    }
+
+    /**
+     * RET-1e — permanent owner removal. Closes every ticket claimed by a mob that is gone for good.
+     *
+     * <p>The ownership markers are deliberately <b>not</b> touched: a furnace a dead scavenger placed
+     * is still a scavenger-placed furnace, and its lifetime belongs to the block.
+     *
+     * @return {@code true} when anything was released
+     */
+    public boolean forgetMob(UUID mobId) {
+        if (mobId == null) {
+            return false;
+        }
+        boolean changed = tickets.entrySet().removeIf(e -> mobId.equals(e.getValue().claimantMob()));
+        if (changed) {
+            setDirty();
+        }
+        return changed;
+    }
+
+    /** RET-1e — extent: tickets are per-dimension, a mob is not. */
+    public static int forgetEverywhere(net.minecraft.server.MinecraftServer server, UUID mobId) {
+        return PerMobSavedData.sweep(server, mobId, FurnaceJobSavedData::peekIn,
+                FurnaceJobSavedData::forgetMob);
+    }
+
+    private static FurnaceJobSavedData peekIn(ServerLevel level) {
+        return level.getDataStorage().get(
+                new Factory<>(FurnaceJobSavedData::new, FurnaceJobSavedData::load, DataFixTypes.LEVEL),
+                DATA_NAME);
     }
 
     public boolean isScavengerOwned(BlockPos pos) {

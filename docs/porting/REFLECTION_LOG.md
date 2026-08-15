@@ -1007,3 +1007,27 @@ observer class; verification is project tests + one runtime session).
   completed greet may increment social events when bound.
 - **Must not happen:** `UNKNOWN_ACTIVE` from `VillagePerceptionObserver`; indefinite greet suppression.
 - **Constraints:** no commit/push/launch in this reflection session.
+
+### Addendum 2026-08-15 — RET-1e immediately caught two more instances
+
+The reflection above promoted **RET-1e** (eviction has an extent and a signal). A User audit the same
+day found the identical defect in two further stores — `MiningProjectSavedData` (five per-mob maps,
+task-scoped clears only) and `FurnaceJobSavedData` (`reclaimOrClose` with zero production callers;
+`scavengerOwned` with no removal path at all) — plus a genuine `ConcurrentModificationException` in
+`VillagePerceptionScheduler.removePendingFor`.
+
+Two updates to the reflection's own conclusions:
+
+1. **The lesson generalised faster than expected.** Village memory was not "the first of three"; it
+   was the first *found* of three, all of which predate it. That strengthens RET-1e from
+   `CODE_CONFIRMED` on one feature to a repeated finding across three independently written
+   subsystems.
+2. **A written gate is weaker than an enforced one.** RET-1e as prose would not have caught these —
+   the audit did. `PerMobSavedData` + `PerMobRemovalContractTest` now make the rule a build failure
+   rather than a thing to remember, which is the form the lesson should have taken immediately.
+
+Also recorded: the contract test's first detector (`Map<UUID,`) missed the store that most needed
+it, because that store keys by `BlockPos` and holds the mob id in the value. **"Keyed by" was the
+wrong property to detect** — the right one is "mentions mob identity at all". A structural test is
+only as good as the property it looks for, which is the same lesson as the AV-1 section above,
+arriving from the detector side rather than the assertion side.
