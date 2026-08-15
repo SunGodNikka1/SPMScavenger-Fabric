@@ -69,3 +69,16 @@ BUILD SUCCESSFUL — 905 tests
 | --- | --- | --- |
 | Familiarity bootstrap | `empty(tick)` made `tick - lastVisitTick == 0` forever | `SettlementRelationship.empty()` uses `lastVisitTick = 0`; visit/presence paths use `bootstrap` when no row exists |
 | Load regression test | `remember()` pre-evicted before save | Test builds oversized NBT directly (17 villages + 17 relationships) |
+
+## Repair pass 3 (2026-08-15, VR-T1.5a FAIL)
+
+**Runtime evidence (Bob, overworld taiga):** remembered village anchor ~(-11666, 7709); Bob stopped at ~(-11592, 7716) — **~74 blocks** from anchor. Inside 64-block arrival bounds: no. Inside 128-block commute **start** cutoff: yes → **dead zone**.
+
+| Fix | Issue | Resolution |
+| --- | --- | --- |
+| Commute dead zone | `shouldCommute()` applied `COMMUTE_MIN_DISTANCE` (128) to **chain** legs as well as new starts | Split: `shouldStartCommute` / `shouldStartCommuteAt` (128 gate) vs `shouldContinueCommute` / `shouldContinueCommuteAt` (64-boundary only). `ExploringGoal.completeExpedition` chains via `tryChainCommuteLeg` + continue policy |
+| Dead-zone unit tests | Bob repro not covered | `mustNotHappen_startCommuteInsideDeadZoneBetweenBoundsAndMinDistance` at 74 blocks; continue=true, start=false |
+
+`.\gradlew.bat clean build` — **BUILD SUCCESSFUL** (914 tests).
+
+**VR-T1.5a:** still **UNVERIFIED** after fix — retest requires explicit launch approval.
