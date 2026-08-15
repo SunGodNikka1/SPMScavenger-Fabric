@@ -18,7 +18,7 @@ import java.util.UUID;
 class CrossDimensionEvictionTest {
 
     private static ObservationQuality complete(int admitted) {
-        return new ObservationQuality(admitted, 0);
+        return ObservationQuality.fullCoverage(admitted);
     }
 
     /**

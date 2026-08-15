@@ -10,8 +10,8 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
 | **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (hardened through V1-R3); V2+ design-only; no VR-T* runtime |
-| **Nearest frontier** | **V1-R4 `ACCEPTED`** — ready to implement when authorized. **V1-D / D-VR-033** remain **BLOCKED** (scheduler P1s after R4 lands + code review). |
-| **Last update** | 2026-08-14 (User **accepts V1-R4** `PerceptionCoverage` lock; D-VR-033 REVIEW; V1-D BLOCKED; no implementation this turn) |
+| **Nearest frontier** | **V1-R4 `IMPLEMENTED`** (1.9.5). Review code/tests, then close D-VR-033 scheduler P1s before V1-D. |
+| **Last update** | 2026-08-14 (V1-R4 `PerceptionCoverage` implemented in 1.9.5) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -2645,9 +2645,9 @@ Do not equate "no chunk generation" with "cheap query."
 
 **SettlementTier decomposition gate:** no objection — defer enum churn until V4/V5 consumers force it.
 
-### V1-R4 — `PerceptionCoverage` replaces withheld in cognition (`LOCKED` — User, 2026-08-14)
+### V1-R4 — `PerceptionCoverage` replaces withheld in cognition (`IMPLEMENTED` — 1.9.5)
 
-**Status:** **`ACCEPTED` / ready to implement** — implementation **not authorized** this turn
+**Status:** **`IMPLEMENTED`** (User accepted design, 2026-08-14; ships in mod **1.9.5**)
 
 **Fixes both prior failures:**
 
@@ -3438,6 +3438,7 @@ camp becoming `HOME_VILLAGE`; treating one mob's founding history as settlement 
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Cursor | 2026-08-14 | **V1-R4 implemented (1.9.5).** `PerceptionCoverage` dual pipeline; `ObservationQuality` cross-multiply supersede; optimistic NBT migration; `PerceptionCoverageTest` + contract/structural updates. Village tests green. V1-D still BLOCKED. |
 | User | 2026-08-14 | **Accept V1-R4.** `PerceptionCoverage` LOCKED: dual pipeline (coverage independent of `getInRange`); `loadedColumns`/`totalColumns` + cross-multiply supersede; optimistic full-coverage NBT migration; required shrink + worse-coverage tests. D-VR-033 still REVIEW; V1-D BLOCKED. **No implementation authorization.** |
 | User | 2026-08-14 | **V1-R4 design amendment.** Reject admitted-count supersede (regresses V1-R1 shrink freeze). Replace withheld with **`PerceptionCoverage`** (loaded/total chunk columns in 64-block footprint). Conditional scheduler Must happen; fair admission over `MAX_QUEUE>=100`; B-VR-59. **No implementation authorization.** |
 | User | 2026-08-14 | **D-VR-033 implementation review — V1-D BLOCKED.** P0: `withheldPoiCount` epistemic leak (V1-R4). P1: dirty≠prompt service; queue admission fairness. D-VR-033 → `REVIEW`. D-VR-027 P2 title; 029/030/031 concept locks affirmed; 028 open; 032 held. B-VR-55…58. **No implementation authorization.** |

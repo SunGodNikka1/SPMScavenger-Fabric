@@ -92,8 +92,8 @@ public final class KnownVillage {
      * observations that the village silently becomes a different village, which is the failure
      * D-VR-019 exists to prevent — reintroduced from the inside.
      *
-     * <p>V1-R1: the acceptance rule moved from POI <em>quantity</em> to observation
-     * <em>completeness</em> (see {@link ObservationQuality#supersedes}). Under the old rule a village
+     * <p>V1-R4: the acceptance rule uses {@link PerceptionCoverage} (see
+     * {@link ObservationQuality#supersedes}). Under the old quantity rule a village that lost
      * that lost buildings (20 POIs to 16) or was rebuilt in place (20 to a different 20) could never
      * update its anchor again, because both fail {@code newCount > oldCount}.
      *
@@ -145,7 +145,7 @@ public final class KnownVillage {
         // the defect the acceptance rule exists to prevent.
         ObservationQuality quality = tag.contains("quality")
                 ? ObservationQuality.load(tag.getCompound("quality"))
-                : new ObservationQuality(tag.getInt("poiCount"), 0);
+                : ObservationQuality.fullCoverage(tag.getInt("poiCount"));
         return new KnownVillage(
                 anchor, tier, tag.getLong("firstSeen"), tag.getLong("lastSeen"), quality);
     }
@@ -153,6 +153,7 @@ public final class KnownVillage {
     @Override
     public String toString() {
         return "KnownVillage[" + anchor.toShortString() + " " + tier
-                + " poi=" + quality.admitted() + "/" + quality.totalVisible() + "]";
+                + " poi=" + quality.admitted()
+                + " cov=" + quality.loadedColumns() + "/" + quality.totalColumns() + "]";
     }
 }

@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 class AnchorStabilityTest {
 
     private static ObservationQuality complete(int admitted) {
-        return new ObservationQuality(admitted, 0);
+        return ObservationQuality.fullCoverage(admitted);
     }
 
     /**
@@ -105,7 +105,8 @@ class AnchorStabilityTest {
         BlockPos good = new BlockPos(0, 64, 0);
         memory.remember(good, 100L, complete(30));
         for (int i = 1; i <= 50; i++) {
-            memory.remember(new BlockPos(30, 64, 20), 100L + i * 100L, new ObservationQuality(2, 28));
+            memory.remember(new BlockPos(30, 64, 20), 100L + i * 100L,
+                    ObservationQuality.withCoverage(2, 30, 2));
         }
         assertEquals(good, memory.villages().get(0).anchor());
     }

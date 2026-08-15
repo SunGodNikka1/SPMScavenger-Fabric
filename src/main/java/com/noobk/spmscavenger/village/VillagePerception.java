@@ -31,8 +31,9 @@ import java.util.List;
  *
  * <p>So the boundary is a <b>construction invariant</b>, not a check the caller is trusted to
  * remember. This class holds the only reference to {@link PoiManager} in the addon, the raw stream is
- * never returned, and every record passes {@link #withinPerception} before it can influence anything.
- * The same philosophy as ore in Mining Intelligence: the server knows it is there; the mob does not.
+ * never returned, and every record passes {@link #withinPerception} before it can influence settlement
+ * facts. Observation <em>quality</em> comes from {@link PerceptionCoverage}, computed independently
+ * of POI records (V1-R4).
  *
  * <p>{@code ServerLevel#hasChunk} resolves against the chunk source's loaded map and <b>does not
  * trigger a load or generation</b>, so asking the question cannot manufacture its own answer
@@ -51,19 +52,15 @@ public final class VillagePerception {
     }
 
     /** What the mob is allowed to have noticed, and the anchor that follows from it. */
-    public record Observation(BlockPos anchor, int admittedPoiCount, int withheldPoiCount) {
+    public record Observation(BlockPos anchor, int admittedPoiCount, PerceptionCoverage coverage) {
 
         public boolean isSettlement() {
             return admittedPoiCount > 0;
         }
 
-        /**
-         * True when the boundary actually excluded something. Useful as a runtime signal that the
-         * mob is at the edge of a settlement rather than in it — and as the log line that proves the
-         * boundary is doing work rather than being trivially satisfied.
-         */
+        /** True when the mob's perceivable footprint was not fully loaded (V1-R4). */
         public boolean partiallyPerceived() {
-            return withheldPoiCount > 0;
+            return !coverage.isFull();
         }
     }
 
@@ -75,10 +72,12 @@ public final class VillagePerception {
      *     from a remembered or predicted place
      */
     public static Observation observe(ServerLevel level, BlockPos origin) {
-        List<BlockPos> admitted = new ArrayList<>();
-        int withheld = 0;
+        PerceptionCoverage coverage =
+                PerceptionCoverage.compute(level, origin, VILLAGE_QUERY_RADIUS);
 
-        // The single PoiManager touch point in the addon. Everything downstream sees `admitted`.
+        List<BlockPos> admitted = new ArrayList<>();
+
+        // Pipeline B — settlement facts. Coverage (pipeline A) is already fixed above.
         List<PoiRecord> records = level.getPoiManager()
                 .getInRange(
                         holder -> holder.is(PoiTypeTags.VILLAGE),
@@ -91,13 +90,11 @@ public final class VillagePerception {
             BlockPos pos = record.getPos();
             if (withinPerception(level, pos)) {
                 admitted.add(pos);
-            } else {
-                withheld++;
             }
         }
 
         BlockPos anchor = VillageAnchorPolicy.anchorOf(admitted, origin);
-        return new Observation(anchor, admitted.size(), withheld);
+        return new Observation(anchor, admitted.size(), coverage);
     }
 
     /**

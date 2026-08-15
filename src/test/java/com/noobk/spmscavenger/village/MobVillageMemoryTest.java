@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class MobVillageMemoryTest {
 
     private static ObservationQuality complete(int admitted) {
-        return new ObservationQuality(admitted, 0);
+        return ObservationQuality.fullCoverage(admitted);
     }
 
     /** Villages far enough apart to never merge under any candidate identity radius. */
@@ -27,7 +27,7 @@ class MobVillageMemoryTest {
         KnownVillage first = memory.remember(new BlockPos(0, 64, 0), 100L, complete(12));
         // 30 blocks apart: the same settlement seen from another side (identity radius is 48).
         KnownVillage again =
-                memory.remember(new BlockPos(24, 64, 18), 200L, new ObservationQuality(9, 6));
+                memory.remember(new BlockPos(24, 64, 18), 200L, ObservationQuality.withCoverage(5, 10, 9));
 
         assertEquals(1, memory.size(), "two anchors inside the identity radius are one village");
         assertSame(first, again, "a less complete re-observation keeps the better-supported anchor");
@@ -45,7 +45,7 @@ class MobVillageMemoryTest {
         MobVillageMemory memory = new MobVillageMemory();
         BlockPos good = new BlockPos(0, 64, 0);
         memory.remember(good, 100L, complete(30));
-        memory.remember(new BlockPos(30, 64, 0), 500L, new ObservationQuality(2, 26));
+        memory.remember(new BlockPos(30, 64, 0), 500L, ObservationQuality.withCoverage(2, 28, 2));
 
         assertEquals(good, memory.at(good).orElseThrow().anchor());
         assertEquals(30, memory.at(good).orElseThrow().poiCount());
@@ -54,7 +54,7 @@ class MobVillageMemoryTest {
     @Test
     void mustHappen_strongerObservationReplacesTheAnchor() {
         MobVillageMemory memory = new MobVillageMemory();
-        memory.remember(new BlockPos(0, 64, 0), 100L, new ObservationQuality(4, 20));
+        memory.remember(new BlockPos(0, 64, 0), 100L, ObservationQuality.withCoverage(4, 24, 4));
         BlockPos better = new BlockPos(24, 64, 16);
         memory.remember(better, 300L, complete(25));
 

@@ -93,6 +93,10 @@ class VillagePerceptionContractTest {
         int query = body.indexOf("getInRange");
         assertTrue(query > 0, "the query exists");
 
+        int coverage = body.indexOf("PerceptionCoverage.compute", 0);
+        assertTrue(coverage > 0 && coverage < query,
+                "coverage is computed independently before any PoiManager query");
+
         int filter = body.indexOf("withinPerception", query);
         int returned = body.indexOf("return new Observation", query);
         assertTrue(filter > 0 && filter < returned,

@@ -19,11 +19,11 @@ import java.util.List;
 class VillageLifecycleAndIdentityTest {
 
     private static ObservationQuality complete(int admitted) {
-        return new ObservationQuality(admitted, 0);
+        return ObservationQuality.fullCoverage(admitted);
     }
 
-    private static ObservationQuality partial(int admitted, int withheld) {
-        return new ObservationQuality(admitted, withheld);
+    private static ObservationQuality partial(int admitted, int loaded, int total) {
+        return ObservationQuality.withCoverage(loaded, total, admitted);
     }
 
     // ------------------------------------------------------------------ P1a: identity vs raid
@@ -134,7 +134,7 @@ class VillageLifecycleAndIdentityTest {
         memory.remember(good, 100L, complete(20));
 
         // Standing at the rim: three POIs admitted, twenty-five refused by the boundary.
-        memory.remember(new BlockPos(30, 64, 20), 50_000L, partial(3, 25));
+        memory.remember(new BlockPos(30, 64, 20), 50_000L, partial(3, 2, 20));
 
         assertEquals(good, memory.at(good).orElseThrow().anchor(),
                 "a 3/28 view must never overwrite a complete one, however recent");
@@ -146,30 +146,32 @@ class VillageLifecycleAndIdentityTest {
     @Test
     void mustHappen_moreCompleteViewWinsOverLargerCount() {
         MobVillageMemory memory = new MobVillageMemory();
-        memory.remember(new BlockPos(0, 64, 0), 100L, partial(18, 12));
+        memory.remember(new BlockPos(0, 64, 0), 100L, partial(18, 9, 15));
         BlockPos better = new BlockPos(10, 64, 10);
         memory.remember(better, 200L, complete(9));
         assertEquals(better, memory.at(better).orElseThrow().anchor());
     }
 
     @Test
-    void mustHappen_completenessMathIsHonest() {
-        assertEquals(1f, complete(10).completeness());
-        assertEquals(0f, new ObservationQuality(0, 7).completeness());
-        assertEquals(0.5f, partial(5, 5).completeness());
-        assertFalse(new ObservationQuality(0, 0).isComplete(), "seeing nothing is not seeing it all");
+    void mustHappen_coverageMathIsHonest() {
+        assertEquals(1f, complete(10).coverageRatio());
+        assertEquals(0f, ObservationQuality.withCoverage(0, 7, 0).coverageRatio());
+        assertEquals(0.5f, partial(5, 5, 10).coverageRatio());
+        assertFalse(ObservationQuality.withCoverage(0, 0, 0).isComplete(),
+                "zero footprint is not a complete view");
         assertTrue(complete(1).isComplete());
     }
 
-    /** The perception layer must hand the memory layer the whole signal, not half of it. */
+    /** The perception layer must hand the memory layer coverage, not hidden POI counts (V1-R4). */
     @Test
-    void mustHappen_observationCarriesWithheldCount() {
+    void mustHappen_observationCarriesCoverage() {
+        PerceptionCoverage partial = new PerceptionCoverage(4, 11);
         VillagePerception.Observation observation = new VillagePerception.Observation(
-                new BlockPos(0, 64, 0), 4, 11);
+                new BlockPos(0, 64, 0), 4, partial);
         assertTrue(observation.partiallyPerceived());
-        ObservationQuality quality =
-                new ObservationQuality(observation.admittedPoiCount(), observation.withheldPoiCount());
-        assertEquals(15, quality.totalVisible());
+        ObservationQuality quality = ObservationQuality.of(observation.coverage(), observation.admittedPoiCount());
+        assertEquals(4, quality.loadedColumns());
+        assertEquals(11, quality.totalColumns());
         assertFalse(quality.isComplete());
     }
 
@@ -180,6 +182,17 @@ class VillageLifecycleAndIdentityTest {
      * complete observation of that size — treating it as unusable would let the first partial glance
      * after the update overwrite a good anchor, which is the defect the rule exists to prevent.
      */
+    @Test
+    void mustHappen_preR1WithheldLoadsAsOptimisticFullCoverage() {
+        net.minecraft.nbt.CompoundTag legacyQuality = new net.minecraft.nbt.CompoundTag();
+        legacyQuality.putInt("admitted", 12);
+        legacyQuality.putInt("withheld", 40);
+
+        ObservationQuality loaded = ObservationQuality.load(legacyQuality);
+        assertTrue(loaded.isComplete(), "withheld must not be reinterpreted");
+        assertEquals(12, loaded.admitted());
+    }
+
     @Test
     void mustHappen_preUpgradeRowsLoadAsCompleteObservations() {
         net.minecraft.nbt.CompoundTag legacy = KnownVillage.discovered(
@@ -194,9 +207,10 @@ class VillageLifecycleAndIdentityTest {
 
     @Test
     void mustHappen_qualityRoundTripsThroughNbt() {
-        KnownVillage village = KnownVillage.discovered(new BlockPos(0, 64, 0), 10L, partial(6, 9));
+        KnownVillage village = KnownVillage.discovered(new BlockPos(0, 64, 0), 10L, partial(6, 6, 15));
         KnownVillage loaded = KnownVillage.load(village.save());
         assertEquals(6, loaded.quality().admitted());
-        assertEquals(9, loaded.quality().withheld());
+        assertEquals(6, loaded.quality().loadedColumns());
+        assertEquals(15, loaded.quality().totalColumns());
     }
 }

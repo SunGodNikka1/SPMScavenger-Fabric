@@ -140,13 +140,10 @@ public final class VillageMemorySavedData extends SavedData {
         if (observation == null || !observation.isSettlement()) {
             return Optional.empty();
         }
-        // V1-R1: the full quality, not just the admitted count. withheldPoiCount is how much of the
-        // settlement the boundary refused, and it is the only signal that distinguishes "small
-        // village seen whole" from "big village glimpsed from the edge".
         KnownVillage village = memoryOf(mob).remember(
                 observation.anchor(),
                 tick,
-                new ObservationQuality(observation.admittedPoiCount(), observation.withheldPoiCount()));
+                ObservationQuality.of(observation.coverage(), observation.admittedPoiCount()));
         setDirty();
         return Optional.of(village);
     }
