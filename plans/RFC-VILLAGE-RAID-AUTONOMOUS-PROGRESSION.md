@@ -8,10 +8,10 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + VR-T1A CLOSED**. **V1.5 Settlement attachment** is the active frontier; **V2 Trading** follows |
-| **Status** | `RESEARCHING` — V1.5 **concept APPROVED**; **task-46 HOLD** (contract contradictions under repair) |
-| **Nearest frontier** | **Close task-46 P1s** → re-authorize V1.5 / 1.11.0 |
-| **Last update** | 2026-08-14 (User task-46 peer review — P1 closure edits) |
+| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + VR-T1A CLOSED**. **Task-46 AUTHORIZED** — V1.5 / 1.11.0 implementation |
+| **Status** | `IMPLEMENTING` — V1.5 **task-46 AUTHORIZED** (D-VR-052 REJECT V1.5-E) |
+| **Nearest frontier** | **Implement task-46** (V1.5-A…D + temporary F) → VR-T1.5a–c runtime |
+| **Last update** | 2026-08-14 (User D-VR-052 REJECT — task-46 authorized) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -631,13 +631,13 @@ V1.5 Settlement attachment & return (NEXT)
 ├─ recognize factual home + familiarity bands
 ├─ return / commute-to-home-or-familiar goal
 ├─ village-aware FriendlyGreet / discretionary SOCIAL weighting
-└─ basic village manners precursor (ally storage gate sketch → VR-20)
+└─ (V1.5-E / VR-T1.5d **DEFERRED** → V3 `StorageOwnership`)
 V2   Trading (VillagerTradeAdapter, TradeEvaluationPolicy, TradeWithVillagerGoal)
 V3+  Work, reputation, raid, site utility (unchanged ordering after V2)
 ```
 
 **Strongest objection:** V1.5 scope creep absorbs V3 manners + V4 return + part of V5 ally logic.
-**Mitigation:** V1.5 MVP is **relationship + return + social weighting + ally-gate precursor only**;
+**Mitigation:** V1.5 MVP is **relationship + return + social weighting only**; ally storage gate,
 replant, full gift loops, and raid interrupt remain later phases.
 
 **Viable alternative:** keep original plan (V2 trade before attachment). **Rejected for gen-1** per
@@ -651,7 +651,7 @@ visible "my village" play.
 | VR-T1.5a | After 10+ min away, mob with HOME paths toward home anchor | Treats home same as never-seen cluster |
 | VR-T1.5b | Repeated visits increase familiarity in saved data | Single visit maxes attachment |
 | VR-T1.5c | Village-aware greet fires more near familiar settlement | Greet mistaken for trade completion |
-| VR-T1.5d | HIGH attachment + HOME suppresses village chest raid (precursor) | Ally profile still loots workstation chest |
+| ~~VR-T1.5d~~ | **DEFERRED → VR-T3** (`D-VR-052`) | — |
 
 ### Decisions
 
@@ -675,13 +675,14 @@ visible "my village" play.
 | **D-VR-049** | Option A relationship `rekey` on anchor supersede + merge on `remember()` + evict sync | **`LOCKED`** |
 | **D-VR-050** | Social credit requires `settlementAnchorAtStart` on greet binding at admission | **`LOCKED`** |
 | **D-VR-051** | No permanent village debug commands; temporary `designate-home` removed post VR-T1.5 | **`LOCKED`** |
-| **D-VR-052** | V1.5-E ally loot gate — **PRODUCT DECISION** before implementation | **OPEN** |
+| **D-VR-052** | V1.5-E ally loot gate — **REJECT for V1.5**; defer to V3 `StorageOwnership` + VR-T3 | **`LOCKED`** — User 2026-08-14 |
 
-**Not authorized:** V1.5 implementation or Minecraft launch.
+**Authorized:** task-46 / V1.5 slices A–D + temporary F → **1.11.0**. **Not authorized:** V1.5-E,
+Minecraft launch.
 
-**Next frontier:** close **task-46 P1 contradictions** (this section) → re-authorize **1.11.0**.
+**Next frontier:** implement task-46 → VR-T1.5a–c runtime (overworld-only).
 
-### Task-46 peer review — User P1 closure (`HOLD`, 2026-08-14)
+### Task-46 peer review — User P1 closure (`AUTHORIZED`, 2026-08-14)
 
 **Review state (`CONFIRMED`, User):**
 
@@ -690,7 +691,7 @@ visible "my village" play.
 | V1.5 concept | **APPROVED** |
 | Phase placement (before Trading) | **APPROVED** |
 | Architecture direction | **APPROVED** |
-| Task-46 implementation | **HOLD** — contract contradictions, not missing theory |
+| Task-46 implementation | **AUTHORIZED** — D-VR-052 REJECT V1.5-E |
 
 #### P1-1 — V1.5-F vs VR-T1A cleanup (`CLOSED`)
 
@@ -798,21 +799,32 @@ nearest remembered village anchor within `SettlementBoundsPolicy`, or empty. Per
 
 Structural contract test required before task-46 authorization.
 
-#### P1-9 — V1.5-E coarse ally gate (`PRODUCT DECISION` — open)
+#### P1-9 — V1.5-E coarse ally gate (`CLOSED` — User REJECT)
 
 **Finding:** Global `RaidContainersGoal#canUse` cancel for HOME/HIGH may suppress legitimate scavenging.
+Attachment answers “this settlement matters”; it does not classify container ownership.
 
-**Resolution:** V1.5-E remains **in scope** but **blocked on explicit User acceptance** of coarse
-predicate. Document tradeoff: protects village chests; may block workstation loot until V3
-`StorageOwnership`. **Do not implement V1.5-E** until accepted or narrowed (e.g. only chests tagged
-`VILLAGE_PUBLIC` when tag exists).
+**Resolution (`LOCKED` — `D-VR-052`):** **REJECT V1.5-E for this release.**
+
+| Item | Decision |
+| --- | --- |
+| V1.5-E | **DEFER → V3** `StorageOwnership` |
+| VR-T1.5d | **DEFER → VR-T3** — prove manners with container classification, not blanket cancel |
+| V1.5 ships | A + B + C + D + temporary F only |
+
+**V3 proof contract (when implemented):** HOME/HIGH-attached village **+** container classified
+`VILLAGE_PUBLIC` → `RaidContainersGoal` cannot loot it. Tests actual village manners, not attachment
+as a substitute for ownership.
+
+**Rejected alternatives:** coarse HOME/HIGH blanket (throws away container information); narrow
+`VILLAGE_PUBLIC` tag in V1.5 (starts `StorageOwnership` incompletely, migration debt for V3).
 
 #### P2 cleanup (`CLOSED`)
 
 - `attachmentBand`: **derived only** at read time from `familiarityScore`; not NBT field.
 - `helpfulEventCount`: **removed** from gen-1 schema (no consumer).
 
-### V1.5 implementation contract (`HOLD` — revise per P1 closure, then authorize **1.11.0**)
+### V1.5 implementation contract (`AUTHORIZED` — task-46 / **1.11.0**)
 
 **Scope (in):**
 
@@ -822,10 +834,11 @@ predicate. Document tradeoff: protects village chests; may block workstation loo
 | **V1.5-B** | Gen-1 accumulation (`D-VR-036`): presence via `SettlementBoundsPolicy` @ 64, visit on `record`, social via `SettlementRelationshipService` |
 | **V1.5-C** | `SettlementReturnPolicy` + forced-heading `ExploringGoal` commute (`D-VR-043`); blocked during mining/cave handoff |
 | **V1.5-D** | Village-aware discretionary SOCIAL weighting near familiar anchor (GAO bridge; no trade confusion) |
-| **V1.5-E** | VR-T1.5d precursor: `RaidContainersGoal` suppress when HOME/HIGH — **only after P1-9 acceptance** |
 | **V1.5-F** | **Temporary** `/spmscavenger designate-home` for VR-T1.5a only; **remove post-VR-T1.5**. **No** `village-memory` |
 
-**Scope (out):** `VillagerTradeAdapter`, raid interrupt, replant, full `StorageOwnership`, `SettlementOpinionBias` (V4), SETTLEMENT Opinion subject.
+**Scope (out):** **V1.5-E** (`RaidContainersGoal` suppression — **DEFERRED V3**, `D-VR-052`);
+`VillagerTradeAdapter`, raid interrupt, replant, full `StorageOwnership`, `SettlementOpinionBias`
+(V4), SETTLEMENT Opinion subject.
 
 **Storage — Option A (`LOCK RECOMMENDED`, D-VR-035):**
 
@@ -880,15 +893,18 @@ mining/cave handoff idle; `cfg.exploring` true (`D-VR-046`); no mandatory combat
 
 **`designateHome` gap (`CONFIRMED`):** `VillageMemorySavedData.designateHome` and `MobVillageMemory.designateHome` are **test-only** today (grep `src/main` — no production caller). VR-T1.5a **cannot pass** without **V1.5-F** debug command or an auto-home policy (`D-VR-039` defers auto policy to product review; debug command is minimum).
 
-**Ally storage precursor (`V1.5-E`):** `FriendlyGreetShelterHoldMixin` gates shelter only (`ActivityClass` envelope) — it does **not** block `RaidContainersGoal` looting. VR-T1.5d requires a **separate** mixin `HEAD` cancel on `RaidContainersGoal#canUse` when `VillageAllyStoragePolicy.suppressLoot(mob)` — predicate: `HOME_VILLAGE` **or** attachment HIGH at that settlement. Workstation chests remain **UNVERIFIED** until V3 `StorageOwnership`.
+**Ally storage / VR-T1.5d (`DEFERRED` — `D-VR-052`):** V1.5 does **not** mixin `RaidContainersGoal`.
+`FriendlyGreetShelterHoldMixin` gates shelter only — loot suppression belongs in V3 when
+`StorageOwnership` can classify containers (`VILLAGE_PUBLIC` vs legitimately scavengable). VR-T3
+proves: HOME/HIGH attachment **+** `VILLAGE_PUBLIC` classification → no loot.
 
-**Must happen (static):** relationship persists across save/reload; evict sync; return policy unit tests; commute does not call `VillagePerception.observe` from debug paths.
+**Must happen (static):** relationship persists across save/reload; evict sync; return policy unit tests; commute does not call `VillagePerception.observe` from debug paths; Option A rekey contract test (`D-VR-049`).
 
-**Must not happen:** attachment fields inside `KnownVillage` NBT; return goal at priority 3; trade adapter; perception refresh from debug read commands.
+**Must not happen:** attachment fields inside `KnownVillage` NBT; return goal at priority 3; trade adapter; perception refresh from debug read commands; `RaidContainersGoal` mixin in 1.11.0; reintroduction of `village-memory` / probe / driver.
 
-**Verification:** `.\gradlew.bat test --tests "*village*"` + structural contract extensions; VR-T1.5a–d runtime after launch approval.
+**Verification:** `.\gradlew.bat test --tests "*village*"` + structural contract extensions; VR-T1.5a–c runtime after launch approval (overworld-only; Bob taiga fixture).
 
-**Artifact:** `.superpowers/sdd/task-46-brief.md` on authorization.
+**Artifact:** `.superpowers/sdd/task-46-brief.md` (**written** 2026-08-14).
 
 ### Brainstorm continuation 5 — V1.5 binding gaps (`Agent_Cursor`, 2026-08-14)
 
@@ -3184,7 +3200,7 @@ regression when Pipeline A lives outside `VillagePerception`.
 
 **Cosmetic (deferred):** `KnownVillage` Javadoc duplicated word — not a release blocker.
 
-**Next gate:** ~~V1-D~~ **DONE** → ~~VR-T1A~~ **PASS** → **task-46 HOLD** (P1 closure) → re-authorize V1.5 → VR-T1.5 → V2 Trading.
+**Next gate:** ~~V1-D~~ **DONE** → ~~VR-T1A~~ **PASS** → **task-46 AUTHORIZED** → implement 1.11.0 → VR-T1.5a–c → V2 Trading.
 
 **Status (2026-08-14 continuation):** P1 contracts **CLOSED** in RFC — see `Topic: V1 perception driver`
 scheduler contracts section. D-VR-033 → **`LOCK RECOMMENDED`**. **Awaiting V1-D implementation authorization.**
@@ -3473,10 +3489,10 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | --- | --- | --- | --- |
 | **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** | VR-T1A **PASS** |
 | **V1-D** | Bounded production perception driver (D-VR-033) | **IMPLEMENTED** (1.10.0) | VR-T1A **PASS**; VR-T1b **DEFERRED** |
-| **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social, manners precursor (ally storage gate) | **HOLD** — task-46 P1s closed; D-VR-052 open | VR-T1.5a–d overworld-only; **before V2** |
+| **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social | **AUTHORIZED** — task-46 / 1.11.0 (A–D + F) | VR-T1.5a–c overworld-only; **before V2** |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | moved to V2/V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **REQUIRES MIXIN** — **after V1.5** | VR-T2: trade input → correct villager → atomic inventory change; VR-T2b: sell carrots → buy book |
-| **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest |
+| **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest (**VR-T1.5d deferred here**, `D-VR-052`) |
 | **V4** | Factual site utility + **Place opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**), known traders, home designation, return visits | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
 | **V6** | Raid player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup |
@@ -4107,6 +4123,7 @@ use explicit boolean state (`VillagePerceptionEnqueueDebounce`).
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Cursor | 2026-08-14 | **D-VR-052 REJECT — task-46 AUTHORIZED.** User: V1.5-E **DEFER → V3** `StorageOwnership`; VR-T1.5d **DEFER → VR-T3**. Release scope: V1.5-A/B/C/D + temporary F only (1.11.0). Attachment ≠ container ownership. No `village-memory`/probe/driver resurrection. |
 | Agent_Cursor | 2026-08-14 | **RFC sync — task-46 HOLD state.** Phased plan V1.5 → **HOLD** (D-VR-052 open); next-gate line updated; D-VR-041 → **LOCKED** after P1-2 closure. |
 | User + Agent_Cursor | 2026-08-14 | **Task-46 HOLD — User P1 peer review.** Concept/placement/architecture **APPROVED**; implementation **HOLD**. Closed P1-1…P1-8: no `village-memory` re-add (D-VR-051); home single-owner + `onHomeDesignated` (P1-2); presence @ 64 not 96 (P1-3); COMMUTE admission sequence + multi-leg return (D-VR-047/048); `cfg.exploring` required (D-VR-046); social anchor at greet admission (D-VR-050); Option A rekey (D-VR-049). V1.5-E awaits product acceptance (D-VR-052). Bob VR-T1.5 overworld-only. |
 | Agent_Cursor | 2026-08-14 | **V1.5 brainstorm continuation 5.** `SettlementBoundsPolicy` @ 64 (`D-VR-040`); `SettlementRelationshipService` write path (`D-VR-041`); commute/mining arbitration + forced-heading expedition (`D-VR-043`); relationship merge on village merge (`D-VR-044`); `SettlementSocialBias` not FriendlyGreet hack (`D-VR-045`); auto-home product decision (`D-VR-042`). B-VR-66…71. **Authorize task-46 / 1.11.0** is the only remaining frontier. |

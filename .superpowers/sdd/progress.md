@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | **RT-MI-TS1** | Open — runtime falsification; launch not authorized | `task-33-brief.md` |
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
-| **V1.5 Settlement attachment & return** | **HOLD** — task-46 P1s closed in RFC; re-authorize after D-VR-052 (V1.5-E) | RFC Task-46 peer review |
+| **V1.5 Settlement attachment & return** | **AUTHORIZED** — task-46 / 1.11.0 (A–D + F); V1.5-E deferred V3 | `task-46-brief.md` |
 | **V2 Trading** | **BLOCKED on V1.5** | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
