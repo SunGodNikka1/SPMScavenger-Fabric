@@ -59,12 +59,46 @@ class SocialGreetClaimWindowTest {
     }
 
     @Test
-    void mustHappen_targetChangeResetsTheWindow() {
-        UUID other = UUID.randomUUID();
-        SocialGreetClaimWindow.evaluate(MOB, TARGET, 100L, false);
+    void mustNotHappen_targetChurnExtendsTheClaimDeadline() {
+        UUID alice = UUID.randomUUID();
+        UUID bob = UUID.randomUUID();
+        UUID carol = UUID.randomUUID();
+        long start = 1_000L;
+        int window = DiscretionaryDirectorConstants.GREET_CLAIM_WINDOW_TICKS;
+
+        SocialGreetClaimWindow.evaluate(MOB, alice, start, false);
         assertEquals(SocialGreetClaimWindow.Outcome.DEFER,
-                SocialGreetClaimWindow.evaluate(MOB, other, 110L, false),
-                "new target opens a fresh claim window");
+                SocialGreetClaimWindow.evaluate(MOB, bob, start + 5, false));
+        assertEquals(SocialGreetClaimWindow.Outcome.DEFER,
+                SocialGreetClaimWindow.evaluate(MOB, carol, start + window - 1, false),
+                "churn must not push the deadline past the original episode");
+
+        assertEquals(SocialGreetClaimWindow.Outcome.PROCEED,
+                SocialGreetClaimWindow.evaluate(MOB, carol, start + window, false),
+                "native greet must fall back at the original deadline despite churn");
+        assertEquals(0, SocialGreetClaimWindow.trackedClaimCount());
+    }
+
+    @Test
+    void mustHappen_targetChurnUpdatesIdentityWithoutExtendingDeadline() {
+        UUID alice = UUID.randomUUID();
+        UUID bob = UUID.randomUUID();
+        long start = 500L;
+        int window = DiscretionaryDirectorConstants.GREET_CLAIM_WINDOW_TICKS;
+
+        SocialGreetClaimWindow.evaluate(MOB, alice, start, false);
+        SocialGreetClaimWindow.ClaimEpisode episode =
+                SocialGreetClaimWindow.episodeForTest(MOB).orElseThrow();
+        assertEquals(alice, episode.targetId());
+        assertEquals(start, episode.openedAtTick());
+        assertEquals(start + window, episode.deadlineTick());
+
+        SocialGreetClaimWindow.evaluate(MOB, bob, start + 7, false);
+        episode = SocialGreetClaimWindow.episodeForTest(MOB).orElseThrow();
+        assertEquals(bob, episode.targetId(), "exact candidate must track the host's current target");
+        assertEquals(start, episode.openedAtTick());
+        assertEquals(start + window, episode.deadlineTick(),
+                "episode deadline must remain anchored to the first admission pulse");
     }
 
     @Test

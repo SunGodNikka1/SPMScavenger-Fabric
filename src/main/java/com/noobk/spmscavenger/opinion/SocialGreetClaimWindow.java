@@ -43,11 +43,16 @@ public final class SocialGreetClaimWindow {
         }
 
         Pending pending = PENDING.get(mobId);
-        if (pending == null || !pending.targetId().equals(targetId)) {
+        if (pending == null) {
             long deadline = gameTime + DiscretionaryDirectorConstants.GREET_CLAIM_WINDOW_TICKS;
-            PENDING.put(mobId, new Pending(targetId, gameTime, deadline));
-            return gameTime >= deadline ? Outcome.PROCEED : Outcome.DEFER;
+            pending = new Pending(targetId, gameTime, deadline);
+            PENDING.put(mobId, pending);
+        } else if (!pending.targetId().equals(targetId)) {
+            // Host churn may change the exact candidate; the admission episode deadline must not.
+            pending = new Pending(targetId, pending.openedAtTick(), pending.deadlineTick());
+            PENDING.put(mobId, pending);
         }
+
         if (gameTime >= pending.deadlineTick()) {
             clear(mobId);
             return Outcome.PROCEED;
@@ -73,6 +78,18 @@ public final class SocialGreetClaimWindow {
     static int trackedClaimCount() {
         return PENDING.size();
     }
+
+    /** Test seam — inspect the live admission episode without widening production API. */
+    static java.util.Optional<ClaimEpisode> episodeForTest(UUID mobId) {
+        Pending pending = PENDING.get(mobId);
+        if (pending == null) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(new ClaimEpisode(
+                pending.targetId(), pending.openedAtTick(), pending.deadlineTick()));
+    }
+
+    record ClaimEpisode(UUID targetId, long openedAtTick, long deadlineTick) {}
 
     /** Test seam. */
     static void clearForTest() {
