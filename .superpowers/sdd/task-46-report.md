@@ -62,3 +62,10 @@ BUILD SUCCESSFUL — 905 tests
 | Load/evict sync | `evictBeyondBound()` before relationship NBT load resurrected orphan rows | Load relationships first, then evict; `pruneOrphanRelationships()` after eviction |
 
 `.\gradlew.bat clean build` — **BUILD SUCCESSFUL** (908 tests after repair).
+
+## Repair pass 2 (2026-08-15, pre-VR-T1.5)
+
+| Fix | Issue | Resolution |
+| --- | --- | --- |
+| Familiarity bootstrap | `empty(tick)` made `tick - lastVisitTick == 0` forever | `SettlementRelationship.empty()` uses `lastVisitTick = 0`; visit/presence paths use `bootstrap` when no row exists |
+| Load regression test | `remember()` pre-evicted before save | Test builds oversized NBT directly (17 villages + 17 relationships) |

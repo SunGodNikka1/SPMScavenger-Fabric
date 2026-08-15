@@ -20,8 +20,18 @@ public final class SettlementRelationship {
         this.socialEventCount = Math.max(0, socialEventCount);
     }
 
+    /**
+     * No familiarity bumps yet. {@code lastVisitTick == 0} means "never bumped" so stale gates treat
+     * the first visit/presence as eligible (V1.5-B bootstrap).
+     */
+    public static SettlementRelationship empty() {
+        return new SettlementRelationship(0, 0L, 0);
+    }
+
+    /** @deprecated use {@link #empty()} — seeding {@code lastVisitTick = tick} blocks bootstrap */
+    @Deprecated
     public static SettlementRelationship empty(long tick) {
-        return new SettlementRelationship(0, tick, 0);
+        return empty();
     }
 
     public int familiarityScore() {
@@ -81,7 +91,7 @@ public final class SettlementRelationship {
 
     public static SettlementRelationship load(CompoundTag tag) {
         if (tag == null) {
-            return empty(0L);
+            return empty();
         }
         return new SettlementRelationship(
                 tag.getInt("familiarity"),

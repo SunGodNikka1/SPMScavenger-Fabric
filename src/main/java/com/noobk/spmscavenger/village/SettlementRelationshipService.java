@@ -20,11 +20,13 @@ public final class SettlementRelationshipService {
             return;
         }
         MobVillageMemory memory = VillageMemorySavedData.get(level).memoryOf(mobId);
-        SettlementRelationship relationship = memory.relationshipAt(village.anchor())
-                .orElseGet(() -> SettlementRelationship.empty(tick));
-        if (tick - relationship.lastVisitTick() >= SettlementTuning.VISIT_STALE_TICKS) {
+        BlockPos anchor = village.anchor();
+        boolean bootstrap = memory.relationshipAt(anchor).isEmpty();
+        SettlementRelationship relationship = memory.relationshipAt(anchor)
+                .orElseGet(SettlementRelationship::empty);
+        if (bootstrap || tick - relationship.lastVisitTick() >= SettlementTuning.VISIT_STALE_TICKS) {
             relationship.bumpFamiliarity(SettlementTuning.VISIT_FAMILIARITY_BUMP, tick);
-            memory.putRelationship(village.anchor(), relationship);
+            memory.putRelationship(anchor, relationship);
             VillageMemorySavedData.get(level).markDirty();
         }
     }
@@ -43,14 +45,15 @@ public final class SettlementRelationshipService {
             if (!SettlementBoundsPolicy.within(mobPos, village.anchor())) {
                 continue;
             }
-            SettlementRelationship relationship = memory.get()
-                    .relationshipAt(village.anchor())
-                    .orElseGet(() -> SettlementRelationship.empty(tick));
-            if (tick - relationship.lastVisitTick() < SettlementTuning.PRESENCE_HEARTBEAT_TICKS) {
+            BlockPos anchor = village.anchor();
+            boolean bootstrap = memory.get().relationshipAt(anchor).isEmpty();
+            SettlementRelationship relationship = memory.get().relationshipAt(anchor)
+                    .orElseGet(SettlementRelationship::empty);
+            if (!bootstrap && tick - relationship.lastVisitTick() < SettlementTuning.PRESENCE_HEARTBEAT_TICKS) {
                 continue;
             }
             relationship.bumpFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, tick);
-            memory.get().putRelationship(village.anchor(), relationship);
+            memory.get().putRelationship(anchor, relationship);
             changed = true;
         }
         if (changed) {
@@ -65,7 +68,7 @@ public final class SettlementRelationshipService {
         }
         MobVillageMemory memory = VillageMemorySavedData.get(level).memoryOf(mobId);
         SettlementRelationship relationship = memory.relationshipAt(anchorAtStart)
-                .orElseGet(() -> SettlementRelationship.empty(tick));
+                .orElseGet(SettlementRelationship::empty);
         relationship.recordSocialEpisode(tick);
         memory.putRelationship(anchorAtStart, relationship);
         VillageMemorySavedData.get(level).markDirty();
@@ -77,7 +80,7 @@ public final class SettlementRelationshipService {
         }
         MobVillageMemory memory = VillageMemorySavedData.get(level).memoryOf(mobId);
         SettlementRelationship relationship = memory.relationshipAt(anchor)
-                .orElseGet(() -> SettlementRelationship.empty(tick));
+                .orElseGet(SettlementRelationship::empty);
         relationship.applyHomeDesignationFloor();
         if (tick > relationship.lastVisitTick()) {
             relationship.bumpFamiliarity(0, tick);

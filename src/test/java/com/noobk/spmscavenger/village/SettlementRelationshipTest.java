@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtUtils;
 import org.junit.jupiter.api.Test;
 
 /** V1.5 — relationship persistence, rekey, merge, and eviction sync (D-VR-049). */
@@ -49,13 +52,73 @@ class SettlementRelationshipTest {
     }
 
     @Test
-    void mustNotHappen_loadRestoresRelationshipForEvictedVillage() {
+    void mustHappen_presenceHeartbeatBootstrapsRelationshipRow() {
         MobVillageMemory memory = new MobVillageMemory();
+        BlockPos anchor = far(0);
+        memory.remember(anchor, 100L, complete(5));
+        long tick = 150L;
+
+        boolean bootstrap = memory.relationshipAt(anchor).isEmpty();
+        SettlementRelationship relationship = memory.relationshipAt(anchor)
+                .orElseGet(SettlementRelationship::empty);
+        assertFalse(!bootstrap && tick - relationship.lastVisitTick() < SettlementTuning.PRESENCE_HEARTBEAT_TICKS);
+        relationship.bumpFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, tick);
+        memory.putRelationship(anchor, relationship);
+
+        assertEquals(1, memory.relationshipAt(anchor).orElseThrow().familiarityScore());
+    }
+
+    @Test
+    void mustHappen_firstVisitRecordBootstrapsRelationshipRow() {
+        MobVillageMemory memory = new MobVillageMemory();
+        BlockPos anchor = far(0);
+        memory.remember(anchor, 500L, complete(5));
+        assertTrue(memory.relationshipAt(anchor).isEmpty());
+
+        boolean bootstrap = memory.relationshipAt(anchor).isEmpty();
+        SettlementRelationship relationship = memory.relationshipAt(anchor)
+                .orElseGet(SettlementRelationship::empty);
+        assertTrue(bootstrap || 500L - relationship.lastVisitTick() >= SettlementTuning.VISIT_STALE_TICKS);
+        relationship.bumpFamiliarity(SettlementTuning.VISIT_FAMILIARITY_BUMP, 500L);
+        memory.putRelationship(anchor, relationship);
+
+        assertEquals(
+                SettlementTuning.VISIT_FAMILIARITY_BUMP,
+                memory.relationshipAt(anchor).orElseThrow().familiarityScore());
+    }
+
+    @Test
+    void mustNotHappen_emptySeededAtCurrentTickBlocksStaleGateForever() {
+        long tick = 1_000L;
+        SettlementRelationship seededAtNow = new SettlementRelationship(0, tick, 0);
+        assertEquals(
+                0L,
+                tick - seededAtNow.lastVisitTick(),
+                "old empty(tick) pattern makes age zero forever");
+        assertFalse(tick - seededAtNow.lastVisitTick() >= SettlementTuning.VISIT_STALE_TICKS);
+
+        SettlementRelationship neverBumped = SettlementRelationship.empty();
+        assertEquals(0L, neverBumped.lastVisitTick());
+        assertTrue(tick - neverBumped.lastVisitTick() >= SettlementTuning.VISIT_STALE_TICKS);
+    }
+
+    @Test
+    void mustNotHappen_loadRestoresRelationshipForEvictedVillage() {
+        CompoundTag tag = new CompoundTag();
+        ListTag villageList = new ListTag();
+        ListTag relationshipList = new ListTag();
         for (int i = 0; i <= MobVillageMemory.MAX_KNOWN_VILLAGES; i++) {
-            memory.remember(far(i), 1000L + i, complete(5));
-            memory.putRelationship(far(i), new SettlementRelationship(50 + i, 1000L + i, 0));
+            BlockPos anchor = far(i);
+            villageList.add(KnownVillage.discovered(anchor, 1000L + i, complete(5)).save());
+            CompoundTag row = new CompoundTag();
+            row.put("anchor", NbtUtils.writeBlockPos(anchor));
+            row.put("relationship", new SettlementRelationship(50 + i, 1000L + i, 0).save());
+            relationshipList.add(row);
         }
-        MobVillageMemory reloaded = MobVillageMemory.load(memory.save());
+        tag.put("villages", villageList);
+        tag.put("relationships", relationshipList);
+
+        MobVillageMemory reloaded = MobVillageMemory.load(tag);
         assertEquals(MobVillageMemory.MAX_KNOWN_VILLAGES, reloaded.size());
         assertFalse(
                 reloaded.relationshipAt(far(0)).isPresent(),
