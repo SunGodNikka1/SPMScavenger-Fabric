@@ -10,8 +10,8 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
 | **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (hardened through V1-R3); V2+ design-only; no VR-T* runtime |
-| **Nearest frontier** | **V1-R4 design amendment** (`PerceptionCoverage` — not admitted-count supersede); then RFC re-lock; **no implementation yet**. V1-D / D-VR-033 remain **BLOCKED**. |
-| **Last update** | 2026-08-14 (`User` D-VR-033 implementation review: P0 withheld boundary leak; P1 scheduler/queue contracts; D-VR-027…031 status reconciliation) |
+| **Nearest frontier** | **V1-R4 `ACCEPTED`** — ready to implement when authorized. **V1-D / D-VR-033** remain **BLOCKED** (scheduler P1s after R4 lands + code review). |
+| **Last update** | 2026-08-14 (User **accepts V1-R4** `PerceptionCoverage` lock; D-VR-033 REVIEW; V1-D BLOCKED; no implementation this turn) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -1119,7 +1119,7 @@ review** — **must fix before V1-D.**
 **Intended signal (post-V1-R4):** observation confidence from **`PerceptionCoverage`** — what fraction
 of the 64-block search footprint's chunk columns were **loaded and perceivable** at observation time.
 **Not** admitted POI count (that resurrects the V1-R1 quantity-freezing bug) and **not** hidden POI
-counts (epistemic leak). See **V1-R4** — **design amendment required before code.**
+counts (epistemic leak). **V1-R4 `ACCEPTED`** — see decision block and implementation lock below.
 
 ```text
 64-block POI search footprint
@@ -1131,17 +1131,31 @@ how many are already loaded (hasChunk)?
 PerceptionCoverage = loadedColumns / totalColumns
 ```
 
-**Data model (V1-R4):**
+**Data model (V1-R4 — `LOCKED`):**
 
 ```text
+PerceptionCoverage
+├── loadedColumns   // int — chunk columns in footprint with hasChunk == true
+└── totalColumns    // int — chunk columns intersecting 64-block footprint
+
 Observation
 ├── anchor
 ├── admittedPoiCount      // settlement detection + diagnostics only
 └── coverage              // PerceptionCoverage
 
 ObservationQuality
-└── coverage              // sole supersede ordering signal
+├── loadedColumns         // persisted; ratio is derived view only
+└── totalColumns
 ```
+
+**`supersedes()` compare (deterministic — no persisted float):**
+
+```text
+new.loaded * old.total  vs  old.loaded * new.total
+// equal → newer tick replaces
+```
+
+Percentages (100%, 45%, …) are **derived views** for docs/logging — not serialized float truth.
 
 **`supersedes()` (conceptual):**
 
@@ -2121,7 +2135,7 @@ advance the existing **V1 perception-driver** frontier; they do not add V2/V5 be
 | B-VR-51 | **Hybrid dirty + heartbeat cadence** | `REFINEMENT` | **PROMOTE → D-VR-033** | Chunk transition prevents a fast crossing from falling between slow scans; heartbeat catches POI claims/changes while stationary |
 | B-VR-52 | **Strict per-server-tick POI-query budget** | `PERFORMANCE_PATTERN` | **PROMOTE → D-VR-033** | Staggering smooths normal load but is not a hard burst bound; a one-query safety budget makes 1/10/50/100-mob cost falsifiable |
 | B-VR-53 | **Partial-observation recheck pressure** | `REFINEMENT` | **DEFER until V1-R4 ships** | `coverage < 100%` → earlier re-observation (legitimate chunk-availability signal) |
-| B-VR-55 | **`withheldPoiCount` epistemic leak** | User review | **→ V1-R4 P0** | Replace with `PerceptionCoverage`; no hidden POI in supersede |
+| B-VR-55 | **`withheldPoiCount` epistemic leak** | User review | **→ V1-R4 `ACCEPTED`** | Dual pipeline; coverage independent of `getInRange` |
 | B-VR-56 | **Dirty request ≠ prompt service** | User review | **→ D-VR-033 P1** | Conditional Must happen; VR-T1 measures traversal vs latency separately |
 | B-VR-57 | **Queue admission fairness under saturation** | User review | **→ D-VR-033 P1** | Prefer fair admission; consider ticking-mob-bound queue; not `MAX_QUEUE >= 100` alone |
 | B-VR-59 | **Admitted-count supersede regression** | User review | **REJECTED** | V1-R4 draft would freeze anchor on village shrink — use coverage only |
@@ -2550,7 +2564,8 @@ withheld: removed from persisted quality / supersede (telemetry optional)
 3. coverage 100%/10 POIs → coverage 45%/18 POIs → **keep old** (worse window wins over more POIs).
 
 **Why this blocks V1-D:** the driver makes the dormant leak **live** for every ticking PlayerMob.
-**Do not implement V1-R4 until this design is accepted** — admitted-count supersede regresses V1-R1.
+**V1-R4 design is now `ACCEPTED`** — implement when separately authorized; V1-D remains blocked until
+R4 lands and D-VR-033 scheduler P1s close.
 
 ### P1 — chunk-transition dirtying ≠ prompt observation (`CONTRACT`)
 
@@ -2630,41 +2645,74 @@ Do not equate "no chunk generation" with "cheap query."
 
 **SettlementTier decomposition gate:** no objection — defer enum churn until V4/V5 consumers force it.
 
-### V1-R4 — `PerceptionCoverage` replaces withheld in cognition (`P0`, User review — **amended, not ready for code**)
+### V1-R4 — `PerceptionCoverage` replaces withheld in cognition (`LOCKED` — User, 2026-08-14)
 
-**Problem:** V1-R1 introduced `ObservationQuality(admitted, withheld)` with `completeness()` feeding
-`supersedes()`. `withheld` leaks unperceived persisted POI counts across the epistemic boundary.
+**Status:** **`ACCEPTED` / ready to implement** — implementation **not authorized** this turn
 
-**Rejected repair (draft regression):** `supersedes()` on **admitted POI count**. Quantity was exactly
-what V1-R1 proved unsafe — a rebuilt/shrunk village (20→16 POIs at full coverage) would be rejected
-forever (`16 < 20`). That conflates *settlement size changed* with *observation got worse*.
+**Fixes both prior failures:**
 
-**Accepted repair direction (`PerceptionCoverage`):**
+| Failure | Mechanism | V1-R4 repair |
+| --- | --- | --- |
+| **A** — epistemic leak | hidden unloaded POIs → `withheld` → `completeness()` | coverage from **loaded chunk columns only** |
+| **B** — quantity freeze | admitted POI count → supersede | coverage only; 100%/20→100%/16 **newer wins** |
 
-1. Compute coverage from the **64-block search footprint**: chunk columns intersecting the cylinder /
-   footprint vs how many are loaded (`hasChunk`) — mob knows chunk availability, not hidden POI contents.
-2. `Observation` carries `anchor`, `admittedPoiCount`, `coverage`.
-3. `ObservationQuality` carries **`coverage` only** for supersede ordering.
-4. `supersedes()`: higher coverage wins; equal coverage → newer tick replaces (V1-R1 middle rule on
-   **opportunity**, not POI quantity).
-5. `admittedPoiCount` for `isSettlement()` and diagnostics only.
-6. **NBT migration:** pre-R4 quality loads as optimistic **full coverage**; do not reinterpret saved
-   `withheld`.
-7. **B-VR-53 future signal:** `coverage < 100%` may justify earlier re-observation — legitimate
-   because it uses perceivable chunk availability, not hidden POI existence.
+**Locked epistemic model:**
 
-**Rejected:** withheld in completeness denominator; admitted-count supersede; implementing before this
-amendment is accepted; freezing V1-D without V1-R4.
+```text
+loaded observation opportunity → PerceptionCoverage → quality → supersede
+```
 
-**Evidence:** `VillagePerception.java` L90–100; `ObservationQuality.java` L54–90; V1-R1 P1b quantity
-table (`RFC` § V1-R1).
+**Implementation lock (part of acceptance):** coverage is computed **independently** of POI records
+returned by `getInRange()`. No property of an unloaded `PoiRecord` — count, position, type, or
+existence — may contribute to coverage.
+
+```text
+PIPELINE A — coverage (no PoiManager)
+origin + radius 64
+        ↓
+derive intersecting chunk columns
+        ↓
+hasChunk() each
+        ↓
+PerceptionCoverage(loadedColumns, totalColumns)
+
+PIPELINE B — settlement facts (separate)
+PoiManager.getInRange(...)
+        ↓
+admit only records in loaded chunks
+        ↓
+anchor + admittedPoiCount
+```
+
+**`supersedes()`:** cross-multiply `loadedColumns`/`totalColumns`; equal → newer tick replaces.
+**`admittedPoiCount`:** `isSettlement()` + diagnostics only — **not** supersede ordering.
+
+**Required tests (must ship with R4):**
+
+1. Same position, identical loaded views, different nearby unloaded persisted POI storage → identical
+   supersede-relevant coverage.
+2. 100% / 20 POIs → 100% / 16 POIs (village shrank) → **newer replaces**.
+3. 100% / 10 POIs → 45% / 18 POIs → **keep old** (worse window beats more POIs).
+4. Coverage computation does not call or depend on `getInRange()` result cardinality for unloaded chunks.
+
+**NBT migration:** pre-R4 quality → optimistic **full coverage** (`loadedColumns == totalColumns`);
+do not reinterpret saved `withheld`. A partial post-upgrade glance cannot degrade an old anchor; a
+later full-coverage observation can still replace via equal-coverage-newer-wins.
+
+**Deferred (post-R4):** B-VR-53 — `coverage < 100%` may justify earlier re-observation.
+
+**Rejected:** withheld in supersede; admitted-count supersede (B-VR-59); float coverage in NBT;
+deriving coverage from `getInRange()` withheld/unloaded record counts.
+
+**Next gate:** implement V1-R4 when authorized → review code/tests → then close D-VR-033 scheduler P1s
+before re-locking D-VR-033 / V1-D.
 
 ---
 
 ## Topic: V1 perception driver and observation budget (`Agent_Codex`)
 
-**Status:** `REVIEW` — B2 direction accepted; **implementation authorization BLOCKED** pending
-V1-R4 (`PerceptionCoverage` design) and scheduler-contract amendments (P1); no implementation authorization
+**Status:** `REVIEW` — B2 direction accepted; **implementation authorization BLOCKED** pending V1-R4
+**implementation** + scheduler-contract P1s; V1-R4 **design `ACCEPTED`**
 
 **Goal:** connect the implemented V1 perception/identity substrate to real PlayerMobs without giving
 the observer scheduler authority, manufacturing shared knowledge, or running a 64-block POI query
@@ -2813,7 +2861,7 @@ Consider queue bound = ticking PlayerMobs (one UUID each) + emergency cap. 200/2
 | Phase | Scope | Feasibility | Runtime proof |
 | --- | --- | --- | --- |
 | **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** (static) | VR-T1 pending: enter village → anchor agrees with `Raid.getCenter()` → leave → return → same settlement |
-| **V1-D** | Bounded production perception driver: per-mob eligibility + per-level bounded UUID lanes + one server-global query budget (D-VR-033) | **BLOCKED** — V1-R4 P0 + scheduler P1s; direction accepted | VR-T1 + VR-T1b: 1/10/50/100 mobs; loaded/unloaded POI edge; bounded discovery latency |
+| **V1-D** | Bounded production perception driver (D-VR-033) | **BLOCKED** — implement V1-R4 first; then scheduler P1s | VR-T1 + VR-T1b after R4 + D-VR-033 re-lock |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | moved to V2/V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **REQUIRES MIXIN** | VR-T2: trade input → correct villager → atomic inventory change; VR-T2b: sell carrots → buy book |
 | **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest |
@@ -2925,11 +2973,12 @@ required evidence; code/static tests cannot confirm this timeline.
 | `Raid.addHero(Entity)` full reward path | **CODE_CONFIRMED** — `Raid#tick` awards to any `LivingEntity` via `level.getEntity(uuid)`; runtime still `UNVERIFIED` (`Agent_Claude` F1) |
 | Hero **discount** for a non-player | **BLOCKED** in vanilla — `updateSpecialPrices(Player)`; must be applied by `VillagerTradeAdapter` (B-VR-34) |
 | A non-player **consumer** of villager reputation | **UNVERIFIED** — probe before V3 (B-VR-36) |
-| `PoiManager` unloaded-chunk leakage | **P0 (V1-R4)** — `PerceptionCoverage` for supersede; no withheld/hidden POI in cognition; admitted count not supersede key; query cost `UNVERIFIED` (B-VR-58) |
+| `PoiManager` unloaded-chunk leakage | **V1-R4 `ACCEPTED`** — dual pipeline; coverage independent of `getInRange` unloaded records; query cost `UNVERIFIED` (B-VR-58) |
+| V1-R4 `PerceptionCoverage` | **`ACCEPTED`** — ready to implement when authorized |
+| V1 perception **driver** | **REVIEW — D-VR-033 / V1-D BLOCKED** — after R4 ships + scheduler P1 closure |
 | `MaterialDemandPolicy` class name | **NOT FOUND** — ship trade via `WorkDemandPolicy` facade (B-VR-20) |
 | Storage RFC (full personal/village chest system) | **Deferred** — `StorageOwnership` minimum in V3 |
 | Runtime VR-T* tests | **UNVERIFIED** — VR-T1 datapack planned (B-VR-28). V1 is `STATIC_CONFIRMED` only: no PlayerMob has yet perceived a village in a running world |
-| V1 perception **driver** (what calls `VillagePerception.observe`) | **REVIEW — D-VR-033 / V1-D BLOCKED**: B2 direction accepted; V1-R4 P0 + scheduler P1s open; no implementation authorization |
 | 48-block village identity radius | **UNVERIFIED** — our judgement, no vanilla constant exists. Upgrade path (POI-set overlap) designed and deferred pending runtime evidence (D-VR-022) |
 | Mobs removed without **any** lifecycle event, or in a dimension absent from `getAllLevels()` | **BOUNDED, not eliminated** — held by `MAX_TRACKED_MOBS` (256/dimension), which warns when it fires (D-VR-023) |
 | Monotone anchor following over a long observation sequence | **DOCUMENTED LIMITATION** — replacement tracks the newest equally-good view; separating "rebuilt" from "looks rebuilt" needs POI-set-overlap identity (D-VR-022). VR-T1 must report whether real sequences produce this shape |
@@ -3237,16 +3286,14 @@ UNLOADED/CHANGED reasons `false`); `Entity#setRemoved` sets `removalReason` (off
 `levelCallback.onRemove` (offset 45), and Fabric's event fires downstream. Pinned 1.21.1 jar.
 **Generalises:** any future per-mob `SavedData` in this addon inherits both halves of this rule.
 
-### D-VR-024: Anchor evidence is completeness, not count (`Agent_Claude` + User)
+### D-VR-024: Anchor evidence is coverage, not count (`Agent_Claude` + User)
 
-**Status:** `LOCKED` (User review, 2026-08-14) — **amended by V1-R4** (`PerceptionCoverage`)
-**Accepted:** anchor replacement uses observation **quality** = perceivable search **coverage**, not POI
-quantity; equal coverage + newer tick may replace (V1-R1 middle rule on opportunity).
-**Amendment (V1-R4):** `ObservationQuality` orders by **`PerceptionCoverage`** (loaded chunk columns in
-the 64-block footprint ÷ total). `admittedPoiCount` is settlement detection / diagnostics only.
-`withheld` and hidden POI counts must not feed supersede. Pre-R4 NBT loads as optimistic full coverage.
-**Rejected:** `newPoiCount > oldPoiCount`; admitted-count supersede (regresses V1-R1 shrink/rebuild case).
-**Evidence:** V1-R1 quantity table; User V1-R4 amendment — withheld leak fix ≠ admitted-count proxy.
+**Status:** `LOCKED` — **closed by V1-R4 acceptance** (User, 2026-08-14)
+**Accepted:** anchor replacement uses **`PerceptionCoverage`** (`loadedColumns`/`totalColumns` in the
+64-block footprint), not POI quantity; equal coverage + newer tick replaces; cross-multiply compare.
+**Implementation lock:** coverage computed independently of `getInRange()` unloaded records; persist
+ints not float ratios; optimistic full-coverage NBT migration for pre-R4 rows.
+**Rejected:** `newPoiCount > oldPoiCount`; admitted-count supersede; withheld/hidden POI in supersede.
 
 ### D-VR-025: Village factual utility vs Opinion preference (`User` + `Agent_Cursor`)
 
@@ -3373,44 +3420,25 @@ camp becoming `HOME_VILLAGE`; treating one mob's founding history as settlement 
 
 ### D-VR-033: Bounded individual village-perception scheduling (`Agent_Codex` + User review)
 
-**Status:** `REVIEW` — B2 per-level bounded UUID lanes + server-global budget **direction accepted**;
-**implementation authorization BLOCKED** until V1-R4 (P0) and scheduler-contract P1s closed
-
-**Accepted so far:** cheap per-mob eligibility marks observation pending on chunk transition,
-staleness/heartbeat; a strict server-tick owner bounds POI queries; each granted query records only
-that mob's observation at **current** position. No scheduler/cache may broadcast facts. Empty results
-do not allocate/erase memory; disabling the addon prevents new perception while preserving memory.
-
-**Provisional values:** heartbeat 200 ticks, retry/debounce floor 20 ticks, maximum one POI query per
-server tick. VR-T1b must report query counts and cost at 1/10/50/100 mobs plus loaded/unloaded POI
-edge cases (B-VR-58).
-
-**Rejected:** radius-64 query every tick; attaching it to `ExplorationActivityGoal`; sharing cached
-facts between mobs; authorizing V1-D before V1-R4; treating chunk dirtying as guaranteed prompt service.
-
-**Accepted (B2):** deduplicated `(dimension, mob UUID)` pending entries; level lanes round-robin under
-one server-global cap; no entity references in queue; saturation retains cheap pending marker.
+**Status:** `REVIEW` — B2 direction accepted; **implementation authorization BLOCKED** until V1-R4
+**ships** and scheduler P1s close
 
 **Open before re-lock / authorization:**
 
 | ID | Issue | Required resolution |
 | --- | --- | --- |
-| **P0** | `withheldPoiCount` in `completeness()` / `supersedes()` | V1-R4: **`PerceptionCoverage`**; no admitted-count supersede (B-VR-59) |
+| **P0** | `withheldPoiCount` epistemic leak | **V1-R4 `ACCEPTED`** — implement when authorized |
 | **P1** | Request ≠ service latency | Conditional Must happen; VR-T1 traversal vs latency (B-VR-56) |
 | **P1** | Queue admission fairness when full | Fair admission preferred; ticking-mob-bound queue under consideration (B-VR-57) |
 
-**Required gates:** hard bound; deduplication; round-robin service fairness; **fair admission under
-saturation**; eventual service; unload/death/dimension/stop eviction; V1-R4 epistemic parity test;
-disabled-addon no enqueue/query/write; no MOVE/LOOK or readout effect.
-
-**Prior consensus superseded:** "no high-severity objection remains" — User implementation review
-found P0/P1 contract gaps. B2 remains the preferred scheduler shape once blockers close.
+**Sequence:** V1-R4 implement → code/test review → close P1s → re-lock D-VR-033 → V1-D authorization.
 
 
 ## Contribution
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| User | 2026-08-14 | **Accept V1-R4.** `PerceptionCoverage` LOCKED: dual pipeline (coverage independent of `getInRange`); `loadedColumns`/`totalColumns` + cross-multiply supersede; optimistic full-coverage NBT migration; required shrink + worse-coverage tests. D-VR-033 still REVIEW; V1-D BLOCKED. **No implementation authorization.** |
 | User | 2026-08-14 | **V1-R4 design amendment.** Reject admitted-count supersede (regresses V1-R1 shrink freeze). Replace withheld with **`PerceptionCoverage`** (loaded/total chunk columns in 64-block footprint). Conditional scheduler Must happen; fair admission over `MAX_QUEUE>=100`; B-VR-59. **No implementation authorization.** |
 | User | 2026-08-14 | **D-VR-033 implementation review — V1-D BLOCKED.** P0: `withheldPoiCount` epistemic leak (V1-R4). P1: dirty≠prompt service; queue admission fairness. D-VR-033 → `REVIEW`. D-VR-027 P2 title; 029/030/031 concept locks affirmed; 028 open; 032 held. B-VR-55…58. **No implementation authorization.** |
 | User + Agent_Codex | 2026-08-14 | **Peer review of D-VR-027…033 + pinned-source reconciliation.** Split bottle pickup value from retention; redesigned consumption under cross-domain Ominous Event intent; source-confirmed LivingEntity bottle finish but ServerPlayer-gated Bad/Raid Omen effects; made trade abstraction flexible; source-confirmed vanilla golem creator flag; narrowed Hero gifts to recipient bridge + host pickup; rejected `KnownVillage.origin`; superseded pre-1.21 captain-effect and D-VR-019 96-block identity text; added SettlementTier decomposition gate. D-VR-033 selects bounded per-level UUID lanes under one server-global budget; no shared cache. **No implementation authorization.** |
@@ -3556,9 +3584,8 @@ perception authority, host item pickup, and vanilla golem spawn semantics. Must 
 kill → Bad Omen, broadcast observations, invent founded memory, or let a high pickup rank fill every
 inventory slot.
 
-**Frontier after:** accept **V1-R4 `PerceptionCoverage` design**, then implement V1-R4, then close
-D-VR-033 P1 scheduler contracts, then re-request V1-D authorization. **Do not implement V1-R4 until
-design is accepted** — admitted-count supersede is a known regression.
+**Frontier after:** **V1-R4 `ACCEPTED`** — implement when authorized, review code/tests, close
+D-VR-033 scheduler P1s, re-lock D-VR-033, then V1-D authorization.
 
 ---
 
@@ -3607,9 +3634,8 @@ individual observation remains the knowledge boundary.
 V1-D plan row; MAIBS VR-M1…M7; updated deferred/frontier state.
 
 **Frontier after at that stage:** independent peer review of D-VR-033. User implementation review
-(2026-08-14) accepted B2 direction but **blocked V1-D** on V1-R4 P0 + scheduler P1s. User amended V1-R4
-to **`PerceptionCoverage`** (reject admitted-count supersede). Current frontier: accept V1-R4 design,
-then implement, then close scheduler contracts.
+(2026-08-14) accepted B2 direction but **blocked V1-D**. User **accepted V1-R4** `PerceptionCoverage`
+(2026-08-14). Current frontier: implement R4 when authorized → review → close scheduler P1s → V1-D.
 
 ---
 
