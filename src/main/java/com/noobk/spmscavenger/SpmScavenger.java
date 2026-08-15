@@ -124,6 +124,7 @@ public class SpmScavenger implements ModInitializer {
                         mob.getUUID(), world.getGameTime());
                 OpinionExperienceRegistry.parkOnUnload(mob.getUUID(), world.getGameTime());
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
+                com.noobk.spmscavenger.opinion.SocialGreetClaimWindow.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
                 if (world.getServer() != null) {
                     VillagePerceptionScheduler.forServer(world.getServer())
@@ -168,6 +169,7 @@ public class SpmScavenger implements ModInitializer {
                     FurnaceStations.shutdownServerState();
                     SeekShelterGoal.shutdownServerState();
                     com.noobk.spmscavenger.opinion.SocialAdmissionSeam.shutdownServerState();
+                    com.noobk.spmscavenger.opinion.SocialGreetClaimWindow.shutdownServerState();
                     com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.shutdownServerState();
                     VillagePerceptionScheduler.shutdown(server);
                 });
@@ -177,6 +179,7 @@ public class SpmScavenger implements ModInitializer {
                 SeekShelterGoal.onDeath(mob.getUUID());
                 OpinionExperienceRegistry.onDeath(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
+                com.noobk.spmscavenger.opinion.SocialGreetClaimWindow.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
                 if (mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
                     VillagePerceptionScheduler.forServer(serverLevel.getServer())

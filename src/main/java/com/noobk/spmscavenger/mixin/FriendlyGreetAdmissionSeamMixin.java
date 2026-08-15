@@ -1,9 +1,10 @@
 package com.noobk.spmscavenger.mixin;
 
 import com.noobk.spmscavenger.compat.OptionalGoalMobResolver;
-import com.noobk.spmscavenger.opinion.SocialAdmissionSeam;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
+import com.noobk.spmscavenger.opinion.SocialAdmissionSeam;
 import com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry;
+import com.noobk.spmscavenger.opinion.SocialGreetClaimWindow;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import org.spongepowered.asm.mixin.Mixin;
@@ -86,26 +87,25 @@ public abstract class FriendlyGreetAdmissionSeamMixin {
             SocialAdmissionSeam.recordObservation(
                     mob, range, original == null ? null : original.getUUID());
         }
-        // BUG 1 (user-reported, runtime): this used to return null whenever Opinion was enabled and
-        // no SOCIAL intent was bound - which is almost always, because a mob only forms one when the
-        // director picks SOCIAL. The observable effect was that enabling Opinion silently deleted
-        // SPM's own greeting: a crowd of maximally Friendly PlayerMobs would never crouch-greet
-        // anyone, and nothing logged a reason.
-        //
-        // Opinion's job is to CLAIM a greet it caused, not to VETO one it did not. An unclaimed
-        // native greet proceeds and is classified SOCIAL_REFLEX by the binding-based classifier, so
-        // it still cannot be credited to an Opinion decision (D-GAO-058 holds). What changes is that
-        // adapter or director failure now costs us control, never the host's own behaviour.
+        // BUG 1: indefinite null veto deleted native greeting. BUG 2 (VR-T1.5c): immediate return
+        // original raced the 10-tick observer — greet started as SOCIAL_REFLEX before Opinion could
+        // bind. Bounded claim window: defer briefly, then proceed unbound on timeout.
         if (mob == null || original == null) {
             if (mob != null) {
+                SocialGreetClaimWindow.clear(mob.getUUID());
                 SocialExecutionBindingRegistry.rejectAdmission(mob.getUUID());
             }
             return original;
         }
         if (OpinionFeatureGate.isEnabled()) {
-            // Claim it when a matching intent exists; an empty result is an unclaimed reflex greet,
-            // not a refusal.
-            SocialExecutionBindingRegistry.admit(mob, original.getUUID(), mob.level().getGameTime());
+            long gameTime = mob.level().getGameTime();
+            boolean bound = SocialExecutionBindingRegistry.admit(
+                    mob, original.getUUID(), gameTime).isPresent();
+            return switch (SocialGreetClaimWindow.evaluate(
+                    mob.getUUID(), original.getUUID(), gameTime, bound)) {
+                case DEFER -> null;
+                case PROCEED -> original;
+            };
         }
         return original;
     }

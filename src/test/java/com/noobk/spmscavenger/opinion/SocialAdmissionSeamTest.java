@@ -100,7 +100,7 @@ class SocialAdmissionSeamTest {
         assertEquals(0, SocialAdmissionSeam.trackedWindowCount());
     }
 
-    /** 44D preserves exact parity when Opinion is disabled and gates the host answer when enabled. */
+    /** 44D + VR-T1.5c — Opinion may claim via a bounded window; it must never veto indefinitely. */
     @Test
     void mustHappen_theSeamKeepsTheOptionalFailClosedGate() throws Exception {
         String source = java.nio.file.Files.readString(java.nio.file.Path.of(
@@ -110,24 +110,20 @@ class SocialAdmissionSeamTest {
         assertTrue(source.contains("SocialExecutionBindingRegistry")
                         && source.contains(".admit("),
                 "Opinion-on admission must bind the current host answer, not a cached pulse");
+        assertTrue(source.contains("SocialGreetClaimWindow"),
+                "bounded claim window must sit between pulse publish and greet start");
+        assertTrue(source.contains("case DEFER -> null"),
+                "brief defer is allowed so Opinion can bind before SPM starts");
         assertTrue(source.contains("require = 0"),
                 "a missing call site must be survivable, never fatal");
 
-        // BUG 1. This assertion used to be `source.contains("if (!OpinionFeatureGate.isEnabled())")`
-        // - the SHAPE of an early return that existed only to let the other branch veto. It passed
-        // happily while the addon deleted SPM's greeting for every mob without a bound SOCIAL
-        // intent. The semantics, not the shape: the handler has exactly one return value, and it is
-        // always the host's own answer. Opinion may claim a greet; it may never withhold one.
-        long returnsOriginal = source.lines()
-                .filter(line -> line.trim().equals("return original;"))
-                .count();
-        assertTrue(returnsOriginal >= 2,
-                "every exit of the redirect must hand back SPM's own answer");
+        // BUG 1: indefinite `return null` when Opinion was enabled deleted native greeting.
+        // VR-T1.5c: immediate `return original` raced the observer and greets stayed SOCIAL_REFLEX.
+        assertTrue(source.contains("case PROCEED -> original"),
+                "after bind or timeout the host's own answer must be returned");
         assertFalse(source.contains("? original")
-                        || source.contains(": null;")
-                        || source.contains("return null;"),
-                "no path may substitute null for the host's answer - that is how enabling Opinion "
-                        + "silently deleted native greeting");
+                        || source.contains(": null;"),
+                "no ternary may substitute null for the host answer outside the bounded DEFER arm");
     }
 
     @Test
@@ -168,8 +164,14 @@ class SocialAdmissionSeamTest {
         assertEquals(2, releases,
                 "ENTITY_UNLOAD and AFTER_DEATH must both release - one alone leaves the other path "
                         + "accumulating for the whole session, found " + releases);
+        int claimReleases = stripped.split(java.util.regex.Pattern.quote(
+                "SocialGreetClaimWindow.release("), -1).length - 1;
+        assertEquals(2, claimReleases,
+                "claim window must release on the same entity lifetime hooks");
         assertTrue(stripped.contains("SocialAdmissionSeam.shutdownServerState()"),
                 "and the world boundary still clears the rest");
+        assertTrue(stripped.contains("SocialGreetClaimWindow.shutdownServerState()"),
+                "claim window must clear on server stop");
     }
 
     /** The failure Task 44A exists to detect: descriptor accepted, handler rejected at load. */
