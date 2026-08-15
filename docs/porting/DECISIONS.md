@@ -1421,3 +1421,104 @@ later invalidation as history. **Must not happen:** invalidation before DONE ear
 learning. Full suite and clean build: 809 tests, zero failures/errors/skips. Artifact SHA-256:
 `DA017011A280DB38F390890B8104E64E59DBB213A33BA1BADBE2175C1430BF5C`. Runtime remains
 `UNVERIFIED`.
+
+## 2026-08-14 — GAO-10 Task 44D-R2: Opinion may claim a greet, never veto one; sociability unit repair
+
+**Reported by the User from live play:** a crowd of maximally **Friendly** PlayerMobs, none of them
+crouch-greeting each other or anyone else. Two independent defects, both `RUNTIME_CONFIRMED`.
+
+---
+
+### BUG 1 — Opinion suppressed unclaimed native greeting
+
+`FriendlyGreetAdmissionSeamMixin` ended its redirect with:
+
+```java
+if (!OpinionFeatureGate.isEnabled()) return original;
+if (mob == null || original == null) { rejectAdmission(...); return null; }
+return admit(mob, original.getUUID(), now).isPresent() ? original : null;
+```
+
+`admit()` succeeds only when the director already holds a running or pending `DiscretionaryIntent`
+whose `candidateKey` is exactly `(SOCIAL, thatTarget)`. That is rare by design. So with Opinion
+enabled, **every greet the director did not itself choose returned `null`** — SPM's own social
+behaviour deleted, for every mob, with no log line and no config that looked responsible.
+
+Two further ways to lose greeting for free: `mob == null` (goal-owner resolution failed) and a
+reflective failure inside `invokeOriginal` both produced `null` as well.
+
+**Repair — Opinion's job is to *claim* a greet it caused, not to *veto* one it did not.** The
+handler now always returns the host's own answer; when Opinion is on it calls `admit(...)` for its
+side effect and ignores the result. An unclaimed greet proceeds and the binding-based classifier
+reports it as `SOCIAL_REFLEX`, so **D-GAO-058 still holds** — an unbound greet cannot be credited to
+an Opinion decision. What changes is that adapter or director failure now costs us *control*, never
+the host's behaviour.
+
+This amends the third line of **D-GAO-052**'s matrix (*Opinion ON, no SocialIntent → null*). That
+line was written to stop Opinion-era mobs greeting autonomously; in practice it stopped them greeting
+at all. Under **Gate SPM-0**, compatibility outranks our architecture, and a shim that removes a host
+feature has not integrated with it.
+
+`SocialAdmissionSeam.invokeOriginal` now also logs **once per session** when reflective resolution
+fails. Silently returning "no target" from a hot path made a disabled host feature undiagnosable.
+
+---
+
+### BUG 2 — `Friendly` reached scoring on the wrong numeric scale
+
+| Value | Range | Normaliser used | Correct? |
+| --- | --- | --- | --- |
+| `PersonalityModel.sociability()` | **[0, 1]** (`trait` clamp) | `UtilityNormalizer.channel` (÷100) | **no — 100x too small** |
+| `EntityOpinionMemory.preference()` | [−100, +100] | `UtilityNormalizer.channel` | yes |
+
+```text
+maximally Friendly mob    sociability = 1.0
+channel(1.0) * 32       = 0.32        intended: 32
+MEDIUM settlement bias  = 12
+```
+
+The mob's defining personality trait was worth about **1/40th** of a medium village bias, while the
+weight's own comment read *"Personality is the strongest single term."*
+
+**The tests hid it, and the reason is worth recording.** They called
+`scoreSocial(..., 80f, 0f)` — sociability as if it were a 0–100 channel — while production passes
+0–1. Both assertions were *directional* (`sociable > neutral`), which holds just as well at 0.32 as
+at 32. **A comparison cannot detect a scale error.**
+
+**Repair:** `UtilityNormalizer.trait01(value)` as an explicit, named unit, applied to sociability
+only. Not a stray `* 100`: a value entering scoring is now either a `channel` or a `trait01`, and the
+call site must say which, so the next trait added cannot repeat this.
+
+```text
+sociability 0.00 -> +0     0.50 -> +16     1.00 -> +32
+```
+
+**The trap in the repair,** pinned by its own test: `trait01` must **not** be applied to
+`subjectPreference`. It floors at 0, so a *disliked* entity would read as neutral rather than
+negative, and +50 would saturate to full instead of half. Two inputs, two units, two normalisers.
+
+---
+
+### Verification
+
+**930 tests, 0 failures.** Three negative controls, each restoring one defect:
+
+| Control | Fails |
+| --- | --- |
+| sociability back to `channel()` | `mustHappen_aMaximallyFriendlyMobContributesTheFullSociabilityWeight`, `mustHappen_sociabilityScalesLinearlyOverTheTraitRange` |
+| `trait01` applied to the preference channel too | `mustNotHappen_theTraitNormaliserIsAppliedToTheOpinionChannel` + 2 |
+| restore the Opinion veto | `mustHappen_theSeamKeepsTheOptionalFailClosedGate` |
+
+Magnitude assertions replace the directional ones: sociability 1.0 must contribute the **full**
+weight and must exceed a MEDIUM settlement bias, so a future scale error fails rather than shrinks.
+
+**A structural test had to be rewritten because it encoded the defect.**
+`mustHappen_theSeamKeepsTheOptionalFailClosedGate` asserted `source.contains("if
+(!OpinionFeatureGate.isEnabled())")` — the *shape* of an early return whose only purpose was to let
+the other branch veto. It passed happily while the addon deleted native greeting. It now asserts the
+semantics: every exit returns the host's answer, and no path substitutes `null`. **Third instance in
+this project of a structural test locking in a wrong invariant as firmly as a right one.**
+
+**Runtime `UNVERIFIED`.** Both repairs are static; the reported symptom is a live-play observation
+and its resolution must be confirmed the same way — a crowd of Friendly PlayerMobs visibly
+crouch-greeting with Opinion enabled.

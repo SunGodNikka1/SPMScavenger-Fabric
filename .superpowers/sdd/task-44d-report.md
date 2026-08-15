@@ -77,3 +77,32 @@ host travel goals retain the existing conservative `SOCIAL_REFLEX` envelope beha
 Predicted loop: exact SOCIAL/Bob owns execution → DONE validates Bob's live intent → completion is
 stamped once → later scheduler invalidation cannot rewrite that past event → stop consumes it.
 Invalidation before DONE → no live exact intent → binding cleared → no positive learning.
+
+
+---
+
+## Fix report — 44D-R2 (2026-08-14, `Agent_Claude` + User)
+
+**Status:** `DONE_WITH_CONCERNS` — static only, runtime `UNVERIFIED`.
+
+The 44D binding shipped correct bookkeeping on top of an incorrect gate. `canUse` returned `null`
+whenever `admit()` found no exactly-matching intent, which is the normal case, so **enabling Opinion
+silently removed SPM's native greeting entirely** — observed by the User as a crowd of maximally
+Friendly PlayerMobs greeting nobody.
+
+The report's own MAIBS note said the repair *"changes bookkeeping/classification at causal boundaries
+only; it does not alter Goal priority, flags, pathing, movement, or host phases."* That was true of
+the classification work and false of the gate shipped beside it: returning `null` from `canUse` is
+precisely an alteration of host behaviour. The static MAIBS pass did not model the case where **no**
+intent exists, which is the overwhelmingly common one.
+
+**Changed:** the redirect always returns the host's answer; `admit()` is called for its side effect
+when Opinion is enabled. Unbound greets classify as `SOCIAL_REFLEX`, so D-GAO-058 is preserved and
+D-GAO-052's "no autonomous start" line is amended (see `docs/porting/DECISIONS.md`, 2026-08-14).
+
+**Also repaired in the same session:** `sociability` reached SOCIAL scoring through the
+`-100..+100` channel normaliser despite being a `[0, 1]` trait — a 100x under-scaling that made
+*Friendly* worth ~1/40th of a medium village bias. Fixed with an explicit `UtilityNormalizer.trait01`
+unit; the tests that missed it were using channel units and directional assertions.
+
+**Verification:** 930 tests, 0 failures; 3 negative controls fire. No Minecraft launch occurred.

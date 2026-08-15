@@ -107,14 +107,27 @@ class SocialAdmissionSeamTest {
                 "src/main/java/com/noobk/spmscavenger/mixin/"
                         + "FriendlyGreetAdmissionSeamMixin.java"));
 
-        assertTrue(source.contains("if (!OpinionFeatureGate.isEnabled())"));
-        assertTrue(source.contains("return original;"),
-                "Opinion-off must preserve SPM's own target exactly");
         assertTrue(source.contains("SocialExecutionBindingRegistry")
                         && source.contains(".admit("),
                 "Opinion-on admission must bind the current host answer, not a cached pulse");
         assertTrue(source.contains("require = 0"),
                 "a missing call site must be survivable, never fatal");
+
+        // BUG 1. This assertion used to be `source.contains("if (!OpinionFeatureGate.isEnabled())")`
+        // - the SHAPE of an early return that existed only to let the other branch veto. It passed
+        // happily while the addon deleted SPM's greeting for every mob without a bound SOCIAL
+        // intent. The semantics, not the shape: the handler has exactly one return value, and it is
+        // always the host's own answer. Opinion may claim a greet; it may never withhold one.
+        long returnsOriginal = source.lines()
+                .filter(line -> line.trim().equals("return original;"))
+                .count();
+        assertTrue(returnsOriginal >= 2,
+                "every exit of the redirect must hand back SPM's own answer");
+        assertFalse(source.contains("? original")
+                        || source.contains(": null;")
+                        || source.contains("return null;"),
+                "no path may substitute null for the host's answer - that is how enabling Opinion "
+                        + "silently deleted native greeting");
     }
 
     @Test

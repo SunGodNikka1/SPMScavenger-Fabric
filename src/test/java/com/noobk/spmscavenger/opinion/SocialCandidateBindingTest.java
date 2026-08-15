@@ -113,19 +113,85 @@ class SocialCandidateBindingTest {
         ActivityOpinionMemory memory = new OpinionMemory()
                 .memoryOf(ActivityKind.SOCIALIZING);
 
+        // PRODUCTION UNITS. sociability is a PersonalityModel trait in [0, 1]; subjectPreference is
+        // an EntityOpinionMemory channel in [-100, +100]. The earlier version of this test passed
+        // 80f for BOTH, which is why it never noticed that production divides the trait by 100.
         float neutral = ActivityUtilityScorer
                 .scoreSocial(new AffectiveState(), memory, 0f, 0f).total();
         float sociable = ActivityUtilityScorer
-                .scoreSocial(new AffectiveState(), memory, 80f, 0f).total();
+                .scoreSocial(new AffectiveState(), memory, 0.8f, 0f).total();
         float liked = ActivityUtilityScorer
                 .scoreSocial(new AffectiveState(), memory, 0f, 80f).total();
         float disliked = ActivityUtilityScorer
-                .scoreSocial(new AffectiveState(), memory, 80f, -80f).total();
+                .scoreSocial(new AffectiveState(), memory, 0.8f, -80f).total();
 
         assertTrue(sociable > neutral, "a sociable mob prefers company");
         assertTrue(liked > neutral, "a liked neighbour is worth greeting");
         assertTrue(disliked < sociable,
                 "disliking this particular entity must pull the score down even for a sociable mob");
+    }
+
+    /**
+     * The unit bug, pinned by magnitude rather than by direction.
+     *
+     * <p>The old test only asserted {@code sociable > neutral}, which held at 0.32 just as well as
+     * at 32 — the defect was invisible to a comparison. A mob a player sees labelled <b>Friendly</b>
+     * must contribute something that can actually compete with the other terms, so the assertion is
+     * on the size of the contribution.
+     */
+    @Test
+    void mustHappen_aMaximallyFriendlyMobContributesTheFullSociabilityWeight() {
+        ActivityOpinionMemory memory = new OpinionMemory().memoryOf(ActivityKind.SOCIALIZING);
+
+        float neutral = ActivityUtilityScorer
+                .scoreSocial(new AffectiveState(), memory, 0f, 0f).subjectFit();
+        float maximal = ActivityUtilityScorer
+                .scoreSocial(new AffectiveState(), memory, 1.0f, 0f).subjectFit();
+
+        assertEquals(ActivityUtilityWeights.SOCIAL_SOCIABILITY_FIT, maximal - neutral, 0.001f,
+                "sociability 1.0 must be worth the full weight; channel() made it weight/100");
+        assertTrue(maximal - neutral > 12f,
+                "and it must outweigh a MEDIUM settlement bias, or the village matters more than "
+                        + "the mob's defining personality trait");
+    }
+
+    /** The trait scale is linear across its whole range, not just at the ends. */
+    @Test
+    void mustHappen_sociabilityScalesLinearlyOverTheTraitRange() {
+        ActivityOpinionMemory memory = new OpinionMemory().memoryOf(ActivityKind.SOCIALIZING);
+        float base = ActivityUtilityScorer
+                .scoreSocial(new AffectiveState(), memory, 0f, 0f).subjectFit();
+
+        float w = ActivityUtilityWeights.SOCIAL_SOCIABILITY_FIT;
+        for (float[] pair : new float[][] {{0.25f, 0.25f * w}, {0.5f, 0.5f * w}, {0.75f, 0.75f * w}}) {
+            float actual = ActivityUtilityScorer
+                    .scoreSocial(new AffectiveState(), memory, pair[0], 0f).subjectFit() - base;
+            assertEquals(pair[1], actual, 0.001f, "sociability " + pair[0]);
+        }
+    }
+
+    /**
+     * The trap in the repair. {@code trait01} floors at 0, so applying it to the preference channel
+     * would erase dislike entirely — a mob would treat an entity it hates as merely neutral — and
+     * saturate every preference above +100... which is why the two inputs keep different normalisers.
+     */
+    @Test
+    void mustNotHappen_theTraitNormaliserIsAppliedToTheOpinionChannel() {
+        ActivityOpinionMemory memory = new OpinionMemory().memoryOf(ActivityKind.SOCIALIZING);
+
+        float neutral = ActivityUtilityScorer
+                .scoreSocial(new AffectiveState(), memory, 0f, 0f).subjectFit();
+        float disliked = ActivityUtilityScorer
+                .scoreSocial(new AffectiveState(), memory, 0f, -80f).subjectFit();
+        assertTrue(disliked < neutral,
+                "a disliked entity must score BELOW neutral; trait01 would floor it to neutral");
+
+        float half = ActivityUtilityScorer
+                .scoreSocial(new AffectiveState(), memory, 0f, 50f).subjectFit() - neutral;
+        float full = ActivityUtilityScorer
+                .scoreSocial(new AffectiveState(), memory, 0f, 100f).subjectFit() - neutral;
+        assertEquals(full / 2f, half, 0.001f,
+                "+50 is half of +100 on a -100..+100 channel; trait01 would saturate both");
     }
 
     /** The subject term is its own named component, so explanations cannot misattribute it. */
@@ -134,7 +200,7 @@ class SocialCandidateBindingTest {
         ActivityUtilityBreakdown social = ActivityUtilityScorer.scoreSocial(
                 new AffectiveState(),
                 new OpinionMemory().memoryOf(ActivityKind.SOCIALIZING),
-                80f, 80f);
+                0.8f, 80f);
         assertEquals(DiscretionaryActivity.SOCIAL, social.activity());
         assertTrue(social.subjectFit() > 0f, "sociability and entity opinion land in subjectFit");
         assertEquals(0f, social.noveltyFit(),

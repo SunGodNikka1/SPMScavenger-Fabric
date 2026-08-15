@@ -86,20 +86,28 @@ public abstract class FriendlyGreetAdmissionSeamMixin {
             SocialAdmissionSeam.recordObservation(
                     mob, range, original == null ? null : original.getUUID());
         }
-        if (!OpinionFeatureGate.isEnabled()) {
-            return original;
-        }
+        // BUG 1 (user-reported, runtime): this used to return null whenever Opinion was enabled and
+        // no SOCIAL intent was bound - which is almost always, because a mob only forms one when the
+        // director picks SOCIAL. The observable effect was that enabling Opinion silently deleted
+        // SPM's own greeting: a crowd of maximally Friendly PlayerMobs would never crouch-greet
+        // anyone, and nothing logged a reason.
+        //
+        // Opinion's job is to CLAIM a greet it caused, not to VETO one it did not. An unclaimed
+        // native greet proceeds and is classified SOCIAL_REFLEX by the binding-based classifier, so
+        // it still cannot be credited to an Opinion decision (D-GAO-058 holds). What changes is that
+        // adapter or director failure now costs us control, never the host's own behaviour.
         if (mob == null || original == null) {
             if (mob != null) {
                 SocialExecutionBindingRegistry.rejectAdmission(mob.getUUID());
             }
-            return null;
+            return original;
         }
-        return SocialExecutionBindingRegistry
-                        .admit(mob, original.getUUID(), mob.level().getGameTime())
-                        .isPresent()
-                ? original
-                : null;
+        if (OpinionFeatureGate.isEnabled()) {
+            // Claim it when a matching intent exists; an empty result is an unclaimed reflex greet,
+            // not a refusal.
+            SocialExecutionBindingRegistry.admit(mob, original.getUUID(), mob.level().getGameTime());
+        }
+        return original;
     }
 
     @Inject(method = {"start", "method_6269"}, at = @At("TAIL"), require = 0)

@@ -35,7 +35,8 @@ BUILD SUCCESSFUL — 905 tests
 | No V1.5-E / RaidContainersGoal mixin | **CONFIRMED** | grep — no production mixin added |
 | No village-memory/probe/driver | **CONFIRMED** | only `designate-home` under `debug/` |
 | VR-T1.5a runtime | **CONFIRMED** | User Bob session 2026-08-15 — far start, autonomous return, entered village ~`-11666`, hostile resume |
-| VR-T1.5b–c runtime | **UNVERIFIED** | not yet observed |
+| VR-T1.5b runtime | **CONFIRMED** | User God session 2026-08-15 — **CLOSED**; see checklist below |
+| VR-T1.5c runtime | **UNVERIFIED** | God fixture ready: 350/MEDIUM, 0 social, inside bounds |
 | Multi-leg commute in world | **CONFIRMED** | VR-T1.5a Bob session; dead-zone repair pass 3 validated |
 
 ## Self-review (brief mapping)
@@ -51,8 +52,8 @@ BUILD SUCCESSFUL — 905 tests
 
 ## Concerns
 
-- VR-T1.5b–c runtime still required before full V1.5 runtime closure.
-- `designate-home` eligible for removal per D-VR-051 (VR-T1.5a PASS); keep until VR-T1.5b–c or user directs cleanup.
+- VR-T1.5c runtime still required before full V1.5 runtime closure.
+- `designate-home` / `settlement-status` eligible for removal per D-VR-051 after VR-T1.5c or user directs cleanup.
 - `designate-home` picks nearest remembered village to target mob — operator must ensure Bob has memory.
 
 ## Repair pass (2026-08-15, pre-VR-T1.5)
@@ -124,3 +125,19 @@ re-observation granted `+50` visit every 200t while standing still → HIGH with
 | Outside marker | `lastOutsideTick` updated when mob leaves 64² bounds |
 | Visit grant | bootstrap or `lastOutsideTick > lastVisitTick` only — **not** stale re-scan while resident |
 | Presence at cap | `recordPresenceHeartbeat` always advances `lastPresenceTick`, never `lastVisitTick` |
+
+## VR-T1.5b runtime (`CLOSED PASS`, User, 2026-08-15)
+
+**Mob:** God. **Anchor:** `-11666, 82, 7709`. **User directive:** no further VR-T1.5b testing.
+
+| Check | Result |
+| --- | --- |
+| Bootstrap / initial familiarity | **PASS** |
+| Passive presence accumulation | **PASS** |
+| MEDIUM reachable naturally | **PASS** — 300/MEDIUM |
+| Presence cap at 250 | **PASS** — `Presence: 250 / 250` |
+| Continuous-residency exploit | **BLOCKED** — 300 stable across repeated status polls |
+| Leave → re-entry +50 | **PASS** — `300 → 350`; `lastVisit` `237861 → 259152` |
+| HOME independence | **PASS** — `Home: false` at MEDIUM |
+
+**VR-T1.5c fixture:** God at 350/MEDIUM, 0 social events, inside bounds — ready for greet-bias probe.

@@ -1,7 +1,7 @@
 package com.noobk.spmscavenger.village;
 
 /**
- * V1.5 gen-1 accumulation and commute tuning (D-VR-036). VR-T1.5b may adjust constants.
+ * V1.5 gen-1 accumulation and commute tuning (D-VR-036). VR-T1.5b **CLOSED** 2026-08-15.
  */
 public final class SettlementTuning {
 

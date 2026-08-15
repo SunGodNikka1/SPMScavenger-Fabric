@@ -17,6 +17,34 @@ public final class UtilityNormalizer {
         return clamp(value / OpinionMemory.CHANNEL_MAX);
     }
 
+    /**
+     * Personality traits ({@code 0..1}) — <b>not</b> a channel.
+     *
+     * <h2>Why this exists as its own name</h2>
+     *
+     * SOCIAL scoring passed {@code PersonalityModel.sociability()} through {@link #channel(float)},
+     * which divides by {@code CHANNEL_MAX} because mood and opinion channels run {@code -100..+100}.
+     * Personality traits are clamped to {@code [0, 1]} by {@code PersonalityModel.trait}, so the
+     * division under-scaled them by <b>100x</b>:
+     *
+     * <pre>
+     * a maximally Friendly mob   sociability = 1.0
+     * channel(1.0) * 32          = 0.32        &lt;-- intended: 32
+     * </pre>
+     *
+     * A mob displaying <i>Friendly</i> contributed about {@code +0.3} utility while a MEDIUM village
+     * bias contributes {@code +12} — the village mattered dozens of times more than the mob's
+     * defining personality trait. The weight said "personality is the strongest single term"; the
+     * arithmetic said it was noise.
+     *
+     * <p>The unit is named rather than corrected by a stray {@code * 100} so the next trait added
+     * cannot repeat it: a value that reaches scoring is either a {@link #channel} or a
+     * {@link #trait01}, and the call site has to say which.
+     */
+    public static float trait01(float value) {
+        return clamp01(value);
+    }
+
     /** Repetition pressure ({@code 0..+100}). */
     public static float repetitionPressure(float repetition) {
         return clamp01(repetition / OpinionMemory.CHANNEL_MAX);

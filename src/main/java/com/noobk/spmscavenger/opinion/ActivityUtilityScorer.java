@@ -103,11 +103,18 @@ public final class ActivityUtilityScorer {
                 UtilityNormalizer.channel(affect.boredom()) * ActivityUtilityWeights.SOCIAL_BOREDOM_FIT;
         float stressFit =
                 -UtilityNormalizer.channel(affect.stress()) * ActivityUtilityWeights.SOCIAL_STRESS_FIT;
-        float subjectFit =
-                UtilityNormalizer.channel(sociability) * ActivityUtilityWeights.SOCIAL_SOCIABILITY_FIT
-                        + UtilityNormalizer.channel(subjectPreference)
-                                * ActivityUtilityWeights.SOCIAL_SUBJECT_PREFERENCE
-                        + settlementSocialBias;
+        // Three inputs, and the first two are in different units that must not be normalised alike.
+        //   sociability        PersonalityModel trait, clamped [0, 1]      -> trait01
+        //   subjectPreference  EntityOpinionMemory channel, [-100, +100]   -> channel
+        // channel() on the trait under-scaled a maximally Friendly mob by 100x (0.32, not 32), so a
+        // MEDIUM village bias of +12 outweighed the mob's defining personality trait by ~40x.
+        // trait01() on the preference would be just as wrong the other way: it floors at 0, so a
+        // *disliked* entity would read neutral instead of negative, and +50 would saturate to full.
+        float sociabilityFit =
+                UtilityNormalizer.trait01(sociability) * ActivityUtilityWeights.SOCIAL_SOCIABILITY_FIT;
+        float preferenceFit = UtilityNormalizer.channel(subjectPreference)
+                * ActivityUtilityWeights.SOCIAL_SUBJECT_PREFERENCE;
+        float subjectFit = sociabilityFit + preferenceFit + settlementSocialBias;
         float cost = -ActivityUtilityWeights.SOCIAL_COST;
 
         return ActivityUtilityBreakdown.social(

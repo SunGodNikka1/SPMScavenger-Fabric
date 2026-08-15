@@ -44,6 +44,10 @@ public final class SocialAdmissionSeam {
 
     private static volatile MethodHandle nearestWhereReaction;
 
+    /** One warning per session: this fires from a hot path and must not become log spam. */
+    private static final java.util.concurrent.atomic.AtomicBoolean RESOLUTION_FAILURE_REPORTED =
+            new java.util.concurrent.atomic.AtomicBoolean();
+
     private SocialAdmissionSeam() {
     }
 
@@ -161,6 +165,16 @@ public final class SocialAdmissionSeam {
             }
             return (LivingEntity) handle.invoke(playerMob, reaction, range);
         } catch (Throwable resolutionFailed) {
+            // Returning null is what canUse() sees when nothing is eligible, so the host simply does
+            // not greet - but that is indistinguishable from "no one nearby" and used to be entirely
+            // silent. A mod that quietly disables a host feature must at least say so once.
+            if (RESOLUTION_FAILURE_REPORTED.compareAndSet(false, true)) {
+                com.noobk.spmscavenger.SpmScavenger.LOGGER.warn(
+                        "Could not invoke PlayerMobEntity#nearestWhereReaction reflectively; greeting"
+                                + " target resolution will return no target and PlayerMobs will not"
+                                + " greet. This usually means Social Player Mobs changed that method.",
+                        resolutionFailed);
+            }
             return null;
         }
     }
