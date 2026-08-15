@@ -7,7 +7,7 @@
 | **RT-MI-TS1** | Open — runtime falsification; launch not authorized | `task-33-brief.md` |
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
-| **V2 Trading** | **NEXT** — unblocked | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
+| **V2 Trading** | **DESIGN READY** — brainstorm closed; task-47 brief on authorization | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` (V2 contract) |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
