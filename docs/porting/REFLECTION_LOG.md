@@ -774,3 +774,156 @@ No shared skill edits this session; promotion bar not met for repo-wide mandator
 - **Still unverified:** RQ-GAO-SHELTER-01 runtime shelter hold behavior; executor/Goal layer in inspector (user noted as future); MultiLineEditBox selection on all platforms/GUI scales.
 - **Next if continuing:** Runtime probe shelter mandatory hold + discretionary REST side-by-side; optional executor intent line in readout DTO.
 - **Constraints:** No commit, push, or Minecraft launch in this reflection session.
+
+---
+
+## 2026-08-14 — V1 village perception (R1–R3), furnace station/fuel repairs, greet veto and sociability units
+
+Continues the 2026-08-12 GAO-8B reflection. Only work since that report is covered.
+
+### Step 1 — Scope
+
+| Field | Value |
+| --- | --- |
+| Project | SPM Scavenger (`spmscavenger`), Fabric 1.21.1 addon for Social Player Mobs `playermob` 0.86.0 |
+| Work reflected on | GAO-10 Task 44C; village V1 + repairs R1/R2/R3; furnace FS-R1/FS-R2; greet 44D-R2 |
+| Starting state | 786 tests; SOCIAL not yet a discretionary candidate; no village domain |
+| Final state | **930 tests, 0 failures**, `spmscavenger-1.11.0.jar` |
+| Systems changed | `opinion/` (SOCIAL candidacy, scoring units), new `village/` package, `FurnacePolicy`/`FurnaceStations`/`SmeltAtFurnaceGoal`, `FriendlyGreetAdmissionSeamMixin`, `SocialAdmissionSeam` |
+| Claimed stability | static only |
+| Verification | unit + structural tests, **11 negative controls**, `clean build`; bytecode reads from the pinned 1.21.1 merged jar |
+| Deferred / unverified | **all runtime behaviour** — no Minecraft launch by me this session; VR-T1 scenarios; 48-block identity radius; monotone anchor following; blast furnace for iron |
+
+**Scope note:** two agents edited the RFCs concurrently (`Agent_Cursor` added the Opinion↔Village
+boundary and V1-D perception driver). This reflection covers *my* changes; where their work is
+adjacent it is named, not claimed.
+
+### Step 2 — Reconstruction
+
+| Stage | Problem | Action | Result | Evidence | Confidence |
+| --- | --- | --- | --- | --- | --- |
+| 44C | SOCIAL had no candidacy | subject bound immutably to the winning `DiscretionaryIntent`; absent subject removes the candidate rather than scoring it low | 793 tests | negative controls on both invariants | `CONFIRMED` static |
+| Player-gate audit | RFC reasoned from signatures | read method **bodies** from the pinned jar | 3 of 4 conclusions moved; hero credit is one `EntityType` check, reputation is already entity-agnostic, village is a POI tag | `javap` offsets cited in RFC | `CODE_CONFIRMED` |
+| V1 | no village ontology | `VillageAnchorPolicy` reproducing vanilla's raid-centre derivation; POI perception bounded to loaded chunks | 837 tests | 4 negative controls | `CONFIRMED` static |
+| V1-R1 | unload deleted persisted memory | reason-gated eviction | 852 | 3 controls | `CONFIRMED` static |
+| V1-R2 | staleness TTL deleted live mobs' homes | `RemovalReason.shouldDestroy()` | 858 | 2 controls | `CODE_CONFIRMED` |
+| V1-R3 | eviction reached one dimension | `forgetEverywhere` + non-creating accessor | 864 | 2 controls | `CODE_CONFIRMED` |
+| FS-R1 | blast furnace accepted a charcoal job | accessor on `quickCheck`; capability checked before insert | 895 | control | `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+| FS-R2 | wooden pickaxe chosen as fuel | expendability layer ahead of ranking | 895 | control reproduces the screenshot | `CODE_CONFIRMED` |
+| 44D-R2 | Opinion deleted native greeting | claim, never veto | 930 | 3 controls | `CODE_CONFIRMED`; runtime `UNVERIFIED` |
+
+### Step 3 — Errors and recoveries
+
+Self-inflicted first, because they were the more instructive.
+
+| Error | Root cause | How found | Recovery | Reusable? |
+| --- | --- | --- | --- | --- |
+| **Eviction on generic `ENTITY_UNLOAD`** deleted persisted village memory | copied the *shape* of neighbouring runtime-state releases without checking their semantics | **User review** | reason-gated deletion | yes → RET-1e |
+| Replaced it with a **staleness TTL** — same mistake, new clock | reached for the nearest signal that satisfied RET-1 rather than the one that meant "owner gone" | **User review** | `RemovalReason.shouldDestroy()` | yes → RET-1e |
+| Eviction swept **one dimension** | wrote the deletion against the level the handler happened to hold | **User review** | `forgetEverywhere` over `getAllLevels()` | yes → RET-1e |
+| **A structural test asserted `assertEquals(2, forgetCallSites)`** — enforcing the unload defect | test written by reading current code | it failed *correctly* when I fixed the bug | assert the property, not the count | yes → AV-1 |
+| **A structural test asserted `source.contains("if (!OpinionFeatureGate.isEnabled())")`** — the veto's shape | same | failed when the veto was removed | assert "every exit returns the host's answer" | yes → AV-1 |
+| `return !stack.is(ItemTags.PLANKS) \|\| true;` — an always-true clause pretending to check | wrote the comment first, then a clause that did not implement it | self-caught before commit | delete, do not repair | recurring personal failure mode |
+| `FuelExpendabilityTest` passed only because another class bootstrapped Minecraft first | `static final ItemStack` initialises before `@BeforeAll` | **running a negative control in isolation** | method, not field | yes → AV-1 |
+| Python edit scripts silently no-opped or mangled Java (greedy regex rewrote `BlockPos` args) | `str.replace` does not fail on a missing anchor | a build failure, then an `assert` | assert every anchor, and its uniqueness, before writing | yes, workflow |
+| Structural test tripped on `AbstractFurnaceBlockEntity` containing `FurnaceBlockEntity` | substring matching on type names | test failed on correct code | exclude the ambiguous name, document why | minor |
+
+**User-found, not self-found (the majority of the real defects):** all three lifecycle errors, the
+furnace station mismatch, the fuel expendability gap, the greet veto, and the sociability unit bug.
+Each was found by *reading the shipped design* or *watching the game*, never by the suite.
+
+### Step 4 — Breakthroughs
+
+| Breakthrough | Obstacle | Discovery | Technique | Why it matters | Evidence | Label |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Reproduce vanilla's derivation, don't resemble it** | our village anchor had to agree with `Raid.getCenter()` or D-VR-010 silently never fires | vanilla's centroid is raw ints + `BlockPos.containing` (floor), Y included, duplicates significant | transcribe the algorithm, test each property against the wrong-but-natural alternative | four one-block error classes, all invisible in play | `Raids#createOrExtendRaid` offsets 72–171 | `PROVEN` (static) |
+| **Ask the station, don't classify it** | blast furnace ≠ charcoal, and `AbstractFurnaceBlockEntity` is the common supertype | 1.21.1 has no `recipeType` field; the type is captured in `quickCheck` | accessor on `quickCheck`, ask it for a recipe | correct for modded furnaces; a class map is wrong for all of them | javap + 2 controls | `STRONGLY_SUPPORTED` |
+| **Permission layer above a capability predicate** | vanilla says a wooden pickaxe burns | `isFuel` is a fact about the item; expendability is a fact about the mob | veto layer *before* ranking, derived from `isDamageableItem()` | ranking can order what is expendable, never make it so | control reproduces the screenshot | `PROVEN` (static) |
+| **Name the unit at the call site** | a `[0,1]` trait through a `÷100` channel normaliser | 100x under-scale made *Friendly* worth 1/40th of a village bias | `trait01` vs `channel`, with a control proving each is wrong in the other's place | prevents the next trait repeating it | 3 controls | `PROVEN` (static) |
+| **Claim, never veto** | Opinion deleted SPM's greeting | `admit()` succeeding is rare by design | always return the host's answer; claim by side effect | adapter failure costs control, never host behaviour | control restores the veto | `STRONGLY_SUPPORTED`; runtime `UNVERIFIED` |
+
+### Step 5 — Reusable patterns
+
+**`VALIDATION_PATTERN` — the negative control as the unit of evidence.** 11 this session; 4 exposed
+something I had not predicted, including one defect in a test rather than in production. *When not to
+use:* nothing — but a control that is not run **in isolation** is weaker than it looks.
+
+**`ARCHITECTURE_PATTERN` — "X is not Y" separation.** Recurring shape across the whole session:
+burnable ≠ expendable · capability ≠ shape · storage availability ≠ perception · record age ≠ owner
+liveness · raid neighbourhood ≠ settlement identity · preference ≠ permission (prior). Each is a
+predicate about *the world* being substituted for a predicate about *permission or identity*. **Review
+question:** this boolean answers a question about the thing — does the decision need a question about
+us? *When not to use:* where the two genuinely coincide; say so explicitly rather than adding a layer.
+`STRONGLY_SUPPORTED` as a review lens, deliberately **not** promoted to a gate — it is a heuristic,
+not a pass/fail.
+
+**`PERSISTENCE_PATTERN` — partitioned state, unpartitioned owner.** → RET-1e.
+
+**`WORKFLOW_PATTERN` — assert the anchor before editing.** Every scripted source edit asserts its
+anchor exists *and is unique* before writing, and writes only after all anchors pass. This session it
+caught three stale anchors from concurrent RFC edits by another agent, aborting cleanly instead of
+clobbering. `PROVEN`.
+
+### Step 6 — Lesson → instruction mapping
+
+| Lesson | Existing instruction | Relationship | Evidence | Action |
+| --- | --- | --- | --- | --- |
+| Eviction extent + signal | Gate RET-1 (a–d) | `ADDS_VALIDATION_GATE` | 3 shipped defects | **promoted → RET-1e** |
+| Structural tests encode semantics | — (no existing guidance) | `NEW_CAPABILITY` | 2 tests enforced live defects | **promoted → AV-1 "Test strength as a proof class"** |
+| Directional assertions miss scale errors | AV-1 proof classes | `STRENGTHENS_EXISTING` | 100x bug survived a full suite | **promoted → same AV-1 section** |
+| Run controls in isolation | AV-1 | `CLARIFIES_EXISTING` | order-dependent test found | **promoted → same section** |
+| Shim must not remove host behaviour | Gate SPM-0 "degrade, never break" | `DUPLICATES_EXISTING` | greet veto | **not promoted** — SPM-0 already says it; recorded as an instance |
+| "X is not Y" review lens | MAIBS-1 / porting review | `STRONGLY_SUPPORTED` | 6 instances | **project report only** for now — needs a second project before it earns a gate |
+| Accessor over class map | api-break-detection (mixin audit) | `PROJECT_SPECIFIC` | one furnace case | **not promoted** — accessors carry their own fragility; recorded in `DECISIONS.md` |
+
+### Step 8 — Rejected proposals
+
+| Rejected | Reason |
+| --- | --- |
+| Promote "prefer accessor mixins to class maps" as a default | one case; accessors add a mixin-break surface that `api-break-detection` already governs. Right *here*, not right *generally*. |
+| Promote the 48-block village identity radius | `UNVERIFIED`, project-specific, and I flagged it as a judgement when I chose it |
+| Promote "watching beats unit testing" | true this session, but not actionable — AV-1 already says build ≠ runtime; a rule saying "look at the game" adds nothing checkable |
+| Add "X is not Y" as a gate | a heuristic cannot be pass/fail; forcing it into a gate would produce ritual compliance |
+| Weaken RET-1's runtime-sample requirement because RET-1e is statically checkable | would trade a proof class for convenience — exactly what Step 8 warns against. RET-1e is **additional**, not a substitute |
+
+### Step 9 — Handoff
+
+**Objective completed:** SOCIAL is a scored discretionary candidate with an immutably bound subject; a
+village perception/identity layer exists; three shipped defect classes repaired.
+
+**Stable state:** 930 tests, 0 failures, `build/libs/spmscavenger-1.11.0.jar`. Build:
+`./gradlew.bat clean build`.
+
+**Architecture now in use**
+- `village/` — `VillagePerception` (sole `PoiManager` touch point, loaded-chunk bounded),
+  `VillageAnchorPolicy` (reproduces vanilla), `VillageIdentityPolicy` (48, ours) vs
+  `RaidAssociationPolicy` (9216, vanilla), `KnownVillage` + `ObservationQuality`,
+  `MobVillageMemory` (16 LRU, home exempt), `VillageMemorySavedData` (`forgetEverywhere`).
+- Greet seam: **claims** via `SocialExecutionBindingRegistry.admit`, never vetoes.
+- Furnace: `FurnaceCapability.canCook` before every insert; `FuelExpendability.mayBurn` before ranking.
+
+**Failed approaches to avoid**
+1. Evicting persisted per-entity state on `ENTITY_UNLOAD`, or on any age-based TTL.
+2. A class map for furnace recipe types.
+3. `trait01` on `subjectPreference` (floors dislike to neutral).
+4. Structural assertions that count call sites or match control-flow shape.
+5. `str.replace` without asserting the anchor — two agents edit these files concurrently.
+
+**Highest-priority next action:** a runtime session. Everything above is `STATIC_CONFIRMED`; the
+three highest-value observations are (a) Friendly PlayerMobs visibly crouch-greeting with Opinion
+enabled, (b) whether SOCIAL now wins **too** often at full weight 32 — never exercised at that
+strength, and (c) a charcoal job completing at a plain furnace with the pickaxe untouched.
+
+**Constraints unchanged:** no Minecraft launch without explicit approval; commits and pushes only on
+explicit request; SPM stays stock (PolyForm Shield).
+
+### Shared-instruction changes made by this reflection
+
+| File | Change |
+| --- | --- |
+| `.agents/skills/minecraft-mod-porting/references/validation-matrix.md` | **new RET-1e** (extent + signal + direction-of-failure), and a RET-1 must-not clause |
+| `docs/agent-workflows/ASSUMPTION_VS_VERIFICATION.md` | **new section "Test strength as a proof class"** + AV-1 must-not clause |
+| `.claude/rules/retention-and-lifetime.md`, `.cursor/rules/retention-and-lifetime.mdc` | thin RET-1e pointers |
+| `.claude/rules/assumption-vs-verification.md`, `.cursor/rules/assumption-vs-verification.mdc` | thin test-strength pointers |
+
+No gate was weakened; no prior reasoning deleted. Nothing committed or pushed.
