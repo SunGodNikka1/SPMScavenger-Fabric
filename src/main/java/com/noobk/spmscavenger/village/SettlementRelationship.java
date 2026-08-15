@@ -11,11 +11,18 @@ import java.util.Objects;
 public final class SettlementRelationship {
 
     private int familiarityScore;
+    private int presenceFamiliarity;
     private long lastVisitTick;
     private int socialEventCount;
 
     public SettlementRelationship(int familiarityScore, long lastVisitTick, int socialEventCount) {
+        this(familiarityScore, lastVisitTick, socialEventCount, 0);
+    }
+
+    public SettlementRelationship(
+            int familiarityScore, long lastVisitTick, int socialEventCount, int presenceFamiliarity) {
         this.familiarityScore = clampFamiliarity(familiarityScore);
+        this.presenceFamiliarity = clampPresenceFamiliarity(presenceFamiliarity);
         this.lastVisitTick = lastVisitTick;
         this.socialEventCount = Math.max(0, socialEventCount);
     }
@@ -38,6 +45,10 @@ public final class SettlementRelationship {
         return familiarityScore;
     }
 
+    public int presenceFamiliarity() {
+        return presenceFamiliarity;
+    }
+
     public long lastVisitTick() {
         return lastVisitTick;
     }
@@ -50,8 +61,27 @@ public final class SettlementRelationship {
         return AttachmentBand.fromScore(familiarityScore);
     }
 
+    /** Visit, social, home-designation, and future trade/defense bumps. */
     public SettlementRelationship bumpFamiliarity(int amount, long tick) {
         familiarityScore = clampFamiliarity(familiarityScore + amount);
+        if (tick > lastVisitTick) {
+            lastVisitTick = tick;
+        }
+        return this;
+    }
+
+    /**
+     * Passive in-bounds presence only. Capped at {@link SettlementTuning#PRESENCE_FAMILIARITY_CAP} so
+     * standing around can reach MEDIUM but not HIGH alone.
+     */
+    public SettlementRelationship bumpPresenceFamiliarity(int amount, long tick) {
+        int headroom = SettlementTuning.PRESENCE_FAMILIARITY_CAP - presenceFamiliarity;
+        if (headroom <= 0 || amount <= 0) {
+            return this;
+        }
+        int applied = Math.min(amount, headroom);
+        presenceFamiliarity += applied;
+        familiarityScore = clampFamiliarity(familiarityScore + applied);
         if (tick > lastVisitTick) {
             lastVisitTick = tick;
         }
@@ -74,6 +104,7 @@ public final class SettlementRelationship {
             return this;
         }
         familiarityScore = Math.max(familiarityScore, other.familiarityScore);
+        presenceFamiliarity = Math.max(presenceFamiliarity, other.presenceFamiliarity);
         lastVisitTick = Math.max(lastVisitTick, other.lastVisitTick);
         socialEventCount = Math.min(
                 SettlementTuning.MAX_SOCIAL_EVENT_COUNT,
@@ -84,6 +115,7 @@ public final class SettlementRelationship {
     public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
         tag.putInt("familiarity", familiarityScore);
+        tag.putInt("presenceFamiliarity", presenceFamiliarity);
         tag.putLong("lastVisit", lastVisitTick);
         tag.putInt("socialEvents", socialEventCount);
         return tag;
@@ -93,10 +125,15 @@ public final class SettlementRelationship {
         if (tag == null) {
             return empty();
         }
+        int familiarity = tag.getInt("familiarity");
+        int presence = tag.contains("presenceFamiliarity")
+                ? tag.getInt("presenceFamiliarity")
+                : Math.min(familiarity, SettlementTuning.PRESENCE_FAMILIARITY_CAP);
         return new SettlementRelationship(
-                tag.getInt("familiarity"),
+                familiarity,
                 tag.getLong("lastVisit"),
-                tag.getInt("socialEvents"));
+                tag.getInt("socialEvents"),
+                presence);
     }
 
     static SettlementRelationship clampMerged(SettlementRelationship left, SettlementRelationship right) {
@@ -105,5 +142,9 @@ public final class SettlementRelationship {
 
     private static int clampFamiliarity(int score) {
         return Math.max(0, Math.min(SettlementTuning.MAX_FAMILIARITY, score));
+    }
+
+    private static int clampPresenceFamiliarity(int score) {
+        return Math.max(0, Math.min(SettlementTuning.PRESENCE_FAMILIARITY_CAP, score));
     }
 }

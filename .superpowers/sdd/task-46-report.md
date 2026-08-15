@@ -96,3 +96,19 @@ BUILD SUCCESSFUL — 905 tests
 **Prior failure (repair pass 3):** stopped ~74 blocks out (`-11592, 7716`) — dead zone from 128-block gate on chain legs. **REPAIRED** before this PASS.
 
 **Not in scope for VR-T1.5a:** flee-past-weak-monster personality tuning; VR-T1.5b familiarity; VR-T1.5c social bias.
+
+## Repair pass 4 (2026-08-15, VR-T1.5b tuning rebalance)
+
+**User finding:** VR-T1.5b mechanics **PASS**; passive grind (+1/10s → ~100 min for HIGH) **unplayable** for typical mob lifetimes.
+
+| Constant | Before | After |
+| --- | --- | --- |
+| `VISIT_FAMILIARITY_BUMP` | 25 | **50** |
+| `PRESENCE_FAMILIARITY_BUMP` | 1 | **5** |
+| `PRESENCE_FAMILIARITY_CAP` | — | **250** (new; passive cannot reach HIGH alone) |
+| `SOCIAL_FAMILIARITY_BUMP` | 40 | 40 |
+| `MEDIUM_BAND_MIN` / `HIGH_BAND_MIN` | 200 / 600 | unchanged |
+
+`SettlementRelationship.presenceFamiliarity` persisted; `bumpPresenceFamiliarity` used from heartbeat only. HIGH requires returns, social, and later trade/work/defense.
+
+`settlement-status` now prints `Presence: X / 250`.

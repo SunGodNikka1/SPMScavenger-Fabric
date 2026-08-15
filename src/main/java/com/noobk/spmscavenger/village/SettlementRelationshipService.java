@@ -52,7 +52,7 @@ public final class SettlementRelationshipService {
             if (!bootstrap && tick - relationship.lastVisitTick() < SettlementTuning.PRESENCE_HEARTBEAT_TICKS) {
                 continue;
             }
-            relationship.bumpFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, tick);
+            relationship.bumpPresenceFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, tick);
             memory.get().putRelationship(anchor, relationship);
             changed = true;
         }

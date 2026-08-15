@@ -88,6 +88,8 @@ public final class VillageSettlementStatusCommand {
                 + "Familiarity: " + relationship.familiarityScore()
                 + " / " + SettlementTuning.MAX_FAMILIARITY + "\n"
                 + "Band: " + relationship.attachmentBand().name() + "\n"
+                + "Presence: " + relationship.presenceFamiliarity()
+                + " / " + SettlementTuning.PRESENCE_FAMILIARITY_CAP + "\n"
                 + "Social events: " + relationship.socialEventCount() + "\n"
                 + "Home: " + home + "\n"
                 + "Last visit: " + relationship.lastVisitTick() + "\n"

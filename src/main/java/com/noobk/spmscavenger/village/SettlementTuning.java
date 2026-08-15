@@ -10,10 +10,12 @@ public final class SettlementTuning {
     public static final int HIGH_BAND_MIN = 600;
 
     public static final int VISIT_STALE_TICKS = 200;
-    public static final int VISIT_FAMILIARITY_BUMP = 25;
+    public static final int VISIT_FAMILIARITY_BUMP = 50;
 
     public static final int PRESENCE_HEARTBEAT_TICKS = 200;
-    public static final int PRESENCE_FAMILIARITY_BUMP = 1;
+    public static final int PRESENCE_FAMILIARITY_BUMP = 5;
+    /** Passive presence alone cannot exceed this contribution (VR-T1.5b rebalance). */
+    public static final int PRESENCE_FAMILIARITY_CAP = 250;
 
     public static final int SOCIAL_FAMILIARITY_BUMP = 40;
     public static final int MAX_SOCIAL_EVENT_COUNT = 10_000;

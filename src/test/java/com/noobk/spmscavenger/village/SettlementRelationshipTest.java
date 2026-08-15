@@ -62,10 +62,11 @@ class SettlementRelationshipTest {
         SettlementRelationship relationship = memory.relationshipAt(anchor)
                 .orElseGet(SettlementRelationship::empty);
         assertFalse(!bootstrap && tick - relationship.lastVisitTick() < SettlementTuning.PRESENCE_HEARTBEAT_TICKS);
-        relationship.bumpFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, tick);
+        relationship.bumpPresenceFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, tick);
         memory.putRelationship(anchor, relationship);
 
-        assertEquals(1, memory.relationshipAt(anchor).orElseThrow().familiarityScore());
+        assertEquals(5, memory.relationshipAt(anchor).orElseThrow().familiarityScore());
+        assertEquals(5, memory.relationshipAt(anchor).orElseThrow().presenceFamiliarity());
     }
 
     @Test
@@ -134,6 +135,18 @@ class SettlementRelationshipTest {
         }
         memory.remember(far(999), 9999L, complete(5));
         assertFalse(memory.relationshipAt(far(0)).isPresent(), "stale village relationship evicted with village");
+    }
+
+    @Test
+    void mustHappen_presenceFamiliarityRoundTripsThroughNbt() {
+        MobVillageMemory memory = new MobVillageMemory();
+        memory.remember(far(0), 10L, complete(5));
+        memory.putRelationship(far(0), new SettlementRelationship(220, 10L, 0, 200));
+
+        MobVillageMemory reloaded = MobVillageMemory.load(memory.save());
+        SettlementRelationship relationship = reloaded.relationshipAt(far(0)).orElseThrow();
+        assertEquals(220, relationship.familiarityScore());
+        assertEquals(200, relationship.presenceFamiliarity());
     }
 
     @Test

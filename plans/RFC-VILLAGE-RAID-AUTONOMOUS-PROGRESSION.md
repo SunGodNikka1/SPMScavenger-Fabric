@@ -865,8 +865,8 @@ socialEventCount
 
 | Signal | Rule | Cap |
 | --- | --- | --- |
-| Perception `record` updates village | `+VISIT_TICKS` familiarity if `lastVisitTick` stale ≥ 200t | score ≤ 1000 |
-| Observer heartbeat while mob inside **`SettlementBoundsPolicy` (64²)** of remembered anchor | `+1` familiarity / 200t | same cap |
+| Perception `record` updates village | `+VISIT` familiarity if `lastVisitTick` stale ≥ 200t | score ≤ 1000 |
+| Observer heartbeat while mob inside **`SettlementBoundsPolicy` (64²)** of remembered anchor | `+5` familiarity / 200t, **presence channel capped at 250** | same cap |
 | GAO SOCIAL / greet `COMPLETED` with `settlementAnchorAtStart` present (`D-VR-050`) | `+SOCIAL_BUMP` + socialEventCount | band thresholds |
 | `designateHome()` | factual `HOME_VILLAGE` + `onHomeDesignated` familiarity floor | — |
 
