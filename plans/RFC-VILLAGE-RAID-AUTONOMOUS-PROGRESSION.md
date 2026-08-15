@@ -9,9 +9,9 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
-| **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (hardened through V1-R3); V2+ design-only; no VR-T* runtime |
-| **Nearest frontier** | **V1-R4 `IMPLEMENTED`** (1.9.5). Review code/tests, then close D-VR-033 scheduler P1s before V1-D. |
-| **Last update** | 2026-08-14 (V1-R4 `PerceptionCoverage` implemented in 1.9.5) |
+| **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (through V1-R4 / 1.9.5 **APPROVED**); V2+ design-only; no VR-T* runtime |
+| **Nearest frontier** | **D-VR-033 scheduler contracts** (fair admission + bounded/conditional service) → re-lock → **V1-D** targets **1.10.0** |
+| **Last update** | 2026-08-14 (User **approves** pushed V1-R4 / 1.9.5; P0 + admitted-count regression **CLOSED**) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -2645,9 +2645,35 @@ Do not equate "no chunk generation" with "cheap query."
 
 **SettlementTier decomposition gate:** no objection — defer enum churn until V4/V5 consumers force it.
 
-### V1-R4 — `PerceptionCoverage` replaces withheld in cognition (`IMPLEMENTED` — 1.9.5)
+### V1-R4 — `PerceptionCoverage` replaces withheld in cognition (`APPROVED` — 1.9.5)
 
-**Status:** **`IMPLEMENTED`** (User accepted design, 2026-08-14; ships in mod **1.9.5**)
+**Status:** **`APPROVED`** (User review of pushed 1.9.5, 2026-08-14)
+
+| Closure | Status |
+| --- | --- |
+| P0 epistemic leak (`withheld` → cognition) | **CLOSED** |
+| Admitted-count supersede regression (B-VR-59) | **CLOSED** |
+| Runtime village perception (VR-T1 / VR-T1b) | **UNVERIFIED** |
+
+**User review (`CONFIRMED` against pushed 1.9.5):** `PerceptionCoverage.compute()` derives coverage solely
+from the 64-block chunk-column footprint via `hasChunk`, independent of POI results;
+`VillagePerception.observe()` computes coverage before `PoiManager`; `ObservationQuality.supersedes()`
+delegates exclusively to coverage (admitted POI count = diagnostics/settlement evidence only); comparison
+uses exact integer cross-multiplication; pre-R4 quality and pre-R1 `poiCount` rows migrate optimistically
+to full coverage; `VillageMemorySavedData.record()` persists coverage-based quality. Regression tests pin
+100%/20→100%/16 replaces and 100%/10→45%/18 does not replace. Structural contract enforces
+`PerceptionCoverage.compute()` before `getInRange()` and `withinPerception()` on raw POI results.
+
+**P2 test hardening (deferred — not 1.9.5):** extend
+`mustNotHappen_theBoundaryCheckCanLoadAChunk()` structural invariant to **both** `VillagePerception.java`
+and `PerceptionCoverage.java` — forbid `getChunk`, `getChunkAt`, `addRegionTicket`, `forceLoad`, and
+chunk generate/load calls. Current `PerceptionCoverage` is clean (`hasChunk` only); guard against future
+regression when Pipeline A lives outside `VillagePerception`.
+
+**Cosmetic (deferred):** `KnownVillage` Javadoc duplicated word — not a release blocker.
+
+**Next gate:** close D-VR-033 scheduler P1s (B-VR-56 fair admission, B-VR-57 conditional/bounded service)
+→ re-lock D-VR-033 → authorize **V1-D** for **1.10.0**.
 
 **Fixes both prior failures:**
 
@@ -2704,15 +2730,15 @@ later full-coverage observation can still replace via equal-coverage-newer-wins.
 **Rejected:** withheld in supersede; admitted-count supersede (B-VR-59); float coverage in NBT;
 deriving coverage from `getInRange()` withheld/unloaded record counts.
 
-**Next gate:** implement V1-R4 when authorized → review code/tests → then close D-VR-033 scheduler P1s
-before re-locking D-VR-033 / V1-D.
+**Next gate:** ~~implement V1-R4 when authorized~~ **DONE (1.9.5 APPROVED)** → close D-VR-033 scheduler P1s
+before re-locking D-VR-033 / V1-D (**1.10.0**).
 
 ---
 
 ## Topic: V1 perception driver and observation budget (`Agent_Codex`)
 
-**Status:** `REVIEW` — B2 direction accepted; **implementation authorization BLOCKED** pending V1-R4
-**implementation** + scheduler-contract P1s; V1-R4 **design `ACCEPTED`**
+**Status:** `REVIEW` — B2 direction accepted; **implementation authorization BLOCKED** pending D-VR-033
+scheduler-contract P1 closure; V1-R4 **`APPROVED`** (1.9.5)
 
 **Goal:** connect the implemented V1 perception/identity substrate to real PlayerMobs without giving
 the observer scheduler authority, manufacturing shared knowledge, or running a 64-block POI query
@@ -2861,7 +2887,7 @@ Consider queue bound = ticking PlayerMobs (one UUID each) + emergency cap. 200/2
 | Phase | Scope | Feasibility | Runtime proof |
 | --- | --- | --- | --- |
 | **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** (static) | VR-T1 pending: enter village → anchor agrees with `Raid.getCenter()` → leave → return → same settlement |
-| **V1-D** | Bounded production perception driver (D-VR-033) | **BLOCKED** — implement V1-R4 first; then scheduler P1s | VR-T1 + VR-T1b after R4 + D-VR-033 re-lock |
+| **V1-D** | Bounded production perception driver (D-VR-033) | **BLOCKED** — close D-VR-033 P1s; target **1.10.0** | VR-T1 + VR-T1b after D-VR-033 re-lock |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | moved to V2/V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **REQUIRES MIXIN** | VR-T2: trade input → correct villager → atomic inventory change; VR-T2b: sell carrots → buy book |
 | **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest |
@@ -3438,6 +3464,7 @@ camp becoming `HOME_VILLAGE`; treating one mob's founding history as settlement 
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| User | 2026-08-14 | **Approve V1-R4 / 1.9.5** (pushed implementation). P0 epistemic leak **CLOSED**; admitted-count regression **CLOSED**. Runtime perception **UNVERIFIED**. D-VR-033 **REVIEW**; V1-D **BLOCKED** → **1.10.0** after scheduler P1 closure. P2: extend no-chunk-load structural test to `PerceptionCoverage.java` (deferred). |
 | Agent_Cursor | 2026-08-14 | **V1-R4 implemented (1.9.5).** `PerceptionCoverage` dual pipeline; `ObservationQuality` cross-multiply supersede; optimistic NBT migration; `PerceptionCoverageTest` + contract/structural updates. Village tests green. V1-D still BLOCKED. |
 | User | 2026-08-14 | **Accept V1-R4.** `PerceptionCoverage` LOCKED: dual pipeline (coverage independent of `getInRange`); `loadedColumns`/`totalColumns` + cross-multiply supersede; optimistic full-coverage NBT migration; required shrink + worse-coverage tests. D-VR-033 still REVIEW; V1-D BLOCKED. **No implementation authorization.** |
 | User | 2026-08-14 | **V1-R4 design amendment.** Reject admitted-count supersede (regresses V1-R1 shrink freeze). Replace withheld with **`PerceptionCoverage`** (loaded/total chunk columns in 64-block footprint). Conditional scheduler Must happen; fair admission over `MAX_QUEUE>=100`; B-VR-59. **No implementation authorization.** |
