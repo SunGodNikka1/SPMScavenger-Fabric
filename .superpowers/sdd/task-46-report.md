@@ -141,3 +141,32 @@ re-observation granted `+50` visit every 200t while standing still → HIGH with
 | HOME independence | **PASS** — `Home: false` at MEDIUM |
 
 **VR-T1.5c fixture:** God at 350/MEDIUM, 0 social events, inside bounds — ready for greet-bias probe.
+
+## Repair pass 6 (2026-08-15, VR-T1.5c root cause — taxonomy)
+
+**Runtime evidence (God idle, Opinion inspector Runtime authority section):**
+
+```
+latestDispositionCause=UNKNOWN_ACTIVE
+discretionaryBlocker= → UNKNOWN_ACTIVE (UNKNOWN_ACTIVE)
+running: VillagePerceptionObserver → UNKNOWN_ACTIVE
+running: AnticsGoal → PASSIVE_COSMETIC
+running: ExplorationActivityGoal → PASSIVE_OBSERVER
+```
+
+**Root cause:** `VillagePerceptionObserver` (V1-D flagless background observer) was missing from
+`MoveHolderClassifier.staticActivityClass()`, so it fell through to `UNKNOWN_ACTIVE`. That
+continuously suppressed Opinion discretionary evaluation (`DiscretionaryEligibility` fail-closed on
+`unknownActive`), preventing SOCIAL intent formation and greet binding regardless of the 13-tick
+claim window.
+
+| Fix | Change |
+| --- | --- |
+| Taxonomy | `VillagePerceptionObserver` → `ActivityClass.PASSIVE_OBSERVER` beside `ExplorationActivityGoal` |
+| Inspector | Runtime authority section (prior pass) identified the blocker — not greet timing alone |
+| Scope guard | No `DiscretionaryEligibility` special-case; UNKNOWN_ACTIVE policy unchanged |
+
+**VR-T1.5c status:** root cause **CONFIRMED** (runtime inspector); taxonomy repair **CONFIRMED**
+(build + tests); greet-bias / `DISCRETIONARY_SOCIAL` runtime **UNVERIFIED** pending retest.
+
+`.\gradlew.bat clean build` — **BUILD SUCCESSFUL** after repair.

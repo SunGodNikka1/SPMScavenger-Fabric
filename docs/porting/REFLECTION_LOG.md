@@ -927,3 +927,83 @@ explicit request; SPM stays stock (PolyForm Shield).
 | `.claude/rules/assumption-vs-verification.md`, `.cursor/rules/assumption-vs-verification.mdc` | thin test-strength pointers |
 
 No gate was weakened; no prior reasoning deleted. Nothing committed or pushed.
+
+---
+
+## 2026-08-15 — VR-T1.5c taxonomy root cause (`VillagePerceptionObserver` → `UNKNOWN_ACTIVE`)
+
+**Gate PREFL-1.** Continues task-46 / V1.5 runtime work. Covers runtime-authority inspector
+diagnosis, greet claim-window work, and the `MoveHolderClassifier` taxonomy repair — not unrelated
+V1.5 slices.
+
+### Step 1 — Scope
+
+| Field | Value |
+| --- | --- |
+| Project | `SPMScavenger-1.21.1-Fabric` v1.11.0 |
+| Work reflected on | VR-T1.5c greet binding failure; bounded claim window; runtime authority inspector; taxonomy fix |
+| Starting state | God greeting visibly but `Social events: 0`; Opinion stuck at `MANDATORY_AUTHORITY` / diagnostic-only |
+| Final state | `VillagePerceptionObserver` → `PASSIVE_OBSERVER` in `MoveHolderClassifier`; regression tests added |
+| Systems changed | `mining/MoveHolderClassifier.java`, `activity/*Test`, `village/VillagePerceptionContractTest`, `opinion/readout/*` (inspector), `SocialGreetClaimWindow` |
+| Verification | Runtime inspector `CONFIRMED` blocker; `clean build` + new taxonomy tests `CONFIRMED`; greet `DISCRETIONARY_SOCIAL` retest `UNVERIFIED` |
+
+### Step 2 — Reconstruction
+
+| Stage | Problem | Action | Result | Evidence | Confidence |
+| --- | --- | --- | --- | --- | --- |
+| VR-T1.5c symptom | God greets; `Social events: 0` | Classified as `SOCIAL_REFLEX` (correct when unbound) | Opinion not owning greet | User runtime + inspector | `CONFIRMED` |
+| Claim window | `admit()` raced 10-tick observer | 13-tick bounded defer + fixed episode deadline | Build/tests pass | `SocialGreetClaimWindowTest` | `CONFIRMED` static |
+| Deeper blocker | Opinion never formed SOCIAL intent | Extended O inspector with runtime authority scan | `VillagePerceptionObserver → UNKNOWN_ACTIVE` | User paste of inspector output | `RUNTIME_CONFIRMED` |
+| Root cause | V1-D observer omitted from GAO-0 taxonomy | `staticActivityClass`: `VillagePerceptionObserver` beside `ExplorationActivityGoal` | `PASSIVE_OBSERVER`; no `unknownActive` | taxonomy tests | `CONFIRMED` static |
+
+### Step 3 — Errors and recoveries
+
+| Error | Root cause | How found | Recovery |
+| --- | --- | --- | --- |
+| Treated greet timing as sole failure mode | claim window only helps when director can evaluate | User: `MANDATORY_AUTHORITY` **between** greets too | Runtime authority inspector |
+| Claim-window target churn extended deadline | new target reset `deadlineTick` | Static review before runtime | Preserve episode `openedAtTick`/`deadlineTick` on churn |
+| `VillagePerceptionObserver` always running | shipped V1-D without `MoveHolderClassifier` pin | Inspector showed `UNKNOWN_ACTIVE` while idle | Taxonomy at source — not `DiscretionaryEligibility` special-case |
+
+### Step 4 — Breakthroughs
+
+| Breakthrough | Label | Verification |
+| --- | --- | --- |
+| Runtime authority inspector exposes **which Goal** blocks Opinion, not just `MANDATORY_AUTHORITY` | `STRONGLY_SUPPORTED` | User God idle session |
+| Flagless background observers must register in `MoveHolderClassifier.staticActivityClass` or they fail-closed the whole director | `PROVEN` (this defect) | `VillagePerceptionObserverTaxonomyTest` + runtime |
+| UNKNOWN_ACTIVE policy must stay; fix taxonomy, not eligibility | `PROVEN` | User constraint + existing `ActivityTaxonomyTest` unknown goal test |
+
+### Step 5 — Reusable pattern
+
+**`ARCHITECTURE_PATTERN` — register sibling observers in the shared taxonomy.**
+
+When adding a flagless, always-on addon `Goal` that only observes/enqueues (like
+`ExplorationActivityGoal` or `VillagePerceptionObserver`), pin it in
+`MoveHolderClassifier.staticActivityClass()` as `PASSIVE_OBSERVER` **in the same change** as the
+Goal install. An unclassified running Goal is indistinguishable from a hostile unknown at the
+director layer and suppresses all discretionary scheduling.
+
+*When not to use:* Goals that intentionally hold scheduler authority (must map to a blocking
+`ActivityClass`). *Verification:* `ActivityTaxonomyTest` + `ActivityObservationService` unknownActive
+assertion + contract test on `MoveHolderClassifier` source.
+
+### Step 6 — Lesson → instruction mapping
+
+| Lesson | Target | Promotion |
+| --- | --- | --- |
+| New flagless observers → `PASSIVE_OBSERVER` in `MoveHolderClassifier` | `ActivityTaxonomyTest` + `VillagePerceptionContractTest` | `STRONGLY_SUPPORTED` — enforced by tests, not yet a global gate |
+| Runtime authority inspector for Opinion blockers | `OpinionRuntimeAuthorityProbe` | `PROJECT_SPECIFIC` until second use |
+| Do not special-case observers in `DiscretionaryEligibility` | User constraint | `STRENGTHENS_EXISTING` GAO-0 single-taxonomy rule |
+
+No shared skill file edited this session; promotion bar for repo-wide mandatory gate not met (one
+observer class; verification is project tests + one runtime session).
+
+### Step 9 — Handoff
+
+- **Install artifact:** rebuild `spmscavenger-1.11.0.jar` after `.\gradlew.bat clean build`.
+- **VR-T1.5c retest:** God @ `-11666, 82, 7709` — inspector should show
+  `VillagePerceptionObserver → PASSIVE_OBSERVER`, `latestDispositionCause` not `UNKNOWN_ACTIVE` while
+  idle; greet should get chance to bind SOCIAL within 13-tick window.
+- **Must happen:** `discretionaryBlocker` absent or non-blocking while idle; SOCIAL intent can form;
+  completed greet may increment social events when bound.
+- **Must not happen:** `UNKNOWN_ACTIVE` from `VillagePerceptionObserver`; indefinite greet suppression.
+- **Constraints:** no commit/push/launch in this reflection session.

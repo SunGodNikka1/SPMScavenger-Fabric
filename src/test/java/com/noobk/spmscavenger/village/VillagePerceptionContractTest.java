@@ -201,6 +201,16 @@ class VillagePerceptionContractTest {
                 "observer must not touch POI storage");
     }
 
+    /** V1-D observer must share ExplorationActivityGoal's PASSIVE_OBSERVER taxonomy. */
+    @Test
+    void mustHappen_villagePerceptionObserverIsRegisteredInSharedTaxonomy() throws IOException {
+        String classifier = code(source(Path.of("mining/MoveHolderClassifier.java")));
+        assertTrue(classifier.contains("VillagePerceptionObserver.class.isAssignableFrom(goalType)"),
+                "flagless village observer must be pinned beside ExplorationActivityGoal");
+        assertTrue(classifier.contains("ActivityClass.PASSIVE_OBSERVER"),
+                "village observer must not fall through to UNKNOWN_ACTIVE");
+    }
+
     /** VR-T1A closed — temporary debug commands and trace plumbing removed after runtime PASS. */
     @Test
     void mustHappen_vrT1aDiagnosticsRemoved() throws IOException {

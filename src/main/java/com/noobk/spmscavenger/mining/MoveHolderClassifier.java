@@ -14,6 +14,7 @@ import com.noobk.spmscavenger.goal.SeekShelterGoal;
 import com.noobk.spmscavenger.goal.SmeltAtFurnaceGoal;
 import com.noobk.spmscavenger.goal.TrackedLocalWanderGoal;
 import com.noobk.spmscavenger.goal.TunnelSearchGoal;
+import com.noobk.spmscavenger.goal.VillagePerceptionObserver;
 import com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -103,7 +104,8 @@ public final class MoveHolderClassifier {
                 || RandomStrollGoal.class.isAssignableFrom(goalType)) {
             return ActivityClass.IDLE_CANDIDATE;
         }
-        if (ExplorationActivityGoal.class.isAssignableFrom(goalType)) {
+        if (ExplorationActivityGoal.class.isAssignableFrom(goalType)
+                || VillagePerceptionObserver.class.isAssignableFrom(goalType)) {
             return ActivityClass.PASSIVE_OBSERVER;
         }
         if (AnticsGoal.class.isAssignableFrom(goalType)

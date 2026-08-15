@@ -13,9 +13,14 @@ import com.noobk.spmscavenger.goal.SeekShelterGoal;
 import com.noobk.spmscavenger.goal.SmeltAtFurnaceGoal;
 import com.noobk.spmscavenger.goal.TrackedLocalWanderGoal;
 import com.noobk.spmscavenger.goal.TunnelSearchGoal;
+import com.noobk.spmscavenger.goal.VillagePerceptionObserver;
 import com.noobk.spmscavenger.mining.MoveHolderClassifier;
+import com.noobk.spmscavenger.opinion.DiscretionaryEligibility;
 import net.minecraft.world.entity.ai.goal.Goal;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,6 +44,30 @@ class ActivityTaxonomyTest {
         assertClass(ActivityClass.IDLE_CANDIDATE, TrackedLocalWanderGoal.class);
         assertClass(ActivityClass.PASSIVE_COSMETIC, AnticsGoal.class);
         assertClass(ActivityClass.PASSIVE_OBSERVER, ExplorationActivityGoal.class);
+        assertClass(ActivityClass.PASSIVE_OBSERVER, VillagePerceptionObserver.class);
+    }
+
+    @Test
+    void passiveObserverDoesNotBlockDiscretionaryEligibility() {
+        var observation = ActivityObservationService.summarize(
+                List.of(ActivityClass.PASSIVE_OBSERVER));
+
+        assertFalse(observation.unknownActive());
+        assertTrue(DiscretionaryEligibility.isDiscretionaryEligible(observation, false));
+        assertEquals(
+                com.noobk.spmscavenger.opinion.InvalidationCause.NONE,
+                DiscretionaryEligibility.invalidationForObservation(observation, false));
+    }
+
+    @Test
+    void unknownGoalStillFailsClosed() {
+        assertClass(ActivityClass.UNKNOWN_ACTIVE, CompletelyUnknownGoal.class);
+
+        var observation = ActivityObservationService.summarize(
+                List.of(ActivityClass.UNKNOWN_ACTIVE));
+
+        assertTrue(observation.unknownActive());
+        assertFalse(DiscretionaryEligibility.isDiscretionaryEligible(observation, false));
     }
 
     @Test
