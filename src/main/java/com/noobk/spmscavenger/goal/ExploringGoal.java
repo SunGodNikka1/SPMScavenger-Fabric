@@ -283,14 +283,32 @@ public final class ExploringGoal extends Goal {
     }
 
     private boolean trySeedCommuteExpedition(ServerLevel level, long now, ScavengerConfig cfg) {
-        if (!SettlementReturnPolicy.shouldCommute(level, mob)) {
-            return false;
+        return seedCommuteExpedition(level, now, cfg, null);
+    }
+
+    private boolean tryChainCommuteLeg(
+            ServerLevel level, long now, ScavengerConfig cfg, BlockPos commuteAnchor) {
+        return seedCommuteExpedition(level, now, cfg, commuteAnchor);
+    }
+
+    private boolean seedCommuteExpedition(
+            ServerLevel level, long now, ScavengerConfig cfg, BlockPos chainAnchor) {
+        BlockPos anchor;
+        if (chainAnchor != null) {
+            if (!SettlementReturnPolicy.shouldContinueCommute(level, mob, chainAnchor)) {
+                return false;
+            }
+            anchor = chainAnchor;
+        } else {
+            if (!SettlementReturnPolicy.shouldStartCommute(level, mob)) {
+                return false;
+            }
+            Optional<BlockPos> target = SettlementReturnPolicy.commuteTarget(level, mob);
+            if (target.isEmpty()) {
+                return false;
+            }
+            anchor = target.get();
         }
-        var target = SettlementReturnPolicy.commuteTarget(level, mob);
-        if (target.isEmpty()) {
-            return false;
-        }
-        BlockPos anchor = target.get();
         double dx = anchor.getX() + 0.5 - mob.getX();
         double dz = anchor.getZ() + 0.5 - mob.getZ();
         double dist = Math.hypot(dx, dz);
@@ -1239,8 +1257,7 @@ public final class ExploringGoal extends Goal {
             if (kind == ExpeditionKind.COMMUTE
                     && commuteAnchor != null
                     && !SettlementBoundsPolicy.within(actualEnd, commuteAnchor)
-                    && SettlementReturnPolicy.shouldCommute(level, mob)
-                    && trySeedCommuteExpedition(level, now, ScavengerConfig.get())) {
+                    && tryChainCommuteLeg(level, now, ScavengerConfig.get(), commuteAnchor)) {
                 rebaseAfterInterruption(level);
                 PlanResult result = planCurrentStage(level, now);
                 if (result == PlanResult.READY && navigationState != null) {

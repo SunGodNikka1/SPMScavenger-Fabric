@@ -17,7 +17,11 @@ public final class SettlementReturnPolicy {
     private SettlementReturnPolicy() {
     }
 
-    public static boolean shouldCommute(ServerLevel level, Mob mob) {
+    /**
+     * Whether to <b>start</b> a new return commute (D-VR-048). Requires {@link SettlementTuning#COMMUTE_MIN_DISTANCE}
+     * so Bob does not commute when already near home.
+     */
+    public static boolean shouldStartCommute(ServerLevel level, Mob mob) {
         if (level == null || mob == null || !ScavengerConfig.get().exploring) {
             return false;
         }
@@ -26,15 +30,61 @@ public final class SettlementReturnPolicy {
             return false;
         }
         Optional<BlockPos> target = commuteTarget(memory.get(), mob.blockPosition());
-        if (target.isEmpty()) {
+        return target.filter(anchor -> shouldStartCommuteAt(memory.get(), anchor, mob.blockPosition()))
+                .isPresent();
+    }
+
+    /**
+     * Whether to <b>start</b> a new return commute at {@code mobPos} toward {@code anchor}.
+     * Package-visible for unit tests without a live level/mob.
+     */
+    static boolean shouldStartCommuteAt(MobVillageMemory memory, BlockPos anchor, BlockPos mobPos) {
+        if (memory == null || anchor == null || mobPos == null) {
             return false;
         }
-        BlockPos anchor = target.get();
-        if (SettlementBoundsPolicy.within(mob.blockPosition(), anchor)) {
+        if (!qualifiesForCommute(memory, anchor)) {
             return false;
         }
-        double dist = Math.sqrt(mob.blockPosition().distSqr(anchor));
+        if (SettlementBoundsPolicy.within(mobPos, anchor)) {
+            return false;
+        }
+        double dist = Math.sqrt(mobPos.distSqr(anchor));
         return dist >= SettlementTuning.COMMUTE_MIN_DISTANCE;
+    }
+
+    /**
+     * Whether an in-flight {@code COMMUTE} may chain another leg. Terminates only at
+     * {@link SettlementBoundsPolicy} — no {@link SettlementTuning#COMMUTE_MIN_DISTANCE} dead zone.
+     */
+    public static boolean shouldContinueCommute(ServerLevel level, Mob mob, BlockPos anchor) {
+        if (level == null || mob == null || anchor == null || !ScavengerConfig.get().exploring) {
+            return false;
+        }
+        Optional<MobVillageMemory> memory = VillageMemorySavedData.get(level).peek(mob.getUUID());
+        if (memory.isEmpty()) {
+            return false;
+        }
+        return shouldContinueCommuteAt(memory.get(), anchor, mob.blockPosition());
+    }
+
+    /**
+     * Whether an in-flight {@code COMMUTE} may chain another leg at {@code mobPos}.
+     * Package-visible for unit tests without a live level/mob.
+     */
+    static boolean shouldContinueCommuteAt(MobVillageMemory memory, BlockPos anchor, BlockPos mobPos) {
+        if (memory == null || anchor == null || mobPos == null) {
+            return false;
+        }
+        if (!qualifiesForCommute(memory, anchor)) {
+            return false;
+        }
+        return !SettlementBoundsPolicy.within(mobPos, anchor);
+    }
+
+    /** @deprecated use {@link #shouldStartCommute} or {@link #shouldContinueCommute} */
+    @Deprecated
+    public static boolean shouldCommute(ServerLevel level, Mob mob) {
+        return shouldStartCommute(level, mob);
     }
 
     public static Optional<BlockPos> commuteTarget(MobVillageMemory memory, BlockPos mobPos) {

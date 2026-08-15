@@ -34,6 +34,43 @@ class SettlementReturnPolicyTest {
     }
 
     @Test
+    void mustNotHappen_startCommuteInsideDeadZoneBetweenBoundsAndMinDistance() {
+        MobVillageMemory memory = new MobVillageMemory();
+        BlockPos home = new BlockPos(0, 64, 0);
+        memory.remember(home, 1L, complete(5));
+        memory.designateHome(home);
+        // ~74 blocks: outside 64² bounds, inside 128-block start cutoff (Bob VR-T1.5a repro).
+        BlockPos bob = new BlockPos(74, 64, 0);
+        assertFalse(SettlementBoundsPolicy.within(bob, home));
+        assertTrue(bob.distSqr(home) > 64L * 64L);
+        assertTrue(Math.sqrt(bob.distSqr(home)) < SettlementTuning.COMMUTE_MIN_DISTANCE);
+        assertFalse(SettlementReturnPolicy.shouldStartCommute(null, null)); // guards only
+        assertTrue(SettlementReturnPolicy.shouldContinueCommuteAt(memory, home, bob));
+        assertFalse(SettlementReturnPolicy.shouldStartCommuteAt(memory, home, bob));
+    }
+
+    @Test
+    void mustHappen_startCommuteBeyondMinDistance() {
+        MobVillageMemory memory = new MobVillageMemory();
+        BlockPos home = new BlockPos(0, 64, 0);
+        memory.remember(home, 1L, complete(5));
+        memory.designateHome(home);
+        BlockPos far = new BlockPos(200, 64, 0);
+        assertTrue(SettlementReturnPolicy.shouldStartCommuteAt(memory, home, far));
+    }
+
+    @Test
+    void mustNotHappen_continueCommuteOnceInsideBounds() {
+        MobVillageMemory memory = new MobVillageMemory();
+        BlockPos home = new BlockPos(0, 64, 0);
+        memory.remember(home, 1L, complete(5));
+        memory.designateHome(home);
+        BlockPos inside = new BlockPos(32, 64, 0);
+        assertTrue(SettlementBoundsPolicy.within(inside, home));
+        assertFalse(SettlementReturnPolicy.shouldContinueCommuteAt(memory, home, inside));
+    }
+
+    @Test
     void mustNotHappen_lowFamiliarityWithoutHomeQualifies() {
         MobVillageMemory memory = new MobVillageMemory();
         BlockPos village = new BlockPos(0, 64, 0);
