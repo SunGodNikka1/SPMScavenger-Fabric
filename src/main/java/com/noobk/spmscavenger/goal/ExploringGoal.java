@@ -1231,7 +1231,9 @@ public final class ExploringGoal extends Goal {
         ExpeditionKind kind = expedition.kind;
         BlockPos commuteAnchor = expedition.commuteAnchor;
         boolean discretionaryTerminal = isDiscretionaryExplorePath() && !expedition.caveHandoffContinuation;
-        emitExpeditionTerminal(expedition, now, ExpeditionEndAttribution.completed());
+        if (attributesExplorationExperience(expedition)) {
+            emitExpeditionTerminal(expedition, now, ExpeditionEndAttribution.completed());
+        }
         if (mob.level() instanceof ServerLevel level) {
             clearCaveContinuationCommitment(level);
             if (kind == ExpeditionKind.COMMUTE
@@ -1247,10 +1249,12 @@ public final class ExploringGoal extends Goal {
                 return;
             }
         }
-        remember(recentExpeditionDestinations,
-                ExplorationPolicy.regionKey(actualEnd.getX(), actualEnd.getZ(), REGION_SIZE_CHUNKS),
-                REGION_MEMORY_LIMIT);
-        remember(recentCompletedHeadings, expedition.headingSector, HEADING_MEMORY_LIMIT);
+        if (kind != ExpeditionKind.COMMUTE) {
+            remember(recentExpeditionDestinations,
+                    ExplorationPolicy.regionKey(actualEnd.getX(), actualEnd.getZ(), REGION_SIZE_CHUNKS),
+                    REGION_MEMORY_LIMIT);
+            remember(recentCompletedHeadings, expedition.headingSector, HEADING_MEMORY_LIMIT);
+        }
         SpmScavenger.LOGGER.info(
                 "[spmscavenger] exploration completed entity={} intent={} stages={} hops={} endpoint={}",
                 mob.getId(), expedition.intent, expedition.waypoints.size(), expedition.hops,
@@ -1265,6 +1269,9 @@ public final class ExploringGoal extends Goal {
     }
 
     private void emitExpeditionUnlocked(ExpeditionState state, long now) {
+        if (!attributesExplorationExperience(state)) {
+            return;
+        }
         ExperienceEmitters.expeditionUnlocked(
                 mob,
                 expeditionEpisodeId(state),
@@ -1273,8 +1280,19 @@ public final class ExploringGoal extends Goal {
 
     private void emitExpeditionTerminal(
             ExpeditionState state, long now, ExpeditionEndAttribution.Semantics semantics) {
+        if (!attributesExplorationExperience(state)) {
+            return;
+        }
         ExperienceEmitters.expeditionTerminal(
                 mob, expeditionEpisodeId(state), state.startedTick, now, semantics);
+    }
+
+    /**
+     * V1.5-C — {@link ExpeditionKind#COMMUTE} reuses this goal for movement only. Settlement return
+     * must not manufacture {@code OVERLAND_EXPLORATION} / {@code EXPEDITION_UNLOCKED} episodes.
+     */
+    private static boolean attributesExplorationExperience(ExpeditionState state) {
+        return state != null && state.kind != ExpeditionKind.COMMUTE;
     }
 
     private UUID expeditionEpisodeId(ExpeditionState state) {

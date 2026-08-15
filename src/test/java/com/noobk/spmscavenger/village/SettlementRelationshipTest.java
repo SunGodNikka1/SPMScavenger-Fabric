@@ -49,6 +49,20 @@ class SettlementRelationshipTest {
     }
 
     @Test
+    void mustNotHappen_loadRestoresRelationshipForEvictedVillage() {
+        MobVillageMemory memory = new MobVillageMemory();
+        for (int i = 0; i <= MobVillageMemory.MAX_KNOWN_VILLAGES; i++) {
+            memory.remember(far(i), 1000L + i, complete(5));
+            memory.putRelationship(far(i), new SettlementRelationship(50 + i, 1000L + i, 0));
+        }
+        MobVillageMemory reloaded = MobVillageMemory.load(memory.save());
+        assertEquals(MobVillageMemory.MAX_KNOWN_VILLAGES, reloaded.size());
+        assertFalse(
+                reloaded.relationshipAt(far(0)).isPresent(),
+                "evicted village relationship must not resurrect on load");
+    }
+
+    @Test
     void mustNotHappen_evictionLeavesOrphanRelationship() {
         MobVillageMemory memory = new MobVillageMemory();
         for (int i = 0; i < MobVillageMemory.MAX_KNOWN_VILLAGES; i++) {

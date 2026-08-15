@@ -53,3 +53,12 @@ BUILD SUCCESSFUL — 905 tests
 - VR-T1.5 runtime (Bob, overworld) still required before removing `designate-home`.
 - `designate-home` picks nearest remembered village to target mob — operator must ensure Bob has memory.
 - Commute multi-leg chaining is unit-tested at policy level only; pathfinding failures in world are **UNVERIFIED**.
+
+## Repair pass (2026-08-15, pre-VR-T1.5)
+
+| Fix | Issue | Resolution |
+| --- | --- | --- |
+| COMMUTE experience attribution | `emitExpeditionUnlocked` / `emitExpeditionTerminal` taught `OVERLAND_EXPLORATION` per leg | `attributesExplorationExperience()` gates all expedition experience emitters; COMMUTE also skips exploration novelty memory |
+| Load/evict sync | `evictBeyondBound()` before relationship NBT load resurrected orphan rows | Load relationships first, then evict; `pruneOrphanRelationships()` after eviction |
+
+`.\gradlew.bat clean build` — **BUILD SUCCESSFUL** (908 tests after repair).

@@ -207,6 +207,16 @@ public final class MobVillageMemory {
             relationships.remove(stalest.anchor());
             villages.remove(stalest);
         }
+        pruneOrphanRelationships();
+    }
+
+    /**
+     * D-VR-049 — drop relationship rows whose settlement no longer exists. Required after load when
+     * {@link #evictBeyondBound()} ran before relationships were deserialized.
+     */
+    private void pruneOrphanRelationships() {
+        relationships.keySet().removeIf(anchor -> villages.stream()
+                .noneMatch(village -> VillageIdentityPolicy.sameSettlement(village.anchor(), anchor)));
     }
 
     /**
@@ -266,7 +276,6 @@ public final class MobVillageMemory {
             }
             memory.villages.add(village);
         }
-        memory.evictBeyondBound();
         ListTag relationshipList = tag.getList("relationships", Tag.TAG_COMPOUND);
         for (int i = 0; i < relationshipList.size(); i++) {
             CompoundTag row = relationshipList.getCompound(i);
@@ -278,6 +287,7 @@ public final class MobVillageMemory {
                     anchor,
                     SettlementRelationship.load(row.getCompound("relationship")));
         }
+        memory.evictBeyondBound();
         return memory;
     }
 }
