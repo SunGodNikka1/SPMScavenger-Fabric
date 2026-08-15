@@ -222,6 +222,29 @@ class VillagePerceptionContractTest {
     }
 
     /**
+     * VR-T1 active probe — one-shot observe only; must not write memory or use the V1-D scheduler.
+     */
+    @Test
+    void mustHappen_villageProbeObservesWithoutRecording() throws IOException {
+        String probe = code(source(Path.of("command/VillageProbeDebugCommand.java")));
+        assertTrue(probe.contains("VillagePerception.observe"),
+                "village-probe must call observe once for diagnosis");
+        for (String forbidden : List.of(
+                "VillageMemorySavedData.record",
+                "observeAndRecord",
+                "VillagePerceptionScheduler",
+                "memoryOf(",
+                "peekMobMemory",
+                "computeIfAbsent")) {
+            assertFalse(probe.contains(forbidden),
+                    "village-probe must not call: " + forbidden);
+        }
+        String memoryCommand = code(source(Path.of("command/VillageMemoryDebugCommand.java")));
+        assertTrue(memoryCommand.contains("village-probe"),
+                "village-probe must register under spmscavenger");
+    }
+
+    /**
      * Gate RET-1a: eviction must exist in production, not only as an API.
      *
      * <p><b>V1-R1/R2/R3.</b> The first version of this test counted call sites and asserted two —

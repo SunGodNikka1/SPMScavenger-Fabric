@@ -32,11 +32,15 @@ public final class VillageMemoryDebugCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         var root = Commands.literal("spmscavenger").requires(source -> source.hasPermission(2));
-        var villageMemory = Commands.literal("village-memory")
-                .then(Commands.argument("target", EntityArgument.entity())
-                        .executes(ctx -> printMemory(
-                                ctx.getSource(), EntityArgument.getEntity(ctx, "target"))));
-        dispatcher.register(root.then(villageMemory));
+        dispatcher.register(root
+                .then(Commands.literal("village-memory")
+                        .then(Commands.argument("target", EntityArgument.entity())
+                                .executes(ctx -> printMemory(
+                                        ctx.getSource(), EntityArgument.getEntity(ctx, "target")))))
+                .then(Commands.literal("village-probe")
+                        .then(Commands.argument("target", EntityArgument.entity())
+                                .executes(ctx -> VillageProbeDebugCommand.probe(
+                                        ctx.getSource(), EntityArgument.getEntity(ctx, "target"))))));
     }
 
     private static int printMemory(CommandSourceStack source, Entity entity) {
