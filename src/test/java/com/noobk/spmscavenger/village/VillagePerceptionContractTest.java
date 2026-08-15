@@ -201,69 +201,33 @@ class VillagePerceptionContractTest {
                 "observer must not touch POI storage");
     }
 
-    /** VR-T1 debug command must be read-only — no perception or memory allocation. */
+    /** VR-T1A closed — temporary debug commands and trace plumbing removed after runtime PASS. */
     @Test
-    void mustNotHappen_vrT1DebugCommandContaminatesPerception() throws IOException {
-        String command = code(source(Path.of("command/VillageMemoryDebugCommand.java")));
-        assertTrue(command.contains("peekMobMemory"),
-                "debug command must read through non-creating peek");
-        for (String forbidden : List.of(
-                "VillagePerception.observe",
-                "VillagePerceptionScheduler",
-                "observeAndRecord",
-                "memoryOf(",
-                "computeIfAbsent",
-                "getChunk(",
-                "getChunkAt(",
-                "forceLoad",
-                "setChunkForced")) {
-            assertFalse(command.contains(forbidden),
-                    "VR-T1 debug command must not call: " + forbidden);
-        }
-        String savedData = code(source(Path.of("village/VillageMemorySavedData.java")));
-        assertTrue(savedData.contains("peekMobMemory"),
-                "peekMobMemory must exist for non-creating VR-T1 reads");
-        assertTrue(savedData.contains("peekIn(level)"),
-                "peekMobMemory must use non-creating saved-data access");
+    void mustHappen_vrT1aDiagnosticsRemoved() throws IOException {
+        assertFalse(Files.exists(MAIN.resolve("command/VillageMemoryDebugCommand.java")),
+                "village-memory debug command must be removed after VR-T1A");
+        assertFalse(Files.exists(MAIN.resolve("command/VillageProbeDebugCommand.java")),
+                "village-probe debug command must be removed after VR-T1A");
+        assertFalse(Files.exists(MAIN.resolve("command/VillageDriverDebugCommand.java")),
+                "village-driver debug command must be removed after VR-T1A");
+        assertFalse(Files.exists(MAIN.resolve("village/VillagePerceptionServiceTrace.java")),
+                "service trace plumbing must be removed after VR-T1A");
+        assertFalse(Files.exists(MAIN.resolve("village/VillagePerceptionDriverDiagnostics.java")),
+                "driver diagnostics must be removed after VR-T1A");
+        String bootstrap = code(source(Path.of("SpmScavenger.java")));
+        assertFalse(bootstrap.contains("village-memory"),
+                "bootstrap must not register village-memory");
+        assertFalse(bootstrap.contains("village-probe"),
+                "bootstrap must not register village-probe");
+        assertFalse(bootstrap.contains("village-driver"),
+                "bootstrap must not register village-driver");
+        String service = code(source(Path.of("village/VillagePerceptionService.java")));
+        assertFalse(service.contains("recordServiceTrace"),
+                "observeAndRecord must not retain VR-T1 trace plumbing");
     }
 
-    /**
-     * VR-T1 active probe — one-shot observe only; must not write memory or use the V1-D scheduler.
-     */
     @Test
-    void mustHappen_villageProbeObservesWithoutRecording() throws IOException {
-        String probe = code(source(Path.of("command/VillageProbeDebugCommand.java")));
-        assertTrue(probe.contains("VillagePerception.observe"),
-                "village-probe must call observe once for diagnosis");
-        for (String forbidden : List.of(
-                "VillageMemorySavedData.record",
-                "observeAndRecord",
-                "VillagePerceptionScheduler",
-                "memoryOf(",
-                "peekMobMemory",
-                "computeIfAbsent")) {
-            assertFalse(probe.contains(forbidden),
-                    "village-probe must not call: " + forbidden);
-        }
-        String memoryCommand = code(source(Path.of("command/VillageMemoryDebugCommand.java")));
-        assertTrue(memoryCommand.contains("village-probe"),
-                "village-probe must register under spmscavenger");
-    }
-
-    /** VR-T1 driver diagnostic — read-only scheduler/observer/trace inspection. */
-    @Test
-    void mustHappen_villageDriverInspectsWithoutObserving() throws IOException {
-        String driver = code(source(Path.of("command/VillageDriverDebugCommand.java")));
-        assertTrue(driver.contains("VillagePerceptionDriverDiagnostics.capture"),
-                "village-driver must read driver diagnostics");
-        for (String forbidden : List.of(
-                "VillagePerception.observe",
-                "VillageMemorySavedData.record",
-                "observeAndRecord",
-                "memoryOf(")) {
-            assertFalse(driver.contains(forbidden),
-                    "village-driver must not call: " + forbidden);
-        }
+    void mustHappen_villagePerceptionReloadPath() throws IOException {
         String bootstrap = code(source(Path.of("SpmScavenger.java")));
         assertTrue(bootstrap.contains("ensureVillagePerceptionObserver"),
                 "reload must re-ensure observer + scheduler registration");
@@ -272,9 +236,15 @@ class VillagePerceptionContractTest {
         int ensureCalls = bootstrap.split("ensureVillagePerceptionObserver", -1).length - 1;
         assertTrue(ensureCalls >= 2,
                 "ensureVillagePerceptionObserver must be called from install paths and reload guard");
-        String service = code(source(Path.of("village/VillagePerceptionService.java")));
-        assertTrue(service.contains("recordServiceTrace"),
-                "observeAndRecord must record driver trace evidence");
+    }
+
+    @Test
+    void mustHappen_peekMobMemoryForNonCreatingReads() throws IOException {
+        String savedData = code(source(Path.of("village/VillageMemorySavedData.java")));
+        assertTrue(savedData.contains("peekMobMemory"),
+                "peekMobMemory must exist for non-creating reads");
+        assertTrue(savedData.contains("peekIn(level)"),
+                "peekMobMemory must use non-creating saved-data access");
     }
 
     /**

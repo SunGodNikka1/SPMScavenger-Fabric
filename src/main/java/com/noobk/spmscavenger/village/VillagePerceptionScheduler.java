@@ -36,7 +36,6 @@ public final class VillagePerceptionScheduler {
     private int laneCursor = 0;
     private int admissionCursor = 0;
     private boolean warnedEmergency;
-    private final VillagePerceptionServiceTrace serviceTrace = new VillagePerceptionServiceTrace();
 
     VillagePerceptionScheduler(ObservationConsumer consumer) {
         this.consumer = consumer;
@@ -72,7 +71,6 @@ public final class VillagePerceptionScheduler {
 
     public void unregisterObserver(UUID mobId) {
         observers.remove(mobId);
-        serviceTrace.clearMob(mobId);
         removePendingFor(mobId);
     }
 
@@ -164,55 +162,6 @@ public final class VillagePerceptionScheduler {
 
     public boolean hasPendingRequest(ResourceKey<Level> dimension, UUID mobId) {
         return pending.contains(new PendingKey(dimension, mobId));
-    }
-
-    public long lastGlobalServiceTick() {
-        return serviceTrace.lastGlobalServiceTick();
-    }
-
-    public java.util.Optional<VillagePerceptionServiceTrace.Snapshot> lastServiceTrace(
-            ResourceKey<Level> dimension, UUID mobId) {
-        return serviceTrace.lastFor(dimension, mobId);
-    }
-
-    void recordServiceTrace(
-            ServerLevel level,
-            UUID mobId,
-            long serviceTick,
-            boolean entityResolved,
-            boolean playerMobRecognized,
-            int observedPois,
-            VillagePerceptionServiceTrace.RecordResult recordResult) {
-        recordServiceTrace(
-                level.dimension(),
-                mobId,
-                serviceTick,
-                entityResolved,
-                playerMobRecognized,
-                observedPois,
-                recordResult);
-    }
-
-    void recordServiceTrace(
-            ResourceKey<Level> dimension,
-            UUID mobId,
-            long serviceTick,
-            boolean entityResolved,
-            boolean playerMobRecognized,
-            int observedPois,
-            VillagePerceptionServiceTrace.RecordResult recordResult) {
-        serviceTrace.record(
-                dimension,
-                mobId,
-                serviceTick,
-                entityResolved,
-                playerMobRecognized,
-                observedPois,
-                recordResult);
-    }
-
-    void clearServiceTrace() {
-        serviceTrace.clear();
     }
 
     private void insertFair(ResourceKey<Level> dimension, UUID mobId) {

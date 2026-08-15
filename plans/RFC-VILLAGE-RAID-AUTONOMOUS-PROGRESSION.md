@@ -8,10 +8,10 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
-| **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (through V1-R4 / 1.9.5 **APPROVED**); V2+ design-only; no VR-T* runtime |
-| **Nearest frontier** | **VR-T1** runtime village perception (launch approval required) — V1-D **IMPLEMENTED** (1.10.0 static) |
-| **Last update** | 2026-08-14 (V1-D production perception driver shipped — 1.10.0) |
+| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D CLOSED** (VR-T1A **PASS**, User 2026-08-14). **V2 Trading** is the active frontier |
+| **Status** | `RESEARCHING` — V1 perception **COMPLETE**; V2 Trading design/authorization next |
+| **Nearest frontier** | **V2 Trading** — `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal` |
+| **Last update** | 2026-08-14 (VR-T1A **PASS**; temporary VR-T1 diagnostics removed; frontier → V2) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -103,7 +103,7 @@ Comparison under **equivalent scenarios** (behaviour, not feature names).
 
 ## Topic: Human-player parity vs villager lifecycle (`D-VR-004`)
 
-**Author:** `Agent_ChatGPT`
+**Author:** `Agent_ChatGPT`  
 **Status:** `LOCKED`
 
 ### What we want
@@ -158,7 +158,7 @@ A PlayerMob can potentially (`INFERRED` product goal; implementation per phase):
 
 ## Topic: VillageInteractionDirector (`Agent_ChatGPT`)
 
-**Author:** `Agent_ChatGPT`
+**Author:** `Agent_ChatGPT`  
 **Status:** `CONSENSUS` — preferred orchestration layer; supersedes ad-hoc village goals.
 
 Central coordinator in **`spmscavenger`**. **No Brain migration.** Does not replace SPM `GoalSelector`; feeds it.
@@ -1357,7 +1357,7 @@ existing `WorkDemandPolicy` paths.
 
 ## Topic: Trading — `VillagerTradeAdapter` (`Agent_ChatGPT`)
 
-**Author:** `Agent_ChatGPT`
+**Author:** `Agent_ChatGPT`  
 **Status:** `CONSENSUS` — hardest boundary; replaces generic `TradeCapability` sketch.
 
 ### Hard boundary (`CONFIRMED` design constraint)
@@ -2654,7 +2654,8 @@ Do not equate "no chunk generation" with "cheap query."
 | --- | --- |
 | P0 epistemic leak (`withheld` → cognition) | **CLOSED** |
 | Admitted-count supersede regression (B-VR-59) | **CLOSED** |
-| Runtime village perception (VR-T1 / VR-T1b) | **UNVERIFIED** |
+| Runtime village perception (VR-T1A) | **PASS** — autonomous discovery, observer→scheduler→service→record, same-village identity, save/reload, cross-dimension persistence **CONFIRMED** (Bob, User 2026-08-14) |
+| Runtime multi-mob / POI cost (VR-T1b) | **DEFERRED** — 10/50/100-mob profiling + B-VR-58; performance validation backlog, not a V1 gate |
 
 **User review (`CONFIRMED` against pushed 1.9.5):** `PerceptionCoverage.compute()` derives coverage solely
 from the 64-block chunk-column footprint via `hasChunk`, independent of POI results;
@@ -2961,8 +2962,8 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 
 | Phase | Scope | Feasibility | Runtime proof |
 | --- | --- | --- | --- |
-| **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** (static) | VR-T1 pending: enter village → anchor agrees with `Raid.getCenter()` → leave → return → same settlement |
-| **V1-D** | Bounded production perception driver (D-VR-033) | **IMPLEMENTED** (static, 1.10.0) | VR-T1 + VR-T1b after ship |
+| **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** | VR-T1A **PASS** |
+| **V1-D** | Bounded production perception driver (D-VR-033) | **IMPLEMENTED** (1.10.0) | VR-T1A **PASS**; VR-T1b **DEFERRED** |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | moved to V2/V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **REQUIRES MIXIN** | VR-T2: trade input → correct villager → atomic inventory change; VR-T2b: sell carrots → buy book |
 | **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest |
@@ -3075,11 +3076,11 @@ required evidence; code/static tests cannot confirm this timeline.
 | Hero **discount** for a non-player | **BLOCKED** in vanilla — `updateSpecialPrices(Player)`; must be applied by `VillagerTradeAdapter` (B-VR-34) |
 | A non-player **consumer** of villager reputation | **UNVERIFIED** — probe before V3 (B-VR-36) |
 | `PoiManager` unloaded-chunk leakage | **V1-R4 `ACCEPTED`** — dual pipeline; coverage independent of `getInRange` unloaded records; query cost `UNVERIFIED` (B-VR-58) |
-| V1-R4 `PerceptionCoverage` | **`ACCEPTED`** — ready to implement when authorized |
-| V1 perception **driver** | **READY** — D-VR-033 scheduler contracts locked; **awaiting V1-D authorization** |
+| V1-R4 `PerceptionCoverage` | **`ACCEPTED`** — shipped 1.9.5; runtime VR-T1 partial **CONFIRMED** |
+| V1 perception **driver** | **RUNTIME CONFIRMED** (Bob, 2026-08-14) — debounce `Long.MIN_VALUE` overflow fixed; `ensureVillagePerceptionObserver` on reload |
 | `MaterialDemandPolicy` class name | **NOT FOUND** — ship trade via `WorkDemandPolicy` facade (B-VR-20) |
 | Storage RFC (full personal/village chest system) | **Deferred** — `StorageOwnership` minimum in V3 |
-| Runtime VR-T* tests | **UNVERIFIED** — VR-T1 datapack planned (B-VR-28). V1 is `STATIC_CONFIRMED` only: no PlayerMob has yet perceived a village in a running world |
+| Runtime VR-T* tests | VR-T1A **PASS** (2026-08-14). VR-T1b 10/50/100-mob profiling **DEFERRED** (performance backlog). Temporary `village-probe` / `village-driver` / `village-memory` commands **REMOVED** post-VR-T1A |
 | 48-block village identity radius | **UNVERIFIED** — our judgement, no vanilla constant exists. Upgrade path (POI-set overlap) designed and deferred pending runtime evidence (D-VR-022) |
 | Mobs removed without **any** lifecycle event, or in a dimension absent from `getAllLevels()` | **BOUNDED, not eliminated** — held by `MAX_TRACKED_MOBS` (256/dimension), which warns when it fires (D-VR-023) |
 | Monotone anchor following over a long observation sequence | **DOCUMENTED LIMITATION** — replacement tracks the newest equally-good view; separating "rebuilt" from "looks rebuilt" needs POI-set-overlap identity (D-VR-022). VR-T1 must report whether real sequences produce this shape |
@@ -3106,8 +3107,8 @@ required evidence; code/static tests cannot confirm this timeline.
 
 ### D-VR-001: Target is vanilla village/raid, not SPM “raid”
 
-**Status:** `LOCKED`
-**Accepted:** Village RFC means `MerchantMenu` + `Raid` event.
+**Status:** `LOCKED`  
+**Accepted:** Village RFC means `MerchantMenu` + `Raid` event.  
 **Rejected:** Equating `RaidContainersGoal` with illager raids.
 
 ### D-VR-002: Player parity for Omen/Hero requires bridge — **SPLIT**
@@ -3128,32 +3129,32 @@ the phase order at the raid end is inverted, and that is an open **product decis
 
 ### D-VR-003: Integration surface
 
-**Status:** `LOCKED`
-**Accepted:** `spmscavenger` addon + capabilities; reuse SPM combat/social.
+**Status:** `LOCKED`  
+**Accepted:** `spmscavenger` addon + capabilities; reuse SPM combat/social.  
 **Rejected:** SPM source fork; datapack-only trade.
 
 ### D-VR-004: Human-player interaction parity, not villager lifecycle
 
-**Status:** `LOCKED` (`Agent_ChatGPT`)
-**Accepted:** PlayerMob **interacts with** village system like Steve; no profession/workstation claim/gossip brain.
+**Status:** `LOCKED` (`Agent_ChatGPT`)  
+**Accepted:** PlayerMob **interacts with** village system like Steve; no profession/workstation claim/gossip brain.  
 **Rejected:** `PlayerMob` → villager entity parity.
 
 ### D-VR-005: `VillagerTradeAdapter` without fake GUI
 
-**Status:** `CONSENSUS` (`Agent_ChatGPT`)
-**Accepted:** Server-side `inspectOffers` / `performTrade`; `TradeWithVillagerGoal` executor.
+**Status:** `CONSENSUS` (`Agent_ChatGPT`)  
+**Accepted:** Server-side `inspectOffers` / `performTrade`; `TradeWithVillagerGoal` executor.  
 **Rejected:** Client menu simulation for autonomous mobs.
 
 ### D-VR-006: `VillageInteractionDirector` orchestration
 
-**Status:** `CONSENSUS` (`Agent_ChatGPT`)
-**Accepted:** Perception → Director → utility → executor goals; composable raid defense.
+**Status:** `CONSENSUS` (`Agent_ChatGPT`)  
+**Accepted:** Perception → Director → utility → executor goals; composable raid defense.  
 **Rejected:** Monolithic `DefendVillageGoal`; Brain migration.
 
 ### D-VR-007: Trade evaluation via `MaterialDemandPolicy`
 
-**Status:** `CONSENSUS` (`Agent_ChatGPT`)
-**Accepted:** Demand-driven offer scoring; trade as `AcquisitionStrategy`.
+**Status:** `CONSENSUS` (`Agent_ChatGPT`)  
+**Accepted:** Demand-driven offer scoring; trade as `AcquisitionStrategy`.  
 **Rejected:** Hardcoded profession preferences (`librarian = good`).
 
 ### D-VR-008: Bell parity via entity ring API
@@ -3540,7 +3541,11 @@ camp becoming `HOME_VILLAGE`; treating one mob's founding history as settlement 
 ### D-VR-033: Bounded individual village-perception scheduling (`Agent_Codex` + User review)
 
 **Status:** `LOCK RECOMMENDED` (2026-08-14) — P0 **CLOSED** (V1-R4 1.9.5); P1 scheduler contracts
-**CLOSED** in RFC (B-VR-56/57/60). **V1-D IMPLEMENTED** (1.10.0 static); runtime VR-T1 **UNVERIFIED**.
+**CLOSED** in RFC (B-VR-56/57/60). **V1-D IMPLEMENTED** (1.10.0); VR-T1 core path **CONFIRMED** (Bob session).
+
+**Runtime P0 (2026-08-14):** `VillagePerceptionObserver` debounce used `gameTime - Long.MIN_VALUE`, which
+overflows and blocked every enqueue forever. Fixed with `VillagePerceptionEnqueueDebounce` (`hasEnqueued`
+guard). Reload path also calls `ensureVillagePerceptionObserver` when `alreadyInstalled` skips full install.
 
 **Accepted:**
 
@@ -3555,14 +3560,45 @@ as primary fairness; unconditional prompt observation guarantee.
 
 **Provisional tuning constants:** `HEARTBEAT_TICKS=200`, `DEBOUNCE_TICKS=20`, `GLOBAL_QUERY_BUDGET=1`.
 
-**Sequence:** ~~V1-R4~~ **DONE** → ~~close P1s~~ **DONE (RFC)** → **authorize V1-D** → ship 1.10.0 →
-VR-T1/VR-T1b runtime (separate launch approval).
+**Sequence:** ~~V1-R4~~ **DONE** → ~~V1-D~~ **DONE** → ~~VR-T1A~~ **PASS** → **V2 Trading** (next).
+
+### VR-T1A — runtime closure (`PASS`, User, 2026-08-14)
+
+**Scope:** core village perception path — not VR-T1b scale profiling, not raid-center alignment, not datapack fixture (B-VR-28).
+
+**World:** natural taiga village, overworld. **Mob:** PlayerMob `Bob`. **Mod:** `spmscavenger` 1.10.0
+(post-debounce fix). Evidence gathered via temporary VR-T1 diagnostics (since removed).
+
+| Scenario | Result | Evidence |
+| --- | --- | --- |
+| Autonomous discovery | **CONFIRMED** | Observer→scheduler→service→record; 7–8 admitted POIs; anchor `-11666, 82, 7709` |
+| Pre-fix V1-D blocker | **CONFIRMED** | `Long.MIN_VALUE` debounce overflow blocked all enqueues; `hasEnqueued` repair fixed it |
+| Leave ~400 blocks | **CONFIRMED** | Still 1 village, same anchor, `First seen: 123682`, `Last seen` advanced |
+| Return to village | **CONFIRMED** | Teleport `-11652, 82, 7686`; same anchor; `First seen` unchanged; `Last seen: 133393` |
+| Save/reload | **CONFIRMED** | Quit/rejoin; anchor and `First seen` persisted |
+| Cross-dimension persistence | **CONFIRMED** | Per-user session (User, 2026-08-14) |
+
+**Deferred (not VR-T1A gates):**
+
+- VR-T1b: 10/50/100-mob backlog + B-VR-58 POI query cost profiling
+- Anchor vs `Raid.getCenter()` during active raid
+- B-VR-28 datapack village fixture
+- Permanent-removal sweep: **STATIC_CONFIRMED** (contract test); runtime eviction probe **DEFERRED**
+- Monotone anchor sequence over long travel (D-VR-022)
+
+**Post-VR-T1A cleanup:** all three temporary debug commands and trace/diagnostics plumbing removed.
+Contract test `mustHappen_vrT1aDiagnosticsRemoved` guards against reintroduction.
+
+**Reflection (PROVEN):** never use numeric extremes as sentinels in arithmetic debounce checks;
+use explicit boolean state (`VillagePerceptionEnqueueDebounce`).
 
 
 ## Contribution
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| User + Agent_Cursor | 2026-08-14 | **VR-T1A PASS; frontier → V2 Trading.** User closed VR-T1A: autonomous discovery, full driver path, same-village identity, save/reload, cross-dimension persistence **CONFIRMED**. Debounce overflow root cause + repair runtime-confirmed. Removed `village-probe` / `village-driver` / `village-memory` and trace plumbing. VR-T1b 10/50/100 profiling **DEFERRED**. Permanent-removal sweep static-confirmed, runtime-deferred. |
+| User + Agent_Cursor | 2026-08-14 | **VR-T1 partial CONFIRMED (Bob).** Post-debounce: driver RECORDED 8 POIs; memory 1 village anchor `-11666,82,7709`; leave/return same settlement; save/reload persists `First seen:123682`. Pre-fix: debounce `Long.MIN_VALUE` overflow blocked all enqueues. Diagnostics: `village-probe`, `village-driver`. VR-T1b + raid-center **UNVERIFIED**. |
 | Agent_Cursor | 2026-08-14 | **PROGRESSIVE_CONTINUATION — D-VR-033 P1 closure.** V1-R4 P0 acknowledged closed. Locked B-VR-56 conditional service + B-VR-57/60 fair admission (ticking-mob-bound queue, round-robin retry, emergency cap only). Scheduler API sketch; V1-D task contract for 1.10.0; VR-33; D-VR-033 → `LOCK RECOMMENDED`. **V1-D authorization still required.** |
 | User | 2026-08-14 | **Approve V1-R4 / 1.9.5** (pushed implementation). P0 epistemic leak **CLOSED**; admitted-count regression **CLOSED**. Runtime perception **UNVERIFIED**. D-VR-033 **REVIEW**; V1-D **BLOCKED** → **1.10.0** after scheduler P1 closure. P2: extend no-chunk-load structural test to `PerceptionCoverage.java` (deferred). |
 | Agent_Cursor | 2026-08-14 | **V1-R4 implemented (1.9.5).** `PerceptionCoverage` dual pipeline; `ObservationQuality` cross-multiply supersede; optimistic NBT migration; `PerceptionCoverageTest` + contract/structural updates. Village tests green. V1-D still BLOCKED. |
