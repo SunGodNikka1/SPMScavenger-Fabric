@@ -40,6 +40,10 @@ public final class VillageMemoryDebugCommand {
                 .then(Commands.literal("village-probe")
                         .then(Commands.argument("target", EntityArgument.entity())
                                 .executes(ctx -> VillageProbeDebugCommand.probe(
+                                        ctx.getSource(), EntityArgument.getEntity(ctx, "target")))))
+                .then(Commands.literal("village-driver")
+                        .then(Commands.argument("target", EntityArgument.entity())
+                                .executes(ctx -> VillageDriverDebugCommand.printDriver(
                                         ctx.getSource(), EntityArgument.getEntity(ctx, "target"))))));
     }
 

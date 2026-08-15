@@ -194,6 +194,7 @@ public class SpmScavenger implements ModInitializer {
             return;
         }
         if (alreadyInstalled(selector)) {
+            ensureVillagePerceptionObserver(mob, selector);
             return;
         }
         ScavengerConfig cfg = ScavengerConfig.get();
@@ -317,12 +318,31 @@ public class SpmScavenger implements ModInitializer {
     }
 
     private static void installVillagePerceptionObserver(Mob mob, GoalSelector selector) {
+        ensureVillagePerceptionObserver(mob, selector);
+    }
+
+    /**
+     * Idempotent V1-D install + scheduler registration. Called on every {@code ENTITY_LOAD} even when
+     * other Scavenger goals are already present, so {@code unregisterObserver} on unload cannot
+     * leave a mob with a surviving goal but no scheduler registration.
+     */
+    static void ensureVillagePerceptionObserver(Mob mob, GoalSelector selector) {
         ScavengerConfig cfg = ScavengerConfig.get();
         if (!cfg.enabled) {
             return;
         }
-        selector.addGoal(VillagePerceptionObserver.PRIORITY, new VillagePerceptionObserver(mob));
-        if (mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+        boolean hasObserver = false;
+        for (WrappedGoal wrapped : selector.getAvailableGoals()) {
+            if (wrapped.getGoal() instanceof VillagePerceptionObserver) {
+                hasObserver = true;
+                break;
+            }
+        }
+        if (!hasObserver) {
+            selector.addGoal(VillagePerceptionObserver.PRIORITY, new VillagePerceptionObserver(mob));
+        }
+        if (mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel
+                && serverLevel.getServer() != null) {
             VillagePerceptionScheduler.forServer(serverLevel.getServer())
                     .registerObserver(mob.getUUID());
         }

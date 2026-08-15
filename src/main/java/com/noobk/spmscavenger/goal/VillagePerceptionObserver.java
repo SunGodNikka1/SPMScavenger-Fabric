@@ -100,6 +100,14 @@ public final class VillagePerceptionObserver extends Goal {
         return dirty;
     }
 
+    public long lastEnqueueTickForDiagnostics() {
+        return lastEnqueueTick;
+    }
+
+    public boolean isDirtyForDiagnostics() {
+        return dirty;
+    }
+
     void clearDirtyAfterEnqueue() {
         dirty = false;
     }

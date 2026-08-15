@@ -244,6 +244,33 @@ class VillagePerceptionContractTest {
                 "village-probe must register under spmscavenger");
     }
 
+    /** VR-T1 driver diagnostic — read-only scheduler/observer/trace inspection. */
+    @Test
+    void mustHappen_villageDriverInspectsWithoutObserving() throws IOException {
+        String driver = code(source(Path.of("command/VillageDriverDebugCommand.java")));
+        assertTrue(driver.contains("VillagePerceptionDriverDiagnostics.capture"),
+                "village-driver must read driver diagnostics");
+        for (String forbidden : List.of(
+                "VillagePerception.observe",
+                "VillageMemorySavedData.record",
+                "observeAndRecord",
+                "memoryOf(")) {
+            assertFalse(driver.contains(forbidden),
+                    "village-driver must not call: " + forbidden);
+        }
+        String bootstrap = code(source(Path.of("SpmScavenger.java")));
+        assertTrue(bootstrap.contains("ensureVillagePerceptionObserver"),
+                "reload must re-ensure observer + scheduler registration");
+        assertTrue(bootstrap.contains("alreadyInstalled(selector)"),
+                "alreadyInstalled guard must remain");
+        int ensureCalls = bootstrap.split("ensureVillagePerceptionObserver", -1).length - 1;
+        assertTrue(ensureCalls >= 2,
+                "ensureVillagePerceptionObserver must be called from install paths and reload guard");
+        String service = code(source(Path.of("village/VillagePerceptionService.java")));
+        assertTrue(service.contains("recordServiceTrace"),
+                "observeAndRecord must record driver trace evidence");
+    }
+
     /**
      * Gate RET-1a: eviction must exist in production, not only as an API.
      *
