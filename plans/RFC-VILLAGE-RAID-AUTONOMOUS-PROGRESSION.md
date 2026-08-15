@@ -10,8 +10,8 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
 | **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (hardened through V1-R3); V2+ design-only; no VR-T* runtime |
-| **Nearest frontier** | **V1 perception driver** (cadence + mob-count budget), then **V4 Place-opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**); VR-T1 runtime |
-| **Last update** | 2026-08-14 (user topics: Ominous Bottle policy, two-step trade, golem build, hero gifts, village founding; D-VR-027…032) |
+| **Nearest frontier** | Request implementation authority for **V1-D — bounded village perception driver** using D-VR-033's per-level UUID lanes + server-global budget. D-VR-027/029/030/031 are lock candidates; D-VR-028 is redesigned; D-VR-032 remains held. |
+| **Last update** | 2026-08-14 (`User` peer review + `Agent_Codex` source audit: D-VR-027…033 reconciled; obsolete pre-1.21 raid path and D-VR-019 identity text superseded) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -77,13 +77,15 @@ Comparison under **equivalent scenarios** (behaviour, not feature names).
 | Hide in house | Yes | Path to shelter | `SeekShelterGoal` (bed scoring) | **PARTIAL** |
 | Win raid → Hero | Yes | If present as Player | **No** — not `Player` class | **REQUIRES MIXIN** (effect + raid Omen) |
 
-### Scenario D — Start raid (kill captain → Bad Omen → enter village)
+### Scenario D — Start raid in 1.21.1 (captain → bottle → Bad Omen → Raid Omen)
 
 | Behaviour | Human | Mineflayer | SPM today | Feasibility |
 | --- | --- | --- | --- | --- |
-| Kill patrol captain | Combat | Combat | Combat works | **FULL** |
-| Receive Bad Omen | Player effect | Effect API | **NOT FOUND** in SPM | **REQUIRES MIXIN** |
-| Trigger raid on entry | Vanilla `Raid` system | Plugin | **UNVERIFIED** — likely **no** | **REQUIRES MIXIN** |
+| Kill patrol captain | Combat; captain drops Ominous Bottle outside a raid | Combat | Combat works | **FULL** combat; pickup policy pending |
+| Pick up and intentionally consume bottle | Inventory + self-use | Inventory/use plugin | Pickup/self-drink planning absent | **PARTIAL** — finishing applies Bad Omen to any `LivingEntity`; initiating self-use needs an executor |
+| Enter intended village | Bad Omen transforms to 30-second Raid Omen | Plugin | Vanilla effect body rejects non-`ServerPlayer` | **REQUIRES BRIDGE** |
+| Commit or abort during omen window | Wait; milk can cancel before expiry | Script policy | No raid-intent state | **PARTIAL** planner + bridge |
+| Trigger raid when Raid Omen expires | Vanilla `Raids#createOrExtendRaid` | Plugin | Vanilla effect body is `ServerPlayer`-owned | **REQUIRES BRIDGE** |
 | Farm raid loot | Yes | Scripted | Can fight; no wave orchestration | **PARTIAL** |
 
 ### Scenario E — TACZ-style firearms (pattern example, not village target)
@@ -101,7 +103,7 @@ Comparison under **equivalent scenarios** (behaviour, not feature names).
 
 ## Topic: Human-player parity vs villager lifecycle (`D-VR-004`)
 
-**Author:** `Agent_ChatGPT`  
+**Author:** `Agent_ChatGPT`
 **Status:** `LOCKED`
 
 ### What we want
@@ -156,7 +158,7 @@ A PlayerMob can potentially (`INFERRED` product goal; implementation per phase):
 
 ## Topic: VillageInteractionDirector (`Agent_ChatGPT`)
 
-**Author:** `Agent_ChatGPT`  
+**Author:** `Agent_ChatGPT`
 **Status:** `CONSENSUS` — preferred orchestration layer; supersedes ad-hoc village goals.
 
 Central coordinator in **`spmscavenger`**. **No Brain migration.** Does not replace SPM `GoalSelector`; feeds it.
@@ -210,7 +212,6 @@ settlement valid, override raid/shelter mandates, or invent trade permission.
 
 ```text
 KnownVillage
-├── origin: DISCOVERED | FOUNDED          (D-VR-032 — PROPOSED)
 ├── anchor / approximate center
 ├── bell positions
 ├── beds seen
@@ -222,6 +223,11 @@ KnownVillage
 ├── last visit tick
 └── (no affinity in V1 — factual tier only; see Opinion↔Village topic)
 ```
+
+How a particular mob relates historically to a settlement (for example, *helped found*) is observer
+history, not settlement identity. A future `SettlementHistory`/relationship record may carry that
+fact; `KnownVillage` is created only by ordinary `VillagePerception` after world truth satisfies the
+locked village predicate (D-VR-032).
 
 **V1 code (`CONFIRMED`):** `KnownVillage` ships anchor, tier, observation quality only — explicitly **no**
 villagers, offers, or affinity (`KnownVillage.java` class javadoc). `MobVillageMemory.designateHome()`
@@ -266,7 +272,7 @@ KnownVillager
 
 ## Topic: Advanced village site selection & home anchoring (`Agent_Cursor`)
 
-**Author:** `Agent_Cursor` (brainstorm continuation, 2026-08-14)  
+**Author:** `Agent_Cursor` (brainstorm continuation, 2026-08-14)
 **Status:** `PROPOSED` — extends V1 `KnownVillage` + V4 persistent relationship; **not** vanilla `/locate` cheat.
 
 Parallels mining **advanced site selection** (`RFC-VANILLA-AUTONOMOUS-PROGRESSION.md` — `MiningDirector`
@@ -289,6 +295,22 @@ AVOID             — looted chests, hit villagers, golem hostility signals
 ```
 
 Tier promotion/demotion is **utility-driven**, not a quest flag.
+
+### Representation gate before V4/V5 (`OPEN`)
+
+`SettlementTier` currently compresses several independent facts into one enum. A settlement can be
+the mob's home, a valuable trading destination, and temporarily unsafe at the same time. Before V4
+or V5 persists more assumptions around this field, compare:
+
+| Option | Shape | Benefit | Failure mode |
+| --- | --- | --- | --- |
+| Keep one tier enum | Existing `PASSING_THROUGH / TRADING_POST / HOME_VILLAGE / AVOID` | No migration; simple ranking | Mutually excludes states that can coexist; demotion may erase unrelated home/economic meaning |
+| Decompose factual dimensions (recommended for review) | `HomeDesignation`, `EconomicRole`, `SafetyStanding`, later capabilities | Truthful combinations and narrower owners | Migration/serialization work; more predicates if introduced prematurely |
+
+Do **not** change V1 merely from aesthetic concern. Gate the decomposition on V4/V5 consumer mapping,
+saved-data migration design, and tests showing independent state transitions. **Must happen:** a home
+can become temporarily unsafe without ceasing to be home. **Must not happen:** adding a trading role
+silently removes home designation.
 
 ### Village site score — factual vs opinion split (`REVISED` — User + Agent_Cursor, 2026-08-14)
 
@@ -330,7 +352,7 @@ VillagePerception.observe → MobVillageMemory.remember
 ```
 
 **Must happen:** mob far from a remembered `HOME_VILLAGE` with unloaded chunks between can still select
-it for commute/defend when gates pass.  
+it for commute/defend when gates pass.
 **Must not happen:** empty `VillagePerception.observe` (unloaded) **removes** the village from candidacy.
 
 **Example (User):**
@@ -374,7 +396,7 @@ V1 **`IMPLEMENTED`** — detection + tier enum + home designation. **V4** ships 
 
 ## Topic: Opinion ↔ Village boundary (`User` + `Agent_Cursor`)
 
-**Author:** User (architecture); `Agent_Cursor` (RFC capture, 2026-08-14)  
+**Author:** User (architecture); `Agent_Cursor` (RFC capture, 2026-08-14)
 **Status:** `CONSENSUS` — aligns with shipped Opinion central rule (`docs/wiki/Opinion-System.md`).
 
 ### Division of labour
@@ -459,7 +481,7 @@ Opinion picks **who** to greet; Village supplies **where** the settlement is.
 
 ## Topic: Pre-lock review — D-VR-025/026 (`User` + `Agent_Cursor`)
 
-**Author:** User (review criteria); `Agent_Cursor` (code evidence, 2026-08-14)  
+**Author:** User (review criteria); `Agent_Cursor` (code evidence, 2026-08-14)
 **Status:** `D-VR-025` **LOCKED**; `D-VR-026` **HELD** (User amendment, 2026-08-14)
 
 ### Finding 1 — Remembered villages while unloaded/unperceived (`CONFIRMED` gap in draft)
@@ -557,7 +579,7 @@ wiring (`D-VR-025`). Place key policy (`D-VR-026`) remains open until SETTLEMENT
 
 ## Topic: Cross-system reuse — shelter, mining interrupt, activity admission (`Agent_Cursor`)
 
-**Author:** `Agent_Cursor` (brainstorm continuation, 2026-08-14)  
+**Author:** `Agent_Cursor` (brainstorm continuation, 2026-08-14)
 **Status:** `CONSENSUS` direction — reuse shipped Scavenger primitives; **no** parallel raid mega-state.
 
 ### Shipped primitives to reuse (`CODE_CONFIRMED`)
@@ -614,7 +636,7 @@ Vanilla `Raider` subclasses implement `Enemy` (`INFERRED` — standard Monster h
 coward `EVACUATE` profile hiding in SCR-2R5 interior is **automatically ejected** when a raider
 acquires the mob as target (`RaiderTargetsPlayerMobMixin` makes this likely during waves).
 
-**Must happen:** coward profile reaches interior before first raider aggro.  
+**Must happen:** coward profile reaches interior before first raider aggro.
 **Must not happen:** mob oscillates door ↔ bed every tick because threat classification flaps without
 hysteresis — consider raid-wave grace window (`PROPOSED`).
 
@@ -631,7 +653,7 @@ Golem anger still applies if mob hits villager — **friendly fire during raid A
 
 ## Topic: Day/night director arbitration (`Agent_Cursor`)
 
-**Author:** `Agent_Cursor` (user-requested topic, 2026-08-14)  
+**Author:** `Agent_Cursor` (user-requested topic, 2026-08-14)
 **Status:** `PROPOSED` — extends `VillageInteractionDirector` + cross-system shelter/raid topics; **no** new night mega-goal.
 
 ### Problem (observable)
@@ -702,10 +724,10 @@ this matrix is **director-level** intent selection before goals start.
 | 7 | Default discretionary | Farm / social / explore per utility | |
 
 **Must happen:** raid at **home** during dusk → mob does **not** enter new bed sleep until raid resolved or
-EVACUATE profile explicitly chosen (raid intent preempts shelter **adoption**).  
+EVACUATE profile explicitly chosen (raid intent preempts shelter **adoption**).
 **Must not happen:** mob sleeps through wave 1 at home village bell while raiders kill villagers.
 
-**Must happen:** trade for emeralds deferred until day when villager asleep and no raid interrupt.  
+**Must happen:** trade for emeralds deferred until day when villager asleep and no raid interrupt.
 **Must not happen:** infinite “wait for morning” if raid lasts multiple nights — raid hold persists (D-VR-010).
 
 ### Integration with existing systems (`CODE_CONFIRMED` seams)
@@ -751,8 +773,8 @@ that blocks new shelter adoption but does not cancel in-progress eating/healing.
 
 ## Topic: Vanilla API mapping verification (`Agent_Cursor`)
 
-**Author:** `Agent_Cursor` (brainstorm continuation 2, 2026-08-14)  
-**Status:** `CONFIRMED` — pinned 1.21.1 Mojmap via project Loom cache  
+**Author:** `Agent_Cursor` (brainstorm continuation 2, 2026-08-14)
+**Status:** `CONFIRMED` — pinned 1.21.1 Mojmap via project Loom cache
 **Evidence:** `.gradle/loom-cache/source_mappings/1425f5a1b73d8da53d978a43e065a7bbd26518ca.tiny`
 
 | RFC / colloquial name | Mojmap symbol | Signature | Implementation note |
@@ -1255,7 +1277,7 @@ Still `STATIC_CONFIRMED` only — no PlayerMob has perceived a village in a runn
 
 ## Topic: Trade demand integration — `WorkDemandPolicy` facade (`Agent_Cursor`)
 
-**Author:** `Agent_Cursor` (brainstorm continuation 2, 2026-08-14)  
+**Author:** `Agent_Cursor` (brainstorm continuation 2, 2026-08-14)
 **Status:** `PROPOSED` — reconciles D-VR-007 with production code
 
 `MaterialDemandPolicy` is cited across RFCs (`D-TTU-017`) but **NOT FOUND** in Scavenger `src/main`
@@ -1280,14 +1302,14 @@ Do **not** block V2 on renaming `WorkDemandPolicy` → `MaterialDemandPolicy`; a
 `TradeDemandFacade` or extend `consumerKey` vocabulary. Cross-RFC iron/diamond chains stay on
 existing `WorkDemandPolicy` paths.
 
-**Must happen:** "need 27 emeralds" creates a demand ticket trade evaluation can satisfy.  
+**Must happen:** "need 27 emeralds" creates a demand ticket trade evaluation can satisfy.
 **Must not happen:** parallel emerald-hoarding goal fights `TradeWithVillagerGoal` without director arbitration.
 
 ---
 
 ## Topic: Trading — `VillagerTradeAdapter` (`Agent_ChatGPT`)
 
-**Author:** `Agent_ChatGPT`  
+**Author:** `Agent_ChatGPT`
 **Status:** `CONSENSUS` — hardest boundary; replaces generic `TradeCapability` sketch.
 
 ### Hard boundary (`CONFIRMED` design constraint)
@@ -1859,8 +1881,8 @@ Director admission uses **`VillageScenarioProfile`** (`PROPOSED` — B-VR-24) �
 | VR-6 | Raid defense goal | **PARTIAL** | Addon goal priority 2; target `Raider` only | Reuse combat |
 | VR-7 | Friendly fire avoidance | **PARTIAL** | `TargetCategory` + `FeelingLedger` loved villagers | |
 | VR-8 | Bell ringing | **FULL** (`INFERRED`) | `RingVillageBellGoal` → `BellBlock.ring(Entity, …)` | Verify mapping at V1 |
-| VR-9 | Bad Omen acquisition | **REQUIRES MIXIN** | Apply effect on captain kill to PlayerMob | Player parity |
-| VR-10 | Raid trigger as initiator | **REQUIRES MIXIN** | Bridge `Raid` player list to include PlayerMob | |
+| VR-9 | Captain-kill Bad Omen acquisition | **SUPERSEDED (1.21.1)** | Captains outside raids drop Ominous Bottles; do not apply Bad Omen on kill | Replaced by VR-27/29 + omen bridge |
+| VR-10 | Raid trigger as initiator | **REQUIRES BRIDGE** | Extend the `ServerPlayer`-gated Bad Omen → Raid Omen and Raid Omen → raid-creation path for exact PlayerMob ownership | Bottle finishing itself is not this gate |
 | VR-11 | Hero of the Village | **REQUIRES MIXIN (narrow)** | Widen the single `killer.getType() == EntityType.PLAYER` gate in `Raider#die`; vanilla awards the effect to any `LivingEntity` | `Agent_Claude` F1; the discount half still needs `VillagerTradeAdapter` |
 | VR-12 | Suppress village chest loot | **FULL** | Config profile + `RaidContainersGoal` predicate | Policy only |
 | VR-13 | Cure zombie villager | **PARTIAL** | `CommandedUse` weakness potion + golden apple | Needs splash timing |
@@ -1877,12 +1899,12 @@ Director admission uses **`VillageScenarioProfile`** (`PROPOSED` — B-VR-24) �
 | VR-24 | Reputation readout (gossip accessor) | **PARTIAL** | Accessor mixin on `Villager.gossips`; no reputation bridge | `Agent_Claude` F2; consumer still `UNVERIFIED` |
 | VR-25 | Place opinion at village anchor | **PARTIAL** | `SettlementOpinionBias` at **current** anchor chunk (D-VR-026 **HELD**); no frozen chunk key | V4 |
 | VR-26 | Remembered-village candidacy while unloaded | **PARTIAL** | Candidate pool = `MobVillageMemory`; perception refresh separate (D-VR-025) | VR-T4b |
-| VR-27 | Ominous Bottle pickup & retention | **PARTIAL** | `OminousBottlePolicy` + `InventoryKnowledge`; HIGH pickup rank | V5; D-VR-027 |
-| VR-28 | Manual iron golem construction | **PARTIAL** | Block pattern + pumpkin; not village spawn | V7; D-VR-030 |
-| VR-29 | Ominous Bottle consumption policy | **REQUIRES MIXIN** (likely) | `OminousBottleConsumptionPolicy`; profile + anchor gates | V6; D-VR-028; Bad Omen bridge |
-| VR-30 | Two-step trade chain (sell → buy) | **PARTIAL** | `TradeChainTicket` + `RequirementResolver` | V2; D-VR-029 |
-| VR-31 | Hero villager gift collection | **REQUIRES MIXIN** (likely) | `GiveGiftToHero` / `throwGift` + floor pickup | V6; D-VR-031 |
-| VR-32 | Village founding vs discovery | **PARTIAL** | `VillageFoundingProject` + `FOUNDED` origin tag | V7; D-VR-032 |
+| VR-27 | Ominous Bottle pickup & retention | **PARTIAL** | Strategic pickup value + separately bounded inventory retention | V5; D-VR-027 lock candidate |
+| VR-28 | Manual iron golem construction | **PARTIAL** | Defense policy + structured placement, pumpkin last; repair existing first when comparable | V7; D-VR-030 lock candidate |
+| VR-29 | Ominous Event intent and bottle consumption | **PARTIAL + REQUIRES BRIDGE** | Cross-domain `OminousEventPolicy`; Village contributes RAID intent; self-use executor plus exact effect bridges | V6; D-VR-028 redesigned |
+| VR-30 | Two-step trade chain (sell → buy) | **PARTIAL** | Demand-owned multi-step `AcquisitionPlan`; exact ticket class remains open | V2; D-VR-029 concept lock candidate |
+| VR-31 | Hero villager gift receipt | **REQUIRES MIXIN (narrow)** | Widen `GiveGiftToHero` hero-target discovery; reuse SPM floor-item collection | V6; D-VR-031 lock candidate |
+| VR-32 | Village founding vs discovery | **PARTIAL** | Founding changes world truth; ordinary V1 perception creates memory; founder history separate | V7; D-VR-032 held/redesign |
 
 ### Integration option comparison (village trade case)
 
@@ -2010,7 +2032,7 @@ Early candidates — promoted to stable topics above or deferred below:
 | B-VR-11 | **EVACUATE reuses SCR-2R5 shelter** | **→ Topic** | No `HideInHouseGoal`; D-VR-011 |
 | B-VR-12 | **Iron golem as moving village centroid** | **DEFERRED** | Golem position hints anchor when bell unknown |
 | B-VR-13 | **Witness resentment on villager AOE** | **CONSENSUS risk** | `DispositionResolver.witnessedAttackDelta` if mob hurts villager |
-| B-VR-14 | **Patrol captain kill without home raid** | **PRODUCT DECISION** | Bad Omen + enter **HOME_VILLAGE** triggers raid — intentional? |
+| B-VR-14 | **Autonomous Ominous Bottle use for raid intent** | **PRODUCT DECISION** | 1.21 captains drop bottles; decide whether RAID intent may target `HOME_VILLAGE` (default no) |
 | B-VR-15 | **Multi-bell villages — pick alarm bell** | **→ VR-17** | Nearest reachable + raider LOS |
 | B-VR-16 | **Wandering trader as ephemeral `KnownVillager`** | **Already in RFC** | TTL merchant row |
 | B-VR-17 | **GAO SOCIAL browse village** | **DEFERRED** | Opinion discretionary `SOCIAL` + `FriendlyGreetGoal` executor |
@@ -2047,12 +2069,31 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 | B-VR-41 | **Remembered pool vs perception refresh** | User pre-lock review | **→ D-VR-025** | Unloaded villages stay selectable |
 | B-VR-42 | **Frozen `placeOpinionChunkKey`** | User pre-lock review | **REJECTED** | Turns Place into settlement-ID store; User amendment D-VR-026 |
 | B-VR-43 | **`SettlementOpinionBias` facade** | User pre-lock review | **→ D-VR-025** | Village consumes ±15 bias only |
-| B-VR-44 | **Ominous Bottle pickup HIGH + `OminousBottlePolicy`** | User request | **→ Topic** | Inventory knowledge; D-VR-027 |
-| B-VR-45 | **When/whether to drink Ominous Bottle** | User request | **→ Topic** | Profile + anchor gates; D-VR-028 |
-| B-VR-46 | **Sell resources for emeralds, then buy target** | User request | **→ Topic** | `TradeChainTicket`; D-VR-029 |
-| B-VR-47 | **Construct iron golem manually** | User request | **→ Topic** | Not VR-15 village spawn; D-VR-030 |
-| B-VR-48 | **Receive Hero-of-the-Village villager gifts** | User request | **→ Topic** | `throwGift` collection; D-VR-031 |
-| B-VR-49 | **Found village vs discover village** | User request | **→ Topic** | `FOUNDED` origin; D-VR-032 |
+| B-VR-44 | **Ominous Bottle strategic pickup + bounded retention** | User request + review | **→ D-VR-027 lock candidate** | Pickup value is not indefinite retention; five amplifier variants can compete for an 8-slot backpack |
+| B-VR-45 | **Cross-domain Ominous Event intent** | User request + review | **→ D-VR-028 redesigned** | Village contributes RAID intent; bottle use is not globally village-owned |
+| B-VR-46 | **Demand-owned sell resources → buy target plan** | User request + review | **→ D-VR-029 concept lock candidate** | Exact `TradeChainTicket` class remains open |
+| B-VR-47 | **Repair or construct iron golem manually** | User request + review | **→ D-VR-030 concept lock candidate** | Repair-first when comparable; vanilla final-pumpkin path preserves player-created flag |
+| B-VR-48 | **Receive Hero-of-the-Village villager gifts** | User request + review | **→ D-VR-031 lock candidate** | Bridge target recognition only; reuse host floor pickup |
+| B-VR-49 | **Found village by changing world truth** | User request + review | **→ D-VR-032 held/redesign** | Ordinary perception creates `KnownVillage`; founding history is observer-relative |
+
+### Brainstorm continuation 4 (`Agent_Codex`, 2026-08-14)
+
+Deduplicated against B-VR-09…49, V1-R1…R3, the deferred table, and the current source. These ideas
+advance the existing **V1 perception-driver** frontier; they do not add V2/V5 behaviour.
+
+| ID | Idea | Class | Disposition | Why it matters |
+| --- | --- | --- | --- | --- |
+| B-VR-50 | **Individual flagless village observer** | `NEW` | **PROMOTE → V1-D / D-VR-033** | Each PlayerMob records only its own physical observations; no MOVE/LOOK authority and no shared omniscient result cache |
+| B-VR-51 | **Hybrid dirty + heartbeat cadence** | `REFINEMENT` | **PROMOTE → D-VR-033** | Chunk transition prevents a fast crossing from falling between slow scans; heartbeat catches POI claims/changes while stationary |
+| B-VR-52 | **Strict per-server-tick POI-query budget** | `PERFORMANCE_PATTERN` | **PROMOTE → D-VR-033** | Staggering smooths normal load but is not a hard burst bound; a one-query safety budget makes 1/10/50/100-mob cost falsifiable |
+| B-VR-53 | **Partial-observation recheck pressure** | `REFINEMENT` | **EXPERIMENTAL / defer until VR-T1** | `withheldPoiCount > 0` may justify a quicker recheck as chunks become available, but could amplify boundary churn without runtime evidence |
+| B-VR-54 | **Explicit social transfer of village knowledge** | `NEW` | **DEFERRED** | Useful later, but silently copying one mob's observation to companions would violate individual perception; any transfer needs an observable social event |
+
+**Rejected alternatives:** put the 64-block POI query in the existing 10-tick
+`ExplorationActivityGoal` observer (unnecessarily couples expensive perception to control-plane
+bookkeeping); cache one village observation globally and hand it to nearby mobs (cheap, but creates
+knowledge without an individual observation); create a shared result cache/deduplicator before
+profiling proves it necessary. Scheduling individual requests centrally remains a distinct option.
 
 **Rejected (dedup):** `ExploreForVillageGoal` (director + perception); villager profession brain clone
 (`D-VR-004`); client menu bot for trade (`D-VR-005`).
@@ -2061,8 +2102,9 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 
 ## Topic: Ominous Bottle pickup & inventory knowledge (`User`)
 
-**Author:** `User` (topic request, 2026-08-14)  
-**Status:** `PROPOSED` — **HIGH** priority relative to other raid-loot curios; extends inventory policy, not a new GoalSelector mega-goal.
+**Author:** `User` (topic request, 2026-08-14)
+**Status:** `LOCK RECOMMENDED` — strategic pickup value and bounded retention are separate; extends
+inventory policy, not a new GoalSelector mega-goal.
 
 ### Problem (observable)
 
@@ -2082,24 +2124,26 @@ Raid/trial drop or floor item
         ↓
 ItemPickupPolicy / CollectFloorItemsGoal eligibility
         ↓
-OminousBottlePolicy.shouldRetain(stack, mob, profile)
+OminousBottleValue.rank(stack, mob, demand)
+        ↓
+InventoryRetentionPolicy.keep / replace / discard
         ↓
 InventoryKnowledge slot (tagged ominous_bottle, amplifier, source)
         ↓
-(later) OminousBottleConsumptionPolicy
+(later) cross-domain OminousEventPolicy
 ```
 
 ### `OminousBottlePolicy` (`PROPOSED`)
 
 | Responsibility | Detail |
 | --- | --- |
-| **Pickup rank** | `HIGH` — prefer pickup over generic loot when backpack has space |
-| **Retention** | Keep N≥1 bottles when `RAID_HUNTER` / stockpiling profile; never auto-drop for "junk sweep" |
+| **Pickup value** | Strategic/high when a valid Ominous Event intent can use the bottle; this is not permission to retain every bottle |
+| **Retention budget** | Separately bounded by profile, amplifier value, demand, and backpack pressure; replacement/discard is legal when the budget is exceeded |
 | **Amplifier awareness** | Read bottle amplifier component (loot function `SetOminousBottleAmplifierFunction` exists in mappings) |
-| **Slot budget** | Cap retained count (e.g. 1–3) — 8-slot backpack constraint |
+| **Slot budget** | Cap retained stacks/count (exact number is a later product/tuning decision) — five component variants may occupy separate stacks in an 8-slot backpack |
 | **Ally conflict** | `VILLAGE_ALLY` default: retain but **do not** auto-drink near `HOME_VILLAGE` (consumption topic) |
 
-**Must happen:** mob picks up ominous bottle from raid floor when space available.  
+**Must happen:** mob picks up ominous bottle from raid floor when space available.
 **Must not happen:** bottle picked up then immediately dropped by unrelated junk policy.
 
 **NOT FOUND** (3 probes): `OminousBottle`, `ominous_bottle` in Scavenger `src` and SPM `src`.
@@ -2111,48 +2155,99 @@ InventoryKnowledge slot (tagged ominous_bottle, amplifier, source)
 | **V5** | Pickup rank + `InventoryKnowledge` record |
 | **V6** | Profile gates tied to raid-initiation policy |
 
-**Decision:** **D-VR-027** (`PROPOSED`).
+**Decision:** **D-VR-027** (`LOCK RECOMMENDED`, amended): strategic pickup classification and
+retention are two policies. Exact count/amplifier replacement rules remain implementation-time
+product decisions.
 
 ---
 
-## Topic: Ominous Bottle consumption — when to drink (`User`)
+## Topic: Ominous Event intent — when to consume a bottle (`User` + peer review)
 
-**Author:** `User` (topic request, 2026-08-14)  
-**Status:** `PROPOSED` — depends on **D-VR-027** inventory knowledge; ties to **D-VR-002** Bad Omen bridge.
+**Author:** `User` (topic request, 2026-08-14)
+**Status:** `RESEARCHING / REDESIGNED` — cross-domain owner identified; vanilla/SPM source audit
+completed; exact bridge and autonomous self-use executor remain unimplemented.
 
 ### Problem (observable)
 
-Drinking an ominous bottle applies **Bad Omen** (via `OminousBottleItem.finishUsingItem` — `INFERRED`
-from potion-like item pattern; runtime `UNVERIFIED`). A human chooses **where and when** to drink:
-intentional raid farming vs accidental raid on an ally village. Autonomous mob needs explicit **utility
-admission**, not "drink on pickup."
+In 1.21.1 Bad Omen is the entry point to multiple Ominous Events, including raids and Ominous Trials.
+Village/Raid therefore must not globally own bottle consumption. A human chooses the intended event,
+site and abort policy before drinking; autonomous use needs explicit admission, not "drink on pickup."
 
-### `OminousBottleConsumptionPolicy` (`PROPOSED`)
+### Cross-domain contract (`PROPOSED`)
+
+```text
+Ominous Bottle
+      ↓
+OminousEventPolicy
+      ├── RAID intent  ← Village/Raid contributes this candidate
+      └── TRIAL intent ← future Trial Chamber subsystem
+      ↓
+capability + site + inventory + safety admission
+      ↓
+consume bottle
+```
 
 | Profile / state | Default |
 | --- | --- |
-| `RAID_HUNTER` | Drink only when **outside** `HOME_VILLAGE` / ally anchor envelope and target raid farm site selected |
+| `RAID_HUNTER` | Emit RAID intent only when a target village/farm site and abort plan are selected; never consume merely because a bottle exists |
 | `VILLAGE_ALLY` | **Refuse** autonomous drink gen-1 unless product overrides B-VR-14 |
 | `VILLAGE_RAIDER` | May drink near disliked village (`AVOID` tier) — **PRODUCT DECISION** |
 | Active raid at home | **Block** drink (already in raid) |
 | Low health / fleeing | **Defer** drink |
 
-**Executor:** reuse `CommandedUse` / `FakePlayerSource` item-use lifecycle (SPM prototype) or direct
-`LivingEntity#finishUsingItem` server path — **do not** invent parallel effect application.
+### Source-audited execution boundary (`CODE_CONFIRMED`)
 
-**Must happen:** `RAID_HUNTER` drinks at chosen farm site, then enters village to trigger raid.  
-**Must not happen:** ally mob drinks walking through home village square → raid on friends.
+- `OminousBottleItem#finishUsingItem` applies Bad Omen and consumes the stack for any
+  `LivingEntity`; only advancement/stat side effects are `ServerPlayer`-specific. Do **not** duplicate
+  effect application or add a mixin at this layer.
+- `OminousBottleItem#use` is `Player`-typed, and SPM `CommandedUse` performs entity/block-targeted use;
+  it does not prove a targetless self-drink lifecycle. Add or reuse a bounded autonomous self-use
+  executor that reaches vanilla `finishUsingItem` normally.
+- `BadOmenMobEffect#applyEffectTick` is hard-gated to `ServerPlayer` before village detection and
+  Raid Omen creation. `RaidOmenMobEffect#applyEffectTick` is also hard-gated and calls
+  `Raids#createOrExtendRaid(ServerPlayer, pos)`. Those are the actual compatibility bridge seams.
 
-**Strongest objection:** Bad Omen application may still be **player-centric** at effect layer even
-if item use succeeds — same bridge class as patrol-captain omen (D-VR-002 split).
+**Negative executor probes:** (1) SPM `CommandedUse.perform` does nothing when both entity and block
+targets are null; (2) SPM `EatFoodGoal#finishEating` manually applies food semantics and never calls
+the held item's `finishUsingItem`; (3) Scavenger/SPM source searches found no Ominous Bottle-specific
+self-use executor. Therefore “SPM already knows item use” is not proof of autonomous bottle drinking.
 
-**Decision:** **D-VR-028** (`PROPOSED`).
+**Primary references:** [official Java 1.21 notes](https://feedback.minecraft.net/hc/en-us/articles/27547857163917-Minecraft-Java-Edition-1-21-Tricky-Trials),
+[Yarn OminousBottleItem API](https://maven.fabricmc.net/docs/yarn-1.21%2Bbuild.9/net/minecraft/item/OminousBottleItem.html),
+plus method bodies from the project's pinned named 1.21.1 jar.
+
+### Raid-Omen commitment window
+
+```text
+Drink bottle → Bad Omen → enter intended village → Raid Omen (600 ticks)
+                                             ├── COMMIT: remain eligible until raid starts
+                                             └── ABORT: command/danger/wrong site → leave or milk
+```
+
+The intent must retain target village, source bottle/amplifier, authority owner, commit/abort reason,
+and expiry. A command, critical health, or wrong village during the 30-second window must not become
+an accidental raid.
+
+**Must happen:** an admitted `RAID_HUNTER` consumes one chosen bottle, receives Bad Omen, enters the
+intended village, obtains Raid Omen, and either deliberately commits or aborts during the 600-tick
+window.
+**Must not happen:** Village code consumes a bottle reserved for a Trial intent; an ally mob drinks
+while casually crossing home; a failed/aborted intent starts a raid anyway.
+
+**Strongest objection:** the vanilla raid lifecycle stores player-specific omen state and raid
+ownership. Widening only the first `instanceof ServerPlayer` can create a half-working lifecycle;
+the bridge must preserve exact PlayerMob intent/position ownership across both effects without
+reimplementing raid rules.
+
+**Decision:** **D-VR-028** (`REDESIGNED / SOURCE AUDIT COMPLETE`, not locked): use a cross-domain
+`OminousEventPolicy`; Village/Raid contributes RAID intent and owns raid-specific commitment, not
+global bottle consumption. Implementation waits on a complete bridge design.
 
 ---
 
 ## Topic: Two-step villager trade chains — sell for emeralds, then buy (`User`)
 
-**Author:** `User` (topic request, 2026-08-14)  
+**Author:** `User` (topic request, 2026-08-14)
 **Status:** `PROPOSED` — extends `VillagerTradeAdapter` + `RequirementResolver`; not a second trade GUI.
 
 ### Problem (observable)
@@ -2168,7 +2263,7 @@ Path: sell surplus → emeralds → buy book
 RFC already sketches reverse chain in `VillagerTradeAdapter` topic (`BUY_MENDING_BOOK` example) but
 does not treat **sell-then-buy** as a **first-class planner contract** with ticket lifecycle.
 
-### Design (`PROPOSED`)
+### Behavioural contract (`CONCEPT LOCK RECOMMENDED`)
 
 ```text
 ProgressGoal: ACQUIRE_ITEM(book_mending)
@@ -2180,25 +2275,36 @@ ProgressGoal: ACQUIRE_ITEM(book_mending)
   → TaskLifecycle per phase (interruptible by D-VR-010 raid)
 ```
 
-| Field | Purpose |
+| Required plan field | Purpose |
 | --- | --- |
-| `TradeChainTicket` | `{ targetOffer, emeraldBudget, sellPhaseComplete, traderId }` |
+| Originating demand + consumer | Prevent autonomous arbitrage from becoming its own objective |
+| Required output + protected inputs | Preserve the item actually demanded and food/tool survival reserves |
+| Budget + expiration | Bound emerald/input spending and stale plans |
+| Current step + revalidation evidence | Recheck villager, offer, inventory and whether the output was acquired elsewhere before every step |
 | `consumerKey` | `"trade:chain:<goalId>"` on `WorkDemandPolicy.MaterialDemand` (D-VR-015) |
 | Backpack staging | Reserve slots for sell inputs **and** expected emerald output — 8-slot risk |
 
-**Must happen:** mob with carrots but no emeralds completes sell then buy in one directed visit or two commutes.  
-**Must not happen:** buys book offer without emerald budget; sells last food leaving starvation.
+`TradeChainTicket` is one viable representation, but not locked. If the existing progression RFC's
+generic `AcquisitionPlan` can express dependent SELL → BUY steps without losing interruption,
+reservation or revalidation semantics, reuse it rather than introducing a trade-only planner type.
+
+**Must happen:** mob with carrots but no emeralds completes sell then buy in one directed visit or two commutes.
+**Must not happen:** buys book offer without emerald budget; sells last food leaving starvation;
+continues stale step 2 after the offer changes or the demanded output was acquired elsewhere; trades
+for profit without an external demand.
 
 **Cross-RFC:** `RFC-VANILLA-AUTONOMOUS-PROGRESSION` `RequirementResolver`; farm surplus from V3 harvest.
 
-**Decision:** **D-VR-029** (`PROPOSED`).
+**Decision:** **D-VR-029** (`CONCEPT LOCK RECOMMENDED`): demand-owned, revalidated multi-step
+acquisition is required. The exact `TradeChainTicket` abstraction remains `PROPOSED`.
 
 ---
 
 ## Topic: Manual iron golem construction (`User`)
 
-**Author:** `User` (topic request, 2026-08-14)  
-**Status:** `PROPOSED` — **distinct from VR-15** (village-driven golem spawn is `NOT PRACTICAL`).
+**Author:** `User` (topic request, 2026-08-14)
+**Status:** `CONCEPT LOCK RECOMMENDED` — **distinct from VR-15** (village-driven golem spawn is
+`NOT PRACTICAL`); vanilla creator semantics source-audited.
 
 ### Problem (observable)
 
@@ -2206,69 +2312,86 @@ A human **builds** an iron golem: place iron block pattern + carved pumpkin. Thi
 **construction**, not waiting for village mechanics to spawn one. RFC golem section only covers
 **relationship** with existing golems (neutral, assist, door repath).
 
-### Feasibility (`INFERRED`)
+### Feasibility (`CODE_CONFIRMED` trigger; executor `PROPOSED`)
 
 | Step | Integration |
 | --- | --- |
 | Acquire 4 iron blocks + pumpkin | `WorkDemandPolicy` / gather / smelt chain |
 | Place pattern | Scavenger block placement (`PlaceTorchGoal` pattern) + griefing gate |
-| Trigger spawn | Vanilla `BlockPattern` / pumpkin placement on iron T (`CarvedPumpkinBlock` pattern methods exist in mappings: `getOrCreateIronGolemFull`) |
+| Trigger spawn | Place the carved pumpkin/jack-o'-lantern **last** through the normal block-placement lifecycle; `CarvedPumpkinBlock#trySpawnGolem` recognizes the iron pattern and unconditionally calls `IronGolem#setPlayerCreated(true)` |
 | Post-spawn | Existing golem relationship table — hang near / assist vs raid |
 
-**Must happen:** mob with materials constructs golem near `HOME_VILLAGE` when defense utility high and no golem present.  
-**Must not happen:** griefing pumpkin on player builds; infinite iron sink without demand ticket.
+Before building, `VillageDefensePolicy` must compare repairing a damaged existing golem with spending
+four iron blocks on a new one. Prefer `REPAIR_EXISTING` when it provides comparable defense value;
+an active home raid may authorize construction mandatorily, while safe surplus improvement may be
+soft-ranked by Opinion.
+
+**Must happen:** mob with materials constructs a player-created golem near `HOME_VILLAGE` when defense
+utility justifies it, placing the pumpkin last and verifying the entity actually spawned.
+**Must not happen:** griefing pumpkins on player builds; raw-spawning/bypassing the vanilla pattern;
+building a new golem while a cheap repair satisfies the same defense demand; infinite iron sink.
 
 **Strongest objection:** 8-slot backpack + 5 blocks + pathing alignment is fiddly; failure modes
 (pattern off-by-one) look stupid without retry policy.
 
 **Phased delivery:** **V7** (advanced community) or late **V5** if raid defense demands it.
 
-**Decision:** **D-VR-030** (`PROPOSED`).
+**Decision:** **D-VR-030** (`CONCEPT LOCK RECOMMENDED`): defense policy selects repair/build and a
+structured construction executor uses vanilla placement semantics. Exact site planner remains open.
 
 ---
 
 ## Topic: Hero-of-the-Village villager gifts (`User`)
 
-**Author:** `User` (topic request, 2026-08-14)  
-**Status:** `PROPOSED` — reward **collection** behaviour; depends on hero **effect** credit (D-VR-020 / F1).
+**Author:** `User` (topic request, 2026-08-14)
+**Status:** `LOCK RECOMMENDED` (amended after source audit) — bridge villager recipient recognition;
+reuse host pickup; depends on hero effect credit (D-VR-020 / F1).
 
 ### Problem (observable)
 
-After raid victory, villagers **throw gifts** at the hero (`GiveGiftToHero` behaviour;
-`Villager.throwGift` — `CONFIRMED` in Mojmap). PlayerMobs may receive **hero registration**
-(`addHeroOfTheVillage`) without ever **catching** gifts if the gift AI targets `Player` only
-(`UNVERIFIED` — body audit required before implementation).
+After raid victory, villagers **throw gifts** at the hero. Source audit confirms
+`GiveGiftToHero#getNearestTargetableHero` reads `NEAREST_VISIBLE_PLAYER` and returns `Player`; its
+start/tick/range lifecycle is Player-typed, while `throwGift(Villager, LivingEntity)` is general after
+a recipient is selected. The missing seam is therefore hero **recognition/targeting**, not gift
+generation and not a new item-collection system.
 
 ### Design (`PROPOSED`)
 
 ```text
 Raid VICTORY + hero effect active on mob
         ↓
-VillagePerception: villagers in gift range
+Narrow GiveGiftToHero compatibility bridge:
+villager recognizes eligible PlayerMob hero
         ↓
-HeroGiftCollectionPolicy (stand in village center, collect floor items)
+vanilla villager throws normal gift
         ↓
-ItemPickupPolicy respects gift items (bread, seeds, …)
+SPM CollectFloorItemsGoal
         ↓
 InventoryKnowledge / demand re-evaluation
 ```
 
-**Must happen:** defender mob with hero credit receives thrown items within ~1 minute of victory.  
+A bounded post-raid `AFTERMATH` state may keep the hero in the village long enough to be noticed, but
+it does not own floor-item collection and must not duplicate SPM's pickup executor.
+
+**Must happen:** defender mob with hero credit receives thrown items within ~1 minute of victory.
 **Must not happen:** gifts despawn while mob raids chests (`VR-20` ally gate).
 
-**If gift target is player-typed:** narrow mixin on `GiveGiftToHero` / hero lookup — same cost class
-as D-VR-020, not a new reputation system (contrast D-VR-021).
+**Compatibility boundary:** narrow optional mixin/adapter on `GiveGiftToHero` hero lookup and its
+Player-typed lifecycle, preserving vanilla gift tables and throw behavior. Do not introduce a
+`HeroGiftCollectionGoal`.
 
 **Phased delivery:** **V6** with hero credit; static tests mock `throwGift` eligibility.
 
-**Decision:** **D-VR-031** (`PROPOSED`).
+**Decision:** **D-VR-031** (`LOCK RECOMMENDED`, amended): bridge recipient recognition; reuse SPM
+pickup; optional `AFTERMATH` presence hold only.
 
 ---
 
 ## Topic: Village founding vs discovery (`User`)
 
-**Author:** `User` (topic request, 2026-08-14)  
-**Status:** `PROPOSED` — **first-class behaviour** missing today; distinct from V1 **perception of existing** settlements.
+**Author:** `User` (topic request, 2026-08-14)
+**Status:** `HELD / REDESIGN` — founding is a valid future project, but it must not mint settlement
+memory or encode observer history inside `KnownVillage`.
 
 ### Problem (observable)
 
@@ -2277,12 +2400,14 @@ Humans also **found** settlements: place beds, workstations, bells; transport/cu
 a new POI cluster that vanilla later recognizes. RFC treats villages as **discovered objects**, not
 **authored projects**.
 
-### Founding vs discovery (`PROPOSED` vocabulary)
+### Founding vs discovery (`REDESIGNED` ownership)
 
-| Mode | Trigger | `KnownVillage` origin |
+| Concern | Owner |
 | --- | --- | --- |
-| **DISCOVERED** | Mob enters existing POI cluster | `VillagePerception` snapshot (V1) |
-| **FOUNDED** | Mob places critical POI blocks + population criterion | `VillageFoundingProject` ticket → new anchor when vanilla POI qualifies |
+| Construct beds/workstations, transport/cure villagers | `VillageFoundingProject` / generic progression executors |
+| Determine whether world now satisfies village truth | Existing `VillagePerception` + D-VR-019 predicate |
+| Create/update remembered settlement | Existing `VillageMemorySavedData.record`; no founding shortcut |
+| Remember “I helped found this place” | Future observer-relative `SettlementHistory` / relationship record, not `KnownVillage` identity |
 
 **Founding pipeline (high level):**
 
@@ -2295,21 +2420,166 @@ Place blocks (griefing + StorageOwnership)
         ↓
 Wait for POI registration / villager assignment
         ↓
-KnownVillage.create(FOUNDED, anchor, founderMobId)
+ordinary VillagePerception.observe
         ↓
-SettlementTier → HOME_VILLAGE candidate
+ordinary KnownVillage record/update
+        ↓
+optional founder relationship evidence recorded separately
 ```
 
-**Must happen:** mob that builds bed+lectern+bell cluster gets `FOUNDED` village in memory when POI
-query would return village at anchor (same predicate as D-VR-019 — **agreement required**).  
-**Must not happen:** single bed in wilderness tagged `HOME_VILLAGE` without village POI recognition.
+**Must happen:** after the project changes the world enough to satisfy vanilla-compatible village
+conditions, the exact ordinary perception path recognizes the settlement.
+**Must not happen:** `VillageFoundingProject` inserts a fake `KnownVillage`, assigns `HOME_VILLAGE`, or
+records founder credit before the D-VR-019 predicate succeeds.
 
 **Strongest objection:** overlaps `RFC-VANILLA-AUTONOMOUS-PROGRESSION` base-building; village RFC should
 own **POI/villager/economy** founding semantics only, delegating generic shelter to SCR-2.
 
-**Phased delivery:** **V7** primary; design stub in V4 when `HOME_VILLAGE` designation needs `FOUNDED` source tag.
+**Phased delivery:** **V7** primary. No V4 `FOUNDED` source tag; a later history model needs its own
+evidence and decision.
 
-**Decision:** **D-VR-032** (`PROPOSED`).
+**Decision:** **D-VR-032** (`HELD / REDESIGN`): founding project concept retained; `KnownVillage.origin`
+rejected; ordinary perception is the only memory-creation authority.
+
+---
+
+## Topic: V1 perception driver and observation budget (`Agent_Codex`)
+
+**Status:** `LOCKED` — peer review accepts bounded/individual observation and selects B2's explicit
+fair queue over B1's implicit permit contention; provisional cadence values still require measurement;
+no implementation authorization
+
+**Goal:** connect the implemented V1 perception/identity substrate to real PlayerMobs without giving
+the observer scheduler authority, manufacturing shared knowledge, or running a 64-block POI query
+per mob per tick.
+
+### Current implementation
+
+`CODE_CONFIRMED`:
+
+- `VillagePerception.observe(ServerLevel, BlockPos)` performs one radius-64
+  `PoiTypeTags.VILLAGE` + `IS_OCCUPIED` query and filters every result through the locked loaded-chunk
+  boundary.
+- `VillageMemorySavedData.record(UUID, Observation, tick)` is non-allocating for an empty
+  observation and persists a real settlement observation.
+- `ExplorationActivityGoal` demonstrates a flagless observer installed on each PlayerMob and a
+  deterministic ten-tick phase, but its cadence owns mining/readiness/Opinion control-plane work.
+- `PhasedScanClock` already handles GoalSelector polling that misses an exact modulo tick.
+
+Production caller audit:
+
+| Probe | Result |
+| --- | --- |
+| `VillagePerception.observe` under `src/main/java` | **NOT FOUND** |
+| production call to `VillageMemorySavedData.record` | **NOT FOUND** |
+| village perception/driver registration in `SpmScavenger.install` | **NOT FOUND** (only lifecycle cleanup references village memory) |
+
+Therefore V1 currently has a tested perception function, not a mob perception lifecycle. A build or
+unit test cannot prove that a PlayerMob ever learns a village.
+
+### Candidate designs
+
+| Option | Design | Benefit | Strongest objection / failure mode |
+| --- | --- | --- | --- |
+| **A — extend `ExplorationActivityGoal`** | Run village observation from the existing 10-tick flagless observer | Fewest classes and no new Goal registration | Couples a large POI query to unrelated control-plane cadence; changing one cadence changes mining, affect, and village cost together |
+| **B1 — per-mob flagless driver + budget gate** | Each observer marks itself pending and contends for a strict server-tick permit | Preserves individual knowledge, no movement authority, small gen-1 surface | Fairness is emergent from contention; collision/starvation proof is harder |
+| **B2 — per-level bounded UUID queue (peer-review alternative)** | Per-mob cheap eligibility enqueues UUID; level scheduler grants a fixed number of POI queries/tick; result is written only to that mob | Explicit FIFO/round-robin fairness and a hard global cap without sharing facts | Long-lived queue must satisfy RET-1 and reconcile unload/death/dimension changes; more lifecycle code |
+| **C — central result cache/deduplication** | Queue mobs and reuse spatial village query results | Lowest repeated-query potential | Risks shared omniscience/stale facts; not justified without profile evidence |
+
+**Recommended resolution: B2.** A is rejected and C remains deferred. B1's permit race needs a
+fairness mechanism to prove eventual service; once that mechanism remembers pending UUIDs and orders
+them, it has effectively recreated a less explicit queue. B2 makes the ownership honest. The queue
+schedules *when* a specific mob may observe, but never reuses or broadcasts *what* another mob
+observed.
+
+### Proposed V1-D contract
+
+```text
+entity-ticking PlayerMob
+        ↓
+flagless eligibility observer
+        ↓
+observation requested by either:
+  - changed chunk since last successful observation
+  - bounded heartbeat elapsed
+        ↓
+enqueue deduplicated (dimension, mob UUID) request
+        ↓
+server scheduler services per-level lanes round-robin
+under one global POI-query budget
+        ↓
+VillagePerception.observe(level, mob.blockPosition())
+        ↓
+settlement?
+  no  → no memory row created
+  yes → VillageMemorySavedData.record(mob UUID, observation, gameTime)
+```
+
+Provisional gen-1 tuning for implementation review:
+
+- heartbeat: **200 ticks** (ten-second maximum stationary refresh target);
+- movement dirtying: **chunk transition**, coalesced rather than queried immediately;
+- retry/debounce floor: **20 ticks** after a denied/dirty request;
+- hard burst budget: **one POI query per server tick** across the server.
+
+These are proposed safety/timing values, not performance claims or copied vanilla constants. They
+must remain named constants (or configuration only if players benefit from tuning), and VR-T1 must
+measure actual query frequency/cost. The hard budget limits bursts; it does not prove that one query
+per tick is cheap. A denied permit leaves the observation pending, so successful contenders move to
+their next heartbeat and the backlog can drain instead of one entity monopolising every tick.
+
+### Ownership and lifecycle
+
+| Concern | Owner / invariant |
+| --- | --- |
+| Scheduler flags | Empty; observation may run beside combat/work but cannot move or look |
+| Knowledge | Per-mob `VillageMemorySavedData`; no companion/global result sharing |
+| Query budget | Server-scoped hard cap; no observation cache or cross-mob result reuse |
+| Queue retention | Key = `(dimension, mob UUID)`; at most one pending request/key; hard configured cap; no entity references; dequeue on service; remove on unload/death/dimension transition; clear on server stop |
+| Queue saturation | Refuse duplicate/over-cap insertion without clearing the mob's cheap pending marker; bounded retry allows later admission rather than losing perception forever |
+| Cross-level fairness | Per-level lanes serviced round-robin under one **server-global** cap; multiple dimensions must not multiply the budget or starve a quieter level |
+| Entity unload/death | Observer object dies with entity; persistent memory follows V1-R2/R3 semantics |
+| Dimension change | New observer instance; UUID memory remains; first eligible local observation is dirty |
+| Addon disabled | No new query or memory write; existing persisted memory remains unchanged |
+| Empty result | Does not create/erase memory; absence at one moment is not evidence the old settlement ceased to exist |
+
+### Predicted behaviour (MAIBS pre-implementation)
+
+| Layer | Result |
+| --- | --- |
+| Intended behaviour | A PlayerMob notices villages it physically passes through and remembers them |
+| Implemented mechanism (planned) | Flagless, budgeted POI observation at chunk changes/heartbeat; only loaded POIs admitted |
+| Predicted observable behaviour | No visible goal/readout/movement change; village memory appears within a bounded delay after entry |
+| Failure/weirdness | Small village crossed between requests; partial boundary observation updates anchor; many mobs create a pending backlog; teleport/dimension change dirties immediately |
+| Confidence | `CODE_CONFIRMED` substrate; `GAME_MECHANICS_INFERRED` cadence; runtime `UNVERIFIED` |
+
+**Strongest objection:** a 200-tick heartbeat alone can miss a fast traversal through a small village.
+That is an architecture defect, not tuning; chunk-transition dirtying is therefore part of B rather
+than an optional optimization.
+
+**Alternative:** query on every chunk transition without a heartbeat. It lowers traversal misses but
+fails when villagers claim POIs around a stationary mob, and multiple mobs crossing one boundary can
+burst together. Rejected in favour of the hybrid.
+
+### Acceptance and falsification
+
+**Must happen:** a ticking PlayerMob crossing into a loaded occupied vanilla village receives one
+per-mob observation and records a `KnownVillage` within the bounded driver delay, without acquiring
+MOVE/LOOK or changing its current goal.
+
+**Must not happen:** disabled addon, empty observation, unloaded-only POIs, or another mob's
+observation creates village memory for this mob; aggregate POI queries exceed the configured
+per-server-tick budget.
+
+**Runtime falsifiers:** (1) cross a compact village between two observations and leave with no
+memory; (2) 100 ticking PlayerMobs produce a same-tick query burst above the budget; (3) one denied
+mob remains pending indefinitely; (4) observation changes objective labels or interrupts movement;
+(5) an empty follow-up erases a valid remembered village.
+
+**Locked architecture:** B2 owns pending requests as bounded `(dimension, UUID)` entries; cheap
+per-mob eligibility owns only its pending marker. Tests must prove deduplication, global cap,
+round-robin level fairness, eventual service, unload/death/dimension cleanup and saturation retry.
+The 200/20/1 values remain provisional and runtime-tunable evidence, not locked optima.
 
 ---
 
@@ -2320,13 +2590,14 @@ own **POI/villager/economy** founding semantics only, delegating generic shelter
 | Phase | Scope | Feasibility | Runtime proof |
 | --- | --- | --- | --- |
 | **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** (static) | VR-T1 pending: enter village → anchor agrees with `Raid.getCenter()` → leave → return → same settlement |
+| **V1-D** | Bounded production perception driver: per-mob eligibility + per-level bounded UUID lanes + one server-global query budget (D-VR-033) | **LOCKED / AWAITING AUTHORIZATION** | VR-T1 + VR-T1b: 1/10/50/100 mobs; bounded discovery latency, no query burst/starvation |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | moved to V2/V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **REQUIRES MIXIN** | VR-T2: trade input → correct villager → atomic inventory change; VR-T2b: sell carrots → buy book |
 | **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest |
 | **V4** | Factual site utility + **Place opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**), known traders, home designation, return visits | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
-| **V6** | Raid player-parity bridges: Omen, participation credit, hero/reputation, **ominous bottle drink policy**, **hero gift collection** | **REQUIRES MIXIN** | VR-T6: defend → credit; VR-T6b: villager gifts |
-| **V7** | Advanced community: rescue, repair, transport, settlement projects, group coop, **village founding**, **manual golem build** | **NOT PRACTICAL** gen-1 | Deferred |
+| **V6** | Raid player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup |
+| **V7** | Advanced community: rescue, repair, transport, settlement projects, group coop, founding through world truth + ordinary perception, repair/build golem | **NOT PRACTICAL** gen-1 | Deferred |
 
 ### Legacy phase map (superseded)
 
@@ -2361,6 +2632,24 @@ own **POI/villager/economy** founding semantics only, delegating generic shelter
 
 **Must not happen:** `RaidContainersGoal` loots village chest while `HOME_VILLAGE` ally profile active
 (shelter hold alone is insufficient — need VR-20 predicate).
+
+### V1-D — production perception driver (`LOCKED DESIGN / UNIMPLEMENTED` — D-VR-033)
+
+| Scenario | Predicted observable | Failure/weirdness under test |
+| --- | --- | --- |
+| VR-M1: one mob crosses a compact village | Memory appears after chunk-dirty request obtains budget | Crosses completely between observations |
+| VR-M2: mob stands while villagers claim POIs | Heartbeat eventually refreshes facts | Chunk-only design never notices the change |
+| VR-M3: combat during observation turn | Combat continues; flagless observer records facts | Readout/GoalSelector authority changes |
+| VR-M4: 100 mobs enter together across levels | Deduplicated UUID requests drain round-robin; max one global query in a server tick | Same-tick POI storm, level starvation, stale queue entries |
+| VR-M5: only persisted/unloaded POIs nearby | Withheld/empty observation creates no memory | Storage availability becomes omniscience |
+| VR-M6: dimension change/teleport | New local observation is requested; old UUID memory survives | Old observer state suppresses local discovery |
+| VR-M7: addon disabled | No query/new memory; existing memory remains | Disabled cleanup mutates or creates knowledge |
+
+Temporal prediction: `T0` entry dirties observation and enqueues once; `T+0…bounded backlog` its
+level lane receives the global query slot;
+`T+200` stationary heartbeat can correct changed facts; `T+1200` prolonged presence should show
+stable memory rather than repeated new identities. Runtime query counts and anchor sequences are
+required evidence; code/static tests cannot confirm this timeline.
 
 ### V5 — raid interrupt + resume
 
@@ -2417,7 +2706,7 @@ own **POI/villager/economy** founding semantics only, delegating generic shelter
 | `MaterialDemandPolicy` class name | **NOT FOUND** — ship trade via `WorkDemandPolicy` facade (B-VR-20) |
 | Storage RFC (full personal/village chest system) | **Deferred** — `StorageOwnership` minimum in V3 |
 | Runtime VR-T* tests | **UNVERIFIED** — VR-T1 datapack planned (B-VR-28). V1 is `STATIC_CONFIRMED` only: no PlayerMob has yet perceived a village in a running world |
-| V1 perception **driver** (what calls `VillagePerception.observe`) | **NEXT** — design with a real cadence and a 1/10/50/100-PlayerMob budget, not a 64-block POI query per tick (User, 2026-08-14) |
+| V1 perception **driver** (what calls `VillagePerception.observe`) | **LOCKED DESIGN / UNIMPLEMENTED — D-VR-033 / V1-D**: per-mob eligibility, bounded per-level `(dimension, UUID)` lanes, one server-global query budget; 200/20/1 values still require runtime measurement; no implementation authorization |
 | 48-block village identity radius | **UNVERIFIED** — our judgement, no vanilla constant exists. Upgrade path (POI-set overlap) designed and deferred pending runtime evidence (D-VR-022) |
 | Mobs removed without **any** lifecycle event, or in a dimension absent from `getAllLevels()` | **BOUNDED, not eliminated** — held by `MAX_TRACKED_MOBS` (256/dimension), which warns when it fires (D-VR-023) |
 | Monotone anchor following over a long observation sequence | **DOCUMENTED LIMITATION** — replacement tracks the newest equally-good view; separating "rebuilt" from "looks rebuilt" needs POI-set-overlap identity (D-VR-022). VR-T1 must report whether real sequences produce this shape |
@@ -2431,7 +2720,8 @@ own **POI/villager/economy** founding semantics only, delegating generic shelter
 | Iron golem as village centroid heuristic | **Deferred** (B-VR-12) |
 | GAO SOCIAL village browse | **Deferred** — Opinion discretionary `SOCIAL` + `FriendlyGreetGoal` |
 | SETTLEMENT Opinion subject | **Deferred** — reopen if mob needs same-settlement pref when anchor geography moves (D-VR-026 **HELD**; B-VR-39) |
-| Patrol captain → auto-raid home village | **PRODUCT DECISION** open (B-VR-14) |
+| Ominous Bottle RAID intent targeting home village | **PRODUCT DECISION** open; default refuse (B-VR-14 / D-VR-028) |
+| `SettlementTier` decomposition | **OPEN architecture gate before V4/V5** — map consumers and saved-data migration before splitting home/economic/safety dimensions |
 | Ominous Bottle drink near ally village | **PRODUCT DECISION** — default refuse for `VILLAGE_ALLY` (D-VR-028) |
 | Raid EVACUATE threat hysteresis | **Deferred** — only if shelter flap observed (B-VR-21) |
 | Nearby non-home raid night commute | **PRODUCT DECISION** — matrix row 6 (day/night topic) |
@@ -2443,13 +2733,13 @@ own **POI/villager/economy** founding semantics only, delegating generic shelter
 
 ### D-VR-001: Target is vanilla village/raid, not SPM “raid”
 
-**Status:** `LOCKED`  
-**Accepted:** Village RFC means `MerchantMenu` + `Raid` event.  
+**Status:** `LOCKED`
+**Accepted:** Village RFC means `MerchantMenu` + `Raid` event.
 **Rejected:** Equating `RaidContainersGoal` with illager raids.
 
 ### D-VR-002: Player parity for Omen/Hero requires bridge — **SPLIT**
 
-**Status:** `CONSENSUS`, amended by `Agent_Claude` 2026-08-14 — **Omen and Hero are not one problem**  
+**Status:** `CONSENSUS`, amended by `Agent_Claude` 2026-08-14 — **Omen and Hero are not one problem**
 **Accepted (amended):** the two halves have opposite difficulty and must not share a decision.
 
 | Half | Gate | Cost | Owner |
@@ -2459,58 +2749,58 @@ own **POI/villager/economy** founding semantics only, delegating generic shelter
 
 **Evidence:** `Raider#die` offsets 39–58; `Raid#tick` offsets 617–742; `Raids#createOrExtendRaid`
 signature + `getOrCreateRaid` access flags; `ServerPlayer#{set,get,clear}RaidOmenPosition`. All from
-the pinned 1.21.1 merged jar.  
+the pinned 1.21.1 merged jar.
 **Consequence for planning:** treating these as one item is what put hero credit in V6. See B-VR-35 —
 the phase order at the raid end is inverted, and that is an open **product decision**.
 
 ### D-VR-003: Integration surface
 
-**Status:** `LOCKED`  
-**Accepted:** `spmscavenger` addon + capabilities; reuse SPM combat/social.  
+**Status:** `LOCKED`
+**Accepted:** `spmscavenger` addon + capabilities; reuse SPM combat/social.
 **Rejected:** SPM source fork; datapack-only trade.
 
 ### D-VR-004: Human-player interaction parity, not villager lifecycle
 
-**Status:** `LOCKED` (`Agent_ChatGPT`)  
-**Accepted:** PlayerMob **interacts with** village system like Steve; no profession/workstation claim/gossip brain.  
+**Status:** `LOCKED` (`Agent_ChatGPT`)
+**Accepted:** PlayerMob **interacts with** village system like Steve; no profession/workstation claim/gossip brain.
 **Rejected:** `PlayerMob` → villager entity parity.
 
 ### D-VR-005: `VillagerTradeAdapter` without fake GUI
 
-**Status:** `CONSENSUS` (`Agent_ChatGPT`)  
-**Accepted:** Server-side `inspectOffers` / `performTrade`; `TradeWithVillagerGoal` executor.  
+**Status:** `CONSENSUS` (`Agent_ChatGPT`)
+**Accepted:** Server-side `inspectOffers` / `performTrade`; `TradeWithVillagerGoal` executor.
 **Rejected:** Client menu simulation for autonomous mobs.
 
 ### D-VR-006: `VillageInteractionDirector` orchestration
 
-**Status:** `CONSENSUS` (`Agent_ChatGPT`)  
-**Accepted:** Perception → Director → utility → executor goals; composable raid defense.  
+**Status:** `CONSENSUS` (`Agent_ChatGPT`)
+**Accepted:** Perception → Director → utility → executor goals; composable raid defense.
 **Rejected:** Monolithic `DefendVillageGoal`; Brain migration.
 
 ### D-VR-007: Trade evaluation via `MaterialDemandPolicy`
 
-**Status:** `CONSENSUS` (`Agent_ChatGPT`)  
-**Accepted:** Demand-driven offer scoring; trade as `AcquisitionStrategy`.  
+**Status:** `CONSENSUS` (`Agent_ChatGPT`)
+**Accepted:** Demand-driven offer scoring; trade as `AcquisitionStrategy`.
 **Rejected:** Hardcoded profession preferences (`librarian = good`).
 
 ### D-VR-008: Bell parity via entity ring API
 
-**Status:** `LOCK RECOMMENDED` (`Agent_ChatGPT` + mapping verify)  
-**Accepted:** `RingVillageBellGoal` using **`BellBlock.attemptToRing(Entity, …)`** — entity initiator not `Player`-typed.  
+**Status:** `LOCK RECOMMENDED` (`Agent_ChatGPT` + mapping verify)
+**Accepted:** `RingVillageBellGoal` using **`BellBlock.attemptToRing(Entity, …)`** — entity initiator not `Player`-typed.
 **Rejected:** Player-only bell assumption; colloquial `ring` without Mojmap name in implementation.
 
 ### D-VR-009: Advanced village site selection (`CONTESTED` — detection half)
 
-**Status:** `CONTESTED` (`Agent_Claude`, 2026-08-14) — **scoring half endorsed, detection half contested**  
+**Status:** `CONTESTED` (`Agent_Claude`, 2026-08-14) — **scoring half endorsed, detection half contested**
 **Accepted (peer-reviewed, endorse):** settlement tiers, bounded `VillageSiteScore`, home anchor NBT, no `/locate`.
-Two viable alternatives were compared, objections were answered, and the score is bounded and testable.  
+Two viable alternatives were compared, objections were answered, and the score is bounded and testable.
 **Contested (`Agent_Claude`):** the *detection* mechanism — “≥2 villagers + ≥3 beds OR bell + workstation,
 merge clusters by anchor distance”. Superseded by **D-VR-019**: vanilla already defines a village as a
 `PoiTypeTags.VILLAGE` + `IS_OCCUPIED` query, and the raid system uses that definition to place
 `Raid.getCenter()`. A hand-rolled centroid can disagree with the raid centre by an unbounded distance,
-**silently disabling D-VR-010** with no crash and no log line.  
+**silently disabling D-VR-010** with no crash and no log line.
 **Rejected:** nearest-chunk default; full vanilla POI *graph* clone (still rejected — D-VR-019 uses the
-flat query, not the graph).  
+flat query, not the graph).
 **Resolved 2026-08-14 (User).** D-VR-019 accepted and locked; the detection half of this decision is
 **`SUPERSEDED`** by it. The scoring half — settlement tiers, `VillageSiteScore`, home anchor NBT — is
 **`LOCKED`**. V1 ships the tier vocabulary and the `HOME_VILLAGE` identity; utility-driven promotion
@@ -2519,44 +2809,44 @@ yet and inventing them now would mean scoring zeros dressed as judgements.
 
 ### D-VR-010: Raid interrupt via `TaskLifecycle` snapshot
 
-**Status:** `LOCKED` (`Agent_Cursor` proposed; **independent peer review `Agent_Claude` 2026-08-14**)  
+**Status:** `LOCKED` (`Agent_Cursor` proposed; **independent peer review `Agent_Claude` 2026-08-14**)
 **Review:** the `MiningProject` → `MiningProjectEnd.COMBAT` → resume precedent is shipped and tested,
 two alternatives were considered, and the snapshot/revalidate shape avoids the stale-ticket failure.
 **Lock is conditional on D-VR-019**: the trigger `getRaidAt(homeVillageAnchor)` is only meaningful if the
-anchor agrees with `Raid.getCenter()` (VR-23). Without it this decision is correct and inert.  
-**Accepted:** `RaidTask.previousTask` + revalidate demand on victory — mirror `MiningProject` COMBAT interrupt.  
+anchor agrees with `Raid.getCenter()` (VR-23). Without it this decision is correct and inert.
+**Accepted:** `RaidTask.previousTask` + revalidate demand on victory — mirror `MiningProject` COMBAT interrupt.
 **Rejected:** Ad-hoc goal cancel without resume ticket.
 
 ### D-VR-011: Raid `EVACUATE` reuses shelter commitment
 
-**Status:** `LOCKED` (`Agent_Cursor` proposed; **independent peer review `Agent_Claude` 2026-08-14**)  
+**Status:** `LOCKED` (`Agent_Cursor` proposed; **independent peer review `Agent_Claude` 2026-08-14**)
 **Review:** reuse of SCR-2R5 over a new `HideInHouseGoal` is correct under SPM-2, and the B-VR-21
 self-limiting interaction (raider aggro ejects the coward via `ShelterThreatPolicy`) is documented rather
-than papered over. The hysteresis risk stays open as a runtime watch item, not a blocker.  
-**Accepted:** SCR-2R5 `SeekShelterGoal` interior cells for coward profile during raid waves.  
+than papered over. The hysteresis risk stays open as a runtime watch item, not a blocker.
+**Accepted:** SCR-2R5 `SeekShelterGoal` interior cells for coward profile during raid waves.
 **Rejected:** New standalone `HideInHouseGoal`.
 
 ### D-VR-012: Ally chest gate on `RaidContainersGoal` predicate
 
-**Status:** `LOCKED` (`Agent_Cursor` proposed; **independent peer review `Agent_Claude` 2026-08-14**)  
+**Status:** `LOCKED` (`Agent_Cursor` proposed; **independent peer review `Agent_Claude` 2026-08-14**)
 **Review:** a profile-gated predicate rather than a global goal strip is the right width, and it matches the
 shipped `FriendlyGreetShelterHoldMixin` precedent. **GVC-5 applies**: the gate must be evaluated
 continuously, not once on village entry — SPM mobs pick up and re-evaluate constantly, so a one-shot
-check is a filter, not a guard.  
-**Accepted:** `VILLAGE_ALLY` + `StorageOwnership` minimum predicate before V3 ally play.  
+check is a filter, not a guard.
+**Accepted:** `VILLAGE_ALLY` + `StorageOwnership` minimum predicate before V3 ally play.
 **Rejected:** Disabling SPM loot goal globally; silent mixin strip without profile.
 
 ### D-VR-013: Mojmap bell API name (`CONFIRMED`)
 
-**Status:** `LOCKED` (`Agent_Cursor`, mapping verify 2026-08-14)  
-**Accepted:** Implementation references `BellBlock.attemptToRing(Entity, Level, BlockPos, Direction)`.  
+**Status:** `LOCKED` (`Agent_Cursor`, mapping verify 2026-08-14)
+**Accepted:** Implementation references `BellBlock.attemptToRing(Entity, Level, BlockPos, Direction)`.
 **Rejected:** `BellBlock.ring` alias in production code without comment mapping to Mojmap.
 
 ### D-VR-014: Mojmap hero registration API (`CONFIRMED`)
 
-**Status:** `LOCKED` (`Agent_Cursor`, mapping verify 2026-08-14)  
-**Accepted:** Hero credit bridge calls `Raid.addHeroOfTheVillage(Entity)`.  
-**Rejected:** Assuming hero registration implies full Hero-of-the-Village effect parity without V6 runtime proof.  
+**Status:** `LOCKED` (`Agent_Cursor`, mapping verify 2026-08-14)
+**Accepted:** Hero credit bridge calls `Raid.addHeroOfTheVillage(Entity)`.
+**Rejected:** Assuming hero registration implies full Hero-of-the-Village effect parity without V6 runtime proof.
 **Evidence upgraded** (`Agent_Claude` 2026-08-14, `CODE_CONFIRMED`): registration is a bare
 `heroesOfTheVillage.add(entity.getUUID())`, and the victory loop resolves it with
 `ServerLevel.getEntity(uuid)` + `instanceof LivingEntity` — so the **effect** genuinely applies to a
@@ -2566,33 +2856,33 @@ Implementation shape is now D-VR-020.
 
 ### D-VR-015: Trade demand via `WorkDemandPolicy` facade (`PROPOSED`)
 
-**Status:** `PROPOSED` (`Agent_Cursor`)  
-**Accepted:** V2 trade evaluation extends existing `WorkDemandPolicy.MaterialDemand` + `consumerKey` vocabulary; optional `TradeDemandFacade` wrapper.  
+**Status:** `PROPOSED` (`Agent_Cursor`)
+**Accepted:** V2 trade evaluation extends existing `WorkDemandPolicy.MaterialDemand` + `consumerKey` vocabulary; optional `TradeDemandFacade` wrapper.
 **Rejected:** Blocking V2 on renaming to `MaterialDemandPolicy`; parallel emerald goals without director arbitration.
 
 ### D-VR-016: Shelter threat policy is gen-1 raid combat override (`PROPOSED`)
 
-**Status:** `PROPOSED` (`Agent_Cursor`)  
-**Accepted:** `ShelterThreatPolicy.NEARBY_HOSTILE` (Raider as `Enemy`) ejects coward EVACUATE — no parallel raid threat system gen-1.  
+**Status:** `PROPOSED` (`Agent_Cursor`)
+**Accepted:** `ShelterThreatPolicy.NEARBY_HOSTILE` (Raider as `Enemy`) ejects coward EVACUATE — no parallel raid threat system gen-1.
 **Rejected:** Disabling shelter override during raids globally (would trap mobs in beds while pillagers kill villagers).
 
 ### D-VR-017: `VillageScenarioProfile` gates ally behaviour (`PROPOSED`)
 
-**Status:** `PROPOSED` (`Agent_Cursor`)  
-**Accepted:** `VILLAGE_ALLY` profile is minimum predicate for VR-20 chest suppression, trade fairness, and raid DEFEND priority.  
+**Status:** `PROPOSED` (`Agent_Cursor`)
+**Accepted:** `VILLAGE_ALLY` profile is minimum predicate for VR-20 chest suppression, trade fairness, and raid DEFEND priority.
 **Rejected:** Per-mob hardcoded village UUID allowlists without profile enum.
 
 ### D-VR-018: Day/night director arbitration (`PROPOSED`)
 
-**Status:** `PROPOSED` (`Agent_Cursor`)  
-**Accepted:** `VillageInteractionDirector` owns a read-only `VillageDayNightContext` and gen-1 priority matrix; home-village active raid preempts new night-shelter adoption; trade defers when villagers unavailable at night; reuse `SeekShelterGoal` dusk constants and `ShelterInterruptionPolicy` — no parallel night director.  
+**Status:** `PROPOSED` (`Agent_Cursor`)
+**Accepted:** `VillageInteractionDirector` owns a read-only `VillageDayNightContext` and gen-1 priority matrix; home-village active raid preempts new night-shelter adoption; trade defers when villagers unavailable at night; reuse `SeekShelterGoal` dusk constants and `ShelterInterruptionPolicy` — no parallel night director.
 **Rejected:** Duplicate `SeekShelterGoal` scheduling inside village package; global reclassification of all night combat as village raid.
 
 ---
 
 ### D-VR-019: One canonical settlement coordinate system (`Agent_Claude`)
 
-**Status:** `LOCKED` (`Agent_Claude` proposed; **User accepted and strengthened, 2026-08-14**)  
+**Status:** `LOCKED` (`Agent_Claude` proposed; **User accepted and strengthened, 2026-08-14**)
 **Implemented:** V1 — `village/` package, 28 tests, 4 negative controls.
 
 **Accepted (four-part contract, as strengthened by the User):**
@@ -2632,12 +2922,12 @@ one-block error:
 
 The single sentence "derive from the POI centroid" would have passed review and shipped three of
 these four. **Reproduce, do not resemble** is now the written contract, and each property has a
-regression test that computes the wrong answer alongside the right one.  
-**Anchor is `VillageAnchorPolicy.anchorOf`.**  
+regression test that computes the wrong answer alongside the right one.
+**Anchor is `VillageAnchorPolicy.anchorOf`.**
 **Why:** correctness first, elegance second. Agreement with the raid centre is what makes D-VR-010 fire at
-all; tag-extensibility (SPM-0 level 3–4) is the bonus.  
+all; tag-extensibility (SPM-0 level 3–4) is the bonus.
 **Rejected:** hand-rolled bed/villager cluster heuristics (enumerate what a tag expresses, and drift from
-the raid centre); the full vanilla POI *graph*; `/locate`.  
+the raid centre); the full vanilla POI *graph*; `/locate`.
 **Hard constraint — a construction invariant, not a test (User, 2026-08-14):**
 
 ```text
@@ -2654,18 +2944,18 @@ reference (asserted across the whole package), the raw record stream never escap
 every record passes `withinPerception` before an `Observation` exists. The check is
 `ServerLevel#hasChunk` on section coordinates — it resolves against the loaded chunk map and
 cannot trigger a load or generation, so asking the question cannot manufacture its own answer
-(same rule as D-GAO-057).  
-**Merge radius:** two anchors within `9216` (96²) are one settlement — the same radius
-`ServerLevel#getRaidAt` passes to `getNearbyRaid`, and the same one `getOrCreateRaid` uses to reuse
-an existing raid instead of creating a second. **Accepted cost:** two genuinely distinct villages
-90 blocks apart merge into one `KnownVillage`. That is a real fidelity loss and it is the correct
-one — vanilla will also run a single raid across both. Adopting any other radius would reintroduce
-the disagreement this decision removes, merely at a different scale.  
+(same rule as D-GAO-057).
+**Identity ownership superseded by D-VR-022:** D-VR-019 owns village POI membership, the loaded
+perception boundary and the canonical raid-compatible anchor derivation. It does **not** own cognitive
+settlement merging. `VillageIdentityPolicy` uses the separately locked 48-block working radius;
+`RaidAssociationPolicy` alone uses vanilla's `9216` (96²) radius and may associate one raid with
+multiple remembered villages. Do not restore a 96-block `KnownVillage` merge in the name of raid
+compatibility.
 **Evidence:** `Raids#createOrExtendRaid` offsets 44–171; `Raids#getOrCreateRaid`;
-`ServerLevel#getRaidAt` (offset 5, `sipush 9216`); `village.json` POI tag. All from the pinned jar.  
-**Would change my mind:** a measured `PoiManager` query cost exceeding the block scan it replaces at
-50+ mobs, or runtime evidence that the 96-block merge collapses settlements players consider
-distinct often enough to matter.
+`ServerLevel#getRaidAt` (offset 5, `sipush 9216`); `village.json` POI tag. All from the pinned jar.
+**Would change the perception design:** a measured `PoiManager` query cost exceeding alternatives at
+50+ mobs. **Would change cognitive identity:** runtime duplicate-village evidence belongs to
+D-VR-022 and its POI-overlap upgrade path, not this decision.
 
 ### D-VR-022: Village identity is ours; raid association is vanilla's (`Agent_Claude` + User)
 
@@ -2737,7 +3027,7 @@ that shrank or was rebuilt in place, silently breaking D-VR-019's agreement guar
 
 ### D-VR-025: Village factual utility vs Opinion preference (`User` + `Agent_Cursor`)
 
-**Status:** `LOCKED` (User, 2026-08-14)  
+**Status:** `LOCKED` (User, 2026-08-14)
 **Accepted:**
 
 1. `VillageInteractionDirector` scores **legality and need fit** (`FactualVillageUtility`).
@@ -2752,7 +3042,7 @@ source when `MaterialDemand` is blocking; requiring current perception for remem
 
 ### D-VR-026: Place opinion at current anchor geography; SETTLEMENT deferred (`User` + `Agent_Cursor`)
 
-**Status:** `HELD` (User amendment, 2026-08-14) — frozen chunk key rejected; geographic Place retained  
+**Status:** `HELD` (User amendment, 2026-08-14) — frozen chunk key rejected; geographic Place retained
 **Accepted:**
 
 1. Place learning and ranking use **current** `KnownVillage.anchor()` chunk — geographic fidelity
@@ -2769,73 +3059,129 @@ SETTLEMENT gen-1 without evidence; Place-entry migration on anchor supersede (de
 
 ### D-VR-020: Hero credit by widening one type check (`Agent_Claude`)
 
-**Status:** `PROPOSED` (`Agent_Claude`, 2026-08-14) — narrows D-VR-014's implementation, does not reopen it  
+**Status:** `PROPOSED` (`Agent_Claude`, 2026-08-14) — narrows D-VR-014's implementation, does not reopen it
 **Accepted:** VR-11 ships as a single mixin on `Raider#die` widening
 `killer.getType() == EntityType.PLAYER` to admit `PlayerMobEntity`. Vanilla's `Raid#tick` then awards
 `HERO_OF_THE_VILLAGE` to any `LivingEntity`, with vanilla duration, amplifier, spectator check and
-persistence.  
-**Rejected:** reimplementing the reward loop; injecting into `Raid#tick`; awarding the effect ourselves.  
+persistence.
+**Rejected:** reimplementing the reward loop; injecting into `Raid#tick`; awarding the effect ourselves.
 **Dependency:** the discount half is player-typed (`updateSpecialPrices(Player)`), so the benefit is only
 realised through `VillagerTradeAdapter` (D-VR-005). If D-VR-005 is ever replaced by a GUI-driven design,
-this decision loses most of its value and must be revisited.  
+this decision loses most of its value and must be revisited.
 **Evidence:** `Raider#die` offsets 39–58; `Raid#tick` offsets 617–742; `Raid#addHeroOfTheVillage` 0–14.
 
 ### D-VR-021: Reputation is native; expose, do not bridge (`Agent_Claude`)
 
-**Status:** `PROPOSED` (`Agent_Claude`, 2026-08-14) — supersedes VR-4's “REQUIRES API” framing  
+**Status:** `PROPOSED` (`Agent_Claude`, 2026-08-14) — supersedes VR-4's “REQUIRES API” framing
 **Accepted:** the gossip **write** path already accepts any `Entity` and is running today with no addon
-code. V3/V4 needs only an accessor onto `Villager.gossips` to **read** the mob's own reputation.  
+code. V3/V4 needs only an accessor onto `Villager.gossips` to **read** the mob's own reputation.
 **Rejected:** a reputation bridge, a UUID-mapping shim, or a parallel Scavenger-side reputation ledger
-(SPM-2 duplication).  
+(SPM-2 duplication).
 **Consequence to accept honestly:** B-VR-13 already happens — a PlayerMob that AOEs a villager is
 accruing `MINOR_NEGATIVE 25` right now. The RFC previously listed this as a design risk to build; it is a
-live behaviour to measure.  
+live behaviour to measure.
 **Unverified:** whether any vanilla *consumer* of that reputation is non-player-typed. Until that probe
-runs, the feature must not be described as “villagers remember you”.  
+runs, the feature must not be described as “villagers remember you”.
 **Evidence:** `Villager#onReputationEventFrom` offsets 0–116; `setLastHurtByMob` offsets 21–50
 (the sole `instanceof Player` is a cosmetic particle broadcast); `tellWitnessesThatIWasMurdered` ungated.
 
 ### D-VR-027: Ominous Bottle pickup is HIGH priority inventory knowledge (`User`)
 
-**Status:** `PROPOSED` (`User`, 2026-08-14)  
-**Accepted:** `OminousBottlePolicy` + `InventoryKnowledge` retention; extend pickup rank before consumption policy.  
-**Rejected:** Auto-drink on pickup; treating bottles as undifferentiated junk loot.
+**Status:** `LOCK RECOMMENDED` (peer-review amendment, 2026-08-14)
+**Accepted:** classify Ominous Bottles as strategic pickup opportunities, then apply a separate,
+bounded retention/replacement budget using amplifier, active demand and backpack pressure.
+**Rejected:** Auto-drink on pickup; treating bottles as undifferentiated junk; interpreting HIGH
+pickup value as permission to keep every amplifier stack indefinitely.
+**Evidence:** official 1.21 notes specify five variations and stack size 64; component-distinct stacks
+can consume multiple slots, material in an eight-slot backpack.
 
-### D-VR-028: Ominous Bottle consumption is profile- and site-gated (`User`)
+### D-VR-028: Ominous Event policy owns consumption; Village contributes RAID intent (`User` + `Agent_Codex`)
 
-**Status:** `PROPOSED` (`User`, 2026-08-14)  
-**Accepted:** `OminousBottleConsumptionPolicy` separate from pickup; `RAID_HUNTER` drinks only outside ally/home envelope unless product overrides.  
-**Rejected:** Ally mob autonomously drinking in `HOME_VILLAGE` gen-1.
+**Status:** `REDESIGNED / SOURCE AUDIT COMPLETE`; bridge design remains `OPEN`
+**Accepted:** cross-domain `OminousEventPolicy`; Village/Raid emits a target-bound RAID intent with a
+600-tick Raid-Omen commit/abort policy. Bottle finishing uses vanilla LivingEntity behavior.
+**Rejected:** Village globally owning bottle use; ally auto-drink in `HOME_VILLAGE`; captain kill
+directly applying Bad Omen; blanket “bottle requires mixin” classification.
+**Evidence:** pinned 1.21.1 method bodies: `OminousBottleItem#finishUsingItem` applies Bad Omen to any
+`LivingEntity`; `BadOmenMobEffect` and `RaidOmenMobEffect` both gate their meaningful paths on
+`ServerPlayer`. SPM `CommandedUse` does not prove targetless self-drink.
 
 ### D-VR-029: Two-step trade chains are first-class planner tickets (`User`)
 
-**Status:** `PROPOSED` (`User`, 2026-08-14)  
-**Accepted:** `TradeChainTicket` + sell-phase then buy-phase via `RequirementResolver` / `WorkDemandPolicy` consumer keys.  
-**Rejected:** Hardcoded single-hop trades only; selling last food without starvation guard.
+**Status:** `CONCEPT LOCK RECOMMENDED`; exact class remains `PROPOSED`
+**Accepted:** an external demand owns a bounded, expiring, revalidated SELL → BUY acquisition plan
+with protected inputs and consumer identity. Reuse a generic `AcquisitionPlan` if it satisfies the
+contract; `TradeChainTicket` is not mandated.
+**Rejected:** Hardcoded single-hop trades only; selling last food; stale step execution; autonomous
+arbitrage without an external demand.
 
 ### D-VR-030: Manual iron golem construction is distinct from village golem spawn (`User`)
 
-**Status:** `PROPOSED` (`User`, 2026-08-14)  
-**Accepted:** Player-parity **block pattern + pumpkin** construction goal; reuse placement + golem relationship topics.  
-**Rejected:** Equating with VR-15 village-driven summon; griefing pumpkins on foreign builds.
+**Status:** `CONCEPT LOCK RECOMMENDED` after source audit
+**Accepted:** `VillageDefensePolicy` chooses repair-existing vs build-new; structured executor places
+the body then pumpkin last through normal block placement and verifies spawn. Mandatory raid defense
+and discretionary surplus improvement may share the executor but not authority policy.
+**Rejected:** Equating with VR-15; raw entity spawn/custom creator relationship; griefing foreign
+builds; building another golem when repair offers comparable defense.
+**Evidence:** pinned `CarvedPumpkinBlock#trySpawnGolem` unconditionally calls
+`IronGolem#setPlayerCreated(true)` after matching the iron pattern, independent of placement actor.
 
 ### D-VR-031: Hero gift collection is post-raid reward behaviour (`User`)
 
-**Status:** `PROPOSED` (`User`, 2026-08-14)  
-**Accepted:** Stand/collect gifts after hero credit; narrow mixin if `GiveGiftToHero` is player-typed.  
-**Rejected:** New gift economy; looting villager inventories instead of thrown gifts.
+**Status:** `LOCK RECOMMENDED` after owner-boundary amendment and source audit
+**Accepted:** narrowly bridge `GiveGiftToHero` recipient discovery/lifecycle so an eligible PlayerMob
+can receive vanilla gifts; reuse SPM `CollectFloorItemsGoal`; optional bounded AFTERMATH presence.
+**Rejected:** `HeroGiftCollectionGoal`, new gift economy, duplicate pickup logic, looting villager
+inventories.
+**Evidence:** `GiveGiftToHero#getNearestTargetableHero` and lifecycle are Player-typed, while
+`throwGift(Villager, LivingEntity)` is general after selection.
 
 ### D-VR-032: Village founding is distinct from village discovery (`User`)
 
-**Status:** `PROPOSED` (`User`, 2026-08-14)  
-**Accepted:** `KnownVillage` origin tag `FOUNDED` via `VillageFoundingProject`; POI agreement with D-VR-019 predicate.  
-**Rejected:** Single-bed wilderness camp as `HOME_VILLAGE` without village POI recognition.
+**Status:** `HELD / REDESIGN`
+**Accepted:** a future `VillageFoundingProject` changes world truth, then the ordinary D-VR-019
+perception path alone may create/update `KnownVillage`. Founder history, if useful, is observer-relative
+and belongs in a separate relationship/history model.
+**Rejected:** `KnownVillage.origin = FOUNDED`; project-side memory insertion; single-bed wilderness
+camp becoming `HOME_VILLAGE`; treating one mob's founding history as settlement identity for all.
+
+### D-VR-033: Bounded individual village-perception scheduling (`Agent_Codex` + User review)
+
+**Status:** `LOCKED` — B2 per-level bounded UUID lanes selected under one server-global
+budget; individual knowledge boundary unchanged; implementation not authorized
+
+**Accepted so far:** cheap per-mob eligibility marks observation pending on chunk transition,
+staleness/heartbeat or partial evidence; a strict server-tick owner bounds POI queries; each granted
+query records only that mob's observation. No scheduler/cache may broadcast facts. Empty results do
+not allocate/erase memory; disabling the addon prevents new perception while preserving memory.
+
+**Provisional values:** heartbeat 200 ticks, retry/debounce floor 20 ticks, maximum one POI query per
+server tick. These values are safety/timing proposals, not proven performance optima; VR-T1b must
+report query counts and cost at 1/10/50/100 ticking PlayerMobs.
+
+**Rejected:** radius-64 query every tick; attaching it to `ExplorationActivityGoal`; sharing cached
+facts between mobs. A per-level UUID **scheduler** is not a shared result cache and remains viable B2.
+
+**Accepted:** B2 explicitly owns deduplicated `(dimension, mob UUID)` pending entries, services level
+lanes round-robin under one server-global cap, never retains entity references, and writes results
+only to the observed mob. Cheap per-mob eligibility retains its own pending marker on queue saturation.
+
+**Required gates:** hard bound; at most one entry/key; service/death/unload/dimension/stop eviction;
+cross-level fairness; eventual service; disabled-addon no enqueue/query/write; no MOVE/LOOK or readout
+effect. Reopen C result deduplication only if profiling shows spatial redundancy dominates after B2.
+
+**Consensus:** accepted by the User's peer review and `Agent_Codex` reconciliation. B1 remains the
+documented simpler alternative, but its strongest advantage disappears once it adds enough state to
+prove fairness. No high-severity objection remains to B2 provided RET-1 and the listed falsifiers are
+implementation gates. Provisional 200/20/1 tuning is not performance-confirmed by this lock.
 
 
 ## Contribution
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| User + Agent_Codex | 2026-08-14 | **Peer review of D-VR-027…033 + pinned-source reconciliation.** Split bottle pickup value from retention; redesigned consumption under cross-domain Ominous Event intent; source-confirmed LivingEntity bottle finish but ServerPlayer-gated Bad/Raid Omen effects; made trade abstraction flexible; source-confirmed vanilla golem creator flag; narrowed Hero gifts to recipient bridge + host pickup; rejected `KnownVillage.origin`; superseded pre-1.21 captain-effect and D-VR-019 96-block identity text; added SettlementTier decomposition gate. D-VR-033 selects bounded per-level UUID lanes under one server-global budget; no shared cache. **No implementation authorization.** |
+| Agent_Codex | 2026-08-14 | **V1 perception-driver brainstorm.** Confirmed the implemented perception and memory APIs have no production caller (three negative probes). Compared existing-observer, per-mob-budgeted, and central-cache designs; proposed D-VR-033 / V1-D: individual flagless observer, chunk-dirty + heartbeat cadence, strict server-tick POI-query budget, no shared knowledge. Added B-VR-50…54, VR-M1…M7 and 1/10/50/100-mob falsifiers. **No implementation authorization.** |
 | User | 2026-08-14 | **Lock D-VR-025.** Hold D-VR-026: reject frozen `placeOpinionChunkKey` (settlement-ID in Place store); keep Place learning/ranking at **current** anchor geography; settlement-persistent pref across anchor moves → SETTLEMENT evidence. B-VR-42 **REJECTED**. **No implementation authorization.** |
 | User + Agent_Cursor | 2026-08-14 | **Six user-requested topics:** Ominous Bottle pickup (`OminousBottlePolicy`, HIGH), consumption policy, two-step sell→buy trade chains, manual iron golem construction, Hero gift collection, village founding vs discovery. VR-27…32; B-VR-44…49; D-VR-027…032; phased plan V2/V5/V6/V7 hooks. Fixed missing `VillagerTradeAdapter` topic header. **No implementation authorization.** |
 | Agent_Claude + User | 2026-08-14 | **V1-R3 — permanent removal now sweeps every dimension (P0).** Memory is per-dimension, a mob is not, and nothing reconciled them: a mob that learned villages in the Overworld and died in the Nether had `forget()` run against the *Nether* store, leaving the Overworld entry immortal. Since villages are an Overworld feature and PlayerMobs die in the Nether, this was the **common** path — and it would have made V1-R2's `MAX_TRACKED_MOBS` warning fire for an ordinary cause, destroying its signal value. UUID survival across `CHANGED_DIMENSION` confirmed from the pinned jar (`restoreFrom` copies all NBT but `"Dimension"`; `saveWithoutId` writes `"UUID"`) — which is why the dimension change must preserve memory *and* why the delete must be global. Added `forgetEverywhere(server, uuid)` using the **non-creating** `DimensionDataStorage#get`, so cleanup cannot materialise memory files for dimensions that never had one; single-dimension `forget` banned from production by a structural test. **864 tests, 0 failures; 2 new negative controls fire.** Third repair in one family: eviction written against the wrong event (R1), the wrong clock (R2), the wrong scope (R3) — RET-1 asks who evicts and when, never over what **extent**. |
@@ -2939,6 +3285,97 @@ D-VR-009 → `CONTESTED`; **D-VR-010, D-VR-011, D-VR-012 → `LOCKED`**; deferre
 D-VR-019 needs one product acceptance (it contests a peer's decision, so I will not self-lock it),
 and V1's scope is now: `VillagePerception` (bounded POI query) → `KnownVillage` with a raid-agreeing
 anchor → settlement tiers → home anchor NBT. No trade, no raid, no bell.
+
+---
+
+## Contribution — User + Agent_Codex (D-VR-027…033 peer review, 2026-08-14)
+
+**Agent:** `User` (review/design) + `Agent_Codex` (source audit/RFC integration)
+**Contribution type:** `REVIEW` / `RESEARCH` / `DESIGN` — no implementation
+
+**Frontier before:** D-VR-027…032 were broad proposals, D-VR-033 preferred a per-mob permit owner,
+Scenario D still described the pre-1.21 captain-kill effect, and D-VR-019 still claimed the raid
+association radius was settlement identity.
+
+**Evidence audited:** official Java 1.21 notes (five Ominous Bottle variants, stack 64, captain drop,
+Bad Omen as cross-event entry, 600-tick Raid Omen and milk abort); pinned 1.21.1 method bodies for
+`OminousBottleItem`, `BadOmenMobEffect`, `RaidOmenMobEffect`, `CarvedPumpkinBlock` and
+`GiveGiftToHero`; SPM `CommandedUse`, `EatFoodGoal` and `CollectFloorItemsGoal`.
+
+**Agreement:** strategic bottle pickup, demand-owned multi-step trading, manual golem construction
+and Hero gift parity are valuable. **Amendments:** retention is separate from pickup; exact trade
+ticket is not locked; repair precedes build when comparable; Hero gifts reuse host floor pickup;
+founding changes world truth and never mints memory directly. **Correction:** bottle finish itself is
+LivingEntity-compatible, while the actual raid conversion/creation effects are ServerPlayer-gated.
+
+**Scheduler resolution:** D-VR-033's knowledge boundary and hard budget are sound. B1's per-mob
+permit contention needs remembered ordering to prove fairness, which recreates a queue implicitly;
+B2 therefore wins as explicit bounded per-level UUID lanes under one server-global budget. It is not
+the rejected shared cache because it schedules an individual observation without sharing its result.
+
+**Strongest objection:** cross-domain Ominous Event ownership could become an abstraction with only
+one consumer if Trial progression never exists; keep the boundary small and data-bearing rather than
+building a generic event framework prematurely. For B2, stale UUID retention/cleanup is the principal
+failure; for B1, starvation is the principal failure.
+
+**Acceptance:** must preserve the 1.21 bottle lifecycle, individual village knowledge, ordinary V1
+perception authority, host item pickup, and vanilla golem spawn semantics. Must not restore captain
+kill → Bad Omen, broadcast observations, invent founded memory, or let a high pickup rank fill every
+inventory slot.
+
+**Frontier after:** request V1-D implementation authority under the locked-recommended B2 contract.
+D-VR-027/029/030/031 are lock candidates; D-VR-028 bridge design and D-VR-032 remain open/held.
+Runtime remains separately unauthorized.
+
+---
+
+## Contribution — Agent_Codex (brainstorm continuation 4, 2026-08-14)
+
+**Agent:** `Agent_Codex`
+**Contribution type:** `BRAINSTORM_IN_RFC` / `RESEARCH` / `DESIGN` / `MAIBS` — no implementation
+
+**Frontier before:** V1's pure perception, identity and persistence substrate was static-tested and
+hardened through R3, but no production code called `VillagePerception.observe` or
+`VillageMemorySavedData.record`. The RFC named cadence and 1/10/50/100-mob cost as next, without an
+owner or pass/fail design.
+
+**Evidence:** three production probes found no observer call, no memory-record call and no installed
+village driver. `VillagePerception` confirms each observation is one radius-64 POI query;
+`ExplorationActivityGoal` confirms a reusable flagless/staggered pattern but also owns unrelated
+ten-tick control-plane work; `PhasedScanClock` confirms late GoalSelector polls can be scheduled
+without losing a modulo slot. Evidence state is `CODE_CONFIRMED`; runtime cost remains `UNVERIFIED`.
+
+**Design review:**
+
+- **Option A:** attach the query to `ExplorationActivityGoal`. Lowest code count, but wrong coupling:
+  village cost and mining/Opinion cadence would share a knob.
+- **Option B (recommended):** single-purpose per-mob flagless driver plus a server-tick budget gate.
+  Preserves individual perception and provides a hard burst ceiling without caching facts.
+- **Option C:** central scheduler/cache. Best potential query deduplication, but adds RET-1 state and
+  risks turning one mob's perception into shared omniscience before profiling proves it necessary.
+
+**Predicted observable behaviour:** no movement, readout or scheduler change; a mob records a village
+after physically entering it and waiting for a bounded permit. The likely weird cases are a compact
+village crossed between scans, a boundary observation whose anchor changes as chunks become
+available, a 100-mob pending backlog, and a denied entity starving. Chunk-transition dirtying,
+heartbeat refresh, a hard permit cap and fairness tests address those at the contract level.
+
+**Strongest objection:** proposed 200/20/1 values are not measured optima. The hard cap is a safety
+bound, not proof of acceptable TPS. Peer review should challenge them; runtime VR-T1b must measure
+query frequency/cost and discovery latency before performance is called confirmed.
+
+**What would disprove the recommendation:** Option B should be reopened if bounded runtime profiling
+shows spatially redundant POI queries dominate at 50/100 mobs, or if GoalSelector scheduling cannot
+provide eventual service under collisions without a queue. That evidence would justify C, provided
+individual observation remains the knowledge boundary.
+
+**Delivered at that contribution stage (historical; superseded by the next peer review):** stable
+`V1 perception driver and observation budget` topic; B-VR-50…54; D-VR-033 initially `PROPOSED`;
+V1-D plan row; MAIBS VR-M1…M7; updated deferred/frontier state.
+
+**Frontier after at that stage:** independent peer review of D-VR-033. That review now appears above
+and locks B2; the current frontier is V1-D implementation authorization. Runtime VR-T1/VR-T1b remains
+a separate launch approval.
 
 ---
 
