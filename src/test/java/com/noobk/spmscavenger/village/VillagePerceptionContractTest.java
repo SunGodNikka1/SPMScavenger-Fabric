@@ -195,6 +195,32 @@ class VillagePerceptionContractTest {
                 "observer must not touch POI storage");
     }
 
+    /** VR-T1 debug command must be read-only — no perception or memory allocation. */
+    @Test
+    void mustNotHappen_vrT1DebugCommandContaminatesPerception() throws IOException {
+        String command = code(source(Path.of("command/VillageMemoryDebugCommand.java")));
+        assertTrue(command.contains("peekMobMemory"),
+                "debug command must read through non-creating peek");
+        for (String forbidden : List.of(
+                "VillagePerception.observe",
+                "VillagePerceptionScheduler",
+                "observeAndRecord",
+                "memoryOf(",
+                "computeIfAbsent",
+                "getChunk(",
+                "getChunkAt(",
+                "forceLoad",
+                "setChunkForced")) {
+            assertFalse(command.contains(forbidden),
+                    "VR-T1 debug command must not call: " + forbidden);
+        }
+        String savedData = code(source(Path.of("village/VillageMemorySavedData.java")));
+        assertTrue(savedData.contains("peekMobMemory"),
+                "peekMobMemory must exist for non-creating VR-T1 reads");
+        assertTrue(savedData.contains("peekIn(level)"),
+                "peekMobMemory must use non-creating saved-data access");
+    }
+
     /**
      * Gate RET-1a: eviction must exist in production, not only as an API.
      *

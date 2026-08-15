@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.goal;
 
 import com.noobk.spmscavenger.FurnaceJobSavedData;
+import com.noobk.spmscavenger.FurnaceCapability;
 import com.noobk.spmscavenger.FurnacePolicy;
 import com.noobk.spmscavenger.FurnaceStations;
 import com.noobk.spmscavenger.FurnaceTransfers;
@@ -230,6 +231,19 @@ public class SmeltAtFurnaceGoal extends Goal {
             return;
         }
 
+        // FS-R1: last gate before the input leaves the backpack. `instanceof
+        // AbstractFurnaceBlockEntity` above is the common supertype of furnace, blast furnace and
+        // smoker, so on its own it admits exactly the machines that cannot run this job - which is
+        // how an oak log ended up sitting in a blast furnace forever. Once the input is inserted the
+        // mistake is no longer ours to undo cheaply, so it is checked here rather than trusted from
+        // selection time.
+        if (!FurnaceCapability.canCook(furnace, server, plan.input())) {
+            data.closeTicket(furnacePos);
+            cachedFurnace = null;
+            stop();
+            return;
+        }
+
         if (++ticks < CRAFT_TICKS) {
             return;
         }
@@ -434,6 +448,18 @@ public class SmeltAtFurnaceGoal extends Goal {
     }
 
     /**
+     * FS-R1 — the input this job intends to insert, so station search can ask each candidate whether
+     * it can actually cook it.
+     *
+     * <p>Empty before a plan exists: with no input there is no capability question to ask, and the
+     * search falls back to "any cooking station", which is the correct answer for "is one nearby at
+     * all".
+     */
+    private ItemStack plannedInput() {
+        return plan == null ? ItemStack.EMPTY : plan.input();
+    }
+
+    /**
      * PERF-1 — phased world search with explicit deferred vs absent-recent semantics.
      */
     private FurnaceLookup.Resolution locateFurnace(
@@ -445,9 +471,9 @@ public class SmeltAtFurnaceGoal extends Goal {
                 cachedFurnace,
                 requireScanPhase,
                 scanClock,
-                pos -> FurnaceStations.isUsableAt(server, pos, mob.getUUID(), cfg),
+                pos -> FurnaceStations.isUsableAt(server, pos, mob.getUUID(), cfg, plannedInput()),
                 () -> FurnaceStations.findUsable(
-                        server, mob.blockPosition(), mob.getUUID(), cfg),
+                        server, mob.blockPosition(), mob.getUUID(), cfg, plannedInput()),
                 FAILED_SEARCH_COOLDOWN_TICKS);
         cachedFurnace = resolution.cachedFurnace();
         searchFailedUntilTick = resolution.searchFailedUntilTick();

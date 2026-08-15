@@ -39,6 +39,14 @@ public final class FurnaceStations {
     private FurnaceStations() {
     }
 
+    /**
+     * Whether the block is a cooking station <em>at all</em>.
+     *
+     * <p>FS-R1: this is a shape test, not a capability test, and treating it as one is what put an
+     * oak log into a blast furnace. Every caller that is about to commit an <b>input</b> must also
+     * ask {@link FurnaceCapability#canCook}; the two questions are not the same and the wider one
+     * cannot stand in for the narrower.
+     */
     public static boolean isFurnaceState(BlockState state) {
         return state.is(Blocks.FURNACE) || state.is(Blocks.BLAST_FURNACE) || state.is(Blocks.SMOKER);
     }
@@ -81,7 +89,21 @@ public final class FurnaceStations {
     /**
      * Nearest usable furnace in range, honouring ownership + communal opt-in + walk claims.
      */
+    /**
+     * @deprecated FS-R1 — capability-blind. Kept only for callers with no planned input; a caller
+     *     that is about to insert an input must use the {@code plannedInput} overload or it can
+     *     select a station that will never consume it.
+     */
+    @Deprecated
     public static BlockPos findUsable(Level level, BlockPos origin, UUID mob, ScavengerConfig cfg) {
+        return findUsable(level, origin, mob, cfg, ItemStack.EMPTY);
+    }
+
+    /**
+     * @param plannedInput the item the job will insert, or empty to skip the capability check
+     */
+    public static BlockPos findUsable(
+            Level level, BlockPos origin, UUID mob, ScavengerConfig cfg, ItemStack plannedInput) {
         if (!cfg.smeltEnabled) {
             return null;
         }
@@ -104,6 +126,13 @@ public final class FurnaceStations {
                     }
                     BlockEntity be = level.getBlockEntity(pos);
                     if (!(be instanceof AbstractFurnaceBlockEntity furnace)) {
+                        continue;
+                    }
+                    // FS-R1: `instanceof AbstractFurnaceBlockEntity` is the common supertype of
+                    // furnace, blast furnace and smoker, so it passes for exactly the machines that
+                    // cannot run this job. Ask the station itself.
+                    if (!plannedInput.isEmpty()
+                            && !FurnaceCapability.canCook(furnace, level, plannedInput)) {
                         continue;
                     }
                     boolean empty = isContainerEmpty(furnace);
@@ -129,7 +158,14 @@ public final class FurnaceStations {
     /**
      * PERF-1 — revalidates a cached furnace candidate without scanning the world cube.
      */
+    /** @deprecated FS-R1 — capability-blind; see {@link #findUsable(Level, BlockPos, UUID, ScavengerConfig, ItemStack)}. */
+    @Deprecated
     public static boolean isUsableAt(Level level, BlockPos pos, UUID mob, ScavengerConfig cfg) {
+        return isUsableAt(level, pos, mob, cfg, ItemStack.EMPTY);
+    }
+
+    public static boolean isUsableAt(
+            Level level, BlockPos pos, UUID mob, ScavengerConfig cfg, ItemStack plannedInput) {
         if (!cfg.smeltEnabled || pos == null) {
             return false;
         }
@@ -141,6 +177,11 @@ public final class FurnaceStations {
         }
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof AbstractFurnaceBlockEntity furnace)) {
+            return false;
+        }
+        // FS-R1: a cached candidate must still be able to cook the job. A furnace can be replaced by
+        // a blast furnace between selection and arrival.
+        if (!plannedInput.isEmpty() && !FurnaceCapability.canCook(furnace, level, plannedInput)) {
             return false;
         }
         FurnaceJobSavedData data = level instanceof ServerLevel server

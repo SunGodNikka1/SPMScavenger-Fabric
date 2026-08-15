@@ -1597,6 +1597,134 @@ deadlock, but unresolved product choice.
 
 ---
 
+## Topic: Smelting — station capability and fuel expendability (`Agent_Claude` + User)
+
+**Status:** `IMPLEMENTED` (static) — 895 tests, 2 negative controls
+**Origin:** User runtime observation during VR-T1, 2026-08-14. A screenshot, not a log line.
+
+**Neither defect was caused by the village work.** VR-T1 simply put a human in front of a PlayerMob
+long enough to watch what it was doing, and it was doing two wrong things in a subsystem that had
+been shipped and green for weeks. That is worth recording on its own: *watching* found in one session
+what the unit suite had not found at all, because both defects are individually well-formed code that
+does the wrong thing.
+
+---
+
+### FS-R1 — station capability mismatch (`RUNTIME_CONFIRMED`)
+
+Observed: a mob at a **blast furnace** with an **oak log** in the input slot and a fuel item in the
+fuel slot, and nothing happening. Ever.
+
+Three locally reasonable decisions composed into it:
+
+```text
+FurnacePolicy      plans against RecipeType.SMELTING          (log -> charcoal)
+FurnaceStations    isFurnaceState = FURNACE | BLAST_FURNACE | SMOKER
+SmeltAtFurnaceGoal guards with `be instanceof AbstractFurnaceBlockEntity`
+```
+
+Every one of them agrees a blast furnace is a furnace. **None of them asks whether it can cook a
+log** — and it cannot; blasting recipes are ores and metals. The mob inserted its input and its fuel
+into a machine that would never consume either, stranding both and holding the job ticket open.
+
+`AbstractFurnaceBlockEntity` is exactly the wrong granularity for the pre-insert guard: it is the
+common supertype of all three machines, so the `instanceof` was **guaranteed to pass for precisely
+the case that fails**. A guard that cannot fail where it matters is decoration.
+
+**Fix — ask the station, do not classify it.** The obvious repair is a three-way map
+(`FurnaceBlockEntity → SMELTING`, `BlastFurnaceBlockEntity → BLASTING`, `SmokerBlockEntity →
+SMOKING`). That enumerates vanilla's own binding and is wrong for every modded furnace, which would
+then be either refused (capability lost) or accepted and left holding the input — the same defect
+with extra steps.
+
+In 1.21.1 `AbstractFurnaceBlockEntity` has no `recipeType` field; the type is a constructor argument
+captured inside `quickCheck`, a `RecipeManager.CachedCheck` bound to exactly that type. So an
+accessor mixin reading `quickCheck` and asking it for a recipe **is** asking the station what it can
+cook — correct for subclasses and modded recipe types alike, with nothing to enumerate.
+
+| Layer | Change |
+| --- | --- |
+| `FurnaceRecipeCheckAccessor` | accessor only, no injection, registered in the mixin config |
+| `FurnaceCapability.canCook` | fails closed: unavailable accessor or a throwing station → refuse |
+| `FurnaceStations.findUsable` / `isUsableAt` | take the planned input; capability-blind overloads `@Deprecated` |
+| `SmeltAtFurnaceGoal` | revalidates **before** the input leaves the backpack, closes the ticket and drops the cached station on mismatch |
+
+**Fail closed on purpose:** refusing a usable station costs one smelting job; accepting an unusable
+one strands the mob's input and fuel inside a block it must then be told to abandon.
+
+**Deliberate deferral, now explicit rather than accidental:** a blast furnace is still never used
+for iron ore, because `FurnacePolicy` only looks up `SMELTING` recipes. That was already true — it
+just used to fail by stranding items instead of by declining. Planning against the *station's*
+recipe type (so blasting is used when it is faster) is a real capability and is deferred, not lost.
+
+---
+
+### FS-R2 — burnable is not expendable (`RUNTIME_CONFIRMED`)
+
+Observed: a **wooden pickaxe in the fuel slot**, with logs in the backpack.
+
+Nothing was miscalculated. Vanilla marks wooden tools as furnace fuel; `chooseFuel` asked
+`AbstractFurnaceBlockEntity.isFuel`; the ranking is *non-log first, then the smallest burn time that
+suffices*. A wooden pickaxe is a non-log fuel with just enough burn for a 200-tick smelt, so it
+sorted to the front and beat the logs standing next to it.
+
+**The policy was answering the wrong question.** `isFuel` says *will this combust* — a fact about the
+item. *May the mob spend it* is a fact about the mob's situation, and no layer was asking it:
+
+```text
+vanilla says burnable
+        |
+        v
+may I sacrifice this?     <-- did not exist
+        |
+  +-----+------+
+PROTECTED   EXPENDABLE
+```
+
+This is the same shape as an invariant this project has already paid for: **preference does not
+create permission**. Fuel value may *rank* items that are already legally expendable; it must never
+*make* an item expendable by being attractive.
+
+**The predicate is derived, not enumerated.** Protection is `ItemStack.isDamageableItem()`, not a
+list of tool classes — a tool is a thing with durability. That covers every pickaxe, axe, shovel,
+hoe, sword, bow, crossbow, shield, fishing rod, flint-and-steel, elytra and armour piece, **and every
+modded one**, with no list to maintain and nothing to forget. Planks, sticks, logs, boats, crafting
+tables and saplings are not damageable and stay expendable — protecting everything would be its own
+failure.
+
+Beside it, not instead of it: `#spmscavenger:never_fuel`, a `required: false` tag so a datapack can
+protect something durability cannot see. Held main-hand/off-hand stacks are also refused, for a
+different reason that stays separately reportable (`isInUse`). Craft-chain quantity reserves are
+**not** duplicated — they already live in `chooseFuel`'s log reserve (SPM-2).
+
+---
+
+### Verification
+
+895 tests, 0 failures. Two negative controls, each restoring the original defect:
+
+| Control | Fails with |
+| --- | --- |
+| remove the pre-insert capability check | `mustHappen_theInsertPathChecksCapabilityFirst` |
+| remove the expendability gate | `mustHappen_theRankingPicksALogOverThePickaxe` — *"chose 1 minecraft:wooden_pickaxe"* |
+
+The second control reproduces the screenshot exactly, which is the strongest form of this evidence
+available without a runtime session.
+
+**A defect the control found in my own test.** Run in isolation, `FuelExpendabilityTest` threw
+`NoClassDefFoundError`: a `static final ItemStack` field initialises before `@BeforeAll` bootstraps
+Minecraft. It had been passing only because another test class happened to bootstrap first — a
+latent order dependence that the full suite could never surface. Fixed with a method instead of a
+field. **Running a negative control in isolation is a stronger check than running it in the suite**,
+and it is now the habit.
+
+**Still `STATIC_CONFIRMED`.** Whether a blast furnace refuses an oak log needs a live `RecipeManager`;
+the structural tests prove no path commits an input on `instanceof` alone, not that the runtime
+answer is right. A VR-T-class runtime scenario should watch one full charcoal job complete at a plain
+furnace with the pickaxe untouched.
+
+---
+
 ## Topic: Missing AI behaviors
 
 | # | Behavior | Needed for | Feasibility | Integration method |
@@ -1858,6 +1986,7 @@ After NEED/WEALTH split proves useful in runtime.
 ## Contribution
 
 | Agent | Date | Change |
+| Agent_Claude + User | 2026-08-14 | **FS-R1 / FS-R2 — two smelting defects found by watching, not by testing.** User runtime observation (screenshot) during VR-T1. **FS-R1:** `FurnacePolicy` plans `RecipeType.SMELTING`, `FurnaceStations` accepted furnace/blast furnace/smoker interchangeably, and the pre-insert guard was `instanceof AbstractFurnaceBlockEntity` — the common supertype, so it was guaranteed to pass for exactly the machines that fail. A log went into a blast furnace and sat there. Fixed by asking the station itself: an accessor on `quickCheck` (`RecipeManager.CachedCheck`, which captures the station's own recipe type) rather than a three-way class map that would be wrong for every modded furnace; fails closed; revalidated before the input leaves the backpack. **FS-R2:** a wooden pickaxe was chosen as fuel because vanilla marks wooden tools burnable and the ranking prefers the smallest sufficient non-log burn. Added an expendability layer ahead of ranking — **burnable is not expendable**, the same shape as *preference does not create permission* — derived from `isDamageableItem()` rather than a tool list, with a `required:false` tag beside it. **895 tests, 0 failures; 2 negative controls fire**, the second reproducing the screenshot verbatim. Neither defect came from the village work; VR-T1 merely provided the observation. |
 | --- | --- | --- |
 | Agent_Cursor | 2026-08-14 | **Mining intelligence absorbed into united RFC.** Replaced child-RFC cross-link with substantive topics: layered architecture, **MiningDirector + advanced site selection** (decision tree, cave-first strategy), deferred/partial backlog (`MiningMemory`, portfolio, scarcity, greed SPM hook, personalities, project resumption, RT-MI-TS1), D-VP-MI-* decisions. Tier 2–3 status reconciled. Former `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` superseded for planning. **No implementation authorization.** |
 | Agent_Cursor | 2026-08-13 | **GTH-1 proposed (user design).** Captured bounded natural tree harvest architecture: `TreeDetector` claim + `TreeHarvest` progressive execution; shelter-parallel "recognize object once"; refactor `GatherProtection` to claim-time only; remove horizontal≥3 as top-level per-log reject; bounded BFS not unlimited flood fill; code evidence from `continueFelling`/`MAX_FELL_LOGS`/`isHorizontalLogWall`; MAIBS table; D-VP-004; M1b row. **No implementation authorization.** No Java edit, build, runtime launch, commit, push, or PR |

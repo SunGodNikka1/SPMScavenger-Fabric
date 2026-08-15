@@ -140,6 +140,18 @@ public final class FurnacePolicy {
             SmeltDemand demand,
             RecipeLookup recipes,
             FuelLookup fuels) {
+        return plan(backpack, cfg, demand, recipes, fuels, ItemStack.EMPTY, ItemStack.EMPTY);
+    }
+
+    /** FS-R2 — the held-item overload; hands are needed to know what is currently in use. */
+    public static Optional<SmeltPlan> plan(
+            Container backpack,
+            ScavengerConfig cfg,
+            SmeltDemand demand,
+            RecipeLookup recipes,
+            FuelLookup fuels,
+            ItemStack mainHand,
+            ItemStack offHand) {
         if (demand == SmeltDemand.NONE) {
             return Optional.empty();
         }
@@ -157,7 +169,8 @@ public final class FurnacePolicy {
         int batchSize = 1;
         int fuelNeeded = cookingTicks * batchSize;
 
-        Optional<ItemStack> fuelOpt = chooseFuel(backpack, cfg, demand, input, fuelNeeded, fuels);
+        Optional<ItemStack> fuelOpt =
+                chooseFuel(backpack, cfg, demand, input, fuelNeeded, fuels, mainHand, offHand);
         if (fuelOpt.isEmpty()) {
             return Optional.empty();
         }
@@ -195,7 +208,8 @@ public final class FurnacePolicy {
             ScavengerConfig cfg,
             RecipeLookup recipes,
             FuelLookup fuels) {
-        return plan(backpack, cfg, demand(backpack, mainHand, offHand, cfg), recipes, fuels);
+        return plan(backpack, cfg, demand(backpack, mainHand, offHand, cfg), recipes, fuels,
+                mainHand, offHand);
     }
 
     /** Production entry: live {@link RecipeManager} + furnace fuel map. */
@@ -290,6 +304,27 @@ public final class FurnacePolicy {
             ItemStack reservedInput,
             int fuelNeededTicks,
             FuelLookup fuels) {
+        return chooseFuel(backpack, cfg, demand, reservedInput, fuelNeededTicks, fuels,
+                ItemStack.EMPTY, ItemStack.EMPTY);
+    }
+
+    /**
+     * FS-R2 — fuel ranking now runs over <b>expendable</b> candidates only.
+     *
+     * <p>Burn value may order what is already legally spendable; it may never make something
+     * spendable by being attractive. Without this the ranking (non-log first, smallest sufficient
+     * burn) picked a wooden pickaxe over the logs beside it, because vanilla marks wooden tools as
+     * fuel and a pickaxe is a non-log with just enough burn time.
+     */
+    public static Optional<ItemStack> chooseFuel(
+            Container backpack,
+            ScavengerConfig cfg,
+            SmeltDemand demand,
+            ItemStack reservedInput,
+            int fuelNeededTicks,
+            FuelLookup fuels,
+            ItemStack mainHand,
+            ItemStack offHand) {
         int logReserve = logReserveForCraftChain(backpack, cfg);
         // Charcoal job consumes one surplus log as input — that log is not also available as fuel.
         int logsCommittedAsInput = 0;
@@ -306,6 +341,10 @@ public final class FurnacePolicy {
             }
             int burn = fuels.burnTicks(stack);
             if (burn < fuelNeededTicks) {
+                continue;
+            }
+            // FS-R2: burnable is not expendable. This gate precedes every ranking consideration.
+            if (!FuelExpendability.mayBurn(stack, mainHand, offHand)) {
                 continue;
             }
             if (isLog(stack)) {
