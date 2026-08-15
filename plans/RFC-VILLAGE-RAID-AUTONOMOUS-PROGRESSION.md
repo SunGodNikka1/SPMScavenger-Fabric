@@ -10,7 +10,7 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
 | **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (hardened through V1-R3); V2+ design-only; no VR-T* runtime |
-| **Nearest frontier** | **V1-R4 (P0):** fix `withheldPoiCount` epistemic leak before V1-D. **D-VR-033** direction accepted but **implementation BLOCKED** (scheduler contract + queue-admission P1s). D-VR-027/029/030/031 lock candidates; D-VR-028 redesigned/open; D-VR-032 held. |
+| **Nearest frontier** | **V1-R4 design amendment** (`PerceptionCoverage` — not admitted-count supersede); then RFC re-lock; **no implementation yet**. V1-D / D-VR-033 remain **BLOCKED**. |
 | **Last update** | 2026-08-14 (`User` D-VR-033 implementation review: P0 withheld boundary leak; P1 scheduler/queue contracts; D-VR-027…031 status reconciliation) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
@@ -1116,27 +1116,54 @@ cognition: two mobs with identical loaded-chunk views can get different complete
 persists different unloaded POI counts nearby. See **V1-R4** and **Topic: D-VR-033 implementation
 review** — **must fix before V1-D.**
 
-**Intended signal (post-V1-R4):** observation confidence from **admitted POIs only** — how much of
-what the mob could legitimately perceive was seen — independent of settlement size and independent of
-unloaded persisted POI storage.
-
-`ObservationQuality(admitted, withheld)` → `completeness()`, and the acceptance rule becomes:
+**Intended signal (post-V1-R4):** observation confidence from **`PerceptionCoverage`** — what fraction
+of the 64-block search footprint's chunk columns were **loaded and perceivable** at observation time.
+**Not** admitted POI count (that resurrects the V1-R1 quantity-freezing bug) and **not** hidden POI
+counts (epistemic leak). See **V1-R4** — **design amendment required before code.**
 
 ```text
-better view                 -> replace   (strictly more of the settlement was seen)
-equally good view + newer   -> replace   (the settlement itself may have changed)
-worse view                  -> keep      (an edge glance must not degrade a good anchor)
+64-block POI search footprint
+        ↓
+which chunk columns intersect the footprint?
+        ↓
+how many are already loaded (hasChunk)?
+        ↓
+PerceptionCoverage = loadedColumns / totalColumns
 ```
 
-The middle line is the repair: under quantity comparison, *"equally good and newer"* was
-indistinguishable from *"no new information"*. A 3-admitted rim glance still cannot overwrite a
-20-admitted center view however recent; an 18-admitted view beats a 9-admitted one on admitted
-count alone (**withheld must not participate** — V1-R4).
+**Data model (V1-R4):**
 
-**NBT migration:** rows written before V1-R1 carry a bare `poiCount` and load as *complete*
-observations of that size — deliberately optimistic, because treating every pre-upgrade anchor as
-worthless would let the first partial glance after the update overwrite a good anchor, which is the
-defect the rule exists to prevent.
+```text
+Observation
+├── anchor
+├── admittedPoiCount      // settlement detection + diagnostics only
+└── coverage              // PerceptionCoverage
+
+ObservationQuality
+└── coverage              // sole supersede ordering signal
+```
+
+**`supersedes()` (conceptual):**
+
+```text
+new coverage > old coverage  → replace
+new coverage < old coverage  → keep
+equal coverage               → newer observation replaces
+```
+
+**Preserves V1-R1 without the leak:**
+
+| Old | New | Result |
+| --- | --- | --- |
+| coverage 100%, 20 POIs | coverage 100%, 16 POIs (village shrank) | **replace** — equal opportunity, newer evidence |
+| coverage 100%, 10 POIs | coverage 45%, 18 POIs (rim glance) | **keep** — worse legitimate window despite more POIs |
+
+**NBT migration (V1-R4):** pre-R4 rows load observation quality as **optimistic full coverage** — do
+not reinterpret persisted `withheld` from old saves (would preserve the hidden-world signal through
+migration).
+
+**Rejected (V1-R4 draft regression):** `supersedes()` on admitted POI count — `"village got smaller"`
+must not mean `"my observation got worse"`.
 
 ---
 
@@ -2093,10 +2120,11 @@ advance the existing **V1 perception-driver** frontier; they do not add V2/V5 be
 | B-VR-50 | **Individual flagless village observer** | `NEW` | **PROMOTE → V1-D / D-VR-033** | Each PlayerMob records only its own physical observations; no MOVE/LOOK authority and no shared omniscient result cache |
 | B-VR-51 | **Hybrid dirty + heartbeat cadence** | `REFINEMENT` | **PROMOTE → D-VR-033** | Chunk transition prevents a fast crossing from falling between slow scans; heartbeat catches POI claims/changes while stationary |
 | B-VR-52 | **Strict per-server-tick POI-query budget** | `PERFORMANCE_PATTERN` | **PROMOTE → D-VR-033** | Staggering smooths normal load but is not a hard burst bound; a one-query safety budget makes 1/10/50/100-mob cost falsifiable |
-| B-VR-53 | **Partial-observation recheck pressure** | `REFINEMENT` | **BLOCKED on V1-R4** | `withheldPoiCount` must not drive cognition; recheck policy deferred until admitted-only quality ships |
-| B-VR-55 | **`withheldPoiCount` epistemic leak** | User review | **→ V1-R4 P0** | Unloaded persisted POI counts must not alter `supersedes()` |
-| B-VR-56 | **Dirty request ≠ prompt service** | User review | **→ D-VR-033 P1** | Must happen uses bounded service latency, not chunk-entry tick |
-| B-VR-57 | **Queue admission fairness under saturation** | User review | **→ D-VR-033 P1** | Cap ≥ 100 mobs or explicit fair admission; prevent B1 contention at queue door |
+| B-VR-53 | **Partial-observation recheck pressure** | `REFINEMENT` | **DEFER until V1-R4 ships** | `coverage < 100%` → earlier re-observation (legitimate chunk-availability signal) |
+| B-VR-55 | **`withheldPoiCount` epistemic leak** | User review | **→ V1-R4 P0** | Replace with `PerceptionCoverage`; no hidden POI in supersede |
+| B-VR-56 | **Dirty request ≠ prompt service** | User review | **→ D-VR-033 P1** | Conditional Must happen; VR-T1 measures traversal vs latency separately |
+| B-VR-57 | **Queue admission fairness under saturation** | User review | **→ D-VR-033 P1** | Prefer fair admission; consider ticking-mob-bound queue; not `MAX_QUEUE >= 100` alone |
+| B-VR-59 | **Admitted-count supersede regression** | User review | **REJECTED** | V1-R4 draft would freeze anchor on village shrink — use coverage only |
 | B-VR-58 | **POI query cost vs loaded admission** | User review | **→ VR-T1b** | `getInRange` may scan persisted unloaded sections; measure edge cases |
 | B-VR-54 | **Explicit social transfer of village knowledge** | `NEW` | **DEFERRED** | Useful later, but silently copying one mob's observation to companions would violate individual perception; any transfer needs an observable social event |
 
@@ -2502,18 +2530,27 @@ Hidden world truth must not jump the boundary through `withheld`.
 **Not:** "the mob knows where hidden beds are."  
 **But:** "hidden world truth alters the mob's confidence and therefore its memory."
 
-**Required fix (V1-R4):** cognition may use **admitted POIs only**. `withheld` is telemetry at most —
-never persisted in `ObservationQuality` supersede logic. Recommended contract:
+**Required fix (V1-R4):** remove hidden POI information from cognition. Confidence = **`PerceptionCoverage`**
+(loaded chunk columns in the 64-block footprint ÷ total columns in footprint). The mob legitimately
+knows whether surrounding chunks are available to perception; it must not know what hidden POIs those
+chunks contain.
 
 ```text
-supersedes: compare admitted count, then tick (V1-R1 middle rule on admitted equality)
-completeness / isComplete: derived from admitted only, or removed from supersede path
+ObservationQuality.coverage = PerceptionCoverage only
+supersedes: coverage first, then tick on equality
+admittedPoiCount: isSettlement + diagnostics — NOT supersede ordering
+withheld: removed from persisted quality / supersede (telemetry optional)
 ```
 
-**Must-not-happen test:** two observers at the same position with identical loaded views → identical
-supersede-relevant quality regardless of nearby unloaded persisted POI storage.
+**Must-not-happen tests:**
+
+1. Two observers at same position, identical loaded views → identical supersede-relevant quality
+   regardless of nearby unloaded persisted POI storage.
+2. coverage 100%/20 POIs → coverage 100%/16 POIs (village shrank) → **newer replaces** (no freeze).
+3. coverage 100%/10 POIs → coverage 45%/18 POIs → **keep old** (worse window wins over more POIs).
 
 **Why this blocks V1-D:** the driver makes the dormant leak **live** for every ticking PlayerMob.
+**Do not implement V1-R4 until this design is accepted** — admitted-count supersede regresses V1-R1.
 
 ### P1 — chunk-transition dirtying ≠ prompt observation (`CONTRACT`)
 
@@ -2533,8 +2570,20 @@ At one query/server tick, 100 pending UUIDs can need ~100 ticks before a given m
 Chunk dirtying **reduces** traversal misses; it does **not** eliminate them. Prior RFC wording that
 treated dirtying as fixing the architecture defect (not merely tuning) **overpromised**.
 
-**Amendment:** `Must happen` = memory within **bounded service latency**, not same-tick as chunk
-entry. VR-M1 / falsifier (1) must use post-queue-delay semantics.
+**Amendment (scheduler contract):** bounded service latency is **conditional**, not unconditional:
+
+> **If** a PlayerMob remains within a perceivable occupied-village observation region until its
+> pending request is serviced, **then** it **must** record that observation within the scheduler's
+> bounded service latency.
+
+A finite service bound does **not** guarantee the mob stays inside the 64-block radius for the whole
+wait. Fast traversal + backlog can still produce empty observe-at-exit — that is a **cadence/budget
+evidence** problem (VR-T1), not a violation of an impossible architectural guarantee.
+
+**VR-T1 separately measures:** whether normal compact-village traversal duration is long enough
+relative to actual service latency at 1 / 10 / 50 / 100 mobs. If mobs regularly traverse entire
+villages before service, that is evidence the budget/cadence is too conservative — not proof the
+contract is broken.
 
 ### P1 — queue saturation reintroduces unfair **admission** (`CONTRACT`)
 
@@ -2543,12 +2592,17 @@ refused while mobs retain a cheap pending marker and retry later. **Who wins the
 undefined if retries follow GoalSelector poll order — recreating B1's emergent contention at the
 queue entrance.
 
-**Amendment required before lock:** either
+**Amendment required before lock (User, 2026-08-14):**
 
-1. queue capacity ≥ maximum concurrently ticking PlayerMobs in the design target (100), **or**
-2. explicit fair admission (e.g. round-robin retry lanes separate from service lanes)
+- **Prefer explicit fair admission** over `MAX_QUEUE >= 100` as a semantic magic ceiling — 101 mobs
+  brings starvation back unless 100 is declared the **supported concurrency ceiling** for expansion.
+- **Alternative under consideration:** queue size structurally bounded by **currently ticking
+  PlayerMobs** (one pending UUID each); lifecycle cleanup + stale-entry validation provide RET-1
+  discipline; a numerical emergency cap (like `MAX_TRACKED_MOBS`) exists for abnormal cases but is not
+  normal admission behaviour.
 
-Tests must prove **no starvation at admission**, not only eventual service once admitted.
+Tests must prove **no starvation at admission**, not only eventual service once admitted. Do **not**
+re-lock D-VR-033 on `MAX_QUEUE >= 100` alone.
 
 ### Performance note — loaded filter ≠ cheap query (`UNVERIFIED`)
 
@@ -2576,29 +2630,41 @@ Do not equate "no chunk generation" with "cheap query."
 
 **SettlementTier decomposition gate:** no objection — defer enum churn until V4/V5 consumers force it.
 
-### V1-R4 — withheld must not influence cognition (`P0`, User review)
+### V1-R4 — `PerceptionCoverage` replaces withheld in cognition (`P0`, User review — **amended, not ready for code**)
 
 **Problem:** V1-R1 introduced `ObservationQuality(admitted, withheld)` with `completeness()` feeding
-`supersedes()`. Intended to measure view quality; actually leaks unperceived persisted POI counts.
+`supersedes()`. `withheld` leaks unperceived persisted POI counts across the epistemic boundary.
 
-**Accepted repair direction:**
+**Rejected repair (draft regression):** `supersedes()` on **admitted POI count**. Quantity was exactly
+what V1-R1 proved unsafe — a rebuilt/shrunk village (20→16 POIs at full coverage) would be rejected
+forever (`16 < 20`). That conflates *settlement size changed* with *observation got worse*.
 
-1. `supersedes()` compares **admitted** count, then tick (preserve equal-admitted-newer replaces).
-2. Remove `withheld` from persisted NBT supersede path, or persist as diagnostic-only never read for
-   decisions.
-3. Optional follow-up: loaded-chunk-bounded POI iteration for query cost (VR-T1b), separate from P0.
+**Accepted repair direction (`PerceptionCoverage`):**
 
-**Rejected:** keeping `withheld` in completeness denominator; freezing V1-D without V1-R4.
+1. Compute coverage from the **64-block search footprint**: chunk columns intersecting the cylinder /
+   footprint vs how many are loaded (`hasChunk`) — mob knows chunk availability, not hidden POI contents.
+2. `Observation` carries `anchor`, `admittedPoiCount`, `coverage`.
+3. `ObservationQuality` carries **`coverage` only** for supersede ordering.
+4. `supersedes()`: higher coverage wins; equal coverage → newer tick replaces (V1-R1 middle rule on
+   **opportunity**, not POI quantity).
+5. `admittedPoiCount` for `isSettlement()` and diagnostics only.
+6. **NBT migration:** pre-R4 quality loads as optimistic **full coverage**; do not reinterpret saved
+   `withheld`.
+7. **B-VR-53 future signal:** `coverage < 100%` may justify earlier re-observation — legitimate
+   because it uses perceivable chunk availability, not hidden POI existence.
 
-**Evidence:** `VillagePerception.java` L90–100; `ObservationQuality.java` L54–90; `PlaceOpinionMemory`
-is unrelated — this is village perception, not Place opinion.
+**Rejected:** withheld in completeness denominator; admitted-count supersede; implementing before this
+amendment is accepted; freezing V1-D without V1-R4.
+
+**Evidence:** `VillagePerception.java` L90–100; `ObservationQuality.java` L54–90; V1-R1 P1b quantity
+table (`RFC` § V1-R1).
 
 ---
 
 ## Topic: V1 perception driver and observation budget (`Agent_Codex`)
 
 **Status:** `REVIEW` — B2 direction accepted; **implementation authorization BLOCKED** pending
-V1-R4 (P0 withheld boundary) and scheduler-contract amendments (P1); no implementation authorization
+V1-R4 (`PerceptionCoverage` design) and scheduler-contract amendments (P1); no implementation authorization
 
 **Goal:** connect the implemented V1 perception/identity substrate to real PlayerMobs without giving
 the observer scheduler authority, manufacturing shared knowledge, or running a 64-block POI query
@@ -2714,27 +2780,29 @@ burst together. Rejected in favour of the hybrid.
 
 ### Acceptance and falsification
 
-**Must happen:** a ticking PlayerMob crossing into a loaded occupied vanilla village receives one
-per-mob observation and records a `KnownVillage` within a **bounded** driver delay (not necessarily
-the same tick as chunk entry), without acquiring MOVE/LOOK or changing its current goal.
+**Must happen (conditional):** **if** a ticking PlayerMob remains within a perceivable occupied-village
+observation region until its pending request is serviced, it records a `KnownVillage` within the
+scheduler's bounded service latency, without acquiring MOVE/LOOK or changing its current goal.
 
 **Must not happen:** disabled addon, empty observation, unloaded-only POIs, or another mob's
 observation creates village memory for this mob; aggregate POI queries exceed the configured
-per-server-tick budget; **unperceived persisted POI counts alter observation confidence** (V1-R4).
+per-server-tick budget; **hidden POI counts or admitted POI quantity alter supersede ordering**
+(V1-R4 `PerceptionCoverage` only).
 
-**Runtime falsifiers:** (1) cross a compact village and leave with no memory **after bounded service
-latency** (not merely between two heartbeats); (2) 100 ticking PlayerMobs produce a same-tick query
-burst above the budget; (3) one denied mob remains pending indefinitely; (4) observation changes
+**Runtime falsifiers:** (1) mob **stays in village** through service but records nothing — contract
+violation; (2) 100 ticking PlayerMobs produce a same-tick query burst above the budget; (3) one denied
+mob starves at **admission** or remains pending indefinitely once admitted; (4) observation changes
 objective labels or interrupts movement; (5) an empty follow-up erases a valid remembered village;
-(6) two mobs at the same position with identical loaded views produce the same supersede-relevant
-quality (V1-R4).
+(6) two mobs at same position, identical loaded views → identical supersede-relevant coverage (V1-R4);
+(7) coverage 100%/20 POIs → coverage 100%/16 POIs newer → anchor **updates** (no quantity freeze).
 
-**Locked architecture (pending review closure):** B2 owns pending requests as bounded `(dimension, UUID)`
-entries; cheap per-mob eligibility owns only its pending marker. Tests must prove deduplication, global
-cap, round-robin level fairness, **fair queue-admission under saturation**, eventual service,
-unload/death/dimension cleanup and saturation retry. Queue capacity must be justified against the
-100-mob target or admission must be explicitly fair. The 200/20/1 values remain provisional and
-runtime-tunable evidence, not locked optima.
+**VR-T1 (empirical, separate):** measure whether normal traversal through compact villages completes
+before service at 1/10/50/100 mobs — informs budget tuning, not the conditional Must happen above.
+
+**Locked architecture (pending review closure):** B2 owns pending requests; cheap per-mob eligibility
+owns pending marker. Tests must prove deduplication, global cap, round-robin service fairness,
+**explicit fair queue admission** (not `MAX_QUEUE >= 100` alone), eventual service, lifecycle cleanup.
+Consider queue bound = ticking PlayerMobs (one UUID each) + emergency cap. 200/20/1 values provisional.
 
 ---
 
@@ -2796,7 +2864,7 @@ runtime-tunable evidence, not locked optima.
 | VR-M2: mob stands while villagers claim POIs | Heartbeat eventually refreshes facts | Chunk-only design never notices the change |
 | VR-M3: combat during observation turn | Combat continues; flagless observer records facts | Readout/GoalSelector authority changes |
 | VR-M4: 100 mobs enter together across levels | Deduplicated UUID requests drain round-robin; max one global query in a server tick | Same-tick POI storm, level starvation, stale queue entries |
-| VR-M5: only persisted/unloaded POIs nearby | Empty observation creates no memory; **withheld must not affect supersede** (V1-R4) | Storage availability becomes omniscience |
+| VR-M5: only persisted/unloaded POIs nearby | Empty observation creates no memory; **coverage/supersede use PerceptionCoverage only** (V1-R4) | Hidden POI counts or admitted quantity alter supersede |
 | VR-M6: dimension change/teleport | New local observation is requested; old UUID memory survives | Old observer state suppresses local discovery |
 | VR-M7: addon disabled | No query/new memory; existing memory remains | Disabled cleanup mutates or creates knowledge |
 
@@ -2857,7 +2925,7 @@ required evidence; code/static tests cannot confirm this timeline.
 | `Raid.addHero(Entity)` full reward path | **CODE_CONFIRMED** — `Raid#tick` awards to any `LivingEntity` via `level.getEntity(uuid)`; runtime still `UNVERIFIED` (`Agent_Claude` F1) |
 | Hero **discount** for a non-player | **BLOCKED** in vanilla — `updateSpecialPrices(Player)`; must be applied by `VillagerTradeAdapter` (B-VR-34) |
 | A non-player **consumer** of villager reputation | **UNVERIFIED** — probe before V3 (B-VR-36) |
-| `PoiManager` unloaded-chunk leakage | **P0 (V1-R4)** — admitted-only cognition; `withheld` must not affect `supersedes()`; query cost still `UNVERIFIED` (B-VR-58) |
+| `PoiManager` unloaded-chunk leakage | **P0 (V1-R4)** — `PerceptionCoverage` for supersede; no withheld/hidden POI in cognition; admitted count not supersede key; query cost `UNVERIFIED` (B-VR-58) |
 | `MaterialDemandPolicy` class name | **NOT FOUND** — ship trade via `WorkDemandPolicy` facade (B-VR-20) |
 | Storage RFC (full personal/village chest system) | **Deferred** — `StorageOwnership` minimum in V3 |
 | Runtime VR-T* tests | **UNVERIFIED** — VR-T1 datapack planned (B-VR-28). V1 is `STATIC_CONFIRMED` only: no PlayerMob has yet perceived a village in a running world |
@@ -3171,15 +3239,14 @@ UNLOADED/CHANGED reasons `false`); `Entity#setRemoved` sets `removalReason` (off
 
 ### D-VR-024: Anchor evidence is completeness, not count (`Agent_Claude` + User)
 
-**Status:** `LOCKED` (User review, 2026-08-14) — **amended by V1-R4** (withheld must not feed cognition)
-**Accepted:** anchor replacement uses observation **quality** (view goodness), not raw POI quantity;
-equal-or-better view + newer tick may replace (V1-R1 middle rule). Memory retains quality metadata.
-**Amendment (V1-R4):** quality/compare uses **admitted POIs only**; `withheld` is not part of
-`supersedes()` because it leaks unperceived world truth (implementation review P0).
-**Rejected:** `newPoiCount > oldPoiCount` (the shipped V1 rule) — it froze the anchor of any village
-that shrank or was rebuilt in place, silently breaking D-VR-019's agreement guarantee.
-**Evidence:** V1-R1 wired `withheldPoiCount` into `ObservationQuality`; User review found the epistemic
-leak — repair keeps D-VR-024's intent with admitted-only comparison.
+**Status:** `LOCKED` (User review, 2026-08-14) — **amended by V1-R4** (`PerceptionCoverage`)
+**Accepted:** anchor replacement uses observation **quality** = perceivable search **coverage**, not POI
+quantity; equal coverage + newer tick may replace (V1-R1 middle rule on opportunity).
+**Amendment (V1-R4):** `ObservationQuality` orders by **`PerceptionCoverage`** (loaded chunk columns in
+the 64-block footprint ÷ total). `admittedPoiCount` is settlement detection / diagnostics only.
+`withheld` and hidden POI counts must not feed supersede. Pre-R4 NBT loads as optimistic full coverage.
+**Rejected:** `newPoiCount > oldPoiCount`; admitted-count supersede (regresses V1-R1 shrink/rebuild case).
+**Evidence:** V1-R1 quantity table; User V1-R4 amendment — withheld leak fix ≠ admitted-count proxy.
 
 ### D-VR-025: Village factual utility vs Opinion preference (`User` + `Agent_Cursor`)
 
@@ -3328,9 +3395,9 @@ one server-global cap; no entity references in queue; saturation retains cheap p
 
 | ID | Issue | Required resolution |
 | --- | --- | --- |
-| **P0** | `withheldPoiCount` in `completeness()` / `supersedes()` | V1-R4: admitted-only cognition |
-| **P1** | Request ≠ service latency | Amend Must happen + VR-M1 falsifier |
-| **P1** | Queue admission fairness when full | Cap ≥ target mobs or fair admission mechanism (B-VR-57) |
+| **P0** | `withheldPoiCount` in `completeness()` / `supersedes()` | V1-R4: **`PerceptionCoverage`**; no admitted-count supersede (B-VR-59) |
+| **P1** | Request ≠ service latency | Conditional Must happen; VR-T1 traversal vs latency (B-VR-56) |
+| **P1** | Queue admission fairness when full | Fair admission preferred; ticking-mob-bound queue under consideration (B-VR-57) |
 
 **Required gates:** hard bound; deduplication; round-robin service fairness; **fair admission under
 saturation**; eventual service; unload/death/dimension/stop eviction; V1-R4 epistemic parity test;
@@ -3344,6 +3411,7 @@ found P0/P1 contract gaps. B2 remains the preferred scheduler shape once blocker
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| User | 2026-08-14 | **V1-R4 design amendment.** Reject admitted-count supersede (regresses V1-R1 shrink freeze). Replace withheld with **`PerceptionCoverage`** (loaded/total chunk columns in 64-block footprint). Conditional scheduler Must happen; fair admission over `MAX_QUEUE>=100`; B-VR-59. **No implementation authorization.** |
 | User | 2026-08-14 | **D-VR-033 implementation review — V1-D BLOCKED.** P0: `withheldPoiCount` epistemic leak (V1-R4). P1: dirty≠prompt service; queue admission fairness. D-VR-033 → `REVIEW`. D-VR-027 P2 title; 029/030/031 concept locks affirmed; 028 open; 032 held. B-VR-55…58. **No implementation authorization.** |
 | User + Agent_Codex | 2026-08-14 | **Peer review of D-VR-027…033 + pinned-source reconciliation.** Split bottle pickup value from retention; redesigned consumption under cross-domain Ominous Event intent; source-confirmed LivingEntity bottle finish but ServerPlayer-gated Bad/Raid Omen effects; made trade abstraction flexible; source-confirmed vanilla golem creator flag; narrowed Hero gifts to recipient bridge + host pickup; rejected `KnownVillage.origin`; superseded pre-1.21 captain-effect and D-VR-019 96-block identity text; added SettlementTier decomposition gate. D-VR-033 selects bounded per-level UUID lanes under one server-global budget; no shared cache. **No implementation authorization.** |
 | Agent_Codex | 2026-08-14 | **V1 perception-driver brainstorm.** Confirmed the implemented perception and memory APIs have no production caller (three negative probes). Compared existing-observer, per-mob-budgeted, and central-cache designs; proposed D-VR-033 / V1-D: individual flagless observer, chunk-dirty + heartbeat cadence, strict server-tick POI-query budget, no shared knowledge. Added B-VR-50…54, VR-M1…M7 and 1/10/50/100-mob falsifiers. **No implementation authorization.** |
@@ -3488,9 +3556,9 @@ perception authority, host item pickup, and vanilla golem spawn semantics. Must 
 kill → Bad Omen, broadcast observations, invent founded memory, or let a high pickup rank fill every
 inventory slot.
 
-**Frontier after:** **V1-R4 (P0)** fix `withheld` cognition leak, then close D-VR-033 P1 scheduler
-contracts, then re-request V1-D authorization. D-VR-027/029/030/031 remain lock candidates;
-D-VR-028 bridge and D-VR-032 remain open/held. Runtime remains separately unauthorized.
+**Frontier after:** accept **V1-R4 `PerceptionCoverage` design**, then implement V1-R4, then close
+D-VR-033 P1 scheduler contracts, then re-request V1-D authorization. **Do not implement V1-R4 until
+design is accepted** — admitted-count supersede is a known regression.
 
 ---
 
@@ -3539,8 +3607,9 @@ individual observation remains the knowledge boundary.
 V1-D plan row; MAIBS VR-M1…M7; updated deferred/frontier state.
 
 **Frontier after at that stage:** independent peer review of D-VR-033. User implementation review
-(2026-08-14) accepted B2 direction but **blocked V1-D** on V1-R4 P0 + scheduler P1s. Current frontier:
-fix withheld cognition leak, close scheduler contracts, then re-request V1-D authorization.
+(2026-08-14) accepted B2 direction but **blocked V1-D** on V1-R4 P0 + scheduler P1s. User amended V1-R4
+to **`PerceptionCoverage`** (reject admitted-count supersede). Current frontier: accept V1-R4 design,
+then implement, then close scheduler contracts.
 
 ---
 
