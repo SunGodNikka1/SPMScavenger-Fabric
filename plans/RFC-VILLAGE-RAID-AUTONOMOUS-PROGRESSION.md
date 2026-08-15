@@ -8,10 +8,10 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + VR-T1A CLOSED**. **Task-46 AUTHORIZED** — V1.5 / 1.11.0 implementation |
-| **Status** | `IMPLEMENTING` — V1.5 **task-46 AUTHORIZED** (D-VR-052 REJECT V1.5-E) |
-| **Nearest frontier** | **Implement task-46** (V1.5-A…D + temporary F) → VR-T1.5a–c runtime |
-| **Last update** | 2026-08-14 (User D-VR-052 REJECT — task-46 authorized) |
+| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + VR-T1A CLOSED**. **V1.5 / 1.11.0** task-46 shipped |
+| **Status** | `IMPLEMENTING` — V1.5 **VR-T1.5a PASS**; VR-T1.5b–c runtime pending |
+| **Nearest frontier** | **VR-T1.5b–c** runtime (overworld) → V2 Trading |
+| **Last update** | 2026-08-15 (User VR-T1.5a PASS — Bob taiga commute) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -646,12 +646,12 @@ visible "my village" play.
 
 ### V1.5 runtime matrix (`PROPOSED`)
 
-| ID | Must happen | Must not happen |
-| --- | --- | --- |
-| VR-T1.5a | After 10+ min away, mob with HOME paths toward home anchor | Treats home same as never-seen cluster |
-| VR-T1.5b | Repeated visits increase familiarity in saved data | Single visit maxes attachment |
-| VR-T1.5c | Village-aware greet fires more near familiar settlement | Greet mistaken for trade completion |
-| ~~VR-T1.5d~~ | **DEFERRED → VR-T3** (`D-VR-052`) | — |
+| ID | Must happen | Must not happen | Result |
+| --- | --- | --- | --- |
+| VR-T1.5a | After 10+ min away, mob with HOME paths toward home anchor | Treats home same as never-seen cluster | **PASS** (User, Bob, 2026-08-15) |
+| VR-T1.5b | Repeated visits increase familiarity in saved data | Single visit maxes attachment | **UNVERIFIED** |
+| VR-T1.5c | Village-aware greet fires more near familiar settlement | Greet mistaken for trade completion | **UNVERIFIED** |
+| ~~VR-T1.5d~~ | **DEFERRED → VR-T3** (`D-VR-052`) | — | — |
 
 ### Decisions
 
@@ -680,7 +680,7 @@ visible "my village" play.
 **Authorized:** task-46 / V1.5 slices A–D + temporary F → **1.11.0**. **Not authorized:** V1.5-E,
 Minecraft launch.
 
-**Next frontier:** implement task-46 → VR-T1.5a–c runtime (overworld-only).
+**Next frontier:** VR-T1.5b–c runtime (overworld-only); then V2 Trading.
 
 ### Task-46 peer review — User P1 closure (`AUTHORIZED`, 2026-08-14)
 
@@ -3200,7 +3200,7 @@ regression when Pipeline A lives outside `VillagePerception`.
 
 **Cosmetic (deferred):** `KnownVillage` Javadoc duplicated word — not a release blocker.
 
-**Next gate:** ~~V1-D~~ **DONE** → ~~VR-T1A~~ **PASS** → **task-46 AUTHORIZED** → implement 1.11.0 → VR-T1.5a–c → V2 Trading.
+**Next gate:** ~~V1-D~~ **DONE** → ~~VR-T1A~~ **PASS** → ~~task-46 / 1.11.0~~ **DONE** → ~~VR-T1.5a~~ **PASS** → VR-T1.5b–c → V2 Trading.
 
 **Status (2026-08-14 continuation):** P1 contracts **CLOSED** in RFC — see `Topic: V1 perception driver`
 scheduler contracts section. D-VR-033 → **`LOCK RECOMMENDED`**. **Awaiting V1-D implementation authorization.**
@@ -3489,7 +3489,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | --- | --- | --- | --- |
 | **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** | VR-T1A **PASS** |
 | **V1-D** | Bounded production perception driver (D-VR-033) | **IMPLEMENTED** (1.10.0) | VR-T1A **PASS**; VR-T1b **DEFERRED** |
-| **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social | **AUTHORIZED** — task-46 / 1.11.0 (A–D + F) | VR-T1.5a–c overworld-only; **before V2** |
+| **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social | **IMPLEMENTED** — task-46 / 1.11.0 (A–D + F) | VR-T1.5a **PASS**; VR-T1.5b–c **UNVERIFIED** |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | moved to V2/V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **REQUIRES MIXIN** — **after V1.5** | VR-T2: trade input → correct villager → atomic inventory change; VR-T2b: sell carrots → buy book |
 | **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest (**VR-T1.5d deferred here**, `D-VR-052`) |
@@ -4118,11 +4118,41 @@ Contract test `mustHappen_vrT1aDiagnosticsRemoved` guards against reintroduction
 **Reflection (PROVEN):** never use numeric extremes as sentinels in arithmetic debounce checks;
 use explicit boolean state (`VillagePerceptionEnqueueDebounce`).
 
+### VR-T1.5a — runtime closure (`PASS`, User, 2026-08-15)
+
+**Scope:** autonomous return commute to designated home — not VR-T1.5b familiarity growth, not VR-T1.5c
+village-aware social, not auto-home (`D-VR-042`).
+
+**World:** natural taiga village, overworld (same Bob fixture as VR-T1A). **Mob:** PlayerMob `Bob`.
+**Mod:** `spmscavenger` 1.11.0 (post repair pass 3 — commute dead-zone fix). Home anchor ~`-11666, 7709`
+(via `/spmscavenger designate-home` fixture, **D-VR-039** / V1.5-F).
+
+| Scenario | Result | Evidence |
+| --- | --- | --- |
+| Start far from home | **CONFIRMED** | User: Bob left village area; return commute seeded from distance |
+| Autonomous multi-leg return | **CONFIRMED** | Bob pathing home without operator steering |
+| Enter home village bounds | **CONFIRMED** | Crossed into actual village at ~`-11666` (inside 64-block anchor bounds) |
+| Prior dead-zone failure | **REPAIRED** | Pre-fix stop at ~`-11592, 7716` (~74 blocks); repair pass 3 split start vs continue policy |
+| Hostile interruption + resume | **CONFIRMED** | Monster encounter interrupted explore; flee/hide; exploration resumed after threat cleared (out of V1.5 scope for flee-past tuning) |
+
+**Deferred (not VR-T1.5a gates):**
+
+- VR-T1.5b / VR-T1.5c runtime
+- Auto-home production policy (`D-VR-042` — `PRODUCT DECISION`)
+- Remove temporary `designate-home` — eligible per **D-VR-051** after VR-T1.5a PASS; cleanup when VR-T1.5b–c close or user directs
+
+**Reflection (PROVEN):** `COMMUTE_MIN_DISTANCE` (128) is a **start** gate only; in-flight commute legs
+must chain until `SettlementBoundsPolicy` (64) — applying 128 to chain legs creates a dead zone.
+
+**Reflection (PROVEN):** hostile interruption during COMMUTE/DISCRETIONARY explore does not terminate the
+expedition if the mob survives; resume after threat clearance is observable without V1.5 changes.
+
 
 ## Contribution
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| User + Agent_Cursor | 2026-08-15 | **VR-T1.5a PASS.** Bob (overworld taiga): started far from home; autonomous multi-leg return; entered village at ~`-11666`; hostile interrupt + explore resume **CONFIRMED**. Prior ~74-block dead-zone stop **REPAIRED** (repair pass 3). Frontier → VR-T1.5b–c. `designate-home` removal eligible per D-VR-051; not executed this turn. |
 | Agent_Cursor | 2026-08-14 | **D-VR-052 REJECT — task-46 AUTHORIZED.** User: V1.5-E **DEFER → V3** `StorageOwnership`; VR-T1.5d **DEFER → VR-T3**. Release scope: V1.5-A/B/C/D + temporary F only (1.11.0). Attachment ≠ container ownership. No `village-memory`/probe/driver resurrection. |
 | Agent_Cursor | 2026-08-14 | **RFC sync — task-46 HOLD state.** Phased plan V1.5 → **HOLD** (D-VR-052 open); next-gate line updated; D-VR-041 → **LOCKED** after P1-2 closure. |
 | User + Agent_Cursor | 2026-08-14 | **Task-46 HOLD — User P1 peer review.** Concept/placement/architecture **APPROVED**; implementation **HOLD**. Closed P1-1…P1-8: no `village-memory` re-add (D-VR-051); home single-owner + `onHomeDesignated` (P1-2); presence @ 64 not 96 (P1-3); COMMUTE admission sequence + multi-leg return (D-VR-047/048); `cfg.exploring` required (D-VR-046); social anchor at greet admission (D-VR-050); Option A rekey (D-VR-049). V1.5-E awaits product acceptance (D-VR-052). Bob VR-T1.5 overworld-only. |

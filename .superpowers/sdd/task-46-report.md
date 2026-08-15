@@ -34,8 +34,9 @@ BUILD SUCCESSFUL — 905 tests
 | Compile + unit tests | **CONFIRMED** | `clean build` output above |
 | No V1.5-E / RaidContainersGoal mixin | **CONFIRMED** | grep — no production mixin added |
 | No village-memory/probe/driver | **CONFIRMED** | only `designate-home` under `debug/` |
-| VR-T1.5a–c runtime | **UNVERIFIED** | launch not authorized |
-| Multi-leg commute in world | **UNVERIFIED** | static chain logic in `ExploringGoal.completeExpedition` |
+| VR-T1.5a runtime | **CONFIRMED** | User Bob session 2026-08-15 — far start, autonomous return, entered village ~`-11666`, hostile resume |
+| VR-T1.5b–c runtime | **UNVERIFIED** | not yet observed |
+| Multi-leg commute in world | **CONFIRMED** | VR-T1.5a Bob session; dead-zone repair pass 3 validated |
 
 ## Self-review (brief mapping)
 
@@ -50,9 +51,9 @@ BUILD SUCCESSFUL — 905 tests
 
 ## Concerns
 
-- VR-T1.5 runtime (Bob, overworld) still required before removing `designate-home`.
+- VR-T1.5b–c runtime still required before full V1.5 runtime closure.
+- `designate-home` eligible for removal per D-VR-051 (VR-T1.5a PASS); keep until VR-T1.5b–c or user directs cleanup.
 - `designate-home` picks nearest remembered village to target mob — operator must ensure Bob has memory.
-- Commute multi-leg chaining is unit-tested at policy level only; pathfinding failures in world are **UNVERIFIED**.
 
 ## Repair pass (2026-08-15, pre-VR-T1.5)
 
@@ -81,4 +82,17 @@ BUILD SUCCESSFUL — 905 tests
 
 `.\gradlew.bat clean build` — **BUILD SUCCESSFUL** (914 tests).
 
-**VR-T1.5a:** still **UNVERIFIED** after fix — retest requires explicit launch approval.
+## VR-T1.5a runtime (`PASS`, User, 2026-08-15)
+
+**World:** overworld taiga (Bob fixture). **Home anchor:** ~`-11666, 7709` (`designate-home`).
+
+| Must happen | Result |
+| --- | --- |
+| Bob starts far from home | **CONFIRMED** |
+| Autonomous return commute (multi-leg) | **CONFIRMED** |
+| Enters 64-block home bounds at village | **CONFIRMED** — ~`-11666` |
+| Expedition survives hostile interrupt | **CONFIRMED** — flee/hide during monster; explore resumed after death |
+
+**Prior failure (repair pass 3):** stopped ~74 blocks out (`-11592, 7716`) — dead zone from 128-block gate on chain legs. **REPAIRED** before this PASS.
+
+**Not in scope for VR-T1.5a:** flee-past-weak-monster personality tuning; VR-T1.5b familiarity; VR-T1.5c social bias.
