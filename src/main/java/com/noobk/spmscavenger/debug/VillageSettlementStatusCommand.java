@@ -1,9 +1,9 @@
 package com.noobk.spmscavenger.debug;
 
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.village.KnownVillage;
 import com.noobk.spmscavenger.village.MobVillageMemory;
 import com.noobk.spmscavenger.village.SettlementBoundsPolicy;
@@ -12,7 +12,6 @@ import com.noobk.spmscavenger.village.SettlementTuning;
 import com.noobk.spmscavenger.village.VillageMemorySavedData;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -26,28 +25,37 @@ import java.util.Comparator;
  */
 public final class VillageSettlementStatusCommand {
 
+    private static final double NEAREST_RADIUS = 128.0;
+
     private VillageSettlementStatusCommand() {
     }
 
     static LiteralArgumentBuilder<CommandSourceStack> node() {
         return Commands.literal("settlement-status")
-                .then(Commands.argument("target", EntityArgument.entity())
-                        .executes(VillageSettlementStatusCommand::execute));
+                .executes(context -> execute(context, null))
+                .then(Commands.argument("target", StringArgumentType.greedyString())
+                        .suggests(PlayerMobDebugTargets.NAME_SUGGESTIONS)
+                        .executes(context -> execute(
+                                context, StringArgumentType.getString(context, "target"))));
     }
 
-    private static int execute(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        Mob mob = asPlayerMob(EntityArgument.getEntity(context, "target"));
+    private static int execute(CommandContext<CommandSourceStack> context, String target)
+            throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Mob mob = target == null
+                ? PlayerMobDebugTargets.resolveNearest(source, NEAREST_RADIUS)
+                : PlayerMobDebugTargets.resolve(source, target);
         if (mob == null) {
-            context.getSource().sendFailure(Component.literal("Target is not a PlayerMob"));
+            source.sendFailure(Component.literal(PlayerMobDebugTargets.targetHelp()));
             return 0;
         }
         if (!(mob.level() instanceof ServerLevel level)) {
-            context.getSource().sendFailure(Component.literal("Target is not in a server level"));
+            source.sendFailure(Component.literal("Target is not in a server level"));
             return 0;
         }
         var memoryOpt = VillageMemorySavedData.get(level).peek(mob.getUUID());
         if (memoryOpt.isEmpty() || memoryOpt.get().villages().isEmpty()) {
-            context.getSource().sendFailure(Component.literal("Mob has no remembered villages"));
+            source.sendFailure(Component.literal("Mob has no remembered villages"));
             return 0;
         }
         MobVillageMemory memory = memoryOpt.get();
@@ -65,7 +73,7 @@ public final class VillageSettlementStatusCommand {
                 relationship,
                 nearest.isHome(),
                 insideBounds);
-        context.getSource().sendSuccess(() -> Component.literal(report), false);
+        source.sendSuccess(() -> Component.literal(report), false);
         return 1;
     }
 
@@ -84,9 +92,5 @@ public final class VillageSettlementStatusCommand {
                 + "Home: " + home + "\n"
                 + "Last visit: " + relationship.lastVisitTick() + "\n"
                 + "Inside bounds: " + insideBounds;
-    }
-
-    private static Mob asPlayerMob(net.minecraft.world.entity.Entity entity) {
-        return entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob) ? mob : null;
     }
 }

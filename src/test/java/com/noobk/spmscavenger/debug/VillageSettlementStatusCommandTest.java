@@ -31,4 +31,11 @@ class VillageSettlementStatusCommandTest {
         assertTrue(report.contains("Last visit: 184220"));
         assertTrue(report.contains("Inside bounds: true"));
     }
+
+    @Test
+    void mustHappen_targetHelpMentionsNameAndSelector() {
+        String help = PlayerMobDebugTargets.targetHelp();
+        assertTrue(help.contains("Alice"));
+        assertTrue(help.contains("@e[name=Alice"));
+    }
 }
