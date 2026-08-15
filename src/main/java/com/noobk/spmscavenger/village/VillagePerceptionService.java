@@ -26,7 +26,8 @@ final class VillagePerceptionService {
         }
         VillagePerception.Observation observation =
                 VillagePerception.observe(level, mob.blockPosition());
-        return VillageMemorySavedData.get(level).record(level, mobId, observation, tick);
+        return VillageMemorySavedData.get(level).record(
+                level, mobId, observation, tick, mob.blockPosition());
     }
 
     private VillagePerceptionService() {}

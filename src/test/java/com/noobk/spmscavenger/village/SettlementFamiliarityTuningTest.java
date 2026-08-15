@@ -16,7 +16,7 @@ class SettlementFamiliarityTuningTest {
 
         // ~5 minutes at +5 / 200 ticks (10 seconds).
         for (int i = 0; i < 30; i++) {
-            relationship.bumpPresenceFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, 200L + i);
+            relationship.recordPresenceHeartbeat(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, 200L + i);
         }
 
         assertEquals(200, relationship.familiarityScore());
@@ -28,7 +28,7 @@ class SettlementFamiliarityTuningTest {
     void mustNotHappen_passivePresenceAloneReachesHigh() {
         SettlementRelationship relationship = SettlementRelationship.empty();
         for (int i = 0; i < 200; i++) {
-            relationship.bumpPresenceFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, i);
+            relationship.recordPresenceHeartbeat(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, i);
         }
 
         assertEquals(SettlementTuning.PRESENCE_FAMILIARITY_CAP, relationship.familiarityScore());
@@ -41,7 +41,7 @@ class SettlementFamiliarityTuningTest {
     void mustHappen_returnsAndSocialCanReachHighBeyondPresenceCap() {
         SettlementRelationship relationship = SettlementRelationship.empty();
         for (int i = 0; i < 50; i++) {
-            relationship.bumpPresenceFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, i);
+            relationship.recordPresenceHeartbeat(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, i);
         }
         assertEquals(250, relationship.presenceFamiliarity());
 
@@ -64,10 +64,10 @@ class SettlementFamiliarityTuningTest {
         SettlementRelationship relationship = SettlementRelationship.empty();
         for (int i = 0; i < SettlementTuning.PRESENCE_FAMILIARITY_CAP
                 / SettlementTuning.PRESENCE_FAMILIARITY_BUMP; i++) {
-            relationship.bumpPresenceFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, i);
+            relationship.recordPresenceHeartbeat(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, i);
         }
         int scoreAtCap = relationship.familiarityScore();
-        relationship.bumpPresenceFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, 9_999L);
+        relationship.recordPresenceHeartbeat(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, 9_999L);
         assertEquals(scoreAtCap, relationship.familiarityScore());
     }
 }

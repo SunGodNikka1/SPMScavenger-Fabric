@@ -61,8 +61,8 @@ class SettlementRelationshipTest {
         boolean bootstrap = memory.relationshipAt(anchor).isEmpty();
         SettlementRelationship relationship = memory.relationshipAt(anchor)
                 .orElseGet(SettlementRelationship::empty);
-        assertFalse(!bootstrap && tick - relationship.lastVisitTick() < SettlementTuning.PRESENCE_HEARTBEAT_TICKS);
-        relationship.bumpPresenceFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, tick);
+        assertFalse(!bootstrap && tick - relationship.lastPresenceTick() < SettlementTuning.PRESENCE_HEARTBEAT_TICKS);
+        relationship.recordPresenceHeartbeat(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, tick);
         memory.putRelationship(anchor, relationship);
 
         assertEquals(5, memory.relationshipAt(anchor).orElseThrow().familiarityScore());

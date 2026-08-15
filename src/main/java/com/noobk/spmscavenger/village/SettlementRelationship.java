@@ -13,23 +13,39 @@ public final class SettlementRelationship {
     private int familiarityScore;
     private int presenceFamiliarity;
     private long lastVisitTick;
+    private long lastPresenceTick;
+    private long lastOutsideTick;
     private int socialEventCount;
 
     public SettlementRelationship(int familiarityScore, long lastVisitTick, int socialEventCount) {
-        this(familiarityScore, lastVisitTick, socialEventCount, 0);
+        this(familiarityScore, lastVisitTick, socialEventCount, 0, 0L, 0L);
     }
 
     public SettlementRelationship(
-            int familiarityScore, long lastVisitTick, int socialEventCount, int presenceFamiliarity) {
+            int familiarityScore,
+            long lastVisitTick,
+            int socialEventCount,
+            int presenceFamiliarity) {
+        this(familiarityScore, lastVisitTick, socialEventCount, presenceFamiliarity, 0L, 0L);
+    }
+
+    public SettlementRelationship(
+            int familiarityScore,
+            long lastVisitTick,
+            int socialEventCount,
+            int presenceFamiliarity,
+            long lastPresenceTick,
+            long lastOutsideTick) {
         this.familiarityScore = clampFamiliarity(familiarityScore);
         this.presenceFamiliarity = clampPresenceFamiliarity(presenceFamiliarity);
         this.lastVisitTick = lastVisitTick;
+        this.lastPresenceTick = lastPresenceTick;
+        this.lastOutsideTick = lastOutsideTick;
         this.socialEventCount = Math.max(0, socialEventCount);
     }
 
     /**
-     * No familiarity bumps yet. {@code lastVisitTick == 0} means "never bumped" so stale gates treat
-     * the first visit/presence as eligible (V1.5-B bootstrap).
+     * No familiarity bumps yet. {@code lastVisitTick == 0} means "never visited" for re-entry gates.
      */
     public static SettlementRelationship empty() {
         return new SettlementRelationship(0, 0L, 0);
@@ -53,6 +69,14 @@ public final class SettlementRelationship {
         return lastVisitTick;
     }
 
+    public long lastPresenceTick() {
+        return lastPresenceTick;
+    }
+
+    public long lastOutsideTick() {
+        return lastOutsideTick;
+    }
+
     public int socialEventCount() {
         return socialEventCount;
     }
@@ -61,7 +85,7 @@ public final class SettlementRelationship {
         return AttachmentBand.fromScore(familiarityScore);
     }
 
-    /** Visit, social, home-designation, and future trade/defense bumps. */
+    /** Meaningful arrival / return visit, social, home-designation, and future trade/defense bumps. */
     public SettlementRelationship bumpFamiliarity(int amount, long tick) {
         familiarityScore = clampFamiliarity(familiarityScore + amount);
         if (tick > lastVisitTick) {
@@ -71,21 +95,36 @@ public final class SettlementRelationship {
     }
 
     /**
-     * Passive in-bounds presence only. Capped at {@link SettlementTuning#PRESENCE_FAMILIARITY_CAP} so
-     * standing around can reach MEDIUM but not HIGH alone.
+     * Passive in-bounds heartbeat. Capped at {@link SettlementTuning#PRESENCE_FAMILIARITY_CAP}.
+     * Always advances {@link #lastPresenceTick} even when capped — never touches
+     * {@link #lastVisitTick}.
      */
-    public SettlementRelationship bumpPresenceFamiliarity(int amount, long tick) {
+    public SettlementRelationship recordPresenceHeartbeat(int amount, long tick) {
         int headroom = SettlementTuning.PRESENCE_FAMILIARITY_CAP - presenceFamiliarity;
-        if (headroom <= 0 || amount <= 0) {
-            return this;
+        if (headroom > 0 && amount > 0) {
+            int applied = Math.min(amount, headroom);
+            presenceFamiliarity += applied;
+            familiarityScore = clampFamiliarity(familiarityScore + applied);
         }
-        int applied = Math.min(amount, headroom);
-        presenceFamiliarity += applied;
-        familiarityScore = clampFamiliarity(familiarityScore + applied);
-        if (tick > lastVisitTick) {
-            lastVisitTick = tick;
+        if (tick > lastPresenceTick) {
+            lastPresenceTick = tick;
         }
         return this;
+    }
+
+    /** Mob left {@link SettlementBoundsPolicy} for this settlement anchor. */
+    public SettlementRelationship noteOutsideBounds(long tick) {
+        if (tick > lastOutsideTick) {
+            lastOutsideTick = tick;
+        }
+        return this;
+    }
+
+    /**
+     * Re-entry visit after the mob was outside since the last meaningful visit.
+     */
+    public boolean qualifiesForReentryVisit() {
+        return lastOutsideTick > lastVisitTick;
     }
 
     public SettlementRelationship recordSocialEpisode(long tick) {
@@ -106,6 +145,8 @@ public final class SettlementRelationship {
         familiarityScore = Math.max(familiarityScore, other.familiarityScore);
         presenceFamiliarity = Math.max(presenceFamiliarity, other.presenceFamiliarity);
         lastVisitTick = Math.max(lastVisitTick, other.lastVisitTick);
+        lastPresenceTick = Math.max(lastPresenceTick, other.lastPresenceTick);
+        lastOutsideTick = Math.max(lastOutsideTick, other.lastOutsideTick);
         socialEventCount = Math.min(
                 SettlementTuning.MAX_SOCIAL_EVENT_COUNT,
                 socialEventCount + other.socialEventCount);
@@ -117,6 +158,8 @@ public final class SettlementRelationship {
         tag.putInt("familiarity", familiarityScore);
         tag.putInt("presenceFamiliarity", presenceFamiliarity);
         tag.putLong("lastVisit", lastVisitTick);
+        tag.putLong("lastPresence", lastPresenceTick);
+        tag.putLong("lastOutside", lastOutsideTick);
         tag.putInt("socialEvents", socialEventCount);
         return tag;
     }
@@ -133,7 +176,9 @@ public final class SettlementRelationship {
                 familiarity,
                 tag.getLong("lastVisit"),
                 tag.getInt("socialEvents"),
-                presence);
+                presence,
+                tag.getLong("lastPresence"),
+                tag.getLong("lastOutside"));
     }
 
     static SettlementRelationship clampMerged(SettlementRelationship left, SettlementRelationship right) {

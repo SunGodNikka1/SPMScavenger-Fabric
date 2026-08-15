@@ -138,7 +138,8 @@ public final class VillageMemorySavedData extends SavedData {
      *     would acquire one
      */
     public Optional<KnownVillage> record(
-            ServerLevel level, UUID mob, VillagePerception.Observation observation, long tick) {
+            ServerLevel level, UUID mob, VillagePerception.Observation observation, long tick,
+            net.minecraft.core.BlockPos mobPos) {
         if (observation == null || !observation.isSettlement()) {
             return Optional.empty();
         }
@@ -146,7 +147,7 @@ public final class VillageMemorySavedData extends SavedData {
                 observation.anchor(),
                 tick,
                 ObservationQuality.of(observation.coverage(), observation.admittedPoiCount()));
-        SettlementRelationshipService.onVillageRecorded(level, mob, village, tick);
+        SettlementRelationshipService.onVillageRecorded(level, mob, village, tick, mobPos);
         setDirty();
         return Optional.of(village);
     }

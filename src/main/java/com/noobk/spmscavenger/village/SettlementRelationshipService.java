@@ -15,8 +15,11 @@ public final class SettlementRelationshipService {
     }
 
     public static void onVillageRecorded(
-            ServerLevel level, UUID mobId, KnownVillage village, long tick) {
-        if (level == null || mobId == null || village == null) {
+            ServerLevel level, UUID mobId, KnownVillage village, long tick, BlockPos mobPos) {
+        if (level == null || mobId == null || village == null || mobPos == null) {
+            return;
+        }
+        if (!SettlementBoundsPolicy.within(mobPos, village.anchor())) {
             return;
         }
         MobVillageMemory memory = VillageMemorySavedData.get(level).memoryOf(mobId);
@@ -24,7 +27,7 @@ public final class SettlementRelationshipService {
         boolean bootstrap = memory.relationshipAt(anchor).isEmpty();
         SettlementRelationship relationship = memory.relationshipAt(anchor)
                 .orElseGet(SettlementRelationship::empty);
-        if (bootstrap || tick - relationship.lastVisitTick() >= SettlementTuning.VISIT_STALE_TICKS) {
+        if (bootstrap || relationship.qualifiesForReentryVisit()) {
             relationship.bumpFamiliarity(SettlementTuning.VISIT_FAMILIARITY_BUMP, tick);
             memory.putRelationship(anchor, relationship);
             VillageMemorySavedData.get(level).markDirty();
@@ -42,17 +45,19 @@ public final class SettlementRelationshipService {
         }
         boolean changed = false;
         for (KnownVillage village : memory.get().villages()) {
-            if (!SettlementBoundsPolicy.within(mobPos, village.anchor())) {
-                continue;
-            }
             BlockPos anchor = village.anchor();
-            boolean bootstrap = memory.get().relationshipAt(anchor).isEmpty();
             SettlementRelationship relationship = memory.get().relationshipAt(anchor)
                     .orElseGet(SettlementRelationship::empty);
-            if (!bootstrap && tick - relationship.lastVisitTick() < SettlementTuning.PRESENCE_HEARTBEAT_TICKS) {
-                continue;
+            if (SettlementBoundsPolicy.within(mobPos, anchor)) {
+                boolean bootstrap = memory.get().relationshipAt(anchor).isEmpty();
+                if (!bootstrap && tick - relationship.lastPresenceTick()
+                        < SettlementTuning.PRESENCE_HEARTBEAT_TICKS) {
+                    continue;
+                }
+                relationship.recordPresenceHeartbeat(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, tick);
+            } else {
+                relationship.noteOutsideBounds(tick);
             }
-            relationship.bumpPresenceFamiliarity(SettlementTuning.PRESENCE_FAMILIARITY_BUMP, tick);
             memory.get().putRelationship(anchor, relationship);
             changed = true;
         }

@@ -112,3 +112,15 @@ BUILD SUCCESSFUL — 905 tests
 `SettlementRelationship.presenceFamiliarity` persisted; `bumpPresenceFamiliarity` used from heartbeat only. HIGH requires returns, social, and later trade/work/defense.
 
 `settlement-status` now prints `Presence: X / 250`.
+
+## Repair pass 5 (2026-08-15, visit/presence tick split)
+
+**Loophole:** at presence cap 250, `bumpPresenceFamiliarity` stopped updating `lastVisitTick`; heartbeat
+re-observation granted `+50` visit every 200t while standing still → HIGH without leaving.
+
+| Fix | Change |
+| --- | --- |
+| Split ticks | `lastVisitTick` = meaningful visit/return; `lastPresenceTick` = passive heartbeat gate |
+| Outside marker | `lastOutsideTick` updated when mob leaves 64² bounds |
+| Visit grant | bootstrap or `lastOutsideTick > lastVisitTick` only — **not** stale re-scan while resident |
+| Presence at cap | `recordPresenceHeartbeat` always advances `lastPresenceTick`, never `lastVisitTick` |

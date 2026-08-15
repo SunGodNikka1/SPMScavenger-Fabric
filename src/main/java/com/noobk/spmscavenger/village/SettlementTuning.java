@@ -10,6 +10,7 @@ public final class SettlementTuning {
     public static final int HIGH_BAND_MIN = 600;
 
     public static final int VISIT_STALE_TICKS = 200;
+    /** Meaningful arrival / return visit bump (not routine in-bounds re-observation). */
     public static final int VISIT_FAMILIARITY_BUMP = 50;
 
     public static final int PRESENCE_HEARTBEAT_TICKS = 200;
