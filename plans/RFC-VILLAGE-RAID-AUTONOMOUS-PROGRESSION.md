@@ -10,8 +10,8 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 authorized and implemented** (User, 2026-08-14). V2+ remains design-only |
 | **Status** | `RESEARCHING` — **V1 `IMPLEMENTED`** (through V1-R4 / 1.9.5 **APPROVED**); V2+ design-only; no VR-T* runtime |
-| **Nearest frontier** | **D-VR-033 scheduler contracts** (fair admission + bounded/conditional service) → re-lock → **V1-D** targets **1.10.0** |
-| **Last update** | 2026-08-14 (User **approves** pushed V1-R4 / 1.9.5; P0 + admitted-count regression **CLOSED**) |
+| **Nearest frontier** | **Authorize V1-D** (1.10.0) — D-VR-033 scheduler contracts **LOCK RECOMMENDED**; P0 **CLOSED** (V1-R4) |
+| **Last update** | 2026-08-14 (D-VR-033 P1 closure + scheduler API lock; V1-D task contract; **awaiting V1-D authorization**) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -1947,6 +1947,7 @@ Director admission uses **`VillageScenarioProfile`** (`PROPOSED` — B-VR-24) �
 | VR-24 | Reputation readout (gossip accessor) | **PARTIAL** | Accessor mixin on `Villager.gossips`; no reputation bridge | `Agent_Claude` F2; consumer still `UNVERIFIED` |
 | VR-25 | Place opinion at village anchor | **PARTIAL** | `SettlementOpinionBias` at **current** anchor chunk (D-VR-026 **HELD**); no frozen chunk key | V4 |
 | VR-26 | Remembered-village candidacy while unloaded | **PARTIAL** | Candidate pool = `MobVillageMemory`; perception refresh separate (D-VR-025) | VR-T4b |
+| VR-33 | Village perception scheduler (B2) | **PARTIAL** | `VillagePerceptionScheduler` + fair admission + global budget | V1-D; D-VR-033 |
 | VR-27 | Ominous Bottle pickup & retention | **PARTIAL** | Strategic pickup value + separately bounded inventory retention | V5; D-VR-027 lock candidate |
 | VR-28 | Manual iron golem construction | **PARTIAL** | Defense policy + structured placement, pumpkin last; repair existing first when comparable | V7; D-VR-030 lock candidate |
 | VR-29 | Ominous Event intent and bottle consumption | **PARTIAL + REQUIRES BRIDGE** | Cross-domain `OminousEventPolicy`; Village contributes RAID intent; self-use executor plus exact effect bridges | V6; D-VR-028 redesigned |
@@ -2140,6 +2141,7 @@ advance the existing **V1 perception-driver** frontier; they do not add V2/V5 be
 | B-VR-57 | **Queue admission fairness under saturation** | User review | **→ D-VR-033 P1** | Prefer fair admission; consider ticking-mob-bound queue; not `MAX_QUEUE >= 100` alone |
 | B-VR-59 | **Admitted-count supersede regression** | User review | **REJECTED** | V1-R4 draft would freeze anchor on village shrink — use coverage only |
 | B-VR-58 | **POI query cost vs loaded admission** | User review | **→ VR-T1b** | `getInRange` may scan persisted unloaded sections; measure edge cases |
+| B-VR-60 | **Ticking-mob-bound queue + round-robin admission** | P1 closure | **→ D-VR-033** | Normal capacity = one pending slot per ticking observer; emergency cap only |
 | B-VR-54 | **Explicit social transfer of village knowledge** | `NEW` | **DEFERRED** | Useful later, but silently copying one mob's observation to companions would violate individual perception; any transfer needs an observable social event |
 
 **Rejected alternatives:** put the 64-block POI query in the existing 10-tick
@@ -2502,9 +2504,8 @@ rejected; ordinary perception is the only memory-creation authority.
 **Status:** `REVIEW` — architecture direction (B2 bounded UUID lanes + global budget) **accepted**;
 **V1-D implementation authorization BLOCKED** until P0 + P1 items below are resolved
 
-**Verdict summary:** Do **not** authorize V1-D yet. D-VR-033 was marked `LOCKED` but carries one **P0**
-and two **P1** contract gaps that become live defects once `VillagePerception.observe()` has a
-production caller.
+**P0 — CLOSED** (V1-R4 1.9.5 APPROVED). **P1 scheduler contracts — CLOSED** in RFC (see V1 perception
+driver topic). Remaining blocker: **explicit V1-D implementation authorization**.
 
 ### P0 — `withheldPoiCount` violates the perception boundary (`CODE_CONFIRMED`)
 
@@ -2675,6 +2676,9 @@ regression when Pipeline A lives outside `VillagePerception`.
 **Next gate:** close D-VR-033 scheduler P1s (B-VR-56 fair admission, B-VR-57 conditional/bounded service)
 → re-lock D-VR-033 → authorize **V1-D** for **1.10.0**.
 
+**Status (2026-08-14 continuation):** P1 contracts **CLOSED** in RFC — see `Topic: V1 perception driver`
+scheduler contracts section. D-VR-033 → **`LOCK RECOMMENDED`**. **Awaiting V1-D implementation authorization.**
+
 **Fixes both prior failures:**
 
 | Failure | Mechanism | V1-R4 repair |
@@ -2730,15 +2734,14 @@ later full-coverage observation can still replace via equal-coverage-newer-wins.
 **Rejected:** withheld in supersede; admitted-count supersede (B-VR-59); float coverage in NBT;
 deriving coverage from `getInRange()` withheld/unloaded record counts.
 
-**Next gate:** ~~implement V1-R4 when authorized~~ **DONE (1.9.5 APPROVED)** → close D-VR-033 scheduler P1s
-before re-locking D-VR-033 / V1-D (**1.10.0**).
+**Next gate:** ~~V1-R4~~ **DONE (1.9.5)** → ~~scheduler P1 closure~~ **DONE (RFC)** → **authorize V1-D (1.10.0)** → VR-T1 runtime.
 
 ---
 
 ## Topic: V1 perception driver and observation budget (`Agent_Codex`)
 
-**Status:** `REVIEW` — B2 direction accepted; **implementation authorization BLOCKED** pending D-VR-033
-scheduler-contract P1 closure; V1-R4 **`APPROVED`** (1.9.5)
+**Status:** `LOCK RECOMMENDED` — B2 direction accepted; **V1-D implementation authorization pending**
+(V1-R4 **`APPROVED`** / 1.9.5; scheduler P1 contracts closed below)
 
 **Goal:** connect the implemented V1 perception/identity substrate to real PlayerMobs without giving
 the observer scheduler authority, manufacturing shared knowledge, or running a 64-block POI query
@@ -2878,6 +2881,78 @@ owns pending marker. Tests must prove deduplication, global cap, round-robin ser
 **explicit fair queue admission** (not `MAX_QUEUE >= 100` alone), eventual service, lifecycle cleanup.
 Consider queue bound = ticking PlayerMobs (one UUID each) + emergency cap. 200/20/1 values provisional.
 
+### Scheduler contracts — P1 closure (`LOCK RECOMMENDED`, 2026-08-14)
+
+User implementation review identified two P1 gaps after V1-R4 approval. **P0 is closed.** These
+amendments close the P1 **contract** gaps so D-VR-033 can re-lock; runtime VR-T1 still measures
+whether tuning is adequate.
+
+#### B-VR-56 — conditional service latency (`LOCK RECOMMENDED`)
+
+**Amended Must happen (replaces any “prompt observation” wording):**
+
+> If a ticking PlayerMob remains within a perceivable occupied-village observation region until its
+> pending request is serviced, it **must** record that observation within the scheduler's bounded
+> service latency.
+
+**Must not happen:** claiming a finite global budget *guarantees* observation for mobs that traverse
+a village faster than backlog drain.
+
+**Documented service bound (gen-1):**
+
+```text
+worstCaseTicks ≈ (pendingQueueDepth / GLOBAL_QUERY_BUDGET_PER_TICK) + HEARTBEAT_DEBOUNCE
+```
+
+With `GLOBAL_QUERY_BUDGET_PER_TICK = 1` and queue depth ≤ ticking PlayerMob count, worst-case is
+**O(n)** server ticks from dirty to service — not instantaneous.
+
+**VR-T1 role:** empirical — does normal compact-village traversal exceed worst-case at 1/10/50/100
+mobs? Tuning evidence only; not a contract violation if a sprinting mob misses a hamlet.
+
+#### B-VR-57 — fair queue admission (`LOCK RECOMMENDED`)
+
+**Rejected:** `MAX_QUEUE >= 100` as the primary fairness story — at 101+ ticking mobs starvation
+returns at the **admission** gate unless 100 is declared the supported concurrency ceiling.
+
+**Accepted admission model (B2 amended):**
+
+| Rule | Detail |
+| --- | --- |
+| **Normal capacity** | One pending slot per **currently ticking** `PlayerMob` observer — queue depth structurally ≤ ticking mob count |
+| **Dedup** | Key `(dimension, mobUuid)` — re-dirty coalesces to one pending entry |
+| **Saturation** | If admission refuses (emergency cap only), mob retains **dirty flag**; next eligibility uses **round-robin insertion index** — not GoalSelector poll order |
+| **Service fairness** | Per-dimension lanes drained round-robin under one **server-global** query budget |
+| **Emergency cap** | `MAX_EMERGENCY_PENDING` (e.g. 256) — abnormal only; log warning; not normal multiplayer posture |
+
+**Required static tests (V1-D):**
+
+1. N mobs dirty same tick → all admitted within N enqueue attempts (no permanent refuse at admission).
+2. Saturated emergency cap → mob stays dirty; services rotate without one UUID monopolizing re-entry.
+3. Dequeue on service; remove on death/unload/dimension change; no stale UUID observe.
+
+#### Scheduler API sketch (`LOCK RECOMMENDED`)
+
+```text
+VillagePerceptionObserver          // per PlayerMob, flagless — no MOVE/LOOK
+  markDirty(reason)                // chunk transition | heartbeat
+  boolean isDirty()
+  void clearDirtyAfterEnqueue()
+
+VillagePerceptionScheduler         // server singleton
+  boolean requestObservation(ServerLevel level, UUID mobId)
+  void onServerTick(MinecraftServer server)  // service ≤ GLOBAL_QUERY_BUDGET_PER_TICK
+
+VillagePerceptionService           // package-private
+  observeAndRecord(ServerLevel, UUID mobId)  // mob.blockPosition() at service time
+```
+
+**Integration:** register observer in `SpmScavenger` beside `ExplorationActivityGoal`; scheduler
+hook on server tick end (or shared phased clock — **not** inside `ExplorationActivityGoal` cadence).
+
+**RET-1:** queue entries keyed by `(dimension, uuid)`; evict on death (`forgetEverywhere`), unload
+(observer dies), dimension change (re-dirty on new observer); clear lanes on server stop.
+
 ---
 
 ## Topic: Phased implementation plan
@@ -2887,7 +2962,7 @@ Consider queue bound = ticking PlayerMobs (one UUID each) + emergency cap. 200/2
 | Phase | Scope | Feasibility | Runtime proof |
 | --- | --- | --- | --- |
 | **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** (static) | VR-T1 pending: enter village → anchor agrees with `Raid.getCenter()` → leave → return → same settlement |
-| **V1-D** | Bounded production perception driver (D-VR-033) | **BLOCKED** — close D-VR-033 P1s; target **1.10.0** | VR-T1 + VR-T1b after D-VR-033 re-lock |
+| **V1-D** | Bounded production perception driver (D-VR-033) | **READY** — authorize implementation → **1.10.0** | VR-T1 + VR-T1b after ship |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | moved to V2/V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **REQUIRES MIXIN** | VR-T2: trade input → correct villager → atomic inventory change; VR-T2b: sell carrots → buy book |
 | **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest |
@@ -2930,7 +3005,7 @@ Consider queue bound = ticking PlayerMobs (one UUID each) + emergency cap. 200/2
 **Must not happen:** `RaidContainersGoal` loots village chest while `HOME_VILLAGE` ally profile active
 (shelter hold alone is insufficient — need VR-20 predicate).
 
-### V1-D — production perception driver (`REVIEW` — D-VR-033; **not authorized**)
+### V1-D — production perception driver (`LOCK RECOMMENDED` — D-VR-033; **authorization pending**)
 
 | Scenario | Predicted observable | Failure/weirdness under test |
 | --- | --- | --- |
@@ -3001,7 +3076,7 @@ required evidence; code/static tests cannot confirm this timeline.
 | A non-player **consumer** of villager reputation | **UNVERIFIED** — probe before V3 (B-VR-36) |
 | `PoiManager` unloaded-chunk leakage | **V1-R4 `ACCEPTED`** — dual pipeline; coverage independent of `getInRange` unloaded records; query cost `UNVERIFIED` (B-VR-58) |
 | V1-R4 `PerceptionCoverage` | **`ACCEPTED`** — ready to implement when authorized |
-| V1 perception **driver** | **REVIEW — D-VR-033 / V1-D BLOCKED** — after R4 ships + scheduler P1 closure |
+| V1 perception **driver** | **READY** — D-VR-033 scheduler contracts locked; **awaiting V1-D authorization** |
 | `MaterialDemandPolicy` class name | **NOT FOUND** — ship trade via `WorkDemandPolicy` facade (B-VR-20) |
 | Storage RFC (full personal/village chest system) | **Deferred** — `StorageOwnership` minimum in V3 |
 | Runtime VR-T* tests | **UNVERIFIED** — VR-T1 datapack planned (B-VR-28). V1 is `STATIC_CONFIRMED` only: no PlayerMob has yet perceived a village in a running world |
@@ -3444,26 +3519,51 @@ and belongs in a separate relationship/history model.
 **Rejected:** `KnownVillage.origin = FOUNDED`; project-side memory insertion; single-bed wilderness
 camp becoming `HOME_VILLAGE`; treating one mob's founding history as settlement identity for all.
 
+### V1-D — task contract (`PROPOSED` — authorize for 1.10.0)
+
+**Scope (in):** `VillagePerceptionObserver`, `VillagePerceptionScheduler`, server tick hook,
+`SpmScavenger` registration, static tests for VR-M4/M7 + B-VR-57 admission fairness + V1-R4 regressions.
+
+**Scope (out):** `KnownVillager`, bell goal, trade, raid, inspector readout, VR-T1 datapack runtime.
+
+**Must happen:** production call path `observe` → `VillageMemorySavedData.record` for ticking PlayerMobs;
+≤1 global POI query/server tick; no MOVE/LOOK flags on observer.
+
+**Must not happen:** shared observation cache; hidden POI in supersede; starvation at admission among
+≤100 simultaneous ticking observers; unload/death leaves stale queue UUIDs.
+
+**Verification:** `.\gradlew.bat test --tests "*village*"` + structural contract tests; label runtime
+`UNVERIFIED` until VR-T1 launch approval.
+
+**Artifact:** `.superpowers/sdd/task-45-brief.md` (to be written on authorization).
+
 ### D-VR-033: Bounded individual village-perception scheduling (`Agent_Codex` + User review)
 
-**Status:** `REVIEW` — B2 direction accepted; **implementation authorization BLOCKED** until V1-R4
-**ships** and scheduler P1s close
+**Status:** `LOCK RECOMMENDED` (2026-08-14) — P0 **CLOSED** (V1-R4 1.9.5); P1 scheduler contracts
+**CLOSED** in RFC (B-VR-56/57/60). **Implementation authorization:** pending User ack for V1-D.
 
-**Open before re-lock / authorization:**
+**Accepted:**
 
-| ID | Issue | Required resolution |
-| --- | --- | --- |
-| **P0** | `withheldPoiCount` epistemic leak | **V1-R4 `ACCEPTED`** — implement when authorized |
-| **P1** | Request ≠ service latency | Conditional Must happen; VR-T1 traversal vs latency (B-VR-56) |
-| **P1** | Queue admission fairness when full | Fair admission preferred; ticking-mob-bound queue under consideration (B-VR-57) |
+- B2 per-level UUID lanes + **one server-global POI query budget** per tick.
+- Flagless per-mob observer; chunk-dirty + heartbeat; no shared result cache.
+- Conditional Must happen (mob must **remain** in region through service).
+- Fair admission: ticking-mob-bound queue + round-robin retry; emergency cap abnormal only.
+- `VillagePerception.observe(level, mob.blockPosition())` at **service** time — not enqueue time.
 
-**Sequence:** V1-R4 implement → code/test review → close P1s → re-lock D-VR-033 → V1-D authorization.
+**Rejected:** extending `ExplorationActivityGoal` cadence (A); central POI cache (C); `MAX_QUEUE>=100`
+as primary fairness; unconditional prompt observation guarantee.
+
+**Provisional tuning constants:** `HEARTBEAT_TICKS=200`, `DEBOUNCE_TICKS=20`, `GLOBAL_QUERY_BUDGET=1`.
+
+**Sequence:** ~~V1-R4~~ **DONE** → ~~close P1s~~ **DONE (RFC)** → **authorize V1-D** → ship 1.10.0 →
+VR-T1/VR-T1b runtime (separate launch approval).
 
 
 ## Contribution
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Cursor | 2026-08-14 | **PROGRESSIVE_CONTINUATION — D-VR-033 P1 closure.** V1-R4 P0 acknowledged closed. Locked B-VR-56 conditional service + B-VR-57/60 fair admission (ticking-mob-bound queue, round-robin retry, emergency cap only). Scheduler API sketch; V1-D task contract for 1.10.0; VR-33; D-VR-033 → `LOCK RECOMMENDED`. **V1-D authorization still required.** |
 | User | 2026-08-14 | **Approve V1-R4 / 1.9.5** (pushed implementation). P0 epistemic leak **CLOSED**; admitted-count regression **CLOSED**. Runtime perception **UNVERIFIED**. D-VR-033 **REVIEW**; V1-D **BLOCKED** → **1.10.0** after scheduler P1 closure. P2: extend no-chunk-load structural test to `PerceptionCoverage.java` (deferred). |
 | Agent_Cursor | 2026-08-14 | **V1-R4 implemented (1.9.5).** `PerceptionCoverage` dual pipeline; `ObservationQuality` cross-multiply supersede; optimistic NBT migration; `PerceptionCoverageTest` + contract/structural updates. Village tests green. V1-D still BLOCKED. |
 | User | 2026-08-14 | **Accept V1-R4.** `PerceptionCoverage` LOCKED: dual pipeline (coverage independent of `getInRange`); `loadedColumns`/`totalColumns` + cross-multiply supersede; optimistic full-coverage NBT migration; required shrink + worse-coverage tests. D-VR-033 still REVIEW; V1-D BLOCKED. **No implementation authorization.** |
