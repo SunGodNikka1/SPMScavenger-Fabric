@@ -14,7 +14,7 @@ import net.minecraft.world.entity.Mob;
 import java.util.Comparator;
 
 /**
- * Temporary VR-T1.5a fixture (V1.5-F / D-VR-051). Removed after VR-T1.5 PASS.
+ * Temporary VR-T1.5 fixtures (V1.5-F / D-VR-051). Removed after VR-T1.5 PASS.
  */
 public final class VillageDesignateHomeCommand {
 
@@ -67,7 +67,8 @@ public final class VillageDesignateHomeCommand {
                                                     + anchor.toShortString()),
                                             true);
                                     return 1;
-                                }))));
+                                })))
+                .then(VillageSettlementStatusCommand.node()));
     }
 
     private static Mob asPlayerMob(net.minecraft.world.entity.Entity entity) {
