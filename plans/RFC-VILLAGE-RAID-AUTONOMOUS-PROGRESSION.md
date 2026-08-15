@@ -8,10 +8,10 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D CLOSED** (VR-T1A **PASS**, User 2026-08-14). **V2 Trading** is the active frontier |
-| **Status** | `RESEARCHING` — V1 perception **COMPLETE**; V2 Trading design/authorization next |
-| **Nearest frontier** | **V2 Trading** — `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal` |
-| **Last update** | 2026-08-14 (VR-T1A **PASS**; temporary VR-T1 diagnostics removed; frontier → V2) |
+| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + VR-T1A CLOSED**. **V1.5 Settlement attachment** is the active frontier; **V2 Trading** follows |
+| **Status** | `RESEARCHING` — V1 perception **COMPLETE**; V1.5 attachment/return/social design next |
+| **Nearest frontier** | **V1.5 Settlement attachment & return** — then **V2 Trading** |
+| **Last update** | 2026-08-14 (V1.5 design closure — storage Option A, return architecture, task contract; **authorization pending**) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -389,7 +389,8 @@ ship in `com.noobk.spmscavenger.village`.
 
 ### Unblock
 
-V1 **`IMPLEMENTED`** — detection + tier enum + home designation. **V4** ships factual utility scoring +
+V1 **`IMPLEMENTED`** — detection + tier enum + home designation. **V1.5** adds mob-owned
+`SettlementRelationship` + return/social slice (`D-VR-034`). **V4** ships factual utility scoring +
 **Place-opinion bridge** at anchor (D-VR-025/026). V5 consumes `HOME_VILLAGE` for raid interrupt.
 
 ---
@@ -476,6 +477,295 @@ idle fallback
 
 **Cross-link:** GAO-10 discretionary `SOCIAL` is the correct executor for "browse village socially" —
 Opinion picks **who** to greet; Village supplies **where** the settlement is.
+
+---
+
+## Topic: Village attachment & settlement relationship (`User`)
+
+**Author:** `User` (architecture + brainstorm, 2026-08-14)
+**Status:** `PROPOSED` — **V1.5** slice; not implementation authorization
+**Peer review:** `Agent_Cursor` (dedup + RFC capture, 2026-08-14)
+
+### Problem (observable)
+
+With V1 shipped, a PlayerMob can **know** a village exists (`KnownVillage`) but still treats it as
+**POI cluster → (future) trade machine → leave**. Humans and the broader capability list already
+assume something stronger: home nearby, return visits, discretionary social time, preferential trade,
+bringing supplies, village manners, raid defense, and later personal-base establishment. The RFC has
+most pieces scattered across V2–V7, but **"this place matters to me"** is not yet an explicit,
+mob-owned layer between world truth and behavior.
+
+### Layer model (`CONSENSUS` — aligns with Opinion central rule)
+
+```text
+KnownVillage
+  = "I know this settlement exists."          // factual; per settlement row
+        ↓
+Settlement experience
+  = "Things have happened to me here."      // events: visits, trades, raids, gifts, harm
+        ↓
+SettlementRelationship
+  = "This place matters to me."             // mob-owned attachment + history
+        ↓
+Opinion / VillageInteractionDirector
+        ↓
+Behavior (return, socialize, work, trade, defend, camp nearby)
+```
+
+**Locked invariant (reinforces V1 + Opinion boundary):** *Preference affects choice. Preference does
+not create permission.* Attachment may bias return or social time; it may **not** override combat
+safety, player commands, shelter holds, or illegal trade/storage actions.
+
+### What stays factual — `KnownVillage` (`LOCKED` — no change)
+
+`KnownVillage` remains world-truth memory only:
+
+```text
+KnownVillage
+├─ anchor
+├─ observation quality / coverage
+├─ factual tier (SettlementTier — home designation is factual, not affection)
+└─ first/last seen
+```
+
+**Rejected:** storing `attachment`, `familiarity`, `socialHistory`, or personality-specific affection
+inside `KnownVillage` — that would reintroduce the epistemic leak V1-R1/R4 paid to prevent.
+
+**`CODE_CONFIRMED`:** `KnownVillage.java` javadoc explicitly excludes villagers, offers, containers,
+and affinity; `MobVillageMemory.designateHome()` is the existing factual **HOME_VILLAGE** gate
+(`MobVillageMemory.java` L87–105).
+
+### Mob-owned relationship (`PROPOSED` — `SettlementRelationship`)
+
+Attachment belongs on the **mob**, keyed to settlement identity (anchor merge via
+`VillageIdentityPolicy`), conceptually:
+
+```text
+SettlementRelationship
+├─ home?                    // mirrors factual HOME_VILLAGE; not a second home store
+├─ attachment               // accumulated "this matters" score / band
+├─ familiarity              // time/visit-weighted comfort
+├─ helpfulHistory           // defended, replanted, gifted, rang bell, …
+├─ socialHistory            // greets, discretionary SOCIAL episodes
+├─ lastVisitTick
+└─ meaningfulEvents[]       // bounded event log (raid helped, villager hurt witness, …)
+```
+
+**Storage shape (options — pick one at V1.5 lock):**
+
+| Option | Shape | Benefit | Failure mode |
+| --- | --- | --- | --- |
+| **A — parallel map on `MobVillageMemory`** | `Map<anchorKey, SettlementRelationship>` beside `List<KnownVillage>` | Minimal new persistence file; clear split from factual rows | Two structures must stay in sync on merge/evict |
+| **B — embed relationship handle on `KnownVillage`** | relationship fields adjacent but namespaced | One list to iterate | Violates "attachment not in KnownVillage" unless fields are strictly mob-prefixed and reviewed as migration |
+| **C — separate `MobSettlementRelationships` saved-data** | Own codec keyed by mob UUID | Cleanest boundary | Extra saved-data surface; RET-1 for both |
+
+**Recommendation (`Agent_Cursor`):** **Option A** for V1.5 — relationship map keyed by settlement
+identity on `MobVillageMemory`, evicted with the same LRU rules as non-home villages. Revisit **C**
+only if relationship event logs outgrow per-mob bounds.
+
+### Attachment must accumulate (`PROPOSED`)
+
+**Rejected:** `enter village once → LOVE +100`.
+
+**Accepted accumulation signals (non-exhaustive):**
+
+| Signal | Attachment effect | Owner |
+| --- | --- | --- |
+| Meaningful time in village bounds | `+` familiarity | Relationship |
+| Sleep / camp nearby (not villager bed theft) | `+` attachment | Relationship + shelter |
+| Discretionary `FriendlyGreetGoal` / GAO SOCIAL | `+` socialHistory | Opinion executor + relationship |
+| Successful trades (V2+) | `+` economic familiarity | Relationship + `KnownVillager` |
+| Helpful acts (replant, gift food, ring bell) | `+` helpfulHistory | V3+ executors |
+| Raid defense / rescue | `+++` helpfulHistory | V5 |
+| Repeated return visits | `+` familiarity | Relationship |
+| `designateHome()` | `+++` factual home + relationship floor | **Factual** `MobVillageMemory` + relationship mirror |
+
+**Personality modulation (`INFERRED` — fits existing Opinion stack):** sociable mobs attach via
+villagers; materialistic mobs via economy first; adventurous mobs oscillate leave/return; coward
+mobs may attach because the settlement reads as **safe home** — all via `SettlementOpinionBias` /
+personality inputs, not hardcoded tier jumps.
+
+### What attachment should change (behavioral contract)
+
+Strong attachment should make villages **visibly matter**:
+
+| Behavior | Phase | Gate |
+| --- | --- | --- |
+| Return after exploration / mining | **V1.5** | Relationship + remembered anchor |
+| Prefer camping / sleeping nearby | **V1.5** partial | Shelter + attachment; no bed theft |
+| Greet / discretionary social time | **V1.5** | GAO SOCIAL + village-aware `FriendlyGreetGoal` |
+| Prefer this village when multiple legal options | **V2+** | Trade legality first; attachment biases |
+| Bring food/resources back | **V3** | `GiftPolicy` + storage ownership |
+| Replant / village work | **V3** | Farm goals + manners |
+| Avoid village-owned storage theft | **V1.5** precursor | VR-20 ally gate when HOME or high attachment |
+| Defend during raids | **V5** | `HOME_VILLAGE` + raid matrix |
+| Interrupt lesser work when endangered | **V5** | D-VR-010 |
+| Personal base nearby | **V4** | Site utility + Place opinion |
+
+**Must happen (V1.5):** Bob with `HOME_VILLAGE` and high familiarity **paths back** after a long
+mining trip instead of treating all remembered clusters as equal noise.
+**Must not happen:** attachment causes looting village chests, ignoring mandatory shelter, or
+abandoning combat safety.
+
+### Relationship to existing RFC pieces (dedup)
+
+| Existing | Relationship to attachment |
+| --- | --- |
+| `SettlementTier` / `HOME_VILLAGE` | **Factual** designation — attachment **reads** it, does not replace it |
+| `SettlementOpinionBias` (D-VR-025) | **Soft rank** among legal villages — consumes relationship + Place/Entity opinion |
+| V4 return visits / home designation | **Split:** factual home stays V1; **return commute + attachment history → V1.5** |
+| B-VR-17 GAO SOCIAL browse | **→ V1.5** executor slice |
+| B-VR-40 stress → familiar anchor | **→ Opinion package**; attachment supplies "familiar" signal |
+| SETTLEMENT Opinion subject (B-VR-39) | **Still DEFERRED** — relationship history is factual/experiential, not a new Opinion subject type |
+| `SettlementTier` decomposition gate | **Still OPEN** — attachment does not remove need to split home/economic/safety **facts** before V5 |
+
+### Phase insert — **V1.5** before V2 Trading (`PROPOSED` — `D-VR-034`)
+
+User proposal: small village/social features **before** full `VillagerTradeAdapter` — makes trade
+*meaningful* ("I trade **here** because I care") instead of nearest-offer machine.
+
+```text
+V1   ✅ Perceive villages (IMPLEMENTED; VR-T1A PASS)
+V1.5 Settlement attachment & return (NEXT)
+├─ SettlementRelationship persistence + accumulation rules
+├─ recognize factual home + familiarity bands
+├─ return / commute-to-home-or-familiar goal
+├─ village-aware FriendlyGreet / discretionary SOCIAL weighting
+└─ basic village manners precursor (ally storage gate sketch → VR-20)
+V2   Trading (VillagerTradeAdapter, TradeEvaluationPolicy, TradeWithVillagerGoal)
+V3+  Work, reputation, raid, site utility (unchanged ordering after V2)
+```
+
+**Strongest objection:** V1.5 scope creep absorbs V3 manners + V4 return + part of V5 ally logic.
+**Mitigation:** V1.5 MVP is **relationship + return + social weighting + ally-gate precursor only**;
+replant, full gift loops, and raid interrupt remain later phases.
+
+**Viable alternative:** keep original plan (V2 trade before attachment). **Rejected for gen-1** per
+User — trade without attachment reads as machine-like; attachment without trade still produces
+visible "my village" play.
+
+### V1.5 runtime matrix (`PROPOSED`)
+
+| ID | Must happen | Must not happen |
+| --- | --- | --- |
+| VR-T1.5a | After 10+ min away, mob with HOME paths toward home anchor | Treats home same as never-seen cluster |
+| VR-T1.5b | Repeated visits increase familiarity in saved data | Single visit maxes attachment |
+| VR-T1.5c | Village-aware greet fires more near familiar settlement | Greet mistaken for trade completion |
+| VR-T1.5d | HIGH attachment + HOME suppresses village chest raid (precursor) | Ally profile still loots workstation chest |
+
+### Decisions
+
+| ID | Decision | Status |
+| --- | --- | --- |
+| **D-VR-034** | Insert **V1.5** (attachment + return + village social) **before V2 Trading** | **`LOCK RECOMMENDED`** — User intent + VR-T1A foundation |
+| **D-VR-035** | `SettlementRelationship` is mob-owned, separate from factual `KnownVillage` | **`LOCK RECOMMENDED`** — Option **A** (parallel map on `MobVillageMemory`) |
+| **D-VR-036** | Attachment accumulates from events; no single-visit max | **`LOCK RECOMMENDED`** — gen-1 bands below |
+| **D-VR-037** | V1.5 MVP excludes `VillagerTradeAdapter` and raid interrupt | **`LOCKED`** — scope guard |
+| **D-VR-038** | Return commute via **ExploringGoal / discretionary bias**, not priority-3 gather competitor | **`LOCK RECOMMENDED`** — see implementation contract |
+| **D-VR-039** | `designateHome()` needs a **production caller** for VR-T1.5a (debug command minimum) | **`LOCK RECOMMENDED`** — **CONFIRMED** gap: API exists, zero production callers |
+
+**Not authorized:** V1.5 implementation, mixin work beyond ally-gate precursor, or Minecraft launch.
+
+### V1.5 implementation contract (`LOCK RECOMMENDED` — authorize for **1.11.0**)
+
+**Scope (in):**
+
+| Slice | Deliverable |
+| --- | --- |
+| **V1.5-A** | `SettlementRelationship` record + parallel map on `MobVillageMemory`; NBT codec; RET-1 evict with village LRU |
+| **V1.5-B** | Gen-1 accumulation (`D-VR-036`): presence ticks in settlement bounds, visit on perception `record`, social episode hooks |
+| **V1.5-C** | `SettlementReturnPolicy` + `ExploringGoal` commute destination (HOME first, else highest familiarity) |
+| **V1.5-D** | Village-aware discretionary SOCIAL weighting near familiar anchor (GAO bridge; no trade confusion) |
+| **V1.5-E** | VR-T1.5d precursor: `RaidContainersGoal` suppress when `HOME_VILLAGE` or attachment ≥ HIGH (mixin predicate) |
+| **V1.5-F** | Debug: `/spmscavenger designate-home <PlayerMob>` (factual tier only) + read-only `village-memory` for VR-T1.5 probes |
+
+**Scope (out):** `VillagerTradeAdapter`, raid interrupt, replant, full `StorageOwnership`, `SettlementOpinionBias` (V4), SETTLEMENT Opinion subject.
+
+**Storage — Option A (`LOCK RECOMMENDED`, D-VR-035):**
+
+```text
+MobVillageMemory
+├─ List<KnownVillage> villages          // factual — unchanged
+└─ Map<BlockPos, SettlementRelationship> relationships  // mob-owned; key = merged anchor
+```
+
+- Key: canonical anchor from `at(anchor)` merge (`VillageIdentityPolicy`), not a minted id.
+- Eviction: when `remember()` LRU evicts a non-home village, drop the matching relationship row.
+- `relationships` never written inside `KnownVillage` codec.
+
+**`SettlementRelationship` gen-1 fields:**
+
+```text
+attachmentBand     // LOW | MEDIUM | HIGH (derived from score, not stored as float in NBT v1)
+familiarityScore   // int, capped; increments per visit/presence
+lastVisitTick
+helpfulEventCount  // 0 in V1.5 MVP except manual test hooks
+socialEventCount   // greets / GAO SOCIAL episodes near anchor
+```
+
+**Accumulation (`D-VR-036` gen-1 — provisional, VR-T1.5b tunes):**
+
+| Signal | Rule | Cap |
+| --- | --- | --- |
+| Perception `record` updates village | `+VISIT_TICKS` familiarity if `lastVisitTick` stale ≥ 200t | score ≤ 1000 |
+| Flagless observer tick inside raid-association radius of remembered anchor | `+1` familiarity / 200t heartbeat | same cap |
+| GAO SOCIAL / `FriendlyGreetGoal` within 64 of anchor | `+SOCIAL_BUMP` + socialEventCount | band thresholds |
+| `designateHome()` | factual `HOME_VILLAGE` + relationship floor HIGH | — |
+
+Bands: LOW `< 200`, MEDIUM `200–599`, HIGH `≥ 600` (names only; thresholds are tuning constants).
+
+**Return commute (`D-VR-038`):**
+
+**Rejected:** orphan `ReturnToSettlementGoal` at priority **3** beside gather/smelt — loses forever to `RaidContainersGoal` / gather (`SpmScavenger.java` priority table).
+
+**Accepted:**
+
+```text
+SettlementReturnPolicy.shouldCommute(mob, memory, relationships, now)
+        ↓
+when true: ExploringGoal (priority 8) seeds expedition toward
+           home().anchor() else highest familiarity remembered anchor
+        ↓
+DiscretionaryActivityDirector still owns SOCIAL vs explore arbitration
+```
+
+Admission: `HOME_VILLAGE` **or** familiarity HIGH; mob farther than `COMMUTE_MIN_DISTANCE` (e.g. 128); mining expedition idle or `ExplorationReadiness` trip threshold met; no mandatory combat/shelter hold.
+
+**`designateHome` gap (`CONFIRMED`):** `VillageMemorySavedData.designateHome` and `MobVillageMemory.designateHome` are **test-only** today (grep `src/main` — no production caller). VR-T1.5a **cannot pass** without **V1.5-F** debug command or an auto-home policy (`D-VR-039` defers auto policy to product review; debug command is minimum).
+
+**Ally storage precursor (`V1.5-E`):** `FriendlyGreetShelterHoldMixin` gates shelter only (`ActivityClass` envelope) — it does **not** block `RaidContainersGoal` looting. VR-T1.5d requires a **separate** mixin `HEAD` cancel on `RaidContainersGoal#canUse` when `VillageAllyStoragePolicy.suppressLoot(mob)` — predicate: `HOME_VILLAGE` **or** attachment HIGH at that settlement. Workstation chests remain **UNVERIFIED** until V3 `StorageOwnership`.
+
+**Must happen (static):** relationship persists across save/reload; evict sync; return policy unit tests; commute does not call `VillagePerception.observe` from debug paths.
+
+**Must not happen:** attachment fields inside `KnownVillage` NBT; return goal at priority 3; trade adapter; perception refresh from debug read commands.
+
+**Verification:** `.\gradlew.bat test --tests "*village*"` + structural contract extensions; VR-T1.5a–d runtime after launch approval.
+
+**Artifact:** `.superpowers/sdd/task-46-brief.md` on authorization.
+
+### MAIBS — V1.5 (implementation-ready)
+
+| Minute | Predicted observable | Failure mode |
+| --- | --- | --- |
+| 0–3 | Paths through village; greets villagers | Ignores villagers (unchanged V1 gap if GAO not wired) |
+| 3–8 | `KnownVillage` + rising familiarity on repeat presence | Attachment stuck at zero |
+| 8–15 | Leaves for mining; later **chooses** return heading to home/familiar anchor | Picks random explore forever |
+| 15–20 | Camps near village (shelter/torch), not inside villager beds | Steals bed → anger |
+
+**Implementation binding:** return must route through `ExploringGoal` expedition seed (`D-VR-038`), not a new priority-3 executor.
+
+**Weirdness watch:** without `designateHome` production caller, VR-T1.5a needs debug home designation (`D-VR-039`) until auto-home policy exists.
+
+### Decisions
+
+| ID | Decision | Status |
+| --- | --- | --- |
+| **D-VR-034** | Insert **V1.5** (attachment + return + village social) **before V2 Trading** | `PROPOSED` — User |
+| **D-VR-035** | `SettlementRelationship` is mob-owned, separate from factual `KnownVillage` | `PROPOSED` — User |
+| **D-VR-036** | Attachment accumulates from events; no single-visit max | `PROPOSED` — User |
+| **D-VR-037** | V1.5 MVP excludes `VillagerTradeAdapter` and raid interrupt | `PROPOSED` — scope guard |
+
+**Not authorized:** implementation, mixin work, or Minecraft launch.
 
 ---
 
@@ -2143,6 +2433,11 @@ advance the existing **V1 perception-driver** frontier; they do not add V2/V5 be
 | B-VR-58 | **POI query cost vs loaded admission** | User review | **→ VR-T1b** | `getInRange` may scan persisted unloaded sections; measure edge cases |
 | B-VR-60 | **Ticking-mob-bound queue + round-robin admission** | P1 closure | **→ D-VR-033** | Normal capacity = one pending slot per ticking observer; emergency cap only |
 | B-VR-54 | **Explicit social transfer of village knowledge** | `NEW` | **DEFERRED** | Useful later, but silently copying one mob's observation to companions would violate individual perception; any transfer needs an observable social event |
+| B-VR-61 | **SettlementRelationship mob layer** | User architecture | **→ Topic (V1.5)** | Attachment/history separate from `KnownVillage`; D-VR-035 |
+| B-VR-62 | **V1.5 before V2 Trading** | User phase reorder | **→ D-VR-034 PROPOSED** | Social/return/manners before `VillagerTradeAdapter` |
+| B-VR-63 | **Accumulating attachment (no one-visit max)** | User design | **→ D-VR-036 PROPOSED** | Personality-modulated familiarity |
+| B-VR-64 | **Return / commute-to-home goal** | User behavior | **→ V1.5-C** (`D-VR-038`) | `SettlementReturnPolicy` + `ExploringGoal` seed, not priority-3 goal |
+| B-VR-65 | **Village-aware FriendlyGreet weighting** | User + B-VR-17 | **→ V1.5** | GAO SOCIAL + settlement context |
 
 **Rejected alternatives:** put the 64-block POI query in the existing 10-tick
 `ExplorationActivityGoal` observer (unnecessarily couples expensive perception to control-plane
@@ -2674,8 +2969,7 @@ regression when Pipeline A lives outside `VillagePerception`.
 
 **Cosmetic (deferred):** `KnownVillage` Javadoc duplicated word — not a release blocker.
 
-**Next gate:** close D-VR-033 scheduler P1s (B-VR-56 fair admission, B-VR-57 conditional/bounded service)
-→ re-lock D-VR-033 → authorize **V1-D** for **1.10.0**.
+**Next gate:** ~~V1-D~~ **DONE** → ~~VR-T1A~~ **PASS** → **authorize V1.5 (1.11.0)** → VR-T1.5 runtime → V2 Trading.
 
 **Status (2026-08-14 continuation):** P1 contracts **CLOSED** in RFC — see `Topic: V1 perception driver`
 scheduler contracts section. D-VR-033 → **`LOCK RECOMMENDED`**. **Awaiting V1-D implementation authorization.**
@@ -2964,8 +3258,9 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | --- | --- | --- | --- |
 | **V1** | ~~Village awareness~~ → **Village perception & identity** (narrowed by review): `VillagePerception`, `VillageAnchorPolicy`, `KnownVillage`, `SettlementTier`, `MobVillageMemory`, `VillageMemorySavedData` | **IMPLEMENTED** | VR-T1A **PASS** |
 | **V1-D** | Bounded production perception driver (D-VR-033) | **IMPLEMENTED** (1.10.0) | VR-T1A **PASS**; VR-T1b **DEFERRED** |
+| **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social, manners precursor (ally storage gate) | **READY** — D-VR-034…039 **LOCK RECOMMENDED**; task-46 brief | VR-T1.5a–d; **before V2** |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | moved to V2/V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
-| **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **REQUIRES MIXIN** | VR-T2: trade input → correct villager → atomic inventory change; VR-T2b: sell carrots → buy book |
+| **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **REQUIRES MIXIN** — **after V1.5** | VR-T2: trade input → correct villager → atomic inventory change; VR-T2b: sell carrots → buy book |
 | **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest |
 | **V4** | Factual site utility + **Place opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**), known traders, home designation, return visits | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
@@ -3006,7 +3301,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 **Must not happen:** `RaidContainersGoal` loots village chest while `HOME_VILLAGE` ally profile active
 (shelter hold alone is insufficient — need VR-20 predicate).
 
-### V1-D — production perception driver (`LOCK RECOMMENDED` — D-VR-033; **authorization pending**)
+### V1-D — production perception driver (`IMPLEMENTED` — 1.10.0; VR-T1A **PASS**)
 
 | Scenario | Predicted observable | Failure/weirdness under test |
 | --- | --- | --- |
@@ -3092,7 +3387,7 @@ required evidence; code/static tests cannot confirm this timeline.
 | PlayerMob-as-villager lifecycle | **Rejected** (`D-VR-004`) |
 | Exploit-optimized trading hall AI | **Rejected** — emergent arbitrage only |
 | Iron golem as village centroid heuristic | **Deferred** (B-VR-12) |
-| GAO SOCIAL village browse | **Deferred** — Opinion discretionary `SOCIAL` + `FriendlyGreetGoal` |
+| GAO SOCIAL village browse | **→ V1.5-D** — discretionary SOCIAL weighting near familiar anchor (B-VR-65) |
 | SETTLEMENT Opinion subject | **Deferred** — reopen if mob needs same-settlement pref when anchor geography moves (D-VR-026 **HELD**; B-VR-39) |
 | Ominous Bottle RAID intent targeting home village | **PRODUCT DECISION** open; default refuse (B-VR-14 / D-VR-028) |
 | `SettlementTier` decomposition | **OPEN architecture gate before V4/V5** — map consumers and saved-data migration before splitting home/economic/safety dimensions |
@@ -3560,7 +3855,7 @@ as primary fairness; unconditional prompt observation guarantee.
 
 **Provisional tuning constants:** `HEARTBEAT_TICKS=200`, `DEBOUNCE_TICKS=20`, `GLOBAL_QUERY_BUDGET=1`.
 
-**Sequence:** ~~V1-R4~~ **DONE** → ~~V1-D~~ **DONE** → ~~VR-T1A~~ **PASS** → **V2 Trading** (next).
+**Sequence:** ~~V1-R4~~ **DONE** → ~~V1-D~~ **DONE** → ~~VR-T1A~~ **PASS** → **V1.5 Settlement attachment** (next) → V2 Trading.
 
 ### VR-T1A — runtime closure (`PASS`, User, 2026-08-14)
 
@@ -3597,6 +3892,8 @@ use explicit boolean state (`VillagePerceptionEnqueueDebounce`).
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Cursor | 2026-08-14 | **PROGRESSIVE_CONTINUATION — V1.5 design closure.** Code audit: `designateHome()` **zero production callers** (`CONFIRMED`); `FriendlyGreetShelterHoldMixin` does not block `RaidContainersGoal` loot. Locked D-VR-034…037; added D-VR-038 (return via `ExploringGoal` not priority-3 goal), D-VR-039 (home designation gap). V1.5 implementation contract (slices A–F, Option A storage, accumulation bands, VR-T1.5d mixin note). Phased plan V1.5 → **READY**. Fixed stale V1-D / sequence lines. **No implementation authorization.** |
+| User + Agent_Cursor | 2026-08-14 | **Village attachment brainstorm → V1.5 phase.** User model: KnownVillage (factual) → settlement experience → `SettlementRelationship` (mob-owned attachment/history) → Opinion/Director → behavior. Attachment accumulates; home stays factual `designateHome()`. **D-VR-034…037 PROPOSED:** V1.5 (return, social, manners precursor) **before V2 Trading**. Deduped against D-VR-025/026, V4 return/home, B-VR-17/40/39. Frontier → **V1.5**. **No implementation authorization.** |
 | User + Agent_Cursor | 2026-08-14 | **VR-T1A PASS; frontier → V2 Trading.** User closed VR-T1A: autonomous discovery, full driver path, same-village identity, save/reload, cross-dimension persistence **CONFIRMED**. Debounce overflow root cause + repair runtime-confirmed. Removed `village-probe` / `village-driver` / `village-memory` and trace plumbing. VR-T1b 10/50/100 profiling **DEFERRED**. Permanent-removal sweep static-confirmed, runtime-deferred. |
 | User + Agent_Cursor | 2026-08-14 | **VR-T1 partial CONFIRMED (Bob).** Post-debounce: driver RECORDED 8 POIs; memory 1 village anchor `-11666,82,7709`; leave/return same settlement; save/reload persists `First seen:123682`. Pre-fix: debounce `Long.MIN_VALUE` overflow blocked all enqueues. Diagnostics: `village-probe`, `village-driver`. VR-T1b + raid-center **UNVERIFIED**. |
 | Agent_Cursor | 2026-08-14 | **PROGRESSIVE_CONTINUATION — D-VR-033 P1 closure.** V1-R4 P0 acknowledged closed. Locked B-VR-56 conditional service + B-VR-57/60 fair admission (ticking-mob-bound queue, round-robin retry, emergency cap only). Scheduler API sketch; V1-D task contract for 1.10.0; VR-33; D-VR-033 → `LOCK RECOMMENDED`. **V1-D authorization still required.** |

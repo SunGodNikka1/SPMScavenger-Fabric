@@ -5,8 +5,9 @@
 | Item | Status | Artifact |
 | --- | --- | --- |
 | **RT-MI-TS1** | Open — runtime falsification; launch not authorized | `task-33-brief.md` |
-| **V1-D village perception driver** | **DONE** — VR-T1A **PASS** (2026-08-14); diagnostics removed | `task-45-report.md` |
-| **V2 Trading** | **OPEN** — next feature frontier (`VillagerTradeAdapter`, `TradeWithVillagerGoal`) | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
+| **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
+| **V1.5 Settlement attachment & return** | **READY** — D-VR-034…039 LOCK RECOMMENDED; task-46 on authorization → 1.11.0 | RFC V1.5 implementation contract |
+| **V2 Trading** | **BLOCKED on V1.5** — `VillagerTradeAdapter` after attachment slice | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
