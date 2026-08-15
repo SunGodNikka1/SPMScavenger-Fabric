@@ -8,6 +8,7 @@ import com.noobk.spmscavenger.opinion.readout.OpinionReadoutSnapshots;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
 
 import java.util.Optional;
 
@@ -39,11 +40,13 @@ public final class OpinionInspectNetworking {
         }
 
         String displayName = entity.getName().getString();
+        Mob mob = (Mob) entity;
         Optional<OpinionReadoutSnapshot> snapshot = OpinionReadoutSnapshots.captureIfPresent(
                 payload.requestId(),
                 payload.entityId(),
                 displayName,
-                entity.getUUID());
+                entity.getUUID(),
+                mob);
         send(player, new OpinionInspectPayloads.Response(
                 payload.requestId(),
                 payload.entityId(),

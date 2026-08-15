@@ -26,7 +26,7 @@ class OpinionReadoutSnapshotsTest {
         int before = OpinionExperienceRegistry.contextCount();
 
         OpinionReadoutSnapshot snapshot = OpinionReadoutSnapshots.capture(
-                42L, 7, "TestMob", context);
+                42L, 7, "TestMob", context, null);
 
         assertEquals(42L, snapshot.requestId());
         assertEquals("TestMob", snapshot.mobDisplayName());
@@ -38,7 +38,7 @@ class OpinionReadoutSnapshotsTest {
     void captureIfPresentDoesNotAllocateMissingContext() {
         UUID mob = UUID.randomUUID();
         OpinionReadoutSnapshot snapshot = OpinionReadoutSnapshots.captureIfPresent(
-                1L, 2, "Ghost", mob).orElseThrow();
+                1L, 2, "Ghost", mob, null).orElseThrow();
         if (PlayerMobs.available()) {
             assertEquals(OpinionReadoutStatus.NO_CONTEXT, snapshot.status());
         } else {

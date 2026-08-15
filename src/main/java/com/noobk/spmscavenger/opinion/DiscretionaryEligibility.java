@@ -42,7 +42,8 @@ public final class DiscretionaryEligibility {
         return InvalidationCause.NONE;
     }
 
-    private static boolean blocksDiscretionaryChoice(ActivityClass activity) {
+    /** Read-only inspector attribution — same predicate as discretionary eligibility. */
+    public static boolean blocksDiscretionaryChoice(ActivityClass activity) {
         return switch (activity) {
             case MANDATORY_SAFETY,
                     SHELTER_HOLD,
@@ -60,6 +61,11 @@ public final class DiscretionaryEligibility {
                     SOCIAL_REFLEX -> true;
             default -> false;
         };
+    }
+
+    /** Read-only inspector attribution for a blocking activity class. */
+    public static InvalidationCause invalidationCauseForActivity(ActivityClass activity) {
+        return mandatoryCause(activity);
     }
 
     private static InvalidationCause mandatoryCause(ActivityClass activity) {

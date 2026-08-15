@@ -7,7 +7,9 @@ import com.noobk.spmscavenger.opinion.readout.OpinionInspectRejectReason;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutDecisionView;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutSnapshot;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutStatus;
+import com.noobk.spmscavenger.opinion.readout.OpinionRuntimeAuthorityView;
 import com.noobk.spmscavenger.opinion.readout.OpinionShelterHoldView;
+import com.noobk.spmscavenger.opinion.readout.RunningGoalView;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -139,6 +141,7 @@ public final class OpinionInspectPayloads {
             writeAdmission(buf, snapshot.exploreAdmission());
             writeAdmission(buf, snapshot.restAdmission());
             writeDecisions(buf, snapshot.recentDecisions());
+            writeRuntimeAuthority(buf, snapshot.runtimeAuthority());
             // Task 43 item 8 - without this the trace knows the transaction and the client never
             // sees it, which is "recorded" but not "inspectable".
             writeStrings(buf, snapshot.recentYieldEvents(), OpinionReadoutSnapshot.MAX_YIELD_LINES);
@@ -185,6 +188,7 @@ public final class OpinionInspectPayloads {
             ActivityAdmissionView exploreAdmission = readAdmission(buf);
             ActivityAdmissionView restAdmission = readAdmission(buf);
             List<OpinionReadoutDecisionView> decisions = readDecisions(buf);
+            OpinionRuntimeAuthorityView runtimeAuthority = readRuntimeAuthority(buf);
             List<String> yieldEvents = readStrings(buf, OpinionReadoutSnapshot.MAX_YIELD_LINES);
             return new OpinionReadoutSnapshot(
                     requestId,
@@ -214,7 +218,51 @@ public final class OpinionInspectPayloads {
                     exploreAdmission,
                     restAdmission,
                     decisions,
+                    runtimeAuthority,
                     yieldEvents);
+        }
+
+        private static void writeRuntimeAuthority(
+                FriendlyByteBuf buf, OpinionRuntimeAuthorityView authority) {
+            buf.writeUtf(authority.latestDispositionCause());
+            int count = Math.min(
+                    authority.runningGoals().size(), OpinionRuntimeAuthorityView.MAX_RUNNING_GOALS);
+            buf.writeVarInt(count);
+            for (int i = 0; i < count; i++) {
+                RunningGoalView goal = authority.runningGoals().get(i);
+                buf.writeUtf(goal.goalSimpleName());
+                buf.writeUtf(goal.activityClass());
+            }
+            buf.writeUtf(authority.discretionaryBlockerGoal());
+            buf.writeUtf(authority.discretionaryBlockerActivity());
+            buf.writeUtf(authority.discretionaryBlockerCause());
+            buf.writeBoolean(authority.combatTarget());
+            buf.writeUtf(authority.socialAdmissionTargetId());
+            buf.writeUtf(authority.greetClaimTargetId());
+            buf.writeVarLong(authority.greetClaimTicksRemaining());
+            buf.writeUtf(authority.socialBindingPhase());
+            buf.writeUtf(authority.socialBindingSubjectId());
+        }
+
+        private static OpinionRuntimeAuthorityView readRuntimeAuthority(FriendlyByteBuf buf) {
+            String latestDispositionCause = buf.readUtf();
+            int count = Math.min(buf.readVarInt(), OpinionRuntimeAuthorityView.MAX_RUNNING_GOALS);
+            List<RunningGoalView> runningGoals = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                runningGoals.add(new RunningGoalView(buf.readUtf(), buf.readUtf()));
+            }
+            return new OpinionRuntimeAuthorityView(
+                    latestDispositionCause,
+                    runningGoals,
+                    buf.readUtf(),
+                    buf.readUtf(),
+                    buf.readUtf(),
+                    buf.readBoolean(),
+                    buf.readUtf(),
+                    buf.readUtf(),
+                    buf.readVarLong(),
+                    buf.readUtf(),
+                    buf.readUtf());
         }
 
         private static void writeAdmission(FriendlyByteBuf buf, ActivityAdmissionView admission) {

@@ -10,6 +10,8 @@ import com.noobk.spmscavenger.opinion.ActivityAdmissions;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.opinion.PersonalityModel;
 
+import net.minecraft.world.entity.Mob;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,6 +52,7 @@ public final class OpinionReadoutSnapshots {
                 ActivityAdmissionView.empty(),
                 ActivityAdmissionView.empty(),
                 List.of(),
+                OpinionRuntimeAuthorityView.empty(),
                 List.of());
     }
 
@@ -57,7 +60,8 @@ public final class OpinionReadoutSnapshots {
             long requestId,
             int entityId,
             String mobDisplayName,
-            MobExperienceContext context) {
+            MobExperienceContext context,
+            Mob mob) {
         AffectiveState affect = context.affectiveState();
         Optional<ShelterNightAuthority.Hold> shelter = ShelterNightAuthority.hold(context.mobId());
         Optional<OpinionDecisionTrace.Decision> latest =
@@ -101,6 +105,7 @@ public final class OpinionReadoutSnapshots {
                 ActivityAdmissionView.from(context.discretionaryDirector().lastAdmissions().explore()),
                 ActivityAdmissionView.from(context.discretionaryDirector().lastAdmissions().rest()),
                 OpinionReadoutExplanation.recentDecisions(context),
+                OpinionRuntimeAuthorityProbe.capture(mob, context),
                 // Task 43 item 8 - sourced from the trace's typed history, never from
                 // lastYieldOutcome, which describes only the most recent ending and cannot show an
                 // open request or a transaction that ended two decisions ago.
@@ -110,7 +115,7 @@ public final class OpinionReadoutSnapshots {
     }
 
     public static Optional<OpinionReadoutSnapshot> captureIfPresent(
-            long requestId, int entityId, String mobDisplayName, UUID mobId) {
+            long requestId, int entityId, String mobDisplayName, UUID mobId, Mob mob) {
         if (!PlayerMobs.available()) {
             return Optional.of(unavailable(
                     requestId, entityId, mobDisplayName, OpinionReadoutStatus.SPM_UNAVAILABLE));
@@ -120,7 +125,7 @@ public final class OpinionReadoutSnapshots {
             return Optional.of(unavailable(
                     requestId, entityId, mobDisplayName, OpinionReadoutStatus.NO_CONTEXT));
         }
-        return Optional.of(capture(requestId, entityId, mobDisplayName, context));
+        return Optional.of(capture(requestId, entityId, mobDisplayName, context, mob));
     }
 
     private static List<String> summaryForStatus(OpinionReadoutStatus status) {

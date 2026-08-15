@@ -89,6 +89,20 @@ public final class SocialGreetClaimWindow {
                 pending.targetId(), pending.openedAtTick(), pending.deadlineTick()));
     }
 
+    /**
+     * Read-only inspector seam — current greet claim episode and ticks until the fixed deadline.
+     */
+    public static java.util.Optional<ClaimEpisodeStatus> episodeStatus(UUID mobId, long gameTime) {
+        Pending pending = PENDING.get(mobId);
+        if (pending == null) {
+            return java.util.Optional.empty();
+        }
+        long remaining = Math.max(0L, pending.deadlineTick() - gameTime);
+        return java.util.Optional.of(new ClaimEpisodeStatus(pending.targetId(), remaining));
+    }
+
+    public record ClaimEpisodeStatus(UUID targetId, long ticksRemaining) {}
+
     record ClaimEpisode(UUID targetId, long openedAtTick, long deadlineTick) {}
 
     /** Test seam. */

@@ -4,6 +4,8 @@ import com.noobk.spmscavenger.opinion.PersonalityFactory;
 import com.noobk.spmscavenger.opinion.readout.ActivityAdmissionView;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutSnapshot;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutStatus;
+import com.noobk.spmscavenger.opinion.readout.OpinionRuntimeAuthorityView;
+import com.noobk.spmscavenger.opinion.readout.RunningGoalView;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -32,7 +34,9 @@ class OpinionInspectorBodyTest {
                 Map.of(), Map.of(), 0, 0, false, Optional.empty(),
                 "EXPLORE", "EXPLORE", "RUNNING", "NONE", "INTENT_ISSUED",
                 ActivityAdmissionView.empty(), ActivityAdmissionView.empty(),
-                List.of(), yieldLines);
+                List.of(),
+                OpinionRuntimeAuthorityView.empty(),
+                yieldLines);
     }
 
     @Test
@@ -66,5 +70,44 @@ class OpinionInspectorBodyTest {
         assertTrue(OpinionInspectorBody.compose(snapshotWith(List.of(exact))).contains(exact),
                 "deriving anything here would let the client disagree with the server's causal "
                         + "record, which is the whole point of projecting on the server");
+    }
+
+    @Test
+    void mustHappen_runtimeAuthorityDiagnosticsAreVisible() {
+        OpinionRuntimeAuthorityView authority = new OpinionRuntimeAuthorityView(
+                "MANDATORY_AUTHORITY",
+                List.of(
+                        new RunningGoalView("DoorOperationGoal", "SOCIAL_REFLEX"),
+                        new RunningGoalView("FriendlyGreetGoal", "SOCIAL_REFLEX")),
+                "DoorOperationGoal",
+                "SOCIAL_REFLEX",
+                "MANDATORY_AUTHORITY",
+                false,
+                "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                "ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj",
+                7L,
+                "ADMITTED",
+                "ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj");
+
+        OpinionReadoutSnapshot snapshot = new OpinionReadoutSnapshot(
+                1L, 7, "God", OpinionReadoutStatus.READY,
+                List.of("summary"),
+                0f, 0f, 0f, 0f, 0f, 0, false,
+                PersonalityFactory.fromIdentity(UUID.nameUUIDFromBytes("body".getBytes()), 5, 5),
+                Map.of(), Map.of(), 0, 0, false, Optional.empty(),
+                "", "", "", "NONE", "MANDATORY_AUTHORITY",
+                ActivityAdmissionView.empty(), ActivityAdmissionView.empty(),
+                List.of(), authority, List.of());
+
+        String body = String.join("\n", OpinionInspectorBody.compose(snapshot));
+
+        assertTrue(body.contains("— Runtime authority —"), body);
+        assertTrue(body.contains("latestDispositionCause=MANDATORY_AUTHORITY"), body);
+        assertTrue(body.contains("discretionaryBlocker=DoorOperationGoal → SOCIAL_REFLEX"), body);
+        assertTrue(body.contains("running: DoorOperationGoal → SOCIAL_REFLEX"), body);
+        assertTrue(body.contains("socialAdmissionTarget=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), body);
+        assertTrue(body.contains("greetClaimTarget=ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj ticksRemaining=7"),
+                body);
+        assertTrue(body.contains("socialBinding=ADMITTED subject=ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj"), body);
     }
 }

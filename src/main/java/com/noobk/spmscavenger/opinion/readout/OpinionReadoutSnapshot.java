@@ -40,6 +40,7 @@ public record OpinionReadoutSnapshot(
         ActivityAdmissionView exploreAdmission,
         ActivityAdmissionView restAdmission,
         List<OpinionReadoutDecisionView> recentDecisions,
+        OpinionRuntimeAuthorityView runtimeAuthority,
         List<String> recentYieldEvents) {
 
     /** Task 43 item 8 - bounded typed yield history, so a transaction is inspectable. */
@@ -67,6 +68,9 @@ public record OpinionReadoutSnapshot(
                 ? ActivityAdmissionView.empty()
                 : exploreAdmission;
         restAdmission = restAdmission == null ? ActivityAdmissionView.empty() : restAdmission;
+        runtimeAuthority = runtimeAuthority == null
+                ? OpinionRuntimeAuthorityView.empty()
+                : runtimeAuthority;
         recentDecisions = List.copyOf(recentDecisions);
     }
 }

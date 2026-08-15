@@ -3,6 +3,8 @@ package com.noobk.spmscavenger.client.opinion;
 import com.noobk.spmscavenger.opinion.readout.ActivityAdmissionView;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutDecisionView;
 import com.noobk.spmscavenger.opinion.readout.OpinionReadoutSnapshot;
+import com.noobk.spmscavenger.opinion.readout.OpinionRuntimeAuthorityView;
+import com.noobk.spmscavenger.opinion.readout.RunningGoalView;
 
 /**
  * Task 43 item 8 — Inspector body composition, extracted from the screen.
@@ -57,6 +59,7 @@ final class OpinionInspectorBody {
         }
         bodyLines.add("placePreferences=" + snapshot.placePreferenceCount()
                 + " entityPreferences=" + snapshot.entityPreferenceCount());
+        appendRuntimeAuthority(bodyLines, snapshot.runtimeAuthority());
         bodyLines.add("");
         bodyLines.add("— Personality —");
         var p = snapshot.personality();
@@ -88,6 +91,9 @@ final class OpinionInspectorBody {
         for (OpinionReadoutDecisionView decision : snapshot.recentDecisions()) {
             bodyLines.add("#" + decision.decisionId()
                     + " " + decision.disposition()
+                    + (decision.dispositionCause().isBlank()
+                            ? ""
+                            : " cause=" + decision.dispositionCause())
                     + (decision.counterfactualOnly() ? " (non-causal)" : ""));
             bodyLines.add("  " + decision.explanation());
             decision.candidateLines().forEach(line -> bodyLines.add("  cand: " + line));
@@ -101,5 +107,50 @@ final class OpinionInspectorBody {
             snapshot.recentYieldEvents().forEach(bodyLines::add);
         }
         return bodyLines;
+    }
+
+    private static void appendRuntimeAuthority(
+            java.util.List<String> bodyLines, OpinionRuntimeAuthorityView authority) {
+        if (authority == null || !authority.hasContent()) {
+            return;
+        }
+        bodyLines.add("");
+        bodyLines.add("— Runtime authority —");
+        if (!authority.latestDispositionCause().isBlank()) {
+            bodyLines.add("latestDispositionCause=" + authority.latestDispositionCause());
+        }
+        bodyLines.add("combatTarget=" + authority.combatTarget());
+        if (!authority.discretionaryBlockerGoal().isBlank()
+                || !authority.discretionaryBlockerActivity().isBlank()) {
+            bodyLines.add("discretionaryBlocker="
+                    + authority.discretionaryBlockerGoal()
+                    + " → "
+                    + authority.discretionaryBlockerActivity()
+                    + " ("
+                    + authority.discretionaryBlockerCause()
+                    + ")");
+        } else if (!authority.discretionaryBlockerCause().isBlank()) {
+            bodyLines.add("discretionaryBlocker="
+                    + authority.discretionaryBlockerActivity()
+                    + " ("
+                    + authority.discretionaryBlockerCause()
+                    + ")");
+        }
+        for (RunningGoalView goal : authority.runningGoals()) {
+            bodyLines.add("running: " + goal.goalSimpleName() + " → " + goal.activityClass());
+        }
+        if (!authority.socialAdmissionTargetId().isBlank()) {
+            bodyLines.add("socialAdmissionTarget=" + authority.socialAdmissionTargetId());
+        }
+        if (authority.greetClaimTicksRemaining() >= 0) {
+            bodyLines.add("greetClaimTarget=" + authority.greetClaimTargetId()
+                    + " ticksRemaining=" + authority.greetClaimTicksRemaining());
+        }
+        if (!authority.socialBindingPhase().isBlank()) {
+            bodyLines.add("socialBinding="
+                    + authority.socialBindingPhase()
+                    + " subject="
+                    + authority.socialBindingSubjectId());
+        }
     }
 }
