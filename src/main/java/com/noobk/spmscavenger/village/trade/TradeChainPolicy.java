@@ -129,6 +129,45 @@ public final class TradeChainPolicy {
                 null);
     }
 
+    /**
+     * R7 — evaluate a chain when <b>no market evidence is available right now</b>.
+     *
+     * <h2>A missing quote is not a missing consumer</h2>
+     *
+     * R6's executor did {@code if (funding == null) chain = null;} outside this policy, so any moment
+     * without a usable quote destroyed the plan — and the next moment with one built a fresh plan
+     * with a fresh expiry:
+     *
+     * <pre>
+     * T0     chain opens, expires T6000
+     * T3000  the buying villager strolls out of range -&gt; chain = null
+     * T3100  it strolls back                          -&gt; new chain, expires T9100
+     * </pre>
+     *
+     * Repeat and the hard lifetime never arrives. That is the same defect the review rejected for
+     * combat interruption, triggered by market visibility instead — and the hard lifetime is the one
+     * invariant Option A was chosen to preserve.
+     *
+     * <p>So the plan survives an empty market and keeps its original clock. The consumer still wants
+     * the material; only the evidence is momentarily absent. Expiry and target-obtained still apply,
+     * because those are facts about the chain rather than about the market.
+     */
+    public static ChainOutcome withoutMarketEvidence(
+            TradeChainPlan plan, int desiredOutputHeld, long nowTick) {
+        if (plan == null) {
+            return terminated(Termination.CONSUMER_GONE);
+        }
+        if (desiredOutputHeld >= plan.targetHeldQuantity()) {
+            return terminated(Termination.TARGET_OBTAINED_ELSEWHERE);
+        }
+        if (plan.expired(nowTick)) {
+            return terminated(Termination.EXPIRED);
+        }
+        // Alive, and deliberately with no step advice: there is nothing to act on until a quote
+        // reappears, and the caller must not read this as "ready to buy".
+        return new ChainOutcome(plan, 0, true, null);
+    }
+
     private static ChainOutcome terminated(Termination termination) {
         return new ChainOutcome(null, 0, false, termination);
     }

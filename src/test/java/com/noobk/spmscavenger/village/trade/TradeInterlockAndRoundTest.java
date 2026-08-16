@@ -261,7 +261,7 @@ class TradeInterlockAndRoundTest {
         // already selected" is.
         String goal = source(Path.of("goal/TradeWithVillagerGoal.java"));
         final String CALL = "VillagerTradeAdapter.inspectOffers(";
-        String discovery = goal.substring(goal.indexOf("private Optional<Candidate> authorizedCandidate("));
+        String discovery = goal.substring(goal.indexOf("private Optional<AuthorizedAttempt> authorizedCandidate("));
         discovery = discovery.substring(0, discovery.indexOf((char) 10 + "    }"));
 
         int filter = discovery.indexOf("VillagerTradeAdapter.available(villager)");

@@ -102,7 +102,7 @@ class SellReserveModelTest {
         ScavengerConfig cfg = new ScavengerConfig();
 
         SellFundingLeg leg = TradeFundingPlanner.authorizeFunding(
-                new EmeraldDeficit(CONSUMER, 2), List.of(buysWheat), backpack,
+                new EmeraldDeficit(CONSUMER, 2), List.of(buysWheat), null, backpack,
                 ItemStack.EMPTY, ItemStack.EMPTY,
                 material -> SellReserveModel.reservedUnits(material, backpack, cfg));
 
@@ -123,7 +123,7 @@ class SellReserveModelTest {
         ScavengerConfig cfg = new ScavengerConfig();
 
         SellFundingLeg leg = TradeFundingPlanner.authorizeFunding(
-                new EmeraldDeficit(CONSUMER, 1), List.of(buysSticks), backpack,
+                new EmeraldDeficit(CONSUMER, 1), List.of(buysSticks), null, backpack,
                 ItemStack.EMPTY, ItemStack.EMPTY,
                 material -> SellReserveModel.reservedUnits(material, backpack, cfg));
 
@@ -142,7 +142,7 @@ class SellReserveModelTest {
         ScavengerConfig cfg = new ScavengerConfig();
 
         assertTrue(TradeFundingPlanner.authorizeFunding(
-                        new EmeraldDeficit(CONSUMER, 1), List.of(lucrative), backpack,
+                        new EmeraldDeficit(CONSUMER, 1), List.of(lucrative), null, backpack,
                         ItemStack.EMPTY, ItemStack.EMPTY,
                         material -> SellReserveModel.reservedUnits(material, backpack, cfg))
                 == null, "1 spare stick cannot cover a 4-stick sale, at any price");

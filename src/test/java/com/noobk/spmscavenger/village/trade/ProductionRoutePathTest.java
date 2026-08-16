@@ -99,7 +99,7 @@ class ProductionRoutePathTest {
         // only that the collaborator was named somewhere in the class, and it passed with the whole
         // chain bypassed - advanceChain still existed, it was simply never called. That is the exact
         // defect class this slice keeps repairing, reintroduced in the test that polices it.
-        String decision = bodyOf(goal, "private Optional<Candidate> authorizedCandidate(");
+        String decision = bodyOf(goal, "private Optional<AuthorizedAttempt> authorizedCandidate(");
 
         assertTrue(decision.contains("advanceChain("),
                 "the candidate path must consult V2-D, not merely define a method that could");
@@ -157,7 +157,7 @@ class ProductionRoutePathTest {
     @Test
     void mustHappen_theAttemptedQuoteIsTheOneThatWasPlanned() {
         String decision = bodyOf(source("goal/TradeWithVillagerGoal.java"),
-                "private Optional<Candidate> authorizedCandidate(");
+                "private Optional<AuthorizedAttempt> authorizedCandidate(");
 
         assertTrue(decision.contains("sellLeg.offer()"),
                 "the SELL leg carries the quote; re-deriving it from the ranking is the drift");
@@ -165,6 +165,31 @@ class ProductionRoutePathTest {
                 "and the BUY is the funded quote, not whatever ranks highest among all offers");
         assertTrue(decision.contains("owners.get(planned.index())"),
                 "the candidate is looked up BY that quote");
+    }
+
+    /**
+     * R7 — production and the tested seam must be <b>literally the same code</b>.
+     *
+     * <p>R6 added {@code forDemand} and {@code factsFrom}, tested them, and described them as "the
+     * same factory the goal calls" — while the goal still inlined both expressions. The values were
+     * equivalent, so every behavioural control stayed green and the helpers protected nothing. (The
+     * proximate cause was mine: a negative-control loop restored a backup taken before the wiring
+     * edit, silently reverting it.)
+     *
+     * <p>Wiring the calls is what makes breaking a helper break production, and that is now verified.
+     * This assertion exists only to keep the coupling from being inlined away again — an
+     * equivalence-preserving refactor no behavioural test can detect, and the point at which the
+     * helpers would quietly stop covering the caller.
+     */
+    @Test
+    void mustHappen_productionCallsTheSeamsItsRegressionsCover() {
+        String advance = bodyOf(source("goal/TradeWithVillagerGoal.java"),
+                "private TradeChainPolicy.ChainOutcome advanceChain(");
+
+        assertTrue(advance.contains("TradeChainPlan.forDemand("),
+                "inlining held + deficit here is what made the threshold regressions decorative");
+        assertTrue(advance.contains("TradeChainPolicy.factsFrom("),
+                "and inlining the ChainFacts constructor did the same for the units regression");
     }
 
     // ------------------------------------------------- the production publisher

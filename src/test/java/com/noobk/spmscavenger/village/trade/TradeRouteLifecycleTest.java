@@ -177,7 +177,7 @@ class TradeRouteLifecycleTest {
         backpack.setItem(1, new ItemStack(Items.DIAMOND, 5));
 
         assertTrue(TradeFundingPlanner.authorizeFunding(
-                        new EmeraldDeficit(IRON_TOOL, 5), List.of(compoundSell()), backpack,
+                        new EmeraldDeficit(IRON_TOOL, 5), List.of(compoundSell()), null, backpack,
                         ItemStack.EMPTY, ItemStack.EMPTY, s -> OptionalInt.of(0))
                 == null, "refused at the source as well as in the evaluator");
     }

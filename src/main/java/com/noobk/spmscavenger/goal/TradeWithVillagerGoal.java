@@ -89,6 +89,9 @@ public class TradeWithVillagerGoal extends Goal {
      */
     private TradeChainPlan chain;
 
+    /** R7 — the purchase this attempt funds; null unless a funding SELL is in progress. */
+    private TradeAttemptFunding attemptFunding;
+
     private ResourceLocation attemptConsumer;
     private ResourceLocation attemptMaterial;
     private int repathCooldown;
@@ -137,7 +140,8 @@ public class TradeWithVillagerGoal extends Goal {
     @Override
     public void start() {
         if (mob.level() instanceof ServerLevel level) {
-            authorizedCandidate(level).ifPresent(candidate -> beginAttempt(level, candidate));
+            authorizedCandidate(level)
+                    .ifPresent(attempt -> beginAttempt(level, attempt));
         }
     }
 
@@ -154,6 +158,7 @@ public class TradeWithVillagerGoal extends Goal {
         round.clear();
         target = null;
         plannedOffer = null;
+        attemptFunding = null;
         attemptConsumer = null;
         attemptMaterial = null;
         repathCooldown = 0;
@@ -227,7 +232,7 @@ public class TradeWithVillagerGoal extends Goal {
         //
         // Planning permission does not authorize execution. Re-derived here against inventory as it
         // now stands, and bound to the exact quote being attempted.
-        if (isFundingSell(plannedOffer) && !stillAuthorized(level, live.get(), backpack)) {
+        if (isFundingSell(plannedOffer) && !stillAuthorized(backpack)) {
             reselect(level);
             return;
         }
@@ -281,7 +286,7 @@ public class TradeWithVillagerGoal extends Goal {
         target = null;
         plannedOffer = null;
 
-        Optional<Candidate> next = authorizedCandidate(level);
+        Optional<AuthorizedAttempt> next = authorizedCandidate(level);
         if (next.isPresent()) {
             beginAttempt(level, next.get());
         } else {
@@ -299,22 +304,85 @@ public class TradeWithVillagerGoal extends Goal {
      * wrong-offer substitution {@link SellFundingLeg} exists to prevent, arriving at the last
      * possible moment.
      */
-    private boolean stillAuthorized(
-            ServerLevel level, WorkDemandPolicy.MaterialDemand demand, Container backpack) {
-        List<OfferSnapshot> liveOffers = VillagerTradeAdapter.inspectOffers(target);
-        TradeFundingPlanner.FundingTarget funding = fundingTarget(demand, liveOffers, backpack);
-        if (funding == null || funding.funded() || funding.sellLeg() == null) {
-            // Funded, or nothing left to fund: either way this sale is no longer justified.
+    private boolean stillAuthorized(Container backpack) {
+        TradeAttemptFunding context = attemptFunding;
+        if (context == null) {
+            // A funding SELL with no recorded purchase behind it has no justification at all.
             return false;
         }
-        return funding.sellLeg().usable() && funding.sellLeg().covers(plannedOffer);
+        // The buyer must still exist and be tradeable. Checked with `available`, which reads liveness
+        // only - inspecting its offers from here would be the passive sweep the round exists to
+        // prevent, and would lazily populate a villager we are not standing at.
+        if (!VillagerTradeAdapter.available(context.buyer())) {
+            return false;
+        }
+        int deficit = context.emeraldsRequired()
+                - ScavengerCrafting.count(backpack, net.minecraft.world.item.Items.EMERALD);
+        if (deficit <= 0) {
+            // Emeralds arrived from somewhere else during the walk. Nothing left to fund.
+            return false;
+        }
+
+        // Re-derived from inventory as it now stands, against THIS villager's live offers only.
+        ScavengerConfig cfg = ScavengerConfig.get();
+        SellFundingLeg leg = TradeFundingPlanner.authorizeFunding(
+                new TradeEvaluationPolicy.EmeraldDeficit(context.consumerKey(), deficit),
+                VillagerTradeAdapter.inspectOffers(target),
+                context.buyQuote(),
+                backpack,
+                mob.getMainHandItem(),
+                mob.getOffhandItem(),
+                material -> SellReserveModel.reservedUnits(material, backpack, cfg));
+
+        // A different authorized quote is not permission to execute this one.
+        return leg != null && leg.usable() && leg.covers(plannedOffer);
+    }
+
+    /**
+     * R7 — what the current attempt is funding, carried from selection to execution.
+     *
+     * <h2>Why the boundary needed a context at all</h2>
+     *
+     * R6 re-derived the whole funding decision at execution from {@code inspectOffers(target)} — but
+     * {@code target} is the villager being <b>sold to</b>. {@code chooseFundingTarget} refuses to
+     * produce anything without a BUY quote serving the demand, so the ordinary physical arrangement
+     * broke completely:
+     *
+     * <pre>
+     * toolsmith A   emeralds -&gt; iron      the purchase
+     * fletcher  B   sticks   -&gt; emeralds  the funding
+     *
+     * selection    both inspected, leg valid
+     * walk to B
+     * execution    inspect B alone -&gt; no iron quote -&gt; funding null -&gt; SELL always refused
+     * </pre>
+     *
+     * The safety check made cross-villager funding impossible, and the fixture missed it by putting
+     * both quotes in one list.
+     *
+     * <p>So the purchase is carried instead of rediscovered. This is <b>attempt evidence</b>, so
+     * holding villager and offer identity is correct here — and it is exactly why none of it may
+     * enter {@link TradeChainPlan}, which outlives the attempt.
+     */
+    /** A candidate to attempt, plus the purchase it funds (null for a direct BUY). */
+    private record AuthorizedAttempt(Candidate candidate, TradeAttemptFunding funding) {
+    }
+
+    private record TradeAttemptFunding(
+            ResourceLocation consumerKey,
+            Villager buyer,
+            OfferSnapshot buyQuote,
+            int emeraldsRequired) {
     }
 
     // ------------------------------------------------------------------ candidates
 
-    private void beginAttempt(ServerLevel level, Candidate candidate) {
+    private void beginAttempt(ServerLevel level, AuthorizedAttempt attempt) {
+        Candidate candidate = attempt.candidate();
         target = candidate.villager();
         plannedOffer = candidate.offer();
+        // Recorded only for a funding SELL: a direct BUY funds nothing and has no purchase behind it.
+        attemptFunding = attempt.funding();
         attemptConsumer = candidate.consumerKey();
         attemptMaterial = candidate.materialKey();
         round.begin(candidate.villager().getUUID());
@@ -332,7 +400,7 @@ public class TradeWithVillagerGoal extends Goal {
         plannedOffer = null;
         mob.getNavigation().stop();
 
-        Optional<Candidate> next = authorizedCandidate(level);
+        Optional<AuthorizedAttempt> next = authorizedCandidate(level);
         if (next.isPresent()) {
             beginAttempt(level, next.get());
         } else {
@@ -398,7 +466,7 @@ public class TradeWithVillagerGoal extends Goal {
      * never in a passive sweep, because {@code getOffers()} lazily populates a villager's trades and
      * a broad scan would initialise them across a whole village.
      */
-    private Optional<Candidate> authorizedCandidate(ServerLevel level) {
+    private Optional<AuthorizedAttempt> authorizedCandidate(ServerLevel level) {
         Optional<WorkDemandPolicy.MaterialDemand> demand = liveDemand(level);
         if (demand.isEmpty()) {
             return Optional.empty();
@@ -474,6 +542,17 @@ public class TradeWithVillagerGoal extends Goal {
                 ? sellLeg.offer()
                 : funding.buyOffer();
 
+        // Carried, never rediscovered at execution: the BUY and the SELL routinely belong to
+        // different villagers, and re-deriving the purchase while standing at the seller finds no
+        // purchase at all.
+        TradeAttemptFunding attemptContext = step == TradeChainPlan.Step.SELL_TO_FUND
+                ? new TradeAttemptFunding(
+                        demand.get().consumerKey(),
+                        owners.get(funding.buyOffer().index()).villager(),
+                        funding.buyOffer(),
+                        funding.emeraldsRequired())
+                : null;
+
         return TradeDemandGate
                 .authorize(demand.get(),
                         new RouteEvidence(existingFeasible, offers, affordable, deficit,
@@ -483,7 +562,8 @@ public class TradeWithVillagerGoal extends Goal {
                         .anyMatch(evaluation -> evaluation.offerIndex() == planned.index()))
                 .map(decision -> owners.get(planned.index()))
                 .filter(java.util.Objects::nonNull)
-                .filter(candidate -> VillagerTradeAdapter.canAfford(backpack, candidate.offer()));
+                .filter(candidate -> VillagerTradeAdapter.canAfford(backpack, candidate.offer()))
+                .map(candidate -> new AuthorizedAttempt(candidate, attemptContext));
     }
 
     private static boolean isFundingSell(OfferSnapshot offer) {
@@ -513,14 +593,23 @@ public class TradeWithVillagerGoal extends Goal {
     private TradeChainPolicy.ChainOutcome advanceChain(
             ServerLevel level, WorkDemandPolicy.MaterialDemand demand, Container backpack,
             TradeFundingPlanner.FundingTarget funding) {
-        if (funding == null) {
-            // Nothing on offer serves the demand, so there is no purchase for a chain to fund.
-            chain = null;
-            return null;
-        }
         long now = level.getGameTime();
         int held = ScavengerCrafting.count(
                 backpack, BuiltInRegistries.ITEM.get(demand.materialKey()));
+
+        if (funding == null) {
+            // R7: no usable quote right now is NOT a reason to destroy the plan. Nulling it here let
+            // a villager strolling out of range reset the hard lifetime, and the next quote start a
+            // fresh 6000 ticks - the same defect the review rejected for combat interruption, keyed
+            // on market visibility instead. The consumer still wants the material; only the evidence
+            // is missing. V2-D still gets to expire it.
+            if (chain != null) {
+                TradeChainPolicy.ChainOutcome idle =
+                        TradeChainPolicy.withoutMarketEvidence(chain, held, now);
+                chain = idle.active() ? idle.plan() : null;
+            }
+            return null;
+        }
 
         if (chain == null
                 || !chain.consumerKey().equals(demand.consumerKey())
@@ -529,21 +618,15 @@ public class TradeWithVillagerGoal extends Goal {
             // "hold 1 of the 3 ingots you need" terminate the chain after a single purchase, and any
             // chain reopened afterwards terminated instantly - that consumer could never be finished
             // by trade again.
-            chain = TradeChainPlan.forConsumer(
+            chain = TradeChainPlan.forDemand(
                     demand.consumerKey(), demand.materialKey(),
-                    held + demand.derivedDeficit(), now);
+                    held, demand.derivedDeficit(), now);
         }
 
-        SellFundingLeg leg = funding.sellLeg();
         TradeChainPolicy.ChainOutcome outcome = TradeChainPolicy.evaluate(
                 chain,
-                new TradeChainPolicy.ChainFacts(
-                        true,
-                        held,
-                        ScavengerCrafting.count(backpack, net.minecraft.world.item.Items.EMERALD),
-                        funding.emeraldsRequired(),
-                        leg == null ? 0 : leg.emeraldsPerUse(),
-                        leg == null ? 0 : leg.affordableUses()),
+                TradeChainPolicy.factsFrom(funding, held,
+                        ScavengerCrafting.count(backpack, net.minecraft.world.item.Items.EMERALD)),
                 now);
 
         // Terminated chains are dropped rather than left standing: an expired or ownerless plan that

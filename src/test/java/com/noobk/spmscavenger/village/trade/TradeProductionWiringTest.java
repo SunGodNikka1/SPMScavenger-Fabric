@@ -179,7 +179,7 @@ class TradeProductionWiringTest {
     void mustHappen_theGoalPassesAuthorizationIntoTheDecision() {
         String goal = source("goal/TradeWithVillagerGoal.java");
 
-        String decision = bodyOf(goal, "private Optional<Candidate> authorizedCandidate(");
+        String decision = bodyOf(goal, "private Optional<AuthorizedAttempt> authorizedCandidate(");
 
         int computed = decision.indexOf("funding.sellLeg()");
         assertTrue(computed > 0, "the funding leg must be resolved in the candidate path itself");

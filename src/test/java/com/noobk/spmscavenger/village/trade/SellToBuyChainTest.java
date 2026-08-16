@@ -141,7 +141,7 @@ class SellToBuyChainTest {
         // empty for wheat, and SellReserveModelTest pins that refusal separately. See this class's
         // header on what composition tests do and do not prove.
         SellFundingLeg leg = TradeFundingPlanner.authorizeFunding(
-                target.deficit(), offers, backpack, ItemStack.EMPTY, ItemStack.EMPTY,
+                target.deficit(), offers, target.buyOffer(), backpack, ItemStack.EMPTY, ItemStack.EMPTY,
                 s -> java.util.OptionalInt.of(0));
         assertTrue(leg.authorization().permits(sellOffer().costA()), "wheat is authorized funding stock");
 
@@ -255,13 +255,13 @@ class SellToBuyChainTest {
         withPickaxe.setItem(0, new ItemStack(Items.WOODEN_PICKAXE, 3));
 
         assertTrue(TradeFundingPlanner.authorizeFunding(
-                        deficit, List.of(buysPickaxes), withPickaxe,
+                        deficit, List.of(buysPickaxes), null, withPickaxe,
                         ItemStack.EMPTY, ItemStack.EMPTY, s -> java.util.OptionalInt.of(0)) == null,
                 "durability marks an investment, whether the buyer is a furnace or a villager");
 
         // Reserved: held, spare-looking, and already claimed by a craft chain.
         assertTrue(TradeFundingPlanner.authorizeFunding(
-                        deficit, List.of(sellOffer()), backpack(0, 30),
+                        deficit, List.of(sellOffer()), null, backpack(0, 30),
                         ItemStack.EMPTY, ItemStack.EMPTY, s -> java.util.OptionalInt.of(25)) == null,
                 "a craft reserve is not spare because a villager will pay for it");
     }

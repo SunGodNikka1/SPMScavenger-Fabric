@@ -120,7 +120,7 @@ public final class TradeFundingPlanner {
         }
         EmeraldDeficit deficit = new EmeraldDeficit(demand.consumerKey(), shortfall);
         return new FundingTarget(best, required, deficit,
-                authorizeFunding(deficit, offers, backpack, mainHand, offHand, reservedUnits));
+                authorizeFunding(deficit, offers, best, backpack, mainHand, offHand, reservedUnits));
     }
 
     /**
@@ -159,17 +159,44 @@ public final class TradeFundingPlanner {
     }
 
     /**
-     * The one exact SELL quote permitted to fund this deficit.
+     * The one exact SELL quote permitted to fund this deficit — chosen by <b>policy</b>, not by list
+     * order.
      *
-     * <p>Permission is delegated to {@link SellExpendabilityPolicy} — the same layer that stops a
-     * wooden pickaxe becoming furnace fuel — and the chosen quote is carried as identity so the
-     * chain's arithmetic and the executor's attempt cannot describe different offers.
+     * <h2>R7: list order was a deadlock, not a preference</h2>
      *
+     * R6 returned the first authorized offer it found. That is not merely suboptimal — it refuses
+     * trades that are plainly available:
+     *
+     * <pre>
+     * deficit 2 emeralds, 40 disposable sticks
+     * SELL A (first)  30 sticks -&gt; 1 emerald   1 affordable use   cannot fund 2
+     * SELL B (second) 10 sticks -&gt; 1 emerald   4 affordable uses  funds it easily
+     * </pre>
+     *
+     * R6 picked A, {@code TradeChainPolicy} reported {@code sellBlocked}, and the candidate path
+     * returned nothing. The mob declines to trade while a perfectly good funding route sits one
+     * element further down the list.
+     *
+     * <p>So the division of authority is restored: <b>V2-D chooses the step, V2-B chooses among the
+     * offers within it.</b> Legs that can fully close the bounded deficit outrank legs that cannot —
+     * a cheaper unit cost is worthless if it cannot finish the job — and ties fall to V2-B's utility
+     * and then offer index, the same comparator the registrar uses.
+     *
+     * <h2>The BUY's own payment is a reserve too</h2>
+     *
+     * {@code SellReserveModel} protects existing craft-chain claims. The quote being funded is
+     * another real claim: a purchase costing {@code 5 emerald + 12 sticks} needs those twelve sticks
+     * to still be there when the emeralds arrive. R6 checked that stock <i>before</i> funding began
+     * and then let the funding SELL spend it, so the mob could sell its way out of the purchase it
+     * was selling for. That requirement is added to the reserve for the duration.
+     *
+     * @param buyQuote the purchase being funded, whose non-emerald payment must survive; may be null
      * @return {@code null} when no authorized quote exists
      */
     public static SellFundingLeg authorizeFunding(
             EmeraldDeficit deficit,
             List<OfferSnapshot> sellOffers,
+            OfferSnapshot buyQuote,
             Container backpack,
             ItemStack mainHand,
             ItemStack offHand,
@@ -177,38 +204,98 @@ public final class TradeFundingPlanner {
         if (deficit == null || sellOffers == null || backpack == null) {
             return null;
         }
+        SellFundingLeg best = null;
+        boolean bestFunds = false;
+        float bestUtility = -Float.MAX_VALUE;
+
         for (OfferSnapshot offer : sellOffers) {
-            if (!offer.isTradeable() || offer.outOfStock() || !offer.result().is(Items.EMERALD)) {
+            SellFundingLeg leg = legFor(
+                    deficit, offer, buyQuote, backpack, mainHand, offHand, reservedUnits);
+            if (leg == null) {
                 continue;
             }
-            // Authorizing from costA while the transaction also debits costB would hand out
-            // permission for a material nobody examined.
-            if (!offer.costB().isEmpty()) {
+            TradeEvaluationPolicy.Result evaluated =
+                    TradeEvaluationPolicy.evaluateSell(deficit, leg.authorization(), offer);
+            if (!evaluated.viable()) {
                 continue;
             }
-            ItemStack wanted = offer.costA();
-            int held = ScavengerCrafting.count(backpack, wanted.getItem());
-            if (held <= 0) {
-                continue;
+            float utility = evaluated.evaluation().orElseThrow().utility();
+            boolean funds = leg.fullyFunds(deficit.emeraldsNeeded());
+
+            // Sufficiency first: an unaffordable bargain funds nothing. Then V2-B, then index, which
+            // is the registrar's own ordering.
+            if (best == null
+                    || (funds && !bestFunds)
+                    || (funds == bestFunds && utility > bestUtility)) {
+                best = leg;
+                bestFunds = funds;
+                bestUtility = utility;
             }
-            // An unmodelled material is REFUSED, never treated as reserve-free. Reading an absent
-            // model as zero is what made SellExpendabilityPolicy's arithmetic decorative.
-            OptionalInt reserved = reservedUnits.apply(wanted);
-            if (reserved.isEmpty()) {
-                continue;
-            }
-            int disposable = SellExpendabilityPolicy.disposableUnits(
-                    wanted, held, reserved.getAsInt(), mainHand, offHand);
-            if (disposable < wanted.getCount()) {
-                continue;
-            }
-            return new SellFundingLeg(
-                    offer,
-                    new SellAuthorization(wanted, disposable, deficit.consumerKey()),
-                    offer.result().getCount(),
-                    // Uses, not units: the unit TradeChainPolicy compares against.
-                    SellExpendabilityPolicy.affordableSellUses(disposable, wanted.getCount()));
         }
-        return null;
+        return best;
+    }
+
+    /** One candidate leg, or {@code null} when this offer cannot legally fund anything. */
+    private static SellFundingLeg legFor(
+            EmeraldDeficit deficit,
+            OfferSnapshot offer,
+            OfferSnapshot buyQuote,
+            Container backpack,
+            ItemStack mainHand,
+            ItemStack offHand,
+            Function<ItemStack, OptionalInt> reservedUnits) {
+        if (!offer.isTradeable() || offer.outOfStock() || !offer.result().is(Items.EMERALD)) {
+            return null;
+        }
+        // Authorizing from costA while the transaction also debits costB would hand out permission
+        // for a material nobody examined.
+        if (!offer.costB().isEmpty()) {
+            return null;
+        }
+        ItemStack wanted = offer.costA();
+        int held = ScavengerCrafting.count(backpack, wanted.getItem());
+        if (held <= 0) {
+            return null;
+        }
+        // An unmodelled material is REFUSED, never treated as reserve-free. Reading an absent model
+        // as zero is what made SellExpendabilityPolicy's arithmetic decorative.
+        OptionalInt reserved = reservedUnits.apply(wanted);
+        if (reserved.isEmpty()) {
+            return null;
+        }
+        int reserve = reserved.getAsInt() + owedToPurchase(buyQuote, wanted);
+        int disposable = SellExpendabilityPolicy.disposableUnits(
+                wanted, held, reserve, mainHand, offHand);
+        if (disposable < wanted.getCount()) {
+            return null;
+        }
+        // Uses, not units - and never more uses than the merchant has left. Planning a two-sale
+        // sequence against an offer with one use remaining is a deficit that cannot close.
+        int affordable = Math.min(
+                SellExpendabilityPolicy.affordableSellUses(disposable, wanted.getCount()),
+                Math.max(0, offer.maxUses() - offer.uses()));
+        if (affordable <= 0) {
+            return null;
+        }
+        return new SellFundingLeg(
+                offer,
+                new SellAuthorization(wanted, disposable, deficit.consumerKey()),
+                offer.result().getCount(),
+                affordable);
+    }
+
+    /** Units of {@code material} the funded purchase still has to pay with. */
+    public static int owedToPurchase(OfferSnapshot buyQuote, ItemStack material) {
+        if (buyQuote == null || material.isEmpty()) {
+            return 0;
+        }
+        int owed = 0;
+        for (ItemStack cost : new ItemStack[] {buyQuote.costA(), buyQuote.costB()}) {
+            if (!cost.isEmpty() && !cost.is(Items.EMERALD)
+                    && ItemStack.isSameItemSameComponents(cost, material)) {
+                owed += cost.getCount();
+            }
+        }
+        return owed;
     }
 }

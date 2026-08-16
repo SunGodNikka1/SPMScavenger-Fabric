@@ -45,6 +45,18 @@ public record SellFundingLeg(
         Objects.requireNonNull(authorization, "authorization");
     }
 
+    /**
+     * Can this leg close the whole deficit by itself?
+     *
+     * <p>The decisive property when choosing between legs: a cheaper unit cost is worth nothing if
+     * the affordable use count cannot reach the target. R6 took the first authorized offer in list
+     * order, so a 30-stick sale that afforded one use beat a 10-stick sale that afforded four, and
+     * the chain reported {@code sellBlocked} while a working route sat one element later.
+     */
+    public boolean fullyFunds(int emeraldsNeeded) {
+        return usable() && affordableUses * emeraldsPerUse >= emeraldsNeeded;
+    }
+
     /** Whether this leg can actually contribute anything right now. */
     public boolean usable() {
         return !authorization.isEmpty() && emeraldsPerUse > 0 && affordableUses > 0;
