@@ -8,7 +8,7 @@ import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
 import com.noobk.spmscavenger.village.trade.OfferSnapshot;
 import com.noobk.spmscavenger.village.trade.RouteEvidence;
 import com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence;
-import com.noobk.spmscavenger.village.trade.SellAuthorization;
+import com.noobk.spmscavenger.village.trade.SellFundingLeg;
 import com.noobk.spmscavenger.village.trade.SellReserveModel;
 import com.noobk.spmscavenger.village.trade.TradeFundingPlanner;
 import com.noobk.spmscavenger.village.trade.TradeCandidateRound;
@@ -216,6 +216,21 @@ public class TradeWithVillagerGoal extends Goal {
             endRound(level);
             return;
         }
+        // R6 - the boundary that mattered most, and the one R5 left open. Selection authorized this
+        // SELL against the inventory of several hundred ticks ago; affordability is the only thing
+        // rechecked since. Those are not the same question:
+        //
+        //   selection   64 sticks, 3 reserved, 61 disposable, 32-stick sale -> authorized
+        //   walk        crafting consumes 30 sticks
+        //   execution   34 sticks, 3 reserved, 31 disposable
+        //               canAfford(32) is TRUE, and the sale spends into the reserve
+        //
+        // Planning permission does not authorize execution. Re-derived here against inventory as it
+        // now stands, and bound to the exact quote being attempted.
+        if (isFundingSell(plannedOffer) && !stillAuthorized(level, live.get(), backpack)) {
+            reselect(level);
+            return;
+        }
         VillagerTradeAdapter.TradeResult result =
                 VillagerTradeAdapter.performTrade(backpack, target, plannedOffer);
 
@@ -258,6 +273,11 @@ public class TradeWithVillagerGoal extends Goal {
     private void continueChain(ServerLevel level) {
         // Released immediately: the interlock covers an attempt, never a relationship.
         TradeSessionClaimWindow.release(mob.getUUID());
+        // R6: begin() is idempotent for the candidate already in progress, so re-selecting this same
+        // villager returned early and it inherited the approach ticks and path failures the previous
+        // attempt had spent. The merchant that just proved it trades with us was the one arriving on
+        // a part-spent budget. Cleared without demoting - success is not a temporary illegality.
+        round.completeCurrentSuccessfully();
         target = null;
         plannedOffer = null;
 
@@ -268,6 +288,26 @@ public class TradeWithVillagerGoal extends Goal {
             // No further step: either the demand is satisfied, or nothing on offer serves it now.
             endRound(level);
         }
+    }
+
+    /**
+     * Is the funding SELL about to be executed still permitted, right now?
+     *
+     * <p>Everything is recomputed from current inventory — reserves, disposable units, the deficit,
+     * the leg — and then the <b>attempted quote</b> must be the one that came back. A different
+     * authorized quote appearing is not permission to execute this one; that is the same
+     * wrong-offer substitution {@link SellFundingLeg} exists to prevent, arriving at the last
+     * possible moment.
+     */
+    private boolean stillAuthorized(
+            ServerLevel level, WorkDemandPolicy.MaterialDemand demand, Container backpack) {
+        List<OfferSnapshot> liveOffers = VillagerTradeAdapter.inspectOffers(target);
+        TradeFundingPlanner.FundingTarget funding = fundingTarget(demand, liveOffers, backpack);
+        if (funding == null || funding.funded() || funding.sellLeg() == null) {
+            // Funded, or nothing left to fund: either way this sale is no longer justified.
+            return false;
+        }
+        return funding.sellLeg().usable() && funding.sellLeg().covers(plannedOffer);
     }
 
     // ------------------------------------------------------------------ candidates
@@ -345,6 +385,11 @@ public class TradeWithVillagerGoal extends Goal {
         // the mob leaves the demand standing, so a legitimate completed search survives it.
         RouteExhaustionEvidence.retainOnly(
                 mob.getUUID(), demand.orElse(null), level.getGameTime());
+        // R6: the chain gets the same treatment, through V2-D. R5 bound only the evidence to the
+        // live consumer, so a chain could outlive its owner - stop() preserves it deliberately, and
+        // advanceChain always reported consumerStillWants = true because it only runs once a demand
+        // has been found. CONSUMER_GONE was unreachable in production.
+        terminateChainIfOwnerless(level, demand.orElse(null));
         return demand;
     }
 
@@ -401,42 +446,44 @@ public class TradeWithVillagerGoal extends Goal {
         TradeFundingPlanner.FundingTarget funding = fundingTarget(demand.get(), offers, backpack);
         TradeEvaluationPolicy.EmeraldDeficit deficit =
                 funding == null ? null : funding.deficit();
-        // R4: permission reaches the decision. Without this the registrar evaluated every funding
-        // SELL against a null authorization and refused it - the SELL half of V2-D existed and was
-        // unreachable from production.
-        SellAuthorization authorization =
-                deficit == null ? null : fundingAuthorization(deficit, offers, backpack);
+        // R6: one exact SELL quote, carried as identity. R5 derived the chain's per-use yield from
+        // the first authorized SELL in the list while the executor attempted whichever SELL the
+        // ranking preferred - Task 50's "right arithmetic against the wrong offer", one layer in.
+        SellFundingLeg sellLeg = funding == null ? null : funding.sellLeg();
 
-        // R5: V2-D decides whether this chain may continue and which leg is next. Its verdict is
-        // taken before ranking, because a terminated chain must not produce a candidate at all.
+        // V2-D decides whether this chain may continue and which leg is next. Its verdict is taken
+        // before ranking, because a terminated chain must not produce a candidate at all.
         TradeChainPolicy.ChainOutcome outcome =
-                advanceChain(level, demand.get(), backpack, funding, authorization, offers);
+                advanceChain(level, demand.get(), backpack, funding);
         if (outcome == null || !outcome.active()) {
             return Optional.empty();
         }
         TradeChainPlan.Step step = outcome.plan().step();
-        if (step == TradeChainPlan.Step.SELL_TO_FUND && outcome.sellBlocked()) {
+        if (step == TradeChainPlan.Step.SELL_TO_FUND
+                && (outcome.sellBlocked() || sellLeg == null || !sellLeg.usable())) {
             // Not enough authorized material to close the deficit. A state to report, not a reason
             // to attempt a purchase we cannot pay for.
             return Optional.empty();
         }
 
+        // The exact quote this iteration planned - not "the best offer that happens to be the right
+        // direction". Those diverge whenever the planner's fundability filter rejects something the
+        // registrar's ranking accepts, and then the mob would execute a quote whose economics nobody
+        // computed.
+        OfferSnapshot planned = step == TradeChainPlan.Step.SELL_TO_FUND
+                ? sellLeg.offer()
+                : funding.buyOffer();
+
         return TradeDemandGate
                 .authorize(demand.get(),
-                        new RouteEvidence(
-                                existingFeasible, offers, affordable, deficit, authorization))
-                .flatMap(decision -> decision.rankedOffers().stream()
-                        .map(evaluation -> owners.get(evaluation.offerIndex()))
-                        .filter(java.util.Objects::nonNull)
-                        // The chain's step, not the ranking, decides which leg is legal now. Without
-                        // this a BUY the mob cannot yet afford and a SELL that funds it are ranked
-                        // against each other in one list, and the order is V2-B's opinion rather
-                        // than the chain's sequence.
-                        .filter(candidate -> isFundingSell(candidate.offer())
-                                == (step == TradeChainPlan.Step.SELL_TO_FUND))
-                        .filter(candidate -> VillagerTradeAdapter.canAfford(
-                                backpack, candidate.offer()))
-                        .findFirst());
+                        new RouteEvidence(existingFeasible, offers, affordable, deficit,
+                                sellLeg == null ? null : sellLeg.authorization()))
+                // V2-C still owns the route decision; it simply no longer chooses the quote.
+                .filter(decision -> decision.rankedOffers().stream()
+                        .anyMatch(evaluation -> evaluation.offerIndex() == planned.index()))
+                .map(decision -> owners.get(planned.index()))
+                .filter(java.util.Objects::nonNull)
+                .filter(candidate -> VillagerTradeAdapter.canAfford(backpack, candidate.offer()));
     }
 
     private static boolean isFundingSell(OfferSnapshot offer) {
@@ -465,31 +512,38 @@ public class TradeWithVillagerGoal extends Goal {
      */
     private TradeChainPolicy.ChainOutcome advanceChain(
             ServerLevel level, WorkDemandPolicy.MaterialDemand demand, Container backpack,
-            TradeFundingPlanner.FundingTarget funding, SellAuthorization authorization,
-            List<OfferSnapshot> offers) {
+            TradeFundingPlanner.FundingTarget funding) {
         if (funding == null) {
             // Nothing on offer serves the demand, so there is no purchase for a chain to fund.
             chain = null;
             return null;
         }
         long now = level.getGameTime();
+        int held = ScavengerCrafting.count(
+                backpack, BuiltInRegistries.ITEM.get(demand.materialKey()));
+
         if (chain == null
                 || !chain.consumerKey().equals(demand.consumerKey())
                 || !chain.desiredOutput().equals(demand.materialKey())) {
+            // R6: an absolute inventory threshold, never the deficit. Passing the deficit made
+            // "hold 1 of the 3 ingots you need" terminate the chain after a single purchase, and any
+            // chain reopened afterwards terminated instantly - that consumer could never be finished
+            // by trade again.
             chain = TradeChainPlan.forConsumer(
-                    demand.consumerKey(), demand.materialKey(), demand.derivedDeficit(), now);
+                    demand.consumerKey(), demand.materialKey(),
+                    held + demand.derivedDeficit(), now);
         }
 
+        SellFundingLeg leg = funding.sellLeg();
         TradeChainPolicy.ChainOutcome outcome = TradeChainPolicy.evaluate(
                 chain,
                 new TradeChainPolicy.ChainFacts(
                         true,
-                        ScavengerCrafting.count(
-                                backpack, BuiltInRegistries.ITEM.get(demand.materialKey())),
+                        held,
                         ScavengerCrafting.count(backpack, net.minecraft.world.item.Items.EMERALD),
-                        funding.buyOffer().costA().getCount(),
-                        emeraldsPerSellUse(authorization, offers),
-                        authorization == null ? 0 : authorization.disposableUnits()),
+                        funding.emeraldsRequired(),
+                        leg == null ? 0 : leg.emeraldsPerUse(),
+                        leg == null ? 0 : leg.affordableUses()),
                 now);
 
         // Terminated chains are dropped rather than left standing: an expired or ownerless plan that
@@ -498,19 +552,37 @@ public class TradeWithVillagerGoal extends Goal {
         return outcome;
     }
 
-    /** Emeralds the authorized funding SELL yields per use, or {@code 0} when none is authorized. */
-    private static int emeraldsPerSellUse(
-            SellAuthorization authorization, List<OfferSnapshot> offers) {
-        if (authorization == null || authorization.isEmpty()) {
-            return 0;
+    /**
+     * R6 — the consumer is gone or has changed, so its chain is over.
+     *
+     * <p>R5 bound the exhaustion <i>evidence</i> to the live consumer and left the chain resident:
+     * {@code stop()} deliberately preserves it, and {@code advanceChain} only ever runs after a
+     * demand has been found, so it always passed {@code consumerStillWants = true}. {@code
+     * CONSUMER_GONE} was unreachable in production and a chain could outlive its owner, then resume
+     * when the same consumer reappeared.
+     *
+     * <p>Routed through {@link TradeChainPolicy} rather than nulling the field directly — Option A
+     * means V2-D owns chain termination, and a second lifecycle rule beside it is what Option A was
+     * chosen to avoid.
+     */
+    private void terminateChainIfOwnerless(
+            ServerLevel level, WorkDemandPolicy.MaterialDemand liveDemand) {
+        if (chain == null) {
+            return;
         }
-        for (OfferSnapshot offer : offers) {
-            if (isFundingSell(offer) && offer.isTradeable() && !offer.outOfStock()
-                    && authorization.permits(offer.costA())) {
-                return offer.result().getCount();
-            }
+        boolean stillOurs = liveDemand != null
+                && chain.consumerKey().equals(liveDemand.consumerKey())
+                && chain.desiredOutput().equals(liveDemand.materialKey());
+        if (stillOurs) {
+            return;
         }
-        return 0;
+        TradeChainPolicy.ChainOutcome outcome = TradeChainPolicy.evaluate(
+                chain,
+                new TradeChainPolicy.ChainFacts(false, 0, 0, 0, 0, 0),
+                level.getGameTime());
+        if (outcome.terminated()) {
+            chain = null;
+        }
     }
 
     /** Trade may displace working progression only on positively proven infeasibility. */
@@ -540,31 +612,20 @@ public class TradeWithVillagerGoal extends Goal {
      * exists to fund that purchase and is attributed to it (V2-D req 2/3).
      */
     /**
-     * R3: the deficit is derived from the BUY quote this iteration will actually serve.
+     * The deficit is derived from the BUY quote this iteration will actually serve, and the SELL leg
+     * that would close it is chosen in the same pass.
      *
-     * <p>R2 took the cheapest emerald cost found anywhere, independently of the offer ranking would
-     * choose — Task 50's "right arithmetic against the wrong offer", one layer earlier. The mob would
-     * have sold exactly enough for a purchase it was not going to make.
+     * <p>R2 took the cheapest emerald cost found anywhere, independently of the offer the ranking
+     * would choose — Task 50's "right arithmetic against the wrong offer". Reserves come from
+     * {@link SellReserveModel}, which reads the existing craft chain, so a log the torch chain has
+     * claimed is not spare merely because a villager will pay for it, and a material nobody has
+     * modelled is refused rather than assumed free.
      */
     private TradeFundingPlanner.FundingTarget fundingTarget(
             WorkDemandPolicy.MaterialDemand demand, List<OfferSnapshot> offers, Container backpack) {
-        return TradeFundingPlanner.chooseFundingTarget(demand, offers, backpack);
-    }
-
-    /**
-     * R3: which disposable material may fund that shortfall, delegated to the permission layer.
-     *
-     * <p>R4: reserves come from {@link SellReserveModel}, which reads the existing craft chain — so
-     * a log the torch chain has claimed is not spare merely because a villager will pay for it, and
-     * a material nobody has modelled is refused rather than assumed free. R3 passed
-     * {@code material -> 0} here, which made the permission layer unanimously permissive.
-     */
-    private SellAuthorization fundingAuthorization(
-            TradeEvaluationPolicy.EmeraldDeficit deficit, List<OfferSnapshot> offers,
-            Container backpack) {
         ScavengerConfig cfg = ScavengerConfig.get();
-        return TradeFundingPlanner.authorizeFunding(
-                deficit, offers, backpack, mob.getMainHandItem(), mob.getOffhandItem(),
+        return TradeFundingPlanner.chooseFundingTarget(
+                demand, offers, backpack, mob.getMainHandItem(), mob.getOffhandItem(),
                 material -> SellReserveModel.reservedUnits(material, backpack, cfg));
     }
 

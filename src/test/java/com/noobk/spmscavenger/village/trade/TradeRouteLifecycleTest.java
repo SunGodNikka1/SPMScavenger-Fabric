@@ -179,7 +179,7 @@ class TradeRouteLifecycleTest {
         assertTrue(TradeFundingPlanner.authorizeFunding(
                         new EmeraldDeficit(IRON_TOOL, 5), List.of(compoundSell()), backpack,
                         ItemStack.EMPTY, ItemStack.EMPTY, s -> OptionalInt.of(0))
-                .isEmpty(), "refused at the source as well as in the evaluator");
+                == null, "refused at the source as well as in the evaluator");
     }
 
     /** The single-cost equivalent still works: this is a scope limit, not a ban on funding SELL. */

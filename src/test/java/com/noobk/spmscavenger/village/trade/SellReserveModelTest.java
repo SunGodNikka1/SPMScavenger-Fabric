@@ -1,7 +1,7 @@
 package com.noobk.spmscavenger.village.trade;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.noobk.spmscavenger.ScavengerConfig;
@@ -101,14 +101,13 @@ class SellReserveModelTest {
                 new ItemStack(Items.EMERALD, 1), 0, 12, 0, 0f));
         ScavengerConfig cfg = new ScavengerConfig();
 
-        SellAuthorization authorization = TradeFundingPlanner.authorizeFunding(
+        SellFundingLeg leg = TradeFundingPlanner.authorizeFunding(
                 new EmeraldDeficit(CONSUMER, 2), List.of(buysWheat), backpack,
                 ItemStack.EMPTY, ItemStack.EMPTY,
                 material -> SellReserveModel.reservedUnits(material, backpack, cfg));
 
-        assertTrue(authorization.isEmpty(),
+        assertNull(leg,
                 "64 wheat looks spare and is not: nothing in this mod can say what wants it");
-        assertFalse(authorization.permits(buysWheat.costA()));
     }
 
     /**
@@ -123,14 +122,14 @@ class SellReserveModelTest {
                 new ItemStack(Items.EMERALD, 1), 0, 12, 0, 0f));
         ScavengerConfig cfg = new ScavengerConfig();
 
-        SellAuthorization authorization = TradeFundingPlanner.authorizeFunding(
+        SellFundingLeg leg = TradeFundingPlanner.authorizeFunding(
                 new EmeraldDeficit(CONSUMER, 1), List.of(buysSticks), backpack,
                 ItemStack.EMPTY, ItemStack.EMPTY,
                 material -> SellReserveModel.reservedUnits(material, backpack, cfg));
 
-        assertTrue(authorization.permits(buysSticks.costA()),
+        assertTrue(leg.authorization().permits(buysSticks.costA()),
                 "64 sticks less a 3-stick craft claim covers a 32-stick sale");
-        assertEquals(61, authorization.disposableUnits());
+        assertEquals(61, leg.authorization().disposableUnits());
     }
 
     /** A reserve is a reserve however attractive the offer: the claim outranks the price. */
@@ -146,6 +145,6 @@ class SellReserveModelTest {
                         new EmeraldDeficit(CONSUMER, 1), List.of(lucrative), backpack,
                         ItemStack.EMPTY, ItemStack.EMPTY,
                         material -> SellReserveModel.reservedUnits(material, backpack, cfg))
-                .isEmpty(), "1 spare stick cannot cover a 4-stick sale, at any price");
+                == null, "1 spare stick cannot cover a 4-stick sale, at any price");
     }
 }

@@ -169,7 +169,7 @@ class TradeProductionWiringTest {
 
         assertFalse(goal.contains("material -> 0"),
                 "a fabricated zero reserve makes SellExpendabilityPolicy unanimously permissive");
-        assertTrue(goal.substring(goal.indexOf("private SellAuthorization fundingAuthorization("))
+        assertTrue(bodyOf(goal, "private TradeFundingPlanner.FundingTarget fundingTarget(")
                         .contains("SellReserveModel.reservedUnits("),
                 "reserves must come from the model that reads the actual craft chain");
     }
@@ -181,10 +181,9 @@ class TradeProductionWiringTest {
 
         String decision = bodyOf(goal, "private Optional<Candidate> authorizedCandidate(");
 
-        int computed = decision.indexOf("fundingAuthorization(deficit, offers, backpack)");
-        assertTrue(computed > 0, "the authorization must be computed in the candidate path itself");
-        assertTrue(decision.indexOf("existingFeasible, offers, affordable, deficit, authorization")
-                        > computed,
+        int computed = decision.indexOf("funding.sellLeg()");
+        assertTrue(computed > 0, "the funding leg must be resolved in the candidate path itself");
+        assertTrue(decision.indexOf("sellLeg.authorization()") > computed,
                 "and then handed to RouteEvidence - computing it and dropping it is R3's defect");
     }
 

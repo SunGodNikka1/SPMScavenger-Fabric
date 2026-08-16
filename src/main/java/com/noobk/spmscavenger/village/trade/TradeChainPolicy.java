@@ -27,7 +27,32 @@ public final class TradeChainPolicy {
             int emeraldsHeld,
             int emeraldsRequiredForPurchase,
             int emeraldsPerSellUse,
-            int disposableSellUnitsAvailable) {
+            int affordableSellUses) {
+    }
+
+    /**
+     * Build the facts for a live funding target — the one place deficit, units and uses meet.
+     *
+     * <p>Also moved out of the goal in R6, and for the same reason: {@code affordableSellUses} was
+     * being fed {@code disposableUnits} at a call site no test could reach, so raw item units were
+     * compared against a use count and a control reverting it stayed green.
+     *
+     * @param funding the quote this iteration serves; {@code null} yields facts that terminate
+     */
+    public static ChainFacts factsFrom(
+            TradeFundingPlanner.FundingTarget funding, int heldOutput, int heldEmeralds) {
+        if (funding == null) {
+            return new ChainFacts(false, heldOutput, heldEmeralds, 0, 0, 0);
+        }
+        SellFundingLeg leg = funding.sellLeg();
+        return new ChainFacts(
+                true,
+                heldOutput,
+                heldEmeralds,
+                funding.emeraldsRequired(),
+                leg == null ? 0 : leg.emeraldsPerUse(),
+                // USES, not units. Both sides of the sellBlocked comparison are use counts.
+                leg == null ? 0 : leg.affordableUses());
     }
 
     public enum Termination {
@@ -43,8 +68,8 @@ public final class TradeChainPolicy {
      * @param plan the chain as it should now stand, or {@code null} when {@code termination} is set
      * @param requiredSellUses successful sells still needed to fund the purchase; {@code 0} once the
      *     deficit is met
-     * @param sellBlocked a sell is needed but not enough disposable material exists — a state to
-     *     report, not a failure to record
+     * @param sellBlocked a sell is needed but fewer authorized SELL uses are affordable — a state
+     *     to report, not a failure to record
      */
     public record ChainOutcome(
             TradeChainPlan plan,
@@ -76,7 +101,7 @@ public final class TradeChainPolicy {
         }
         // Obtained elsewhere: mined, looted, gifted. The chain's purpose is satisfied, so it stops -
         // it does not keep selling wheat for emeralds nobody now needs (req 9).
-        if (facts.desiredOutputHeld() >= plan.desiredQuantity()) {
+        if (facts.desiredOutputHeld() >= plan.targetHeldQuantity()) {
             return terminated(Termination.TARGET_OBTAINED_ELSEWHERE);
         }
         if (plan.expired(nowTick)) {
@@ -92,7 +117,10 @@ public final class TradeChainPolicy {
 
         int perSell = Math.max(1, facts.emeraldsPerSellUse());
         int needed = ceilDiv(deficit, perSell);
-        boolean blocked = facts.disposableSellUnitsAvailable() < needed;
+        // R6: both sides are SELL USES. R5 passed raw disposable item units here and compared them
+        // against a use count - 61 sticks read as "61 sells available" when a 32-stick offer allows
+        // exactly one. Units on both sides of a comparison is not a detail; it decided sellBlocked.
+        boolean blocked = facts.affordableSellUses() < needed;
 
         return new ChainOutcome(
                 plan.at(TradeChainPlan.Step.SELL_TO_FUND),

@@ -133,6 +133,26 @@ public final class TradeCandidateRound {
         }
     }
 
+    /**
+     * R6 — this candidate <b>succeeded</b>. Release it without demoting it.
+     *
+     * <p>{@code begin()} is idempotent for the candidate already in progress, so re-selecting the
+     * same villager after a successful trade returned early and the seller inherited the approach
+     * ticks and path failures its previous attempt had spent. A merchant that has just proven it
+     * trades with us is the best candidate in the round, and it was the one arriving with a
+     * part-exhausted budget.
+     *
+     * <p>Deliberately not {@code demoteCurrent()}: that adds the villager to {@code attempted}, which
+     * is for candidates that are temporarily <i>illegal</i> — asleep, occupied, unreachable. Success
+     * is the opposite of that, and conflating them would make the one villager known to work
+     * unreachable for the rest of the round.
+     */
+    public void completeCurrentSuccessfully() {
+        current = null;
+        pathFailures = 0;
+        approachTicks = 0;
+    }
+
     /** Every discovered candidate has been tried. */
     public boolean exhausted(int discoveredCandidateCount) {
         return attempted.size() >= discoveredCandidateCount;

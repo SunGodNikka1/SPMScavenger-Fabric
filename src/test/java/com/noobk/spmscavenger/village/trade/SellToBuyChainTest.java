@@ -56,6 +56,17 @@ class SellToBuyChainTest {
     }
 
     private static final UUID GOD = UUID.randomUUID();
+    /**
+     * Injected reserve model for composition fixtures: every material modelled, nothing reserved.
+     *
+     * <p>Deliberately <b>not</b> what production uses. {@code SellReserveModel} refuses unmodelled
+     * materials outright, and {@code SellReserveModelTest} pins that. This exists so the arithmetic
+     * under test can use a legible material like wheat without the reserve model being the thing
+     * that decides the outcome.
+     */
+    private static final java.util.function.Function<ItemStack, java.util.OptionalInt> TEST_RESERVE =
+            stack -> java.util.OptionalInt.of(0);
+
     private static final ResourceLocation CONSUMER =
             ResourceLocation.fromNamespaceAndPath("spmscavenger", "iron_tool_frontier");
     private static final ResourceLocation OTHER_CONSUMER =
@@ -120,7 +131,8 @@ class SellToBuyChainTest {
 
         // T1 - the deficit comes from the chosen BUY quote, and the chain says SELL twice.
         TradeFundingPlanner.FundingTarget target =
-                TradeFundingPlanner.chooseFundingTarget(demand, offers, backpack);
+                TradeFundingPlanner.chooseFundingTarget(demand, offers, backpack,
+                ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE);
         assertFalse(target.funded());
         assertEquals(2, target.deficit().emeraldsNeeded(), "9 needed, 7 held");
 
@@ -128,10 +140,10 @@ class SellToBuyChainTest {
         // legible, NOT because production authorizes wheat today. SellReserveModel currently returns
         // empty for wheat, and SellReserveModelTest pins that refusal separately. See this class's
         // header on what composition tests do and do not prove.
-        SellAuthorization authorization = TradeFundingPlanner.authorizeFunding(
+        SellFundingLeg leg = TradeFundingPlanner.authorizeFunding(
                 target.deficit(), offers, backpack, ItemStack.EMPTY, ItemStack.EMPTY,
                 s -> java.util.OptionalInt.of(0));
-        assertTrue(authorization.permits(sellOffer().costA()), "wheat is authorized funding stock");
+        assertTrue(leg.authorization().permits(sellOffer().costA()), "wheat is authorized funding stock");
 
         ChainOutcome t1 = TradeChainPolicy.evaluate(chain, facts(backpack, 9, 1), 1L);
         assertEquals(TradeChainPlan.Step.SELL_TO_FUND, t1.plan().step());
@@ -161,7 +173,8 @@ class SellToBuyChainTest {
         assertEquals(0, t6.requiredSellUses());
 
         // T7 - the purchase itself.
-        assertTrue(TradeFundingPlanner.chooseFundingTarget(demand, offers, backpack).funded());
+        assertTrue(TradeFundingPlanner.chooseFundingTarget(demand, offers, backpack,
+                ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE).funded());
         buy(backpack);
         assertEquals(1, count(backpack, Items.IRON_INGOT));
         assertEquals(0, count(backpack, Items.EMERALD));
@@ -243,13 +256,13 @@ class SellToBuyChainTest {
 
         assertTrue(TradeFundingPlanner.authorizeFunding(
                         deficit, List.of(buysPickaxes), withPickaxe,
-                        ItemStack.EMPTY, ItemStack.EMPTY, s -> java.util.OptionalInt.of(0)).isEmpty(),
+                        ItemStack.EMPTY, ItemStack.EMPTY, s -> java.util.OptionalInt.of(0)) == null,
                 "durability marks an investment, whether the buyer is a furnace or a villager");
 
         // Reserved: held, spare-looking, and already claimed by a craft chain.
         assertTrue(TradeFundingPlanner.authorizeFunding(
                         deficit, List.of(sellOffer()), backpack(0, 30),
-                        ItemStack.EMPTY, ItemStack.EMPTY, s -> java.util.OptionalInt.of(25)).isEmpty(),
+                        ItemStack.EMPTY, ItemStack.EMPTY, s -> java.util.OptionalInt.of(25)) == null,
                 "a craft reserve is not spare because a villager will pay for it");
     }
 
@@ -324,11 +337,11 @@ class SellToBuyChainTest {
                 new ItemCost(Items.EMERALD, 20), Optional.empty(),
                 new ItemStack(Items.IRON_INGOT, 1), 0, 12, 0, 0f));
 
-        assertEquals(2, TradeFundingPlanner.chooseFundingTarget(
-                demand, List.of(buyOffer(), sellOffer()), backpack).deficit().emeraldsNeeded());
+        assertEquals(2, TradeFundingPlanner.chooseFundingTarget(demand, List.of(buyOffer(), sellOffer()), backpack,
+                ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE).deficit().emeraldsNeeded());
 
-        assertEquals(13, TradeFundingPlanner.chooseFundingTarget(
-                        demand, List.of(dearer, sellOffer()), backpack).deficit().emeraldsNeeded(),
+        assertEquals(13, TradeFundingPlanner.chooseFundingTarget(demand, List.of(dearer, sellOffer()), backpack,
+                ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE).deficit().emeraldsNeeded(),
                 "the deficit tracks the quote actually being served, not a remembered one");
     }
 
@@ -352,13 +365,15 @@ class SellToBuyChainTest {
                 new ItemStack(Items.IRON_INGOT, 4), 0, 12, 0, 0f));
         List<OfferSnapshot> offers = List.of(buyOffer(), bulk, sellOffer());
 
-        assertEquals(2, TradeFundingPlanner.chooseFundingTarget(ironDemand(), offers, backpack)
+        assertEquals(2, TradeFundingPlanner.chooseFundingTarget(ironDemand(), offers, backpack,
+                ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE)
                         .deficit().emeraldsNeeded(),
                 "one ingot wanted: 12 for four of them contributes 1, at a unit cost of 12");
 
         WorkDemandPolicy.MaterialDemand wantsFour = new WorkDemandPolicy.MaterialDemand(
                 BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT), 4, CONSUMER);
-        assertEquals(5, TradeFundingPlanner.chooseFundingTarget(wantsFour, offers, backpack)
+        assertEquals(5, TradeFundingPlanner.chooseFundingTarget(wantsFour, offers, backpack,
+                ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE)
                         .deficit().emeraldsNeeded(),
                 "four wanted: the bulk quote finally contributes four, at a unit cost of 3");
     }
@@ -388,7 +403,8 @@ class SellToBuyChainTest {
                     .orElseThrow(() -> new AssertionError("no viable offer for " + wanted));
 
             assertEquals(bestByV2B.offerIndex(),
-                    TradeFundingPlanner.chooseFundingTarget(demand, offers, backpack)
+                    TradeFundingPlanner.chooseFundingTarget(demand, offers, backpack,
+                ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE)
                             .buyOffer().index(),
                     "planner and V2-B must agree on WHICH quote is served, for demand " + wanted);
         }
@@ -398,8 +414,8 @@ class SellToBuyChainTest {
     @Test
     void mustNotHappen_anExtraSellAfterFunding() {
         WorkDemandPolicy.MaterialDemand demand = ironDemand();
-        TradeFundingPlanner.FundingTarget funded = TradeFundingPlanner.chooseFundingTarget(
-                demand, List.of(buyOffer(), sellOffer()), backpack(9, 64));
+        TradeFundingPlanner.FundingTarget funded = TradeFundingPlanner.chooseFundingTarget(demand, List.of(buyOffer(), sellOffer()), backpack(9, 64),
+                ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE);
 
         assertTrue(funded.funded());
         assertEquals(0, com.noobk.spmscavenger.goal.TradeWithVillagerGoal
@@ -448,5 +464,72 @@ class SellToBuyChainTest {
         assertEquals(VillagerTradeAdapter.TradeResult.TRADED,
                 VillagerTradeAdapter.executeAgainst(
                         backpack, offers, OfferSnapshot.of(0, live), o -> { }));
+    }
+
+    // ------------------------------------------------- fundable BUY quotes (R6)
+
+    private static OfferSnapshot buyWithDiamond() {
+        return OfferSnapshot.of(0, new MerchantOffer(
+                new ItemCost(Items.EMERALD, 5), Optional.of(new ItemCost(Items.DIAMOND, 1)),
+                new ItemStack(Items.IRON_INGOT, 1), 0, 12, 0, 0f));
+    }
+
+    private static OfferSnapshot buyPlain(int emeralds) {
+        return OfferSnapshot.of(1, new MerchantOffer(
+                new ItemCost(Items.EMERALD, emeralds), Optional.empty(),
+                new ItemStack(Items.IRON_INGOT, 1), 0, 12, 0, 0f));
+    }
+
+    /**
+     * R6 — <b>a quote the mob cannot finish paying for is not a funding target.</b>
+     *
+     * <p>R5 skipped offers whose {@code costA} was not emeralds and then sized the deficit from
+     * {@code costA} alone, so the cheaper-looking compound quote won and funded five emeralds:
+     *
+     * <pre>
+     * A: 5 emerald + 1 diamond -&gt; iron    mob holds no diamond, so A can never execute
+     * B: 6 emerald             -&gt; iron    needs 6, and A's deficit is now zero
+     * </pre>
+     *
+     * Nothing would ever sell for the sixth emerald, and the mob would sit funded and unable to buy.
+     */
+    @Test
+    void mustNotHappen_anUnpayableQuoteIsFunded() {
+        SimpleContainer noDiamonds = new SimpleContainer(9);
+
+        TradeFundingPlanner.FundingTarget target = TradeFundingPlanner.chooseFundingTarget(
+                ironDemand(), List.of(buyWithDiamond(), buyPlain(6), sellOffer()), noDiamonds,
+                ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE);
+
+        assertEquals(1, target.buyOffer().index(),
+                "the compound quote is unpayable, so it is not the quote being served");
+        assertEquals(6, target.emeraldsRequired(), "and the deficit sizes the quote that IS served");
+    }
+
+    /** Holding the second cost makes the same quote fundable again — this is a check, not a ban. */
+    @Test
+    void mustHappen_aHeldSecondCostMakesTheQuoteFundable() {
+        SimpleContainer withDiamond = new SimpleContainer(9);
+        withDiamond.setItem(0, new ItemStack(Items.DIAMOND, 1));
+
+        TradeFundingPlanner.FundingTarget target = TradeFundingPlanner.chooseFundingTarget(
+                ironDemand(), List.of(buyWithDiamond(), buyPlain(6), sellOffer()), withDiamond,
+                ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE);
+
+        assertEquals(0, target.buyOffer().index(), "cheaper in emeralds, and now payable");
+        assertEquals(5, target.emeraldsRequired());
+    }
+
+    /** Emeralds in either slot count towards the requirement. */
+    @Test
+    void mustHappen_bothCostSlotsContributeToTheEmeraldRequirement() {
+        OfferSnapshot split = OfferSnapshot.of(0, new MerchantOffer(
+                new ItemCost(Items.EMERALD, 2), Optional.of(new ItemCost(Items.EMERALD, 3)),
+                new ItemStack(Items.IRON_INGOT, 1), 0, 12, 0, 0f));
+
+        assertEquals(5, TradeFundingPlanner.chooseFundingTarget(
+                        ironDemand(), List.of(split, sellOffer()), new SimpleContainer(9),
+                        ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE)
+                .emeraldsRequired(), "2 + 3, not 2");
     }
 }

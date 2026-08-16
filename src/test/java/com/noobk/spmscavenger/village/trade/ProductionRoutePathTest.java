@@ -2,6 +2,7 @@ package com.noobk.spmscavenger.village.trade;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.noobk.spmscavenger.ScavengerConfig;
@@ -48,6 +49,17 @@ class ProductionRoutePathTest {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
     }
+
+    /**
+     * Injected reserve model for composition fixtures: every material modelled, nothing reserved.
+     *
+     * <p>Deliberately <b>not</b> what production uses. {@code SellReserveModel} refuses unmodelled
+     * materials outright, and {@code SellReserveModelTest} pins that. This exists so the arithmetic
+     * under test can use a legible material like wheat without the reserve model being the thing
+     * that decides the outcome.
+     */
+    private static final java.util.function.Function<ItemStack, java.util.OptionalInt> TEST_RESERVE =
+            stack -> java.util.OptionalInt.of(0);
 
     private static final ResourceLocation CONSUMER =
             ResourceLocation.fromNamespaceAndPath("spmscavenger", "iron_tool_frontier");
@@ -130,6 +142,31 @@ class ProductionRoutePathTest {
                         .termination());
     }
 
+    /**
+     * R6 — the executor attempts the <b>exact</b> quote whose economics were computed.
+     *
+     * <p>R5 derived {@code emeraldsPerSellUse} from the first authorized SELL in the list and then
+     * let the registrar's ranking choose what to attempt. Nothing tied those together, so V2-D could
+     * size the chain against a one-emerald sale while V2-E walked off to a three-emerald one — Task 50
+     * warned about precisely this before an executor existed.
+     *
+     * <p>The runtime consequence is caught a second time at the transaction by
+     * {@code SellFundingLeg.covers}, which {@code ExecutionBoundaryTest} exercises behaviourally.
+     * This pins the selection side, which no JVM test can reach.
+     */
+    @Test
+    void mustHappen_theAttemptedQuoteIsTheOneThatWasPlanned() {
+        String decision = bodyOf(source("goal/TradeWithVillagerGoal.java"),
+                "private Optional<Candidate> authorizedCandidate(");
+
+        assertTrue(decision.contains("sellLeg.offer()"),
+                "the SELL leg carries the quote; re-deriving it from the ranking is the drift");
+        assertTrue(decision.contains("funding.buyOffer()"),
+                "and the BUY is the funded quote, not whatever ranks highest among all offers");
+        assertTrue(decision.contains("owners.get(planned.index())"),
+                "the candidate is looked up BY that quote");
+    }
+
     // ------------------------------------------------- the production publisher
 
     /**
@@ -168,37 +205,60 @@ class ProductionRoutePathTest {
     /** The episode's lifetime is bound to the consumer in exactly one place, not four. */
     @Test
     void mustHappen_theDemandFunnelOwnsTheEvidenceEpisode() {
-        assertTrue(bodyOf(source("goal/TradeWithVillagerGoal.java"),
-                        "private Optional<WorkDemandPolicy.MaterialDemand> liveDemand(")
-                        .contains("RouteExhaustionEvidence.retainOnly("),
+        String goal = source("goal/TradeWithVillagerGoal.java");
+        String funnel = bodyOf(goal, "private Optional<WorkDemandPolicy.MaterialDemand> liveDemand(");
+
+        assertTrue(funnel.contains("RouteExhaustionEvidence.retainOnly("),
                 "every path that asks whether a consumer exists funnels through liveDemand");
+        // R6: the chain gets the same treatment. R5 bound only the EVIDENCE to the live consumer, so
+        // a chain outlived its owner - stop() preserves it deliberately, and advanceChain always
+        // reported consumerStillWants = true because it only runs once a demand has been found.
+        // CONSUMER_GONE was unreachable, and the stale chain resumed when the consumer reappeared.
+        assertTrue(funnel.contains("terminateChainIfOwnerless("),
+                "and the chain is bound to the same consumer, in the same one place");
+
+        assertTrue(bodyOf(goal, "private void terminateChainIfOwnerless(")
+                        .contains("TradeChainPolicy.evaluate("),
+                "routed through V2-D - Option A means a second lifecycle rule beside it is the bug");
     }
 
     // ------------------------------------------------- the whole path, in order
 
     /**
-     * The sequence the User specified, driven through the real policy objects in production order:
+     * The sequence the User specified, re-derived at every step exactly as production re-derives it.
      *
      * <pre>
-     * completed empty gather scan -> exhaustion evidence -> V2-C authorizes TRADE
-     *   -> funding SELL authorized -> SELL executes -> chain continues -> BUY executes
-     *   -> consumer closes -> evidence gone
+     * completed empty gather scan -&gt; exhaustion evidence -&gt; V2-C authorizes TRADE
+     *   -&gt; funding SELL authorized -&gt; SELL -&gt; RE-DERIVE -&gt; SELL -&gt; RE-DERIVE
+     *   -&gt; chain advances to BUY -&gt; BUY -&gt; chain stays open -&gt; consumer closes -&gt; evidence gone
      * </pre>
      *
-     * <p>Every step is the production collaborator, and the arithmetic survives a real container
-     * across two real transactions. What it cannot show is movement, priority interleaving, or
-     * reachability — see this class's header.
+     * <h2>What R5's version of this fixture actually proved</h2>
+     *
+     * It executed two 32-stick sales back to back from a single authorization, and it was green — but
+     * production could not have followed that path. After sale one, 32 sticks remain, 3 are reserved,
+     * 29 are disposable, and a 32-stick sale is no longer authorized. <b>The fixture proved a route
+     * the mod cannot take</b>, because it never re-derived between transactions.
+     *
+     * <p>So every transaction here is followed by the same re-derivation the executor performs, and
+     * the numbers are chosen so two sales are genuinely affordable: 64 sticks, 3 reserved, 30 per
+     * sale, {@code floor(61 / 30) == 2}.
+     *
+     * <p>It also starts from <b>1 ingot already held against a need for 3</b> — the state R5's
+     * deficit-valued chain threshold terminated one purchase short.
      */
     @Test
     void mustHappen_theWholeRouteConnectsFromEmptyScanToClosedConsumer() {
         RouteExhaustionEvidence.shutdownServerState();
         UUID mob = UUID.nameUUIDFromBytes("route-path".getBytes());
         ResourceLocation ironKey = BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT);
-        WorkDemandPolicy.MaterialDemand demand =
-                new WorkDemandPolicy.MaterialDemand(ironKey, 1, CONSUMER);
+        ScavengerConfig cfg = new ScavengerConfig();
 
         SimpleContainer backpack = new SimpleContainer(9);
         backpack.setItem(0, new ItemStack(Items.STICK, 64));
+        backpack.setItem(1, new ItemStack(Items.IRON_INGOT, 1));
+        WorkDemandPolicy.MaterialDemand demand =
+                new WorkDemandPolicy.MaterialDemand(ironKey, 2, CONSUMER);
 
         // 1. the gather route reports its own completed, empty search
         RouteExhaustionEvidence.publish(
@@ -211,77 +271,107 @@ class ProductionRoutePathTest {
                         ExistingRouteFeasibility.ExistingRouteStatus.UNKNOWN,
                         RouteExhaustionEvidence.exhaustedFor(mob, demand, 10L)));
 
-        // 3. the quote this iteration serves, and the shortfall it implies
-        OfferSnapshot buyIron = OfferSnapshot.of(0, new MerchantOffer(
-                new ItemCost(Items.EMERALD, 2), Optional.empty(),
-                new ItemStack(Items.IRON_INGOT, 1), 0, 12, 0, 0f));
-        OfferSnapshot sellSticks = OfferSnapshot.of(1, new MerchantOffer(
-                new ItemCost(Items.STICK, 32), Optional.empty(),
-                new ItemStack(Items.EMERALD, 1), 0, 12, 0, 0f));
-        List<OfferSnapshot> offers = List.of(buyIron, sellSticks);
+        List<OfferSnapshot> offers = List.of(
+                OfferSnapshot.of(0, buyIronOffer()), OfferSnapshot.of(1, sellSticksOffer()));
+        MerchantOffers live = new MerchantOffers();
+        live.add(buyIronOffer());
+        live.add(sellSticksOffer());
 
-        TradeFundingPlanner.FundingTarget funding =
-                TradeFundingPlanner.chooseFundingTarget(demand, offers, backpack);
-        assertEquals(2, funding.deficit().emeraldsNeeded(), "two emeralds, none held");
-
-        // 4. permission, from the real reserve model - sticks are modelled, and 64 minus a 3-stick
-        //    craft claim covers two 32-stick sales
-        ScavengerConfig cfg = new ScavengerConfig();
-        SellAuthorization authorization = TradeFundingPlanner.authorizeFunding(
-                funding.deficit(), offers, backpack, ItemStack.EMPTY, ItemStack.EMPTY,
+        // 3. the quote this iteration serves, its shortfall, and the exact SELL leg that closes it
+        TradeFundingPlanner.FundingTarget funding = TradeFundingPlanner.chooseFundingTarget(
+                demand, offers, backpack, ItemStack.EMPTY, ItemStack.EMPTY,
                 m -> SellReserveModel.reservedUnits(m, backpack, cfg));
-        assertTrue(authorization.permits(sellSticks.costA()));
+        assertEquals(2, funding.deficit().emeraldsNeeded(), "two emeralds, none held");
+        assertEquals(2, funding.sellLeg().affordableUses(),
+                "61 disposable sticks at 30 per sale is two USES, never 61");
 
-        // 5. V2-C admits TRADE
+        // 4. V2-C admits TRADE on the authorization the real reserve model produced
         assertEquals(AcquisitionRoute.TRADE,
-                TradeDemandRegistrar.decide(demand,
-                                new RouteEvidence(false, offers, true,
-                                        funding.deficit(), authorization))
+                TradeDemandRegistrar.decide(demand, new RouteEvidence(false, offers, true,
+                                funding.deficit(), funding.sellLeg().authorization()))
                         .route());
 
-        // 6. V2-D says SELL first, and how many times
-        TradeChainPlan plan = TradeChainPlan.forConsumer(CONSUMER, ironKey, 1, 10L);
-        TradeChainPolicy.ChainOutcome first = TradeChainPolicy.evaluate(plan,
-                new TradeChainPolicy.ChainFacts(true, 0, 0, 2, 1, 61), 10L);
-        assertEquals(TradeChainPlan.Step.SELL_TO_FUND, first.plan().step());
-        assertEquals(2, first.requiredSellUses());
-        assertFalse(first.sellBlocked());
+        // 5. the chain opens on an ABSOLUTE threshold: 1 held + 2 needed
+        TradeChainPlan chain = TradeChainPlan.forConsumer(CONSUMER, ironKey,
+                ScavengerCrafting.count(backpack, Items.IRON_INGOT) + demand.derivedDeficit(), 10L);
+        assertEquals(3, chain.targetHeldQuantity());
 
-        // 7. two real SELL transactions against a real container
-        MerchantOffers live = new MerchantOffers();
-        live.add(new MerchantOffer(new ItemCost(Items.EMERALD, 2), Optional.empty(),
-                new ItemStack(Items.IRON_INGOT, 1), 0, 12, 0, 0f));
-        live.add(new MerchantOffer(new ItemCost(Items.STICK, 32), Optional.empty(),
-                new ItemStack(Items.EMERALD, 1), 0, 12, 0, 0f));
+        // 6. two SELL legs, each preceded by its own re-derivation
+        for (int sale = 1; sale <= 2; sale++) {
+            TradeFundingPlanner.FundingTarget now = TradeFundingPlanner.chooseFundingTarget(
+                    demand, offers, backpack, ItemStack.EMPTY, ItemStack.EMPTY,
+                    m -> SellReserveModel.reservedUnits(m, backpack, cfg));
+            assertFalse(now.funded(), "still short before sale " + sale);
+            assertTrue(now.sellLeg().usable(), "still authorized before sale " + sale);
 
-        for (int i = 0; i < 2; i++) {
+            TradeChainPolicy.ChainOutcome outcome = TradeChainPolicy.evaluate(chain,
+                    new TradeChainPolicy.ChainFacts(true,
+                            ScavengerCrafting.count(backpack, Items.IRON_INGOT),
+                            ScavengerCrafting.count(backpack, Items.EMERALD),
+                            now.emeraldsRequired(),
+                            now.sellLeg().emeraldsPerUse(),
+                            now.sellLeg().affordableUses()),
+                    10L);
+            assertEquals(TradeChainPlan.Step.SELL_TO_FUND, outcome.plan().step());
+            assertFalse(outcome.sellBlocked(), "sale " + sale + " is affordable");
+            chain = outcome.plan();
+
             assertEquals(VillagerTradeAdapter.TradeResult.TRADED,
-                    VillagerTradeAdapter.executeAgainst(backpack, live, sellSticks, o -> { }));
+                    VillagerTradeAdapter.executeAgainst(
+                            backpack, live, now.sellLeg().offer(), offer -> assertNotNull(offer)));
         }
         assertEquals(2, ScavengerCrafting.count(backpack, Items.EMERALD));
-        assertEquals(0, ScavengerCrafting.count(backpack, Items.STICK));
+        assertEquals(4, ScavengerCrafting.count(backpack, Items.STICK), "64 less two 30-stick sales");
 
-        // 8. actual inventory - never a remembered counter - advances the chain to BUY
-        TradeChainPolicy.ChainOutcome funded = TradeChainPolicy.evaluate(first.plan(),
-                new TradeChainPolicy.ChainFacts(true, 0,
-                        ScavengerCrafting.count(backpack, Items.EMERALD), 2, 1, 0), 20L);
-        assertEquals(TradeChainPlan.Step.BUY_TARGET, funded.plan().step());
-        assertEquals(0, funded.requiredSellUses(), "no further selling is even representable");
+        // 7. actual inventory - never a remembered counter - advances the chain to BUY
+        TradeFundingPlanner.FundingTarget funded = TradeFundingPlanner.chooseFundingTarget(
+                demand, offers, backpack, ItemStack.EMPTY, ItemStack.EMPTY,
+                m -> SellReserveModel.reservedUnits(m, backpack, cfg));
+        assertTrue(funded.funded(), "the purchase is paid for");
 
-        // 9. the purchase the whole chain existed for
+        TradeChainPolicy.ChainOutcome ready = TradeChainPolicy.evaluate(chain,
+                new TradeChainPolicy.ChainFacts(true,
+                        ScavengerCrafting.count(backpack, Items.IRON_INGOT),
+                        ScavengerCrafting.count(backpack, Items.EMERALD),
+                        funded.emeraldsRequired(), 0, 0), 20L);
+        assertEquals(TradeChainPlan.Step.BUY_TARGET, ready.plan().step());
+        assertEquals(0, ready.requiredSellUses(), "no further selling is even representable");
+
+        // 8. the purchase the chain existed for - and the chain MUST NOT stop here
         assertEquals(VillagerTradeAdapter.TradeResult.TRADED,
-                VillagerTradeAdapter.executeAgainst(backpack, live, buyIron, o -> { }));
-        assertEquals(1, ScavengerCrafting.count(backpack, Items.IRON_INGOT));
+                VillagerTradeAdapter.executeAgainst(
+                        backpack, live, funded.buyOffer(), offer -> assertNotNull(offer)));
+        assertEquals(2, ScavengerCrafting.count(backpack, Items.IRON_INGOT));
 
-        // 10. the consumer closes, and its evidence episode closes with it
-        assertEquals(TradeChainPolicy.Termination.CONSUMER_GONE,
-                TradeChainPolicy.evaluate(funded.plan(),
-                        new TradeChainPolicy.ChainFacts(false, 1, 0, 2, 1, 0), 30L)
+        TradeChainPolicy.ChainOutcome afterFirstBuy = TradeChainPolicy.evaluate(ready.plan(),
+                new TradeChainPolicy.ChainFacts(true, 2, 0, 2, 1, 2), 30L);
+        assertTrue(afterFirstBuy.active(),
+                "2 held against a target of 3 is not the target obtained elsewhere - this is the "
+                        + "R5 P0, and a deficit-valued threshold would have stopped the chain here");
+
+        // 9. the consumer closes only once the third ingot exists
+        backpack.setItem(2, new ItemStack(Items.IRON_INGOT, 1));
+        assertEquals(TradeChainPolicy.Termination.TARGET_OBTAINED_ELSEWHERE,
+                TradeChainPolicy.evaluate(afterFirstBuy.plan(),
+                                new TradeChainPolicy.ChainFacts(true,
+                                        ScavengerCrafting.count(backpack, Items.IRON_INGOT),
+                                        0, 2, 1, 2), 40L)
                         .termination());
 
-        RouteExhaustionEvidence.retainOnly(mob, null, 30L);
+        RouteExhaustionEvidence.retainOnly(mob, null, 40L);
         assertEquals(0, RouteExhaustionEvidence.trackedCount(),
                 "the search that authorized this trade cannot authorize the next episode");
-        assertFalse(RouteExhaustionEvidence.exhaustedFor(mob, demand, 40L));
+        assertFalse(RouteExhaustionEvidence.exhaustedFor(mob, demand, 50L));
+    }
+
+    private static MerchantOffer buyIronOffer() {
+        return new MerchantOffer(new ItemCost(Items.EMERALD, 2), Optional.empty(),
+                new ItemStack(Items.IRON_INGOT, 1), 0, 12, 0, 0f);
+    }
+
+    private static MerchantOffer sellSticksOffer() {
+        return new MerchantOffer(new ItemCost(Items.STICK, 30), Optional.empty(),
+                new ItemStack(Items.EMERALD, 1), 0, 12, 0, 0f);
     }
 }
+

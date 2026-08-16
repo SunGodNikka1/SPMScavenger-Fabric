@@ -186,7 +186,7 @@ class TradeChainPolicyTest {
         for (TradeChainPlan step : List.of(chain, selling.plan(), buying.plan())) {
             assertEquals(MENDING_BOOK, step.consumerKey());
             assertEquals(BuiltInRegistries.ITEM.getKey(Items.BOOK), step.desiredOutput());
-            assertEquals(1, step.desiredQuantity());
+            assertEquals(1, step.targetHeldQuantity());
         }
     }
 
@@ -315,5 +315,128 @@ class TradeChainPolicyTest {
                 assertFalse(body.contains(forbidden), file + " must not reference " + forbidden);
             }
         }
+    }
+
+    /**
+     * R6 — the quantity bug, as a behavioural regression on the most ordinary state there is.
+     *
+     * <p>An iron pickaxe needs 3 ingots. A mob that already holds 1 has a deficit of 2, and R5 opened
+     * the chain with the <b>deficit</b> while the policy terminates on <b>held</b>. One purchase later
+     * the mob holds 2, {@code 2 >= 2} fires, and the chain stops an ingot short of its purpose. Worse,
+     * a chain reopened afterwards (deficit 1, held 2) terminates on its first evaluation — that
+     * consumer can never again be finished by trade.
+     *
+     * <p>Fixtures that start from an empty backpack cannot see this, which is why every previous one
+     * missed it: at held 0 the deficit and the threshold are the same number.
+     */
+    @Test
+    void mustNotHappen_owningSomeOfWhatYouNeedTerminatesTheChainEarly() {
+        int held = 1;
+        int required = 3;
+        TradeChainPlan chain = TradeChainPlan.forConsumer(
+                MENDING_BOOK, BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT),
+                held + (required - held), 0L);
+
+        assertEquals(3, chain.targetHeldQuantity(), "an absolute threshold, not the deficit");
+
+        TradeChainPolicy.ChainOutcome afterFirstBuy = TradeChainPolicy.evaluate(
+                chain, new ChainFacts(true, 2, 0, 2, 1, 4), 10L);
+        assertTrue(afterFirstBuy.active(),
+                "2 of 3 is not the target obtained elsewhere - with the deficit as the threshold "
+                        + "this is exactly where R5 stopped");
+
+        assertEquals(Termination.TARGET_OBTAINED_ELSEWHERE,
+                TradeChainPolicy.evaluate(chain, new ChainFacts(true, 3, 0, 2, 1, 4), 20L)
+                        .termination(),
+                "and the third ingot is what actually closes it");
+    }
+
+    /**
+     * The units defect, behaviourally: {@code sellBlocked} compares SELL <b>uses</b> on both sides.
+     *
+     * <p>R5 passed raw disposable item units into this field, so 61 sticks read as "61 sales
+     * available" when a 32-stick offer permits exactly one. The comparison was arithmetically fine
+     * and the operands were in different currencies.
+     */
+    @Test
+    void mustHappen_sellBlockedComparesUsesAgainstUses() {
+        TradeChainPlan chain = TradeChainPlan.forConsumer(
+                MENDING_BOOK, BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT), 1, 0L);
+
+        // Two emeralds needed, one per sale: two uses required.
+        assertTrue(TradeChainPolicy.evaluate(chain, new ChainFacts(true, 0, 0, 2, 1, 1), 10L)
+                        .sellBlocked(),
+                "one affordable use cannot fund a two-use deficit");
+        assertFalse(TradeChainPolicy.evaluate(chain, new ChainFacts(true, 0, 0, 2, 1, 2), 10L)
+                        .sellBlocked(),
+                "two affordable uses can");
+    }
+
+    // ------------------------------------------------- production wiring arithmetic (R6)
+
+    /**
+     * The P0 quantity bug, at the <b>exact</b> arithmetic production performs.
+     *
+     * <p>The two earlier regressions in this file built the plan by hand and so proved only that the
+     * policy compares correctly. Reverting the goal's conversion left both of them green, because the
+     * conversion lived in {@code advanceChain} where no JVM test can reach it. This calls the same
+     * factory the goal calls.
+     */
+    @Test
+    void mustNotHappen_theChainThresholdIsOpenedFromTheDeficit() {
+        TradeChainPlan chain = TradeChainPlan.forDemand(
+                MENDING_BOOK, BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT), 1, 2, 0L);
+
+        assertEquals(3, chain.targetHeldQuantity(),
+                "1 held + 2 needed. Opening on the deficit (2) stops the chain after one purchase");
+
+        assertTrue(TradeChainPolicy.evaluate(chain, new ChainFacts(true, 2, 0, 2, 1, 4), 10L)
+                        .active(),
+                "and 2 of 3 must still be an active chain");
+    }
+
+    /** From an empty backpack the two are equal, which is why every earlier fixture missed it. */
+    @Test
+    void mustHappen_anEmptyBackpackMakesDeficitAndThresholdAgree() {
+        assertEquals(3, TradeChainPlan.forDemand(
+                MENDING_BOOK, BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT), 0, 3, 0L)
+                .targetHeldQuantity());
+    }
+
+    /**
+     * The units defect at the production call site: {@code affordableSellUses}, never disposable
+     * units.
+     */
+    @Test
+    void mustNotHappen_rawItemUnitsReachTheSellUseComparison() {
+        OfferSnapshot sale = OfferSnapshot.of(0, new net.minecraft.world.item.trading.MerchantOffer(
+                new net.minecraft.world.item.trading.ItemCost(Items.STICK, 32),
+                java.util.Optional.empty(), new ItemStack(Items.EMERALD, 1), 0, 12, 0, 0f));
+        SellFundingLeg leg = new SellFundingLeg(
+                sale, new SellAuthorization(new ItemStack(Items.STICK, 32), 61, MENDING_BOOK), 1, 1);
+        TradeFundingPlanner.FundingTarget funding = new TradeFundingPlanner.FundingTarget(
+                sale, 2, new TradeEvaluationPolicy.EmeraldDeficit(MENDING_BOOK, 2), leg);
+
+        ChainFacts facts = TradeChainPolicy.factsFrom(funding, 0, 0);
+
+        assertEquals(1, facts.affordableSellUses(),
+                "61 disposable sticks at 32 per sale is ONE use - passing 61 here is the R5 defect");
+        assertTrue(TradeChainPolicy.evaluate(
+                        TradeChainPlan.forDemand(MENDING_BOOK,
+                                BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT), 0, 1, 0L),
+                        facts, 10L).sellBlocked(),
+                "one use cannot fund a two-emerald deficit at one emerald per sale");
+    }
+
+    /** No funding target is a chain with no reason to exist. */
+    @Test
+    void mustHappen_absentFundingTerminatesTheChain() {
+        assertFalse(TradeChainPolicy.factsFrom(null, 0, 0).consumerStillWants());
+        assertEquals(Termination.CONSUMER_GONE,
+                TradeChainPolicy.evaluate(
+                                TradeChainPlan.forDemand(MENDING_BOOK,
+                                        BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT), 0, 1, 0L),
+                                TradeChainPolicy.factsFrom(null, 0, 0), 10L)
+                        .termination());
     }
 }

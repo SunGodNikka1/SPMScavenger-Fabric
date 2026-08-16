@@ -254,11 +254,32 @@ class TradeInterlockAndRoundTest {
     /** Locked constraint 6 (executor half): offers are inspected per candidate, never swept. */
     @Test
     void mustNotHappen_theGoalSweepsOffersPassively() throws IOException {
+        // R6: restated as the actual property. This was a whole-file index comparison, and it broke
+        // the moment a SECOND, legitimate call site appeared earlier in the file - the execution
+        // boundary re-inspecting the villager it is standing in front of. "First inspectOffers in
+        // the file" was never the rule; "no offer list is touched for a villager that was not
+        // already selected" is.
         String goal = source(Path.of("goal/TradeWithVillagerGoal.java"));
-        int filter = goal.indexOf("VillagerTradeAdapter.available(villager)");
-        int inspect = goal.indexOf("VillagerTradeAdapter.inspectOffers");
+        final String CALL = "VillagerTradeAdapter.inspectOffers(";
+        String discovery = goal.substring(goal.indexOf("private Optional<Candidate> authorizedCandidate("));
+        discovery = discovery.substring(0, discovery.indexOf((char) 10 + "    }"));
+
+        int filter = discovery.indexOf("VillagerTradeAdapter.available(villager)");
+        int inspect = discovery.indexOf("VillagerTradeAdapter.inspectOffers");
         assertTrue(filter > 0 && filter < inspect,
                 "candidates are filtered for availability before any offer list is touched - "
                         + "getOffers() lazily populates trades");
+
+        int from = 0;
+        int sites = 0;
+        while ((from = goal.indexOf(CALL, from)) >= 0) {
+            String argument = goal.substring(from + CALL.length());
+            argument = argument.substring(0, argument.indexOf(')'));
+            assertTrue(argument.equals("villager") || argument.equals("target"),
+                    "offers may only be inspected for an already-selected candidate, not " + argument);
+            sites++;
+            from += CALL.length();
+        }
+        assertTrue(sites >= 1, "the discovery call site must still exist");
     }
 }
