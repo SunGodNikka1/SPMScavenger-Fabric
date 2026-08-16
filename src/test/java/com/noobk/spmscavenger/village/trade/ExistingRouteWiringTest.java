@@ -58,9 +58,9 @@ class ExistingRouteWiringTest {
                 "hardcoding infeasible disables V2-C's guard on every call");
         assertFalse(goal.contains("RouteEvidence.of(true"),
                 "hardcoding feasible would disable trading entirely - also a lie");
-        assertTrue(goal.contains("existingRouteFeasible(level"),
+        assertTrue(goal.contains("existingRouteInfeasible(level"),
                 "the fact must be produced, not invented");
-        assertTrue(goal.contains("ExistingRouteFeasibility.canSatisfy"),
+        assertTrue(goal.contains("ExistingRouteFeasibility.tradeMayDisplace"),
                 "and produced by the dedicated authority");
     }
 
@@ -72,13 +72,19 @@ class ExistingRouteWiringTest {
     void mustHappen_theProducerFailsTowardExistingWork() throws IOException {
         String producer = source(Path.of("village/trade/ExistingRouteFeasibility.java"));
 
-        int lastReturn = producer.lastIndexOf("return true;");
-        int lastFalse = producer.lastIndexOf("return false;");
-        assertTrue(lastReturn > lastFalse,
-                "the final fall-through must be `true` - anything unrecognised keeps work eligible");
+        // Scoped to the DECISION path. The whole-file version failed on reportRouteExhausted(),
+        // which legitimately returns INFEASIBLE and is not part of the fall-through.
+        int decisionStart = producer.indexOf("static ExistingRouteStatus gatherStatus(");
+        int decisionEnd = producer.indexOf("public static ExistingRouteStatus reportRouteExhausted");
+        assertTrue(decisionStart > 0 && decisionEnd > decisionStart);
+        String decision = producer.substring(decisionStart, decisionEnd);
 
-        assertTrue(producer.contains("level == null || demand == null"),
-                "a missing input is 'cannot tell', not 'infeasible'");
+        int lastUnknown = decision.lastIndexOf("return ExistingRouteStatus.UNKNOWN;");
+        int lastInfeasible = decision.lastIndexOf("return ExistingRouteStatus.INFEASIBLE;");
+        assertTrue(lastUnknown > lastInfeasible,
+                "the final fall-through must be UNKNOWN - anything unrecognised keeps work eligible");
+        assertTrue(producer.contains("this == INFEASIBLE"),
+                "only positively proven infeasibility may permit displacement");
     }
 
     /** P1. Route ownership must be revalidated during the walk, or V2-C convergence never happens. */
@@ -91,8 +97,10 @@ class ExistingRouteWiringTest {
         assertTrue(continueStart > 0 && continueEnd > continueStart);
         String body = goal.substring(continueStart, continueEnd);
 
-        assertTrue(body.contains("existingRouteFeasible"),
+        assertTrue(body.contains("existingRouteInfeasible"),
                 "work becoming feasible again must return ownership to EXISTING_WORK mid-walk");
+        assertTrue(body.contains("sameAttemptConsumer"),
+                "and it must be the SAME consumer, not merely some demand");
         assertTrue(body.contains("liveDemand"), "and the demand must still exist");
         assertFalse(body.contains("inspectOffers"),
                 "continuation stays cheap - exact offer checks belong at the transaction boundary");
@@ -126,7 +134,7 @@ class ExistingRouteWiringTest {
         assertFalse(goal.contains("candidate.result().getItem() == flat.result().getItem()"),
                 "identity was ours to keep; matching it back is ambiguous");
         assertFalse(goal.contains("private Candidate resolve("), "the reverse lookup is gone");
-        assertTrue(goal.contains("new Candidate(villager, offer)"),
+        assertTrue(goal.contains("new Candidate(villager, offer,"),
                 "the candidate keeps the villager's own offer, real index and all");
     }
 

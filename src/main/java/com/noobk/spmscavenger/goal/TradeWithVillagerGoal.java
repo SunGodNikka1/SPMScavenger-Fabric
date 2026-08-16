@@ -8,9 +8,10 @@ import com.noobk.spmscavenger.village.trade.OfferSnapshot;
 import com.noobk.spmscavenger.village.trade.RouteEvidence;
 import com.noobk.spmscavenger.village.trade.TradeCandidateRound;
 import com.noobk.spmscavenger.village.trade.TradeDemandGate;
-import com.noobk.spmscavenger.village.trade.TradeEvaluation;
+import com.noobk.spmscavenger.village.trade.TradeEvaluationPolicy;
 import com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow;
 import com.noobk.spmscavenger.village.trade.VillagerTradeAdapter;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Mob;
@@ -62,6 +63,9 @@ public class TradeWithVillagerGoal extends Goal {
 
     private Villager target;
     private OfferSnapshot plannedOffer;
+    /** The consumer that authorized the attempt in progress. Identity, not a snapshot of demand. */
+    private ResourceLocation attemptConsumer;
+    private ResourceLocation attemptMaterial;
     private int repathCooldown;
 
     public TradeWithVillagerGoal(Mob mob, double speed) {
@@ -90,16 +94,19 @@ public class TradeWithVillagerGoal extends Goal {
         // The demand can vanish mid-walk - someone else smelted the iron, the consumer completed.
         // Checked here rather than only at commit so the mob stops walking toward a purchase nobody
         // needs, instead of arriving and then discovering it.
-        // Cheap continuation: demand, route ownership, physical legality. No villager rescan -
-        // exact offer, affordability and capacity are re-checked at the transaction boundary.
+        // Cheap continuation: same consumer, route ownership, physical legality. No villager
+        // rescan - exact offer, affordability and capacity stay at the transaction boundary.
         Optional<WorkDemandPolicy.MaterialDemand> demand = liveDemand(level);
         if (demand.isEmpty() || target == null || !VillagerTradeAdapter.available(target)) {
             return false;
         }
-        // V2-C convergence depends on ownership returning to EXISTING_WORK when work becomes
-        // feasible again mid-walk. Without this the mob would keep walking to a merchant it no
-        // longer needs.
-        return !existingRouteFeasible(level, demand.get());
+        // The SAME consumer, not merely some consumer. Another activity can satisfy the iron
+        // frontier mid-walk while the torch chain becomes the selected demand; "a demand exists"
+        // would then keep the mob walking to execute an iron offer nobody wants.
+        if (!sameAttemptConsumer(demand.get())) {
+            return false;
+        }
+        return existingRouteInfeasible(level, demand.get());
     }
 
     @Override
@@ -122,6 +129,8 @@ public class TradeWithVillagerGoal extends Goal {
         round.clear();
         target = null;
         plannedOffer = null;
+        attemptConsumer = null;
+        attemptMaterial = null;
         repathCooldown = 0;
         mob.getNavigation().stop();
     }
@@ -175,6 +184,13 @@ public class TradeWithVillagerGoal extends Goal {
             reselect(level);
             return;
         }
+        // Consumer identity at the execution boundary, freshly derived. Planning permission does not
+        // authorize execution, and that applies to *who wanted this* as much as to affordability.
+        Optional<WorkDemandPolicy.MaterialDemand> live = liveDemand(level);
+        if (live.isEmpty() || !sameAttemptConsumer(live.get())) {
+            endRound(level);
+            return;
+        }
         VillagerTradeAdapter.TradeResult result =
                 VillagerTradeAdapter.performTrade(backpack, target, plannedOffer);
 
@@ -198,6 +214,8 @@ public class TradeWithVillagerGoal extends Goal {
     private void beginAttempt(ServerLevel level, Candidate candidate) {
         target = candidate.villager();
         plannedOffer = candidate.offer();
+        attemptConsumer = candidate.consumerKey();
+        attemptMaterial = candidate.materialKey();
         round.begin(candidate.villager().getUUID());
         // Claim at attempt start, before WALK can carry us into greet range. A FACE-only claim would
         // depend on winning a race against the priority-1 greet re-evaluating every tick.
@@ -229,7 +247,19 @@ public class TradeWithVillagerGoal extends Goal {
         mob.getNavigation().stop();
     }
 
-    private record Candidate(Villager villager, OfferSnapshot offer) {
+    /**
+     * A candidate plus the consumer that authorized it.
+     *
+     * <p>{@code consumerKey} and {@code materialKey} are the stable identity; the deficit is
+     * deliberately absent because it legitimately shrinks during the walk. Without them the goal
+     * could prove only that <i>a</i> demand exists, and execute an iron offer for a torch-chain
+     * demand that replaced it mid-approach.
+     */
+    private record Candidate(
+            Villager villager,
+            OfferSnapshot offer,
+            ResourceLocation consumerKey,
+            ResourceLocation materialKey) {
     }
 
     private Optional<WorkDemandPolicy.MaterialDemand> liveDemand(ServerLevel level) {
@@ -281,7 +311,8 @@ public class TradeWithVillagerGoal extends Goal {
             for (OfferSnapshot offer : VillagerTradeAdapter.inspectOffers(villager)) {
                 offers.add(new OfferSnapshot(slot, offer.costA(), offer.costB(),
                         offer.result(), offer.uses(), offer.maxUses()));
-                owners.put(slot, new Candidate(villager, offer));   // offer keeps its REAL index
+                owners.put(slot, new Candidate(villager, offer,      // offer keeps its REAL index
+                        demand.get().consumerKey(), demand.get().materialKey()));
                 slot++;
             }
         }
@@ -289,13 +320,17 @@ public class TradeWithVillagerGoal extends Goal {
         boolean affordable = offers.stream()
                 .anyMatch(offer -> VillagerTradeAdapter.canAfford(backpack, offer));
 
-        // P0 repair: this was hardcoded `false`, which told V2-C the existing route was always
-        // infeasible and so disabled its central guard on every call. The policy was correct and
-        // the caller was lying to it.
-        boolean existingFeasible = existingRouteFeasible(level, demand.get());
+        // P0/R2: produced, tri-state, and trade proceeds only on positively proven infeasibility.
+        boolean existingFeasible = !existingRouteInfeasible(level, demand.get());
+
+        // V2-D: without a live emerald deficit every SELL offer is refused by design, so a funding
+        // leg could never be entered and V2-E was a direct-BUY subset of the locked architecture.
+        TradeEvaluationPolicy.EmeraldDeficit deficit =
+                emeraldDeficitFor(demand.get(), offers, backpack);
 
         return TradeDemandGate
-                .authorize(demand.get(), RouteEvidence.of(existingFeasible, offers, affordable))
+                .authorize(demand.get(),
+                        new RouteEvidence(existingFeasible, offers, affordable, deficit))
                 .flatMap(authorization -> authorization.rankedOffers().stream()
                         .map(evaluation -> owners.get(evaluation.offerIndex()))
                         .filter(java.util.Objects::nonNull)
@@ -304,10 +339,73 @@ public class TradeWithVillagerGoal extends Goal {
                         .findFirst());
     }
 
-    private boolean existingRouteFeasible(
+    /** Trade may displace working progression only on positively proven infeasibility. */
+    private boolean existingRouteInfeasible(
             ServerLevel level, WorkDemandPolicy.MaterialDemand demand) {
-        return ExistingRouteFeasibility.canSatisfy(
+        return ExistingRouteFeasibility.tradeMayDisplace(
                 level, demand, PlayerMobs.backpack(mob),
                 mob.getMainHandItem(), mob.getOffhandItem(), ScavengerConfig.get());
+    }
+
+    private boolean sameAttemptConsumer(WorkDemandPolicy.MaterialDemand demand) {
+        return attemptConsumer != null
+                && attemptConsumer.equals(demand.consumerKey())
+                && attemptMaterial != null
+                && attemptMaterial.equals(demand.materialKey());
+    }
+
+    /**
+     * V2-D wiring: the emerald shortfall a BUY leg needs, if any.
+     *
+     * <p>Derived live from the cheapest matching BUY offer and the emeralds actually held, then
+     * handed to {@link RouteEvidence} so V2-B may evaluate SELL legs at all. Without it every SELL
+     * offer is {@code NO_CONSUMER_FOR_PAYMENT} by design, which is why V2-E was previously a
+     * direct-BUY subset of the locked architecture.
+     *
+     * <p>The deficit carries the <b>external consumer's</b> key, never a manufactured one: the chain
+     * exists to fund that purchase and is attributed to it (V2-D req 2/3).
+     */
+    private TradeEvaluationPolicy.EmeraldDeficit emeraldDeficitFor(
+            WorkDemandPolicy.MaterialDemand demand, List<OfferSnapshot> offers, Container backpack) {
+        int cheapestBuyCost = Integer.MAX_VALUE;
+        for (OfferSnapshot offer : offers) {
+            if (!offer.isTradeable()) {
+                continue;
+            }
+            ResourceLocation resultKey = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                    .getKey(offer.result().getItem());
+            if (!demand.materialKey().equals(resultKey)) {
+                continue;
+            }
+            if (offer.costA().is(net.minecraft.world.item.Items.EMERALD)) {
+                cheapestBuyCost = Math.min(cheapestBuyCost, offer.costA().getCount());
+            }
+        }
+        if (cheapestBuyCost == Integer.MAX_VALUE) {
+            return null;   // nothing here is bought with emeralds; no funding leg is implied
+        }
+        int held = com.noobk.spmscavenger.ScavengerCrafting.count(
+                backpack, net.minecraft.world.item.Items.EMERALD);
+        int shortfall = cheapestBuyCost - held;
+        // Bounded by the purchase. No shortfall means no emerald appetite exists at all (V2-D req 2).
+        return shortfall > 0
+                ? new TradeEvaluationPolicy.EmeraldDeficit(demand.consumerKey(), shortfall)
+                : null;
+    }
+
+    /**
+     * V2-D wiring: how many successful SELL uses this offer must complete, bounded by the deficit.
+     *
+     * <p>Derived from the <b>live</b> offer being attempted, per Task 50's handoff — never a value
+     * carried from planning. Owning 64 disposable wheat is permission to spend wheat, not a reason to
+     * sell 64 of it.
+     */
+    public static int requiredSellUses(
+            TradeEvaluationPolicy.EmeraldDeficit deficit, OfferSnapshot sellOffer) {
+        if (deficit == null || sellOffer == null || sellOffer.result().isEmpty()) {
+            return 0;
+        }
+        int perUse = Math.max(1, sellOffer.result().getCount());
+        return (deficit.emeraldsNeeded() + perUse - 1) / perUse;
     }
 }
