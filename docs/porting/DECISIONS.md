@@ -1627,3 +1627,28 @@ not become a second demand selector**, and the erosion would be gradual, so the 
 defensible shape and no calibration — V2-C may need a different scale. Emeralds are hardcoded as the
 currency, which is correct for vanilla merchants and is a compatibility hardcode worth tracking. One
 demand, one offer: ranking a set is V2-C/V2-E.
+
+## 2026-08-15 - V2-C: trading becomes a legitimate route, and only ever a route
+
+Task 49 (`.superpowers/sdd/task-49-report.md`). 998 tests, 0 failures, 3 negative controls.
+
+**The common acquisition model compares structural facts, never blended numbers** (User gate 6).
+`73` trade utility and `100` smelt utility do not share units, and converting emerald price into
+mining effort would be a magic constant dressed as a comparison. So `decide` reads only: is the
+existing route feasible, is there current bounded offer evidence, can the mob pay. V2-B utility
+orders offers **within** TRADE and nowhere else - asserted structurally by requiring every route
+refusal to precede the first utility read.
+
+**Two asymmetries carry the design.** TRADE is preferred only when the existing route is *infeasible*,
+never when it merely scores lower - so an attractive offer cannot displace working progression
+(gates 3 and 7), and two near-equal options have no score to oscillate on. And the policy is
+**stateless**, which makes gate 9 unrepresentable: a decision is a pure function of present evidence,
+so a disappeared candidate needs no invalidation path.
+
+**The emerald-currency hardcode is recorded as `VANILLA_GEN1_ASSUMPTION`**, not universal merchant
+truth. V2-TE handles real payout semantics separately; the core is deliberately not generalised early.
+
+**Carried forward as a constraint on V2-D/E:** `paymentAffordable` is a caller-supplied boolean
+because V2-C cannot see a container. Affordability must be re-checked for the offer actually
+attempted - asserting it for *some* offer and then attempting the best one is a real gap. Likewise
+reachability filtering belongs upstream of `decide`.

@@ -73,4 +73,6 @@ Task 47: complete (V2-A CLOSED — VillagerTradeAdapter + OfferSnapshot + TradeT
 
 Task 48: complete (V2-B TradeEvaluationPolicy — pure offer scoring; 986 tests, 3 negative controls; V2-C owns route admission)
 
+Task 49: complete (V2-C TradeDemandRegistrar - acquisition feasibility, 10 gates; 998 tests, 3 negative controls; stateless so gate 9 is unrepresentable)
+
 No commits unless user requests. No Minecraft launches unless separately approved.
