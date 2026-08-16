@@ -12,6 +12,7 @@ import com.noobk.spmscavenger.goal.GatherResourcesGoal;
 import com.noobk.spmscavenger.goal.PlaceTorchGoal;
 import com.noobk.spmscavenger.goal.SeekShelterGoal;
 import com.noobk.spmscavenger.goal.SmeltAtFurnaceGoal;
+import com.noobk.spmscavenger.goal.TradeWithVillagerGoal;
 import com.noobk.spmscavenger.goal.TrackedLocalWanderGoal;
 import com.noobk.spmscavenger.goal.TunnelSearchGoal;
 import com.noobk.spmscavenger.goal.VillagePerceptionObserver;
@@ -116,6 +117,9 @@ public final class MoveHolderClassifier {
         if (ExploringGoal.class.isAssignableFrom(goalType)) {
             return ActivityClass.EXPEDITION;
         }
+        if (TradeWithVillagerGoal.class.isAssignableFrom(goalType)) {
+            return ActivityClass.VILLAGE_TRADE;
+        }
         if (GatherResourcesGoal.class.isAssignableFrom(goalType)
                 || CraftTorchesGoal.class.isAssignableFrom(goalType)
                 || SmeltAtFurnaceGoal.class.isAssignableFrom(goalType)) {
@@ -199,6 +203,17 @@ public final class MoveHolderClassifier {
             case DISCRETIONARY_SOCIAL:
                 return MoveHolderClassification.ORDINARY_HOST_WORK;
             case SOCIAL_TRAVEL, COMBAT_PREP, SCAVENGE_LOOT, FARMING, DUNGEON_TRAIN:
+                return MoveHolderClassification.ORDINARY_HOST_WORK;
+            // V2-F. Deliberately NOT cooperative project work: that classification has a stronger
+            // contract - an arbiter-recognised MiningGoalKind participant doing downstream work the
+            // project wants - and TradeWithVillagerGoal has neither a project binding nor the
+            // arbiter's blessing. Granting it lease-pausing semantics would manufacture cooperation
+            // out of shared demand alone. Mining sees a real MOVE contender and the lease ages.
+            //
+            // If a future slice binds a particular trade attempt to an active mining project, add a
+            // conditional project-provenance path there rather than declaring all village trading
+            // cooperative here.
+            case VILLAGE_TRADE:
                 return MoveHolderClassification.ORDINARY_HOST_WORK;
             case MANDATORY_COMBAT:
                 return MoveHolderClassification.PROTECTED_COMBAT;

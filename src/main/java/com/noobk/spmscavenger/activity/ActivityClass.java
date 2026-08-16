@@ -31,6 +31,15 @@ public enum ActivityClass {
     REST,
     /** Mandatory arrived nighttime shelter; affective rest is observed independently. */
     SHELTER_HOLD,
+    /**
+     * V2-F — a village trade attempt: approach, claim, transact.
+     *
+     * <p>A <b>known non-mining MOVE holder</b>. V2-C models gather and trade as two acquisition
+     * routes to one {@code MaterialDemand}, but that is competition at the <i>consumer</i> level and
+     * is not evidence that the trade goal participates in the active mining project — so this is
+     * ordinary host work, not cooperative project work. See {@code MoveHolderClassifier}.
+     */
+    VILLAGE_TRADE,
     EXPEDITION,
     PASSIVE_OBSERVER,
     UNKNOWN_ACTIVE;

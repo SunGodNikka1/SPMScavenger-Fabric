@@ -12,8 +12,10 @@ import com.noobk.spmscavenger.goal.PlaceTorchGoal;
 import com.noobk.spmscavenger.goal.SeekShelterGoal;
 import com.noobk.spmscavenger.goal.SmeltAtFurnaceGoal;
 import com.noobk.spmscavenger.goal.TrackedLocalWanderGoal;
+import com.noobk.spmscavenger.goal.TradeWithVillagerGoal;
 import com.noobk.spmscavenger.goal.TunnelSearchGoal;
 import com.noobk.spmscavenger.goal.VillagePerceptionObserver;
+import com.noobk.spmscavenger.mining.MoveHolderClassification;
 import com.noobk.spmscavenger.mining.MoveHolderClassifier;
 import com.noobk.spmscavenger.opinion.DiscretionaryEligibility;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -24,6 +26,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** GAO-0 taxonomy coverage without constructing world-bound Goal implementations. */
@@ -38,6 +41,7 @@ class ActivityTaxonomyTest {
         assertClass(ActivityClass.SCAVENGE_WORK, GatherResourcesGoal.class);
         assertClass(ActivityClass.SCAVENGE_WORK, CraftTorchesGoal.class);
         assertClass(ActivityClass.SCAVENGE_WORK, SmeltAtFurnaceGoal.class);
+        assertClass(ActivityClass.VILLAGE_TRADE, TradeWithVillagerGoal.class);
         assertClass(ActivityClass.MAINTENANCE, PlaceTorchGoal.class);
         assertClass(ActivityClass.REST_APPROACH, CampfireGoal.class);
         assertClass(ActivityClass.EXPEDITION, ExploringGoal.class);
@@ -92,6 +96,54 @@ class ActivityTaxonomyTest {
 
     private static void assertClass(ActivityClass expected, Class<? extends Goal> goalType) {
         assertEquals(expected, MoveHolderClassifier.staticActivityClass(goalType), goalType.getName());
+    }
+
+    /**
+     * V2-F — trade is a <b>known non-mining MOVE holder</b>, and both halves of that matter.
+     *
+     * <p><i>Known</i>: before the pin it fell through to {@code UNKNOWN_ACTIVE}, so the observation
+     * service counted every trade attempt as an unidentified activity.
+     *
+     * <p><i>Non-mining</i>: {@code COOPERATIVE_PROJECT_WORK} carries a stronger contract — an
+     * arbiter-recognised {@code MiningGoalKind} participant doing downstream work the project wants —
+     * and pauses the lease rather than ageing it. {@code TradeWithVillagerGoal} has no project
+     * binding and the arbiter never evaluates it, so classifying it cooperative would manufacture
+     * cooperation out of shared demand. V2-C's gather-vs-trade competition is at the
+     * <b>consumer</b> level; it is not project participation.
+     */
+    @Test
+    void tradeIsOrdinaryHostWorkNotCooperativeProjectWork() {
+        assertEquals(ActivityClass.VILLAGE_TRADE,
+                MoveHolderClassifier.staticActivityClass(TradeWithVillagerGoal.class));
+        assertNotEquals(ActivityClass.UNKNOWN_ACTIVE,
+                MoveHolderClassifier.staticActivityClass(TradeWithVillagerGoal.class),
+                "a semantically known holder must not report as unknown");
+
+        assertEquals(MoveHolderClassification.ORDINARY_HOST_WORK,
+                MoveHolderClassifier.classify(
+                        new TradeStub(), null, null, UUID.randomUUID(), 0L),
+                "mining sees real MOVE contention and the lease ages");
+    }
+
+    /** A goal holding no conflicting flag is not a MOVE holder, trade included. */
+    @Test
+    void tradeWithoutTheRequiredFlagIsNotAMoveHolder() {
+        assertEquals(MoveHolderClassification.NOT_MOVE_HOLDER,
+                MoveHolderClassifier.classify(
+                        new TradeStub(), null, null, UUID.randomUUID(), 0L,
+                        java.util.Set.of(Goal.Flag.JUMP)));
+    }
+
+    /** Stands in for the real goal, which needs a Mob and a ServerLevel to construct. */
+    private static final class TradeStub extends TradeWithVillagerGoal {
+        private TradeStub() {
+            super(null, 1.0D);
+        }
+
+        @Override
+        public java.util.EnumSet<Goal.Flag> getFlags() {
+            return java.util.EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK);
+        }
     }
 
     private abstract static class StubGoal extends Goal {

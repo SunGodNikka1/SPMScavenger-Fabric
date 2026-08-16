@@ -116,4 +116,21 @@ class ShelterCommitmentTest {
         assertEquals(ShelterCommitment.State.ARRIVED, commitment.state());
         assertFalse(commitment.approachBudgetExhausted(20_000L));
     }
+
+    /**
+     * V2-F — trade must not displace committed night shelter.
+     *
+     * <p>Not a new rule: the {@code default} branch already blocks every displacing activity that is
+     * not mandatory. Pinned because adding an enum value is exactly the moment a default branch
+     * silently acquires a new member, and nothing would have told us which way it fell.
+     */
+    @Test
+    void tradeDoesNotDisplaceCommittedShelter() {
+        assertEquals(ShelterInterruptionPolicy.Decision.BLOCK_WHILE_SHELTERED,
+                ShelterInterruptionPolicy.decideCandidate(
+                        com.noobk.spmscavenger.activity.ActivityClass.VILLAGE_TRADE, true));
+        assertEquals(ShelterInterruptionPolicy.Decision.ALLOW_IN_PLACE,
+                ShelterInterruptionPolicy.decideCandidate(
+                        com.noobk.spmscavenger.activity.ActivityClass.VILLAGE_TRADE, false));
+    }
 }
