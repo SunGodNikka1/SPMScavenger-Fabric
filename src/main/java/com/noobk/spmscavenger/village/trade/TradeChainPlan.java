@@ -104,10 +104,14 @@ public record TradeChainPlan(
      * V2-G-R1 — is this the <b>same chain episode</b> as {@code other}?
      *
      * <p>Object identity cannot answer this: {@link #at(Step)} returns a new record on every step
-     * transition while remaining the same chain. The stable triple is consumer, desired output and
-     * <b>creation tick</b> — {@code at} preserves {@code createdAtTick}, and only
-     * {@link #forDemand} mints a new one, which is exactly the boundary a fresh relationship episode
-     * is allowed to cross.
+     * transition while remaining the same chain. The stable pair is <b>consumer and creation
+     * tick</b> — {@code at} preserves {@code createdAtTick}, and only {@link #forDemand} mints a new
+     * one, which is exactly the boundary a fresh relationship episode is allowed to cross.
+     *
+     * <p>{@code desiredOutput} is deliberately <b>excluded</b> (V2-H0-R2). {@link #retargetedTo}
+     * switches between the two representations of one appetite while preserving the clock, so
+     * including the target would make a retarget look like a new chain and pay a second familiarity
+     * episode for one economic episode — contradicting `D-VR-075`.
      */
     public boolean sameChainAs(TradeChainPlan other) {
         // V2-H0-R2: desiredOutput is deliberately NOT part of identity. `retargetedTo` switches

@@ -37,11 +37,14 @@ import java.util.Optional;
  * one the consumer already has in the units the market actually trades in. It exists only while that
  * consumer's recipe is live, and disappears with it.
  *
- * <h2>Direct material first, always</h2>
+ * <h2>Direct material first — and it wins when it can act</h2>
  *
- * The original path is preserved and tried first: if a datapack or another mod ever sells
- * {@code iron_ingot}, that purchase wins and no projection happens. Finished-output projection is a
- * <b>fallback</b>, not a replacement, which is why nothing here knows what a Toolsmith is.
+ * The original path is evaluated first and wins whenever it is <b>actionable</b>: already funded, or
+ * carrying a SELL leg that fully closes its deficit. A direct quote the mob can never complete falls
+ * through to an actionable finished-output purchase instead — R1/R2 corrected an earlier "direct
+ * always wins" rule that let an unfundable ingredient quote suppress a reachable tool purchase.
+ * Finished-output projection remains a <b>fallback</b>, not a replacement, which is why nothing here
+ * knows what a Toolsmith is.
  *
  * <h2>What must NOT be projected</h2>
  *

@@ -5156,9 +5156,15 @@ TRADE           emeralds -> villager                       -> iron_pickaxe
 
 **Accepted.** A narrow pure projection, `TradePurchaseProjection`: source `MaterialDemand` +
 active `ConsumerRecipeSpec` → recipe **output**, deficit **1**, **same `consumerKey`**. Live only
-while that consumer's recipe is. **Direct material is tried first and always wins** — a datapack
-that ever sells `iron_ingot` keeps the original path, which is why nothing here knows what a
-Toolsmith is.
+while that consumer's recipe is. **Direct material is evaluated first and wins when it is
+actionable** — already funded, or carrying a SELL leg that fully closes its deficit. An unactionable
+direct quote falls through to an actionable projected-output purchase; a datapack that ever sells a
+*fundable* `iron_ingot` keeps the original path, which is why nothing here knows what a Toolsmith is.
+
+*(Amended V2-H0-R1/R2. The original wording said "tried first and always wins", which let an
+unfundable ingredient quote suppress a reachable tool purchase — first with no SELL leg at all, then
+with a partial one. A future agent reading the superseded text could have "corrected" production
+back into that defect, which is why the amendment is recorded here rather than only in the code.)*
 
 **Bound to the source demand, not the projection:** `ExistingRouteFeasibility` and
 `RouteExhaustionEvidence`. Their logic describes the raw-iron gather/smelt route, and reinterpreting

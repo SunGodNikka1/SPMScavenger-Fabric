@@ -165,4 +165,54 @@ class VanillaTradeSupplyProbeTest {
     private static boolean sellsExactly(String itemId) {
         return SOLD.stream().anyMatch(entry -> entry.equals(itemId) || entry.startsWith(itemId + " "));
     }
+
+    /**
+     * V2-H — the funding leg the fixture will actually use.
+     *
+     * <p>{@code SellReserveModel} refuses unmodelled materials, so carrots and wheat cannot fund
+     * anything in production. The authorized stocks today are craft-chain surplus: logs, planks and
+     * sticks. This pins which vanilla villager will actually buy one of those, and at what price, so
+     * the fixture is built on a verified offer rather than a remembered one.
+     */
+    @Test
+    void mustHappen_aVanillaVillagerBuysAMaterialTheReserveModelAuthorizes() {
+        java.util.Set<String> emeraldPurchasesOf = new TreeSet<>();
+        RandomSource random = RandomSource.create(99L);
+
+        VillagerTrades.TRADES.forEach((profession, byLevel) -> byLevel.forEach((level, listings) -> {
+            for (VillagerTrades.ItemListing listing : listings) {
+                for (java.lang.reflect.Field field : listing.getClass().getDeclaredFields()) {
+                    try {
+                        field.setAccessible(true);
+                        Object value = field.get(listing);
+                        net.minecraft.world.item.Item item = null;
+                        int count = 0;
+                        if (value instanceof net.minecraft.world.item.trading.ItemCost cost) {
+                            item = cost.item().value();
+                            count = cost.count();
+                        } else if (value instanceof net.minecraft.world.item.Item bare) {
+                            item = bare;
+                        }
+                        if (item != null) {
+                            String id = BuiltInRegistries.ITEM.getKey(item).toString();
+                            if (id.equals("minecraft:stick") || id.endsWith("_log")
+                                    || id.endsWith("_planks")) {
+                                emeraldPurchasesOf.add(profession.name() + " lvl" + level
+                                        + " buys " + count + "x " + id + " via "
+                                        + listing.getClass().getSimpleName());
+                            }
+                        }
+                    } catch (ReflectiveOperationException | RuntimeException e) {
+                        // reported by the coverage guard above
+                    }
+                }
+            }
+        }));
+
+        System.out.println("[V2-H funding] " + emeraldPurchasesOf);
+        assertFalse(emeraldPurchasesOf.isEmpty(),
+                "the fixture needs a vanilla buyer for a reserve-modelled material; if this is "
+                        + "empty the SELL leg must come from a datapack and VR-T2's vanilla claim "
+                        + "narrows accordingly");
+    }
 }
