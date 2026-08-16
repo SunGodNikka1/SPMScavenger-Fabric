@@ -27,11 +27,25 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * V2-E-R3 — the SELL → BUY chain, end to end across the real seams.
+ * V2-E-R3 — <b>component composition</b> of the SELL → BUY chain. Renamed honestly in R4.
  *
- * <p>Not a unit test of one policy: it walks external demand → chosen BUY quote → deficit →
- * authorization → chain step → transaction → <b>re-derivation from actual inventory</b>. The pieces
- * were each proven in isolation while nothing showed they composed.
+ * <h2>What this proves</h2>
+ *
+ * That the policy objects compose when a test calls them in the intended order: external demand →
+ * chosen BUY quote → deficit → authorization → chain step → transaction → re-derivation from actual
+ * inventory. Each had been proven in isolation while nothing showed they fitted together.
+ *
+ * <h2>What it does not prove, and previously implied</h2>
+ *
+ * <b>It is the test that calls them in that order, not the mod.</b> Every seam here is invoked
+ * directly by the fixture, so this file passed in full while the production registrar used the
+ * legacy evaluator, production passed a fabricated {@code material -> 0} reserve, the funding planner
+ * ranked by a rule that contradicted V2-B, and the executor ended the round on the first successful
+ * trade. A green "end to end" name on a test that supplies its own sequencing is exactly how those
+ * four survived review.
+ *
+ * <p>Whether <i>production</i> reaches this machinery is asserted structurally in
+ * {@code TradeProductionWiringTest}, which is a different question and needs a different test.
  */
 class SellToBuyChainTest {
 
@@ -110,8 +124,13 @@ class SellToBuyChainTest {
         assertFalse(target.funded());
         assertEquals(2, target.deficit().emeraldsNeeded(), "9 needed, 7 held");
 
+        // Injected reserve model: wheat is used as the funding material because the arithmetic is
+        // legible, NOT because production authorizes wheat today. SellReserveModel currently returns
+        // empty for wheat, and SellReserveModelTest pins that refusal separately. See this class's
+        // header on what composition tests do and do not prove.
         SellAuthorization authorization = TradeFundingPlanner.authorizeFunding(
-                target.deficit(), offers, backpack, ItemStack.EMPTY, ItemStack.EMPTY, s -> 0);
+                target.deficit(), offers, backpack, ItemStack.EMPTY, ItemStack.EMPTY,
+                s -> java.util.OptionalInt.of(0));
         assertTrue(authorization.permits(sellOffer().costA()), "wheat is authorized funding stock");
 
         ChainOutcome t1 = TradeChainPolicy.evaluate(chain, facts(backpack, 9, 1), 1L);
@@ -165,6 +184,11 @@ class SellToBuyChainTest {
         WorkDemandPolicy.MaterialDemand torch = new WorkDemandPolicy.MaterialDemand(
                 BuiltInRegistries.ITEM.getKey(Items.CHARCOAL), 4, OTHER_CONSUMER);
         assertFalse(RouteExhaustionEvidence.exhaustedFor(GOD, torch, 1L));
+        // R4: deleted on mismatch, not merely ignored. Leaving it resident meant that if the iron
+        // demand returned inside the lifetime, the OLD search would authorize the NEW episode - a
+        // stale record that a later question could still be answered "yes" by.
+        assertEquals(0, RouteExhaustionEvidence.trackedCount(),
+                "a different demand episode invalidates the evidence outright");
     }
 
     /** …and to a material, so the same consumer asking for something else does not inherit it. */
@@ -177,6 +201,8 @@ class SellToBuyChainTest {
                 new WorkDemandPolicy.MaterialDemand(
                         BuiltInRegistries.ITEM.getKey(Items.DIAMOND), 1, CONSUMER);
         assertFalse(RouteExhaustionEvidence.exhaustedFor(GOD, sameConsumerOtherMaterial, 1L));
+        assertEquals(0, RouteExhaustionEvidence.trackedCount(),
+                "same consumer, different material is still a different search");
     }
 
     @Test
@@ -217,13 +243,13 @@ class SellToBuyChainTest {
 
         assertTrue(TradeFundingPlanner.authorizeFunding(
                         deficit, List.of(buysPickaxes), withPickaxe,
-                        ItemStack.EMPTY, ItemStack.EMPTY, s -> 0).isEmpty(),
+                        ItemStack.EMPTY, ItemStack.EMPTY, s -> java.util.OptionalInt.of(0)).isEmpty(),
                 "durability marks an investment, whether the buyer is a furnace or a villager");
 
         // Reserved: held, spare-looking, and already claimed by a craft chain.
         assertTrue(TradeFundingPlanner.authorizeFunding(
                         deficit, List.of(sellOffer()), backpack(0, 30),
-                        ItemStack.EMPTY, ItemStack.EMPTY, s -> 25).isEmpty(),
+                        ItemStack.EMPTY, ItemStack.EMPTY, s -> java.util.OptionalInt.of(25)).isEmpty(),
                 "a craft reserve is not spare because a villager will pay for it");
     }
 
@@ -301,19 +327,71 @@ class SellToBuyChainTest {
         assertEquals(2, TradeFundingPlanner.chooseFundingTarget(
                 demand, List.of(buyOffer(), sellOffer()), backpack).deficit().emeraldsNeeded());
 
-        // Cheapest TOTAL is not cheapest PER UNIT. A 12-emerald offer yielding 4 ingots is the
-        // better quote; sizing the deficit from the 9-emerald single-ingot offer would fund a
-        // purchase the ranking would not make.
-        OfferSnapshot bulk = OfferSnapshot.of(2, new MerchantOffer(
-                new ItemCost(Items.EMERALD, 12), Optional.empty(),
-                new ItemStack(Items.IRON_INGOT, 4), 0, 12, 0, 0f));
-        assertEquals(5, TradeFundingPlanner.chooseFundingTarget(
-                        demand, List.of(buyOffer(), bulk, sellOffer()), backpack)
-                        .deficit().emeraldsNeeded(),
-                "12 for the chosen bulk quote minus 7 held - not 9 minus 7 from the cheaper total");
         assertEquals(13, TradeFundingPlanner.chooseFundingTarget(
                         demand, List.of(dearer, sellOffer()), backpack).deficit().emeraldsNeeded(),
                 "the deficit tracks the quote actually being served, not a remembered one");
+    }
+
+    /**
+     * R4 — <b>this assertion used to encode the drift it was written to prevent.</b>
+     *
+     * <p>The R3 version asserted a deficit of 5, meaning the 12-emerald bulk quote, for a demand of
+     * <b>one</b> ingot. That is the planner's own {@code costA / resultCount} rule, and V2-B does not
+     * agree with it: V2-B caps a purchase's contribution at the outstanding demand, so buying four
+     * ingots to satisfy a demand for one contributes 1 at a unit cost of 12, losing to 9 → 1 at a
+     * unit cost of 9. A green negative control was actively protecting the contradiction.
+     *
+     * <p>Two ranking definitions is one too many. The planner now calls V2-B, and the split below is
+     * V2-B's own answer in both directions.
+     */
+    @Test
+    void mustHappen_bulkWinsOnlyWhenTheDemandIsActuallyBulk() {
+        SimpleContainer backpack = backpack(7, 64);
+        OfferSnapshot bulk = OfferSnapshot.of(2, new MerchantOffer(
+                new ItemCost(Items.EMERALD, 12), Optional.empty(),
+                new ItemStack(Items.IRON_INGOT, 4), 0, 12, 0, 0f));
+        List<OfferSnapshot> offers = List.of(buyOffer(), bulk, sellOffer());
+
+        assertEquals(2, TradeFundingPlanner.chooseFundingTarget(ironDemand(), offers, backpack)
+                        .deficit().emeraldsNeeded(),
+                "one ingot wanted: 12 for four of them contributes 1, at a unit cost of 12");
+
+        WorkDemandPolicy.MaterialDemand wantsFour = new WorkDemandPolicy.MaterialDemand(
+                BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT), 4, CONSUMER);
+        assertEquals(5, TradeFundingPlanner.chooseFundingTarget(wantsFour, offers, backpack)
+                        .deficit().emeraldsNeeded(),
+                "four wanted: the bulk quote finally contributes four, at a unit cost of 3");
+    }
+
+    /**
+     * The regression the User specified: <b>the planner and V2-B must select the same offer index</b>,
+     * not merely produce plausible numbers independently.
+     *
+     * <p>Asserting the deficit alone cannot catch this — two different quotes can imply the same
+     * shortfall. Identity is the property that was broken, so identity is what is asserted.
+     */
+    @Test
+    void mustHappen_theFundingPlannerAndV2BSelectTheSameQuote() {
+        SimpleContainer backpack = backpack(7, 64);
+        OfferSnapshot bulk = OfferSnapshot.of(2, new MerchantOffer(
+                new ItemCost(Items.EMERALD, 12), Optional.empty(),
+                new ItemStack(Items.IRON_INGOT, 4), 0, 12, 0, 0f));
+        List<OfferSnapshot> offers = List.of(buyOffer(), bulk, sellOffer());
+
+        for (int wanted : new int[] {1, 2, 3, 4, 8}) {
+            WorkDemandPolicy.MaterialDemand demand = new WorkDemandPolicy.MaterialDemand(
+                    BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT), wanted, CONSUMER);
+
+            TradeEvaluation bestByV2B = TradeDemandRegistrar
+                    .decide(demand, RouteEvidence.of(false, offers, true))
+                    .best()
+                    .orElseThrow(() -> new AssertionError("no viable offer for " + wanted));
+
+            assertEquals(bestByV2B.offerIndex(),
+                    TradeFundingPlanner.chooseFundingTarget(demand, offers, backpack)
+                            .buyOffer().index(),
+                    "planner and V2-B must agree on WHICH quote is served, for demand " + wanted);
+        }
     }
 
     /** One extra SELL after the purchase is funded is arithmetically impossible. */

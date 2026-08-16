@@ -25,12 +25,18 @@ import java.util.Objects;
  * @param paymentAffordable whether the mob can currently pay for at least one of those offers
  * @param externalEmeraldDeficit an emerald shortfall a named consumer already established, or
  *     {@code null}. Never synthesised here (gate 2)
+ * @param sellAuthorization R4 — which backpack material may fund that deficit, from
+ *     {@link SellReserveModel} and {@link SellExpendabilityPolicy}. {@code null} means no funding
+ *     SELL is authorized, and every SELL offer is refused. It is carried here rather than derived in
+ *     the registrar because permission is evidence about the <b>mob</b>, and the registrar is a pure
+ *     decision over supplied evidence.
  */
 public record RouteEvidence(
         boolean existingRouteFeasible,
         List<OfferSnapshot> offers,
         boolean paymentAffordable,
-        TradeEvaluationPolicy.EmeraldDeficit externalEmeraldDeficit) {
+        TradeEvaluationPolicy.EmeraldDeficit externalEmeraldDeficit,
+        SellAuthorization sellAuthorization) {
 
     public RouteEvidence {
         offers = offers == null ? List.of() : List.copyOf(offers);
@@ -42,12 +48,12 @@ public record RouteEvidence(
     }
 
     public static RouteEvidence existingRouteOnly(boolean existingRouteFeasible) {
-        return new RouteEvidence(existingRouteFeasible, List.of(), false, null);
+        return new RouteEvidence(existingRouteFeasible, List.of(), false, null, null);
     }
 
     public static RouteEvidence of(
             boolean existingRouteFeasible, List<OfferSnapshot> offers, boolean paymentAffordable) {
         return new RouteEvidence(existingRouteFeasible, Objects.requireNonNull(offers),
-                paymentAffordable, null);
+                paymentAffordable, null, null);
     }
 }

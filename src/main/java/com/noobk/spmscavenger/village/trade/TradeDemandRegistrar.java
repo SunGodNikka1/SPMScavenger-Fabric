@@ -117,10 +117,16 @@ public final class TradeDemandRegistrar {
 
         List<TradeEvaluation> viable = new ArrayList<>();
         for (OfferSnapshot offer : evidence.offers()) {
-            TradeEvaluationPolicy
-                    .evaluate(demand, offer, evidence.externalEmeraldDeficit())
-                    .evaluation()
-                    .ifPresent(viable::add);
+            // R4: the two directions are dispatched explicitly, because they answer different
+            // questions from different evidence. A BUY asks "does this serve the demand"; a funding
+            // SELL asks "am I permitted to spend this material", which the demand cannot answer -
+            // the legacy 3-arg overload made the demand double as the authorization, so the only
+            // SELL that could fund an iron purchase was selling iron.
+            TradeEvaluationPolicy.Result result = isFundingSell(offer)
+                    ? TradeEvaluationPolicy.evaluateSell(
+                            evidence.externalEmeraldDeficit(), evidence.sellAuthorization(), offer)
+                    : TradeEvaluationPolicy.evaluate(demand, offer);
+            result.evaluation().ifPresent(viable::add);
         }
         if (viable.isEmpty()) {
             return existingWork(TradeBlockedReason.NO_VIABLE_OFFER);
@@ -135,6 +141,11 @@ public final class TradeDemandRegistrar {
                 .thenComparingInt(TradeEvaluation::offerIndex));
 
         return new AcquisitionDecision(AcquisitionRoute.TRADE, viable, null);
+    }
+
+    /** An offer that pays emeralds is a funding leg, whatever the mob happens to want. */
+    private static boolean isFundingSell(OfferSnapshot offer) {
+        return offer != null && offer.result().is(net.minecraft.world.item.Items.EMERALD);
     }
 
     private static AcquisitionDecision existingWork(TradeBlockedReason reason) {

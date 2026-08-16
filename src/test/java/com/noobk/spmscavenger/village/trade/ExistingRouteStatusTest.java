@@ -82,12 +82,14 @@ class ExistingRouteStatusTest {
      * {@code >= STONE}, while the guard triggers below stone. They are mutually exclusive, so an
      * iron demand can never reach an unmineable-precursor verdict.
      *
-     * <p><b>The consequence is that INFEASIBLE has no reachable producer today, so TRADE does not
-     * fire at all.</b> This test exists so that fact is visible in the suite instead of being
-     * discovered at runtime as "the mob never trades".
+     * <p><b>R4 update:</b> that used to mean {@code INFEASIBLE} had no reachable producer at all.
+     * It now has one — a completed-and-empty bounded search, published by the gather route — which
+     * is the whole point of downgrading tool capability to {@code UNKNOWN}. What remains true, and
+     * is what this test still pins, is that <b>inventory and game rules alone</b> never authorize
+     * displacement for iron.
      */
     @Test
-    void mustHappen_theInfeasibleSignalHasNoReachableProducerYet() {
+    void mustHappen_inventoryAloneNeverAuthorizesIronDisplacement() {
         assertEquals(ExistingRouteStatus.UNKNOWN,
                 statusFor(with(Items.WOODEN_PICKAXE), Items.IRON_INGOT),
                 "a wooden-pick mob has no iron demand at all, so the guard is never consulted");
@@ -97,6 +99,41 @@ class ExistingRouteStatusTest {
             assertFalse(statusFor(with(pick), Items.IRON_INGOT).permitsTradeDisplacement(),
                     "no pickaxe tier currently authorizes trade displacement for iron: " + pick);
         }
+    }
+
+    /**
+     * R4 — the correction the User specified. A capable pickaxe is evidence of <b>capability</b>,
+     * never of a live route, and R3 returned {@code FEASIBLE} for it. Because {@code reconcile}
+     * gives positive evidence precedence, that one value made a completed-and-empty gather search
+     * unable to authorize anything: <i>"I own a pick"</i> outranked <i>"I looked and there is no
+     * iron"</i>, and {@code RouteExhaustionEvidence} could never change an outcome.
+     */
+    @Test
+    void mustNotHappen_owningAPickaxeCountsAsALiveRoute() {
+        assertEquals(ExistingRouteStatus.UNKNOWN,
+                statusFor(with(Items.STONE_PICKAXE), Items.IRON_INGOT),
+                "capability is not a route; only UNKNOWN can be resolved by a finished search");
+
+        assertEquals(ExistingRouteStatus.INFEASIBLE,
+                ExistingRouteFeasibility.reconcile(
+                        statusFor(with(Items.STONE_PICKAXE), Items.IRON_INGOT), true),
+                "and with the search finished and empty, trade is finally authorized");
+    }
+
+    /**
+     * The positive half, so the change above is a correction and not a blanket demotion: holding the
+     * smelt INPUT is present-tense evidence the route has somewhere to go.
+     */
+    @Test
+    void mustHappen_heldRawIronIsALiveRoute() {
+        assertEquals(ExistingRouteStatus.FEASIBLE,
+                statusFor(with(Items.RAW_IRON, Items.STONE_PICKAXE), Items.IRON_INGOT));
+        assertFalse(statusFor(with(Items.RAW_IRON, Items.STONE_PICKAXE), Items.IRON_INGOT)
+                .permitsTradeDisplacement());
+        assertEquals(ExistingRouteStatus.FEASIBLE,
+                ExistingRouteFeasibility.reconcile(
+                        statusFor(with(Items.RAW_IRON, Items.STONE_PICKAXE), Items.IRON_INGOT), true),
+                "and it still beats a remembered failure");
     }
 
     @Test

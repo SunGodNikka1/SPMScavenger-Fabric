@@ -108,8 +108,15 @@ public final class RouteExhaustionEvidence {
             EVIDENCE.remove(mobId, evidence);
             return false;
         }
-        return evidence.consumerKey().equals(demand.consumerKey())
+        boolean matches = evidence.consumerKey().equals(demand.consumerKey())
                 && evidence.materialKey().equals(demand.materialKey());
+        if (!matches) {
+            // Deleted, not merely ignored. Leaving it resident meant a torch-chain demand could
+            // displace an iron demand and, if iron returned inside the lifetime, the OLD iron
+            // search would authorize the NEW demand episode. New episode, new evidence.
+            EVIDENCE.remove(mobId, evidence);
+        }
+        return matches;
     }
 
     /** Drop the evidence — the route made progress, or the owner is gone. */

@@ -61,22 +61,28 @@ public final class TradeFundingPlanner {
         if (demand == null || offers == null || backpack == null) {
             return null;
         }
+        // R4: ranked by V2-B itself, not by a parallel rule. The R3 version divided emerald cost by
+        // the offer's FULL result count, which disagrees with V2-B whenever the deficit is smaller
+        // than the stack: for a deficit of 1, V2-B caps contribution at 1 and prefers 9->1 (unit 9)
+        // over 12->4 (contribution 1, unit 12). One ranking definition, no drift.
         OfferSnapshot best = null;
-        float bestUnitCost = Float.MAX_VALUE;
+        float bestUtility = -Float.MAX_VALUE;
+        int bestIndex = Integer.MAX_VALUE;
 
         for (OfferSnapshot offer : offers) {
-            if (!offer.isTradeable() || !offer.costA().is(Items.EMERALD)) {
+            if (!offer.costA().is(Items.EMERALD)) {
                 continue;
             }
-            if (!demand.materialKey().equals(
-                    BuiltInRegistries.ITEM.getKey(offer.result().getItem()))) {
+            TradeEvaluationPolicy.Result result = TradeEvaluationPolicy.evaluate(demand, offer);
+            if (!result.viable()) {
                 continue;
             }
-            // Same ordering V2-B would apply within TRADE: cheapest per unit acquired. Choosing the
-            // quote first is what keeps the deficit and the purchase describing the same trade.
-            float unitCost = offer.costA().getCount() / (float) offer.result().getCount();
-            if (unitCost < bestUnitCost) {
-                bestUnitCost = unitCost;
+            TradeEvaluation evaluation = result.evaluation().orElseThrow();
+            // Same comparator the registrar applies within TRADE: utility desc, then offer index.
+            if (evaluation.utility() > bestUtility
+                    || (evaluation.utility() == bestUtility && offer.index() < bestIndex)) {
+                bestUtility = evaluation.utility();
+                bestIndex = offer.index();
                 best = offer;
             }
         }
@@ -98,7 +104,8 @@ public final class TradeFundingPlanner {
      * pickaxe becoming furnace fuel — rather than deciding here what the mob can spare.
      *
      * @param sellOffers offers whose result is emeralds
-     * @param reservedUnits units an existing consumer or craft chain has already claimed
+     * @param reservedUnits units an existing consumer or craft chain has already claimed, or empty
+     *     when the material is unmodelled — in which case it is refused rather than assumed spare
      */
     public static SellAuthorization authorizeFunding(
             EmeraldDeficit deficit,
@@ -106,7 +113,7 @@ public final class TradeFundingPlanner {
             Container backpack,
             ItemStack mainHand,
             ItemStack offHand,
-            java.util.function.ToIntFunction<ItemStack> reservedUnits) {
+            java.util.function.Function<ItemStack, java.util.OptionalInt> reservedUnits) {
         if (deficit == null || sellOffers == null || backpack == null) {
             return null;
         }
@@ -119,8 +126,14 @@ public final class TradeFundingPlanner {
             if (held <= 0) {
                 continue;
             }
+            // R4: an unmodelled material is REFUSED, never treated as reserve-free. Reading an
+            // absent model as zero is what made SellExpendabilityPolicy's arithmetic decorative.
+            java.util.OptionalInt reserved = reservedUnits.apply(wanted);
+            if (reserved.isEmpty()) {
+                continue;
+            }
             int disposable = SellExpendabilityPolicy.disposableUnits(
-                    wanted, held, reservedUnits.applyAsInt(wanted), mainHand, offHand);
+                    wanted, held, reserved.getAsInt(), mainHand, offHand);
             if (disposable >= wanted.getCount()) {
                 return new SellAuthorization(wanted, disposable, deficit.consumerKey());
             }

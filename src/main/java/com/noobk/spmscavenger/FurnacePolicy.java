@@ -460,7 +460,7 @@ public final class FurnacePolicy {
      * Log detection for reserves/fuel. Prefers {@link ItemTags#LOGS}; when tags are unbound
      * (Bootstrap unit tests without datapacks), falls back to vanilla item id suffixes.
      */
-    static boolean isLog(ItemStack stack) {
+    public static boolean isLog(ItemStack stack) {
         if (stack.isEmpty()) {
             return false;
         }
@@ -470,7 +470,7 @@ public final class FurnacePolicy {
         return matchesVanillaPathSuffix(stack, "_log", "_wood");
     }
 
-    static boolean isPlank(ItemStack stack) {
+    public static boolean isPlank(ItemStack stack) {
         if (stack.isEmpty()) {
             return false;
         }

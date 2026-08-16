@@ -2,6 +2,7 @@ package com.noobk.spmscavenger.village.trade;
 
 import com.noobk.spmscavenger.FurnacePolicy;
 import com.noobk.spmscavenger.ScavengerConfig;
+import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.ToolTier;
 import com.noobk.spmscavenger.ToolTierPolicy;
 import com.noobk.spmscavenger.WorkDemandPolicy;
@@ -113,12 +114,21 @@ public final class ExistingRouteFeasibility {
         if (FurnacePolicy.plan(level, backpack, mainHand, offHand, cfg)
                 .filter(plan -> producesDemanded(plan, demand))
                 .isPresent()) {
+            RouteExhaustionEvidence.clear(mobId);
             return ExistingRouteStatus.FEASIBLE;
         }
 
+        ExistingRouteStatus gather = gatherStatus(demand, backpack, mainHand, offHand, cfg);
+        if (gather == ExistingRouteStatus.FEASIBLE) {
+            // R4: work progress / target rediscovery physically invalidates the memory of an empty
+            // search. Without this the entry survives its full lifetime and keeps being re-consulted
+            // after the world has already answered - and `reconcile` would silently rely on
+            // precedence to hide a record that is now known to be false.
+            RouteExhaustionEvidence.clear(mobId);
+            return ExistingRouteStatus.FEASIBLE;
+        }
         return reconcile(
-                gatherStatus(demand, backpack, mainHand, offHand, cfg),
-                RouteExhaustionEvidence.exhaustedFor(mobId, demand, level.getGameTime()));
+                gather, RouteExhaustionEvidence.exhaustedFor(mobId, demand, level.getGameTime()));
     }
 
     /**
@@ -155,6 +165,12 @@ public final class ExistingRouteFeasibility {
             return ExistingRouteStatus.UNKNOWN;
         }
         if (IRON_INGOT.equals(demand.materialKey())) {
+            // R4: the one positive producer this branch was missing. Holding the smelt INPUT is
+            // present-tense evidence that the route has somewhere to go; the capable pickaxe below
+            // is not, and conflating the two is what made exhaustion unusable.
+            if (ScavengerCrafting.count(backpack, Items.RAW_IRON) > 0) {
+                return ExistingRouteStatus.FEASIBLE;
+            }
             // Wanting raw iron is the gather route being ALIVE, not dead - the R1 inversion.
             boolean gatherWantsRawIron =
                     WorkDemandPolicy.rawIronDeficit(backpack, mainHand, offHand, cfg) > 0;
@@ -169,8 +185,13 @@ public final class ExistingRouteFeasibility {
                 // semantically correct guard and a future consumer with no tier prerequisite would
                 // need it - but it must not be mistaken for a live producer of INFEASIBLE.
                 ToolTier pick = ToolTierPolicy.tierOfPick(backpack, mainHand, offHand);
+                // R4: a capable pickaxe proves CAPABILITY, not current route feasibility. Treating
+                // it as positive evidence made it outrank a completed-and-empty gather search, so
+                // exhaustion evidence could never authorize anything: "I own a pick" beat "I looked
+                // and there is no iron". Capability + an outstanding need is UNKNOWN, which is
+                // exactly the state a finished search is entitled to resolve.
                 return pick.compareTo(ToolTier.STONE) >= 0
-                        ? ExistingRouteStatus.FEASIBLE
+                        ? ExistingRouteStatus.UNKNOWN
                         : ExistingRouteStatus.INFEASIBLE;
             }
             // No outstanding raw-iron need and no smelt plan: the chain is satisfied upstream or has

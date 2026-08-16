@@ -7,6 +7,7 @@ import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
 import com.noobk.spmscavenger.village.trade.OfferSnapshot;
 import com.noobk.spmscavenger.village.trade.RouteEvidence;
 import com.noobk.spmscavenger.village.trade.SellAuthorization;
+import com.noobk.spmscavenger.village.trade.SellReserveModel;
 import com.noobk.spmscavenger.village.trade.TradeFundingPlanner;
 import com.noobk.spmscavenger.village.trade.TradeCandidateRound;
 import com.noobk.spmscavenger.village.trade.TradeDemandGate;
@@ -197,17 +198,53 @@ public class TradeWithVillagerGoal extends Goal {
                 VillagerTradeAdapter.performTrade(backpack, target, plannedOffer);
 
         switch (result) {
-            case TRADED -> {
-                // Released immediately: the interlock covers an attempt, never a relationship.
-                TradeSessionClaimWindow.release(mob.getUUID());
-                target = null;
-                plannedOffer = null;
-            }
+            case TRADED -> continueChain(level);
             case MERCHANT_BUSY, MERCHANT_UNAVAILABLE, OFFER_GONE, OFFER_CHANGED, OUT_OF_STOCK ->
                     reselect(level);
             // CANNOT_AFFORD / NO_ROOM are facts about us, not this villager; another candidate would
             // fail identically, so the round ends rather than churning through the whole village.
             default -> endRound(level);
+        }
+    }
+
+    /**
+     * R4 — a completed trade advances the chain; it does not end it.
+     *
+     * <h2>Why R3 stopped after one trade</h2>
+     *
+     * {@code TRADED} cleared the target and returned. With no target {@code canContinueToUse()} is
+     * false, so the goal stopped — and a funding SELL, whose entire purpose is to make the following
+     * BUY affordable, ended the round immediately before the BUY it paid for. The SELL and BUY halves
+     * both existed and could never run in sequence.
+     *
+     * <h2>Actual inventory is the state transition</h2>
+     *
+     * Nothing is decremented from a remembered plan. The emeralds are now in the backpack, so
+     * re-deriving from scratch — demand, BUY quote, deficit, authorization — produces the next step
+     * for free, and produces the <b>right</b> one if the world changed during the trade. A remembered
+     * "two sells remaining" counter would be a second source of truth about a quantity the container
+     * already states, and Task 50 is what that costs.
+     *
+     * <h2>The seller is not a failed candidate</h2>
+     *
+     * {@code reselect()} demotes the villager and consumes its budget, which is correct for a
+     * villager that <i>refused</i> us. Demoting the farmer who just bought our wheat would make the
+     * one merchant proven to trade with us unreachable for the rest of the round. So the same
+     * candidate stays selectable with a fresh approach budget, and only round-level bounds
+     * ({@code exhausted}, the cooldown, and the demand itself going away) end the round.
+     */
+    private void continueChain(ServerLevel level) {
+        // Released immediately: the interlock covers an attempt, never a relationship.
+        TradeSessionClaimWindow.release(mob.getUUID());
+        target = null;
+        plannedOffer = null;
+
+        Optional<Candidate> next = authorizedCandidate(level);
+        if (next.isPresent()) {
+            beginAttempt(level, next.get());
+        } else {
+            // No further step: either the demand is satisfied, or nothing on offer serves it now.
+            endRound(level);
         }
     }
 
@@ -331,11 +368,17 @@ public class TradeWithVillagerGoal extends Goal {
         TradeFundingPlanner.FundingTarget funding = fundingTarget(demand.get(), offers, backpack);
         TradeEvaluationPolicy.EmeraldDeficit deficit =
                 funding == null ? null : funding.deficit();
+        // R4: permission reaches the decision. Without this the registrar evaluated every funding
+        // SELL against a null authorization and refused it - the SELL half of V2-D existed and was
+        // unreachable from production.
+        SellAuthorization authorization =
+                deficit == null ? null : fundingAuthorization(deficit, offers, backpack);
 
         return TradeDemandGate
                 .authorize(demand.get(),
-                        new RouteEvidence(existingFeasible, offers, affordable, deficit))
-                .flatMap(authorization -> authorization.rankedOffers().stream()
+                        new RouteEvidence(
+                                existingFeasible, offers, affordable, deficit, authorization))
+                .flatMap(decision -> decision.rankedOffers().stream()
                         .map(evaluation -> owners.get(evaluation.offerIndex()))
                         .filter(java.util.Objects::nonNull)
                         .filter(candidate -> VillagerTradeAdapter.canAfford(
@@ -384,15 +427,18 @@ public class TradeWithVillagerGoal extends Goal {
     /**
      * R3: which disposable material may fund that shortfall, delegated to the permission layer.
      *
-     * <p>Reserves are read from the existing craft chain, so a log the torch chain has already
-     * claimed is not spare merely because a villager will pay for it.
+     * <p>R4: reserves come from {@link SellReserveModel}, which reads the existing craft chain — so
+     * a log the torch chain has claimed is not spare merely because a villager will pay for it, and
+     * a material nobody has modelled is refused rather than assumed free. R3 passed
+     * {@code material -> 0} here, which made the permission layer unanimously permissive.
      */
     private SellAuthorization fundingAuthorization(
             TradeEvaluationPolicy.EmeraldDeficit deficit, List<OfferSnapshot> offers,
             Container backpack) {
+        ScavengerConfig cfg = ScavengerConfig.get();
         return TradeFundingPlanner.authorizeFunding(
                 deficit, offers, backpack, mob.getMainHandItem(), mob.getOffhandItem(),
-                material -> 0);
+                material -> SellReserveModel.reservedUnits(material, backpack, cfg));
     }
 
     /**
