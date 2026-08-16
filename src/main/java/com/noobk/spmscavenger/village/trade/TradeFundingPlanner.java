@@ -64,6 +64,19 @@ public final class TradeFundingPlanner {
         public boolean funded() {
             return deficit == null;
         }
+
+        /**
+         * V2-H0-R1 — can this target actually be completed, or merely quoted?
+         *
+         * <p>A non-null target with an emerald deficit and no legal SELL leg is a purchase the mob
+         * can never finish. Treating its mere existence as "the direct route wins" meant a reachable
+         * finished-tool purchase was suppressed by an unfundable ingredient quote, and the mob
+         * refused to trade at all. Precedence belongs to the route that can act, not the one that
+         * appears first.
+         */
+        public boolean actionable() {
+            return funded() || (sellLeg != null && sellLeg.usable());
+        }
     }
 
     private TradeFundingPlanner() {

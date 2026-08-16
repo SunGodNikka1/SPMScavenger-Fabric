@@ -643,15 +643,21 @@ public class TradeWithVillagerGoal extends Goal {
         // describes the raw-iron gather route and means nothing about crafting a pickaxe.
         WorkDemandPolicy.MaterialDemand purchaseDemand = demand.get();
         TradeFundingPlanner.FundingTarget funding = fundingTarget(purchaseDemand, offers, backpack);
-        if (funding == null) {
-            Optional<WorkDemandPolicy.MaterialDemand> projected =
-                    TradePurchaseProjection.activeSpecFor(
-                                    demand.get(), backpack, mob.getMainHandItem(),
-                                    mob.getOffhandItem(), ScavengerConfig.get())
-                            .flatMap(spec -> TradePurchaseProjection.ontoOutput(demand.get(), spec));
+        // R1: direct material outranks the projection only when it can ACT. A non-null target with a
+        // deficit and no legal SELL leg is a purchase that can never complete, and letting its mere
+        // existence suppress the projection made a reachable finished-tool purchase unreachable.
+        if (funding == null || !funding.actionable()) {
+            Optional<WorkDemandPolicy.MaterialDemand> projected = activeSpec(backpack)
+                    .flatMap(spec -> TradePurchaseProjection.ontoOutput(demand.get(), spec));
             if (projected.isPresent()) {
-                purchaseDemand = projected.get();
-                funding = fundingTarget(purchaseDemand, offers, backpack);
+                TradeFundingPlanner.FundingTarget viaOutput =
+                        fundingTarget(projected.get(), offers, backpack);
+                // Fall back to the direct target when the projection is no better, so a blocked
+                // direct route still reports sellBlocked rather than vanishing.
+                if (viaOutput != null && viaOutput.actionable()) {
+                    purchaseDemand = projected.get();
+                    funding = viaOutput;
+                }
             }
         }
         TradeEvaluationPolicy.EmeraldDeficit deficit =
@@ -761,7 +767,16 @@ public class TradeWithVillagerGoal extends Goal {
             return null;
         }
 
-        if (chain == null
+        if (chain != null
+                && chain.consumerKey().equals(demand.consumerKey())
+                && !chain.desiredOutput().equals(demand.materialKey())
+                && TradePurchaseProjection.isPurchaseTargetFor(
+                        demand, activeSpec(backpack).orElse(null), chain.desiredOutput())) {
+            // Same appetite, other representation. Preserve the clock: minting a fresh plan whenever
+            // a direct seller wanders in or out of range would restart the hard lifetime on every
+            // market flip - R7's reset defect through a new door.
+            chain = chain.retargetedTo(demand.materialKey(), held + demand.derivedDeficit());
+        } else if (chain == null
                 || !chain.consumerKey().equals(demand.consumerKey())
                 || !chain.desiredOutput().equals(demand.materialKey())) {
             // R6: an absolute inventory threshold, never the deficit. Passing the deficit made
@@ -803,10 +818,13 @@ public class TradeWithVillagerGoal extends Goal {
         if (chain == null) {
             return;
         }
-        boolean stillOurs = liveDemand != null
-                && chain.consumerKey().equals(liveDemand.consumerKey())
-                && chain.desiredOutput().equals(liveDemand.materialKey());
-        if (stillOurs) {
+        // R1: a projected chain buys the recipe OUTPUT while the live demand still names the
+        // INGREDIENT, so a material-equality test declared every projected chain ownerless on the
+        // next continuation tick - and discovery then rebuilt one, which made the architecture
+        // violation look like working behaviour.
+        Container backpack = PlayerMobs.backpack(mob);
+        if (TradePurchaseProjection.stillOwns(chain, liveDemand,
+                backpack == null ? null : activeSpec(backpack).orElse(null))) {
             return;
         }
         TradeChainPolicy.ChainOutcome outcome = TradeChainPolicy.evaluate(
@@ -816,6 +834,23 @@ public class TradeWithVillagerGoal extends Goal {
         if (outcome.terminated()) {
             chain = null;
         }
+    }
+
+    /** The live consumer recipe behind the current demand, if any. */
+    private Optional<ScavengerCrafting.ConsumerRecipeSpec> activeSpec(Container backpack) {
+        return liveDemandPayload(backpack).flatMap(source -> TradePurchaseProjection.activeSpecFor(
+                source, backpack, mob.getMainHandItem(), mob.getOffhandItem(),
+                ScavengerConfig.get()));
+    }
+
+    /** The raw selected demand, without the episode-lifecycle side effects of {@link #liveDemand}. */
+    private Optional<WorkDemandPolicy.MaterialDemand> liveDemandPayload(Container backpack) {
+        if (backpack == null) {
+            return Optional.empty();
+        }
+        return WorkDemandPolicy
+                .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), ScavengerConfig.get())
+                .map(WorkDemandPolicy.WorkDemand::payload);
     }
 
     /** Trade may displace working progression only on positively proven infeasibility. */

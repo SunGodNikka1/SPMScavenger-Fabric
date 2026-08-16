@@ -84,6 +84,48 @@ public final class TradePurchaseProjection {
     }
 
     /**
+     * Is {@code desiredOutput} something this consumer may currently be buying?
+     *
+     * <p>Two representations of one appetite (`D-VR-075`): the source material itself, and the
+     * finished recipe output. Ownership tests that knew only the first killed every projected chain
+     * on the next {@code liveDemand()} tick — {@code iron_pickaxe != iron_ingot} — while later
+     * discovery quietly rebuilt one, so the mod looked functional while the hard lifetime, the
+     * relationship credit and chain identity were all being reset underneath.
+     */
+    public static boolean isPurchaseTargetFor(
+            WorkDemandPolicy.MaterialDemand source,
+            ScavengerCrafting.ConsumerRecipeSpec spec,
+            net.minecraft.resources.ResourceLocation desiredOutput) {
+        if (source == null || desiredOutput == null) {
+            return false;
+        }
+        if (desiredOutput.equals(source.materialKey())) {
+            return true;
+        }
+        return ontoOutput(source, spec)
+                .map(projected -> desiredOutput.equals(projected.materialKey()))
+                .orElse(false);
+    }
+
+    /**
+     * Does this chain still belong to the live consumer?
+     *
+     * <p>Same consumer <b>and</b> a currently valid purchase target. A recipe that stops being live
+     * withdraws the projection in the same tick, so a projected chain becomes ownerless exactly when
+     * its consumer stops wanting the finished tool — which is the lifetime {@code D-VR-075} claims
+     * projection shares.
+     */
+    public static boolean stillOwns(
+            TradeChainPlan chain,
+            WorkDemandPolicy.MaterialDemand source,
+            ScavengerCrafting.ConsumerRecipeSpec spec) {
+        return chain != null
+                && source != null
+                && chain.consumerKey().equals(source.consumerKey())
+                && isPurchaseTargetFor(source, spec, chain.desiredOutput());
+    }
+
+    /**
      * The active recipe owning this demand, if any.
      *
      * <p>Consults the existing frontier accessors rather than a table of its own, so a consumer that

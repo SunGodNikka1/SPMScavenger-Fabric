@@ -120,6 +120,26 @@ public record TradeChainPlan(
         return nowTick >= expiresAtTick;
     }
 
+    /**
+     * V2-H0-R1 — the same chain, buying the other representation of the same appetite.
+     *
+     * <p>{@code createdAtTick} and {@code expiresAtTick} are <b>preserved</b>. Minting a fresh plan
+     * when the market flips between the source material and the recipe output would reset the hard
+     * lifetime every time a direct seller wandered in or out of range — the R7 "villager strolls away
+     * and the clock restarts" defect returning through a new door. `D-VR-075` calls these two
+     * expressions of one consumer appetite, so switching between them is not a new economic episode.
+     *
+     * <p>The step resets to {@code SELL_TO_FUND}: a different quote has a different price, so any
+     * previous "funded" conclusion belonged to the old target.
+     */
+    public TradeChainPlan retargetedTo(ResourceLocation newOutput, int newTargetHeldQuantity) {
+        if (desiredOutput.equals(newOutput) && targetHeldQuantity == newTargetHeldQuantity) {
+            return this;
+        }
+        return new TradeChainPlan(consumerKey, newOutput, newTargetHeldQuantity,
+                createdAtTick, expiresAtTick, Step.SELL_TO_FUND);
+    }
+
     /** Step changes; identity does not. */
     public TradeChainPlan at(Step next) {
         return next == step

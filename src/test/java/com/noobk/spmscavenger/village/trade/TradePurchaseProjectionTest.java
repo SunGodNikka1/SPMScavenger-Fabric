@@ -128,11 +128,13 @@ class TradePurchaseProjectionTest {
                 "private Optional<AuthorizedAttempt> authorizedCandidate(");
 
         int direct = decision.indexOf("fundingTarget(purchaseDemand, offers, backpack)");
-        int fallback = decision.indexOf("TradePurchaseProjection.activeSpecFor(");
+        int fallback = decision.indexOf("TradePurchaseProjection.ontoOutput(");
         assertTrue(direct > 0 && fallback > direct,
                 "the source demand is offered to the market before any projection is considered");
-        assertTrue(decision.contains("if (funding == null)"),
-                "and the projection runs only when the direct purchase found nothing fundable");
+        assertTrue(decision.contains("if (funding == null || !funding.actionable())"),
+                "R1: precedence belongs to the route that can ACT. A non-null direct target with a "
+                        + "deficit and no legal SELL leg can never complete, and letting it suppress "
+                        + "the projection made a reachable purchase unreachable");
     }
 
     /**
@@ -179,5 +181,96 @@ class TradePurchaseProjectionTest {
                     "the rule derives from ConsumerRecipeSpec, never from a named item or "
                             + "profession: " + forbidden);
         }
+    }
+
+    // ------------------------------------------------- R1: ownership across both representations
+
+    private static TradeChainPlan chainFor(net.minecraft.resources.ResourceLocation output) {
+        return TradeChainPlan.forDemand(
+                ScavengerCrafting.IRON_PICKAXE_RECIPE.consumerKey(), output, 0, 1, 100L);
+    }
+
+    /**
+     * The R1 P0. A projected chain buys the recipe <b>output</b> while the live demand still names
+     * the <b>ingredient</b>, so a material-equality ownership test declared it ownerless on the very
+     * next continuation tick — and discovery rebuilt one, which made the violation look like working
+     * behaviour while the hard lifetime, the relationship credit and chain identity all reset.
+     */
+    @Test
+    void mustHappen_bothPurchaseRepresentationsCountAsOwned() {
+        var spec = ScavengerCrafting.IRON_PICKAXE_RECIPE;
+        var source = ironIngotDemand();
+
+        assertTrue(TradePurchaseProjection.stillOwns(
+                        chainFor(BuiltInRegistries.ITEM.getKey(Items.IRON_PICKAXE)), source, spec),
+                "the projected chain buys the tool - that is the same appetite, not a stray plan");
+        assertTrue(TradePurchaseProjection.stillOwns(
+                        chainFor(BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT)), source, spec),
+                "and the direct chain is still owned too");
+    }
+
+    @Test
+    void mustNotHappen_aStrayChainCountsAsOwned() {
+        var spec = ScavengerCrafting.IRON_PICKAXE_RECIPE;
+        var source = ironIngotDemand();
+
+        assertFalse(TradePurchaseProjection.stillOwns(
+                        chainFor(BuiltInRegistries.ITEM.getKey(Items.DIAMOND)), source, spec),
+                "a chain buying something this consumer never wanted is ownerless");
+        assertFalse(TradePurchaseProjection.stillOwns(
+                        chainFor(BuiltInRegistries.ITEM.getKey(Items.IRON_PICKAXE)), source, null),
+                "recipe no longer live - the projection is withdrawn in the same tick");
+        assertFalse(TradePurchaseProjection.stillOwns(null, source, spec));
+
+        TradeChainPlan otherConsumer = TradeChainPlan.forDemand(
+                ResourceLocation.fromNamespaceAndPath("spmscavenger", "torch_chain"),
+                BuiltInRegistries.ITEM.getKey(Items.IRON_PICKAXE), 0, 1, 100L);
+        assertFalse(TradePurchaseProjection.stillOwns(otherConsumer, source, spec),
+                "same target, different consumer");
+    }
+
+    /** The live-demand funnel must use the two-level test, not raw material equality. */
+    @Test
+    void mustNotHappen_ownershipUsesRawMaterialEquality() throws IOException {
+        String body = methodOf(goalSource(), "private void terminateChainIfOwnerless(");
+
+        assertTrue(body.contains("TradePurchaseProjection.stillOwns("),
+                "ownership understands both purchase representations");
+        assertFalse(body.contains("chain.desiredOutput().equals(liveDemand.materialKey())"),
+                "material equality alone killed every projected chain on the next tick");
+    }
+
+    // ------------------------------------------------- R1: representation switch keeps the clock
+
+    /**
+     * Switching between the two expressions of one appetite is not a new economic episode.
+     *
+     * <p>Minting a fresh plan whenever a direct seller wandered into or out of range would restart
+     * the 6000-tick lifetime on every market flip — R7's "villager strolls away and the clock
+     * resets" defect arriving through a new door.
+     */
+    @Test
+    void mustNotHappen_switchingPurchaseRepresentationRestartsTheLifetime() {
+        TradeChainPlan projected = chainFor(BuiltInRegistries.ITEM.getKey(Items.IRON_PICKAXE));
+        TradeChainPlan retargeted = projected.retargetedTo(
+                BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT), 3);
+
+        assertEquals(projected.createdAtTick(), retargeted.createdAtTick());
+        assertEquals(projected.expiresAtTick(), retargeted.expiresAtTick(),
+                "the clock belongs to the consumer's appetite, not to the quote being served");
+        assertEquals(BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT), retargeted.desiredOutput());
+        assertEquals(3, retargeted.targetHeldQuantity(), "and the threshold follows the new units");
+        assertEquals(TradeChainPlan.Step.SELL_TO_FUND, retargeted.step(),
+                "a different quote has a different price, so any funded conclusion is stale");
+    }
+
+    @Test
+    void mustHappen_theExecutorRetargetsRatherThanRemints() throws IOException {
+        String body = methodOf(goalSource(), "private TradeChainPolicy.ChainOutcome advanceChain(");
+
+        assertTrue(body.contains("chain.retargetedTo("),
+                "same consumer, other representation - preserve the lifetime");
+        assertTrue(body.contains("TradePurchaseProjection.isPurchaseTargetFor("),
+                "and only when the new output really is a target for this consumer");
     }
 }
