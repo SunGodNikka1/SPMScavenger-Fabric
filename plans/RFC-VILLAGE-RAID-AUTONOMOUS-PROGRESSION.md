@@ -2095,10 +2095,11 @@ Still `STATIC_CONFIRMED` only — no PlayerMob has perceived a village in a runn
 
 ## Topic: V2-E Behavioral Prediction — physical trade executor (`Agent_Claude`, Gate MAIBS-1)
 
-**Status:** `PREDICTION ONLY` — implementation **held** at the User's instruction.
-**Gate result (stated up front): `FAIL — ARCHITECTURE_DEFECT` on the greet-collision design as
-briefed.** One defect must be resolved before code. Everything else is `BEHAVIORALLY_PLAUSIBLE` or a
-bounded stepping stone.
+**Status:** `DESIGN LOCKED` — prediction accepted with amendments; implementation not yet authorized.
+**Gate result: `FAIL — ARCHITECTURE_DEFECT` as first briefed → `PASS — BEHAVIORALLY_PLAUSIBLE` after
+the User's contract amendments below.** The original three defects are resolved by design, plus four
+corrections the User found in this prediction itself — two of which were errors of mine (claim timing
+and seam ordering). Read this topic together with *V2-E contract amendments and lock*.
 
 ### Evidence baseline
 
@@ -2344,6 +2345,137 @@ villager after a wall-clip · greeting stops working for unrelated villagers · 
 ranking at tick frequency · zero completed trades while chests remain.
 
 ---
+
+### V2-E contract amendments and lock (User, 2026-08-15) — gate flips to `PASS`
+
+**Option decision: `TARGETED SEAM CLAIM` `LOCKED`. `TRADE AS SOCIAL SUB-MODE` `REJECTED`.**
+
+Rejected because the FriendlyGreet integration is SOCIAL-specific end to end — admission, binding,
+`start()`, DONE observation, `stop()`, learning evidence, all through
+`SocialExecutionBindingRegistry`. Putting trade inside that executor would make *"external
+progression demand → acquisition strategy → merchant interaction"* arrive as *social completion
+evidence*, contaminating Opinion learning, activity classification, interruption semantics and
+telemetry — and would make `ActivityClass.VILLAGE_TRADE` (V2-F) fight the architecture rather than
+describe it. **SOCIAL is why a mob engages an entity; VILLAGE_TRADE is why it acquires resources
+through a merchant.** Both involving walking toward a villager is not sufficient reason to merge them.
+
+**This is not the 44D-R2 veto.** That was *no SOCIAL intent → suppress native greeting*, which let
+Opinion globally erase SPM behaviour. This is *active trade with Bob + SPM wants to greet Bob →
+suppress that exact collision*. Alice untouched, Charlie untouched, another PlayerMob greeting Bob
+untouched, and Bob greetable again the moment the attempt ends. An arbitration interlock, not social
+ownership.
+
+---
+
+#### Correction 1 — the claim opens at attempt start, not at FACE (`Agent_Claude` was wrong)
+
+The prediction above put the claim at FACE and argued a claim held across the walk was too broad.
+**That leaves V2-E's correctness resting on an unproven scheduler-ordering fact**: that the trade
+goal transitions WALK → FACE and publishes its claim *before* `FriendlyGreetGoal.canUse()` next
+evaluates the now-close villager. Nothing proves that ordering, and the same prediction states the
+selector re-evaluates the P1 greet every tick. Correctness must not rest on a sequencing detail we
+neither modelled nor pinned.
+
+```text
+candidate Bob selected
+        ↓
+navigation attempt admitted
+        ↓
+claim(mob, Bob)          ← here, before WALK can enter greet range
+        ↓
+WALK → FACE → EXECUTE
+        ↓
+release
+```
+
+The claim means only: *while I am deliberately trying to reach Bob to trade, I will not interrupt
+myself to greet Bob.* The "30-second walk suppresses greeting" objection is answered by bounding the
+**attempt**, which WEIRD-1 independently requires — not by letting trade self-destruct by greeting
+its own target. A lease/interlock, never a villager reservation.
+
+#### Correction 2 — the interlock runs before SOCIAL admission is published (`Agent_Claude` missed this)
+
+`FriendlyGreetAdmissionSeamMixin` records the observation on its **fourth line**, before any
+downstream logic. An interlock bolted onto the end would produce:
+
+```text
+trade owns Bob → SPM says Bob is greetable → SocialAdmissionSeam records Bob
+              → Opinion forms SOCIAL/Bob → interlock finally returns null
+```
+
+The physical greet never happens, but cognitive work has been manufactured for an executor we
+deliberately made unavailable. Required order:
+
+```text
+original = SPM nearestWhereReaction(...)
+if (original == null)                      -> existing handling
+if (TradeSessionClaimWindow.claims(mob, original)) return null;   // BEFORE publication
+recordObservation(...)                     // only now is native admission genuinely available
+existing Opinion / social-binding machinery
+```
+
+`SocialAdmissionSeam` must **not** become a trading abstraction. The trade interlock stays a separate
+type; the mixin is the integration boundary that consults both.
+
+#### Correction 3 — a bounded candidate-attempt ROUND, not a "decision cycle"
+
+*"Demote for this decision cycle"* was ambiguous: if the cycle ends when `canUse()` returns, the
+demotion vanishes exactly when it is needed.
+
+```text
+discover candidate set → rank A > B > C
+attempt A → path budget exhausted → mark A attempted FOR THIS ROUND
+attempt B → fails            → mark B attempted
+attempt C → …
+all exhausted → round ends → failed-search cooldown → fresh round (A eligible again)
+```
+
+No permanent blacklist, no `SavedData`. **V2-C's policy stays stateless; the physical executor holds
+transient attempt state because movement unfolds over time.** That distinction is the point.
+
+#### Correction 4 — evidence split on the busy merchant, and sleep is ours
+
+| Claim | Label |
+| --- | --- |
+| `VillagerTradeAdapter.performTrade` has **no** `getTradingPlayer()` check — it guards `backpack != null`, `villager != null`, `villager.isAlive()` only | **`CODE_CONFIRMED`** (verified in the shipped file) |
+| What racing a live human session actually looks like at runtime | `RUNTIME_QUESTION` |
+
+Two layers, the second mandatory: candidate selection ignores a merchant a human currently occupies,
+**and** `performTrade` re-checks `getTradingPlayer() != null` at the transaction boundary, returning
+an explicit `MERCHANT_BUSY`. A human may begin trading during the mob's walk — *planning permission
+does not authorize execution*.
+
+**Sleeping villagers likewise.** The prediction said "vanilla merchant refuses"; the adapter has no
+asleep check either, so nothing is enforcing it on this no-menu path. Awake/not-sleeping is a
+**V2-E candidate and attempt legality rule**, not something a lower layer handles magically.
+
+---
+
+#### Locked constraints
+
+1. Targeted seam interlock; no SOCIAL sub-mode.
+2. Claim identity is exactly `(mob UUID, villager UUID)`.
+3. Claim begins when the concrete trade attempt starts — before WALK can enter greet range.
+4. The claim confers no authority over the villager and blocks no other entity's interaction.
+5. Release on `stop()`, successful transaction, abandoned/demoted target, demand disappearance,
+   target loss, mob removal/unload/death and server shutdown, with a hard expiry as backstop.
+6. The greet seam checks the SPM-selected entity against the trade claim **before** publishing it as
+   SOCIAL admission evidence.
+7. Candidate failures live in one transient candidate-attempt **round**.
+8. Exhausted round → failed-search cooldown → fresh round.
+9. Player-occupied merchant rejected at selection **and again** by the adapter at execution.
+10. Sleeping/unavailable merchant is explicit V2-E legality, not assumed from V2-A.
+
+Constraint 5 is a Gate RET-1e surface in miniature: the claim is runtime-only, but its release set
+must be complete or a leaked claim silently suppresses greeting for a villager nobody is trading
+with — the `stop()` case being the one the original prediction missed.
+
+#### Gate MAIBS-1 — result after amendment
+
+`PASS — BEHAVIORALLY_PLAUSIBLE`, carrying WEIRD-1 (bounded pursuit), WEIRD-2 (`RaidContainersGoal`
+alternation) and WEIRD-5 (cadenced re-ranking) as bounded stepping stones with named runtime probes.
+Runtime `UNVERIFIED` until VR-T2.
+
 
 ### Gate MAIBS-1 result
 
@@ -5217,6 +5349,7 @@ beside `ExplorationActivityGoal` or it fail-closes the entire discretionary dire
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| User + Agent_Claude | 2026-08-15 | **V2-E design LOCKED — targeted seam interlock; SOCIAL sub-mode rejected.** Ten constraints locked. Rejected the SOCIAL sub-mode because FriendlyGreet's integration is SOCIAL-specific end to end, so trade inside it would arrive as *social completion evidence* and make `ActivityClass.VILLAGE_TRADE` fight the architecture. **Four corrections to my prediction, two of them my errors:** (1) the claim must open at **attempt start**, not FACE — a FACE-only claim rests V2-E's correctness on an unproven GoalSelector ordering fact, and the answer to a long walk is bounding the *attempt*, not letting trade greet its own target; (2) the interlock must run **before** `recordObservation` publishes the target into the SOCIAL control plane, or Opinion forms a SOCIAL intent for an executor we deliberately made unavailable (verified: the observation is the mixin's fourth line); (3) *"decision cycle"* is ambiguous — failures live in a bounded candidate-attempt **round**, exhausted → cooldown → fresh round, keeping V2-C stateless while the physical executor holds transient attempt state; (4) the missing `getTradingPlayer()` guard is **`CODE_CONFIRMED`** not `RUNTIME_QUESTION` (the adapter guards `isAlive()` only), and sleeping-merchant legality is V2-E's, not assumed from V2-A. Gate MAIBS-1 → **`PASS — BEHAVIORALLY_PLAUSIBLE`**; runtime `UNVERIFIED`. **No code written.** |
 | Agent_Claude | 2026-08-15 | **V2-E Behavioral Prediction (Gate MAIBS-1) — implementation held.** Result: **`FAIL — ARCHITECTURE_DEFECT` as briefed**, all three resolvable in design. (1) **A P3 goal cannot hold a claim against P1.** `FriendlyGreetGoal` is priority **1** with MOVE+LOOK and its `canUse` takes the *nearest greetable entity* — which is the villager the mob just walked to, so approaching *creates* the preemption. A `TradeSessionClaimWindow` owned by the P3 trade goal protects nothing. The only mechanism that can express it is the admission seam we already own, as a **targeted, expiring, `stop()`-released** suppression of one (mob → villager) pairing — narrow enough not to reintroduce the global veto 44D-R2 removed. (2) **Claim release on `stop()`** is undefined (combat during FACE leaves greeting suppressed for a villager nobody is trading with). (3) **Candidate demotion** is unspecified: best-unreachable must not re-select forever — *"best-ranked offer is unreachable" ≠ "trade is unreachable"*. Also surfaced: nothing refuses a merchant already held by a **human player** (`getTradingPlayer() != null`) — new V2-E requirement on the V2-A adapter. Five weird behaviours classified, adversarial A–O, T0…T+1200 trace, two design options, falsifying VR-T2 experiment. **No code written.** |
 | User + Agent_Cursor | 2026-08-15 | **V2 peer review pass 2 (continuation 11).** P1: `D-VR-071` count-level exclusivity (stack partition allowed); `D-VR-073` V2-E before V2-F. P2: `D-VR-067` server-stop cleanup. P3: `D-VR-066` → `INSUFFICIENT_DISPOSABLE_QUANTITY`. **LOCK-CLEAN for task-47.** |
 | User + Agent_Cursor | 2026-08-15 | **V2 pre-task-47 peer review (continuation 10).** Locked: `D-VR-067` SOURCE-CONFIRMED mandatory; `D-VR-058` → `SellExpendabilityPolicy`; `D-VR-071` joint allocator; `D-VR-072` commit-instant SlotDelta; `D-VR-015` feasibility-before-win; `D-VR-070` reject literal `commuteTarget()`. Doc-debt sweep. **Ready for task-47.** |
