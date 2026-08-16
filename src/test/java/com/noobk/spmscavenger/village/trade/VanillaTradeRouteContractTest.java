@@ -99,9 +99,16 @@ class VanillaTradeRouteContractTest {
     /**
      * Snapshot → revalidate → execute preserves a component-bearing result exactly.
      *
-     * <p>The strictness is the feature. A quote that rerolls into a different enchantment or price
-     * between selection and arrival is a <b>different purchase</b>, and must be refused rather than
-     * silently accepted — snapshot is evidence, not authority.
+     * <p>The strictness is the feature. A quote that rerolls into different components or a different
+     * price between selection and arrival is a <b>different purchase</b>, and must be refused rather
+     * than silently accepted — snapshot is evidence, not authority.
+     *
+     * <p><b>What this proves, precisely:</b> component-exact semantics for an <i>arbitrary</i>
+     * component payload. It uses {@code CUSTOM_NAME} rather than constructing a real enchanted
+     * stack, so it does <b>not</b> pin {@code DataComponents.ENCHANTMENTS} specifically. Production
+     * compares through {@code ItemStack.isSameItemSameComponents}, which has no per-component
+     * special case, so the generic proof carries — but the actual enchanted vanilla quote is
+     * <b>VR-T2's</b> to transact, and this must not be recorded as static proof of enchantments.
      */
     @Test
     void mustHappen_aComponentBearingResultSurvivesTheTransactionExactly() {
@@ -202,6 +209,35 @@ class VanillaTradeRouteContractTest {
         assertEquals(List.of("fletcher lvl1: 32x minecraft:stick -> 1 emerald"), routes,
                 "the complete set of vanilla buyers for a SellReserveModel-authorized material. "
                         + "V2-H's funding leg is this one route and no other.");
+    }
+
+    /**
+     * The Fletcher must have enough uses for the fixture's four sales.
+     *
+     * <p>More important than backpack capacity, and for a reason arithmetic alone would miss:
+     * {@code TradeFundingPlanner} caps affordable uses by {@code maxUses - uses}, so a backpack full
+     * of sticks cannot make a villager accept a fifth trade once its offer is exhausted. A fixture
+     * that needs K sales against an offer allowing fewer would stall with {@code sellBlocked} and
+     * look like a trade defect.
+     *
+     * <p>Extracted from the same real listing instrument rather than remembered.
+     */
+    @Test
+    void mustHappen_theFletcherStickOfferAllowsTheFixturesFourSales() {
+        Integer maxUses = null;
+        for (Listing entry : allListings()) {
+            if (field(entry.listing(), "itemStack") instanceof ItemCost cost
+                    && cost.item().value() == Items.STICK) {
+                maxUses = (Integer) field(entry.listing(), "maxUses");
+            }
+        }
+
+        assertTrue(maxUses != null, "the stick listing must still exist");
+        System.out.println("[VR-H0c] fletcher stick offer maxUses=" + maxUses
+                + " (fresh offer uses=0, so remaining=" + maxUses + ")");
+        assertTrue(maxUses >= 4,
+                "the fixture performs four SELLs; a fresh offer must allow them. Observed: "
+                        + maxUses);
     }
 
     /**
