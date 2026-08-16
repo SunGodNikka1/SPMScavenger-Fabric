@@ -1652,3 +1652,33 @@ truth. V2-TE handles real payout semantics separately; the core is deliberately 
 because V2-C cannot see a container. Affordability must be re-checked for the offer actually
 attempted - asserting it for *some* offer and then attempting the best one is a real gap. Likewise
 reachability filtering belongs upstream of `decide`.
+
+## 2026-08-15 - V2-D: selling is bounded by the purchase, not by what is spare
+
+Task 50 (`.superpowers/sdd/task-50-report.md`). 1015 tests, 0 failures, 3 architecture-defect probes.
+
+**The rule that shapes the slice:** needs 9 emeralds, holds 7, sell pays 1, owns 64 disposable wheat
+-> **2 sells**, not 64. `requiredSellUses = ceil(deficit / perSell)` and it is zero the moment the
+deficit closes. *Disposable means permitted to spend, not desirable to spend* - the same distinction
+as burnable-is-not-expendable (FS-R2), one layer up the economy.
+
+**Advancement is derived, never remembered.** The step follows from emeralds actually held, so a
+failed sell cannot advance the chain and a successful one needs to report nothing. That is also why
+SPM eating a sellable food item mid-chain is not a conflict: the next evaluation recalculates against
+the smaller stock and reports `sellBlocked` rather than locking SPM out.
+
+**The plan carries identity, not attempt evidence.** `consumerKey` and `desiredOutput` survive every
+step; villager, offer index and path are structurally banned from the record. A momentary observation
+promoted to durable identity is how a chain ends up pointing at a villager that walked away.
+
+**Transient by construction**, so save/reload closes it neutrally and **Gate RET-1e does not apply** -
+there is no store to sweep. Stated explicitly rather than left inferred.
+
+**Three stupid behaviours proved unreachable**, each with a probe that breaks the build when its guard
+is removed: over-selling past a satisfied deficit; buying on after the consumer disappeared; and SELL
+regenerating forever because its own emerald output looks like new demand. The third is a 200-iteration
+loop that sells exactly nine times and stops.
+
+**Carried into V2-E as one rule, not two:** `emeraldsPerSellUse` (V2-D) and `paymentAffordable` (V2-C)
+are both caller-supplied facts that can describe a different offer than the one finally attempted.
+**V2-E must recompute both against the offer it is about to execute.**

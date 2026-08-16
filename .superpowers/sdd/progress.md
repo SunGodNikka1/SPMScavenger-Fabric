@@ -75,4 +75,6 @@ Task 48: complete (V2-B TradeEvaluationPolicy — pure offer scoring; 986 tests,
 
 Task 49: complete (V2-C TradeDemandRegistrar - acquisition feasibility, 10 gates; 998 tests, 3 negative controls; stateless so gate 9 is unrepresentable)
 
+Task 50: complete (V2-D transient TradeChainPlan SELL->BUY; 1015 tests; 3 architecture-defect probes unreachable)
+
 No commits unless user requests. No Minecraft launches unless separately approved.
