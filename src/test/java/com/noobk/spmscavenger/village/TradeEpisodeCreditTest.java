@@ -211,4 +211,136 @@ class TradeEpisodeCreditTest {
                 "crediting trade through the greet binding was explicitly rejected");
         assertNotEquals(-1, goalSource().indexOf("SettlementRelationshipService.onTradeEpisode("));
     }
+
+    // ------------------------------------------------- once per chain, across preemption (R1)
+
+    private static com.noobk.spmscavenger.village.trade.TradeChainPlan chain(long createdAt) {
+        return com.noobk.spmscavenger.village.trade.TradeChainPlan.forDemand(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+                        "spmscavenger", "iron_tool_frontier"),
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+                        "minecraft", "iron_ingot"),
+                0, 2, createdAt);
+    }
+
+    /**
+     * The R1 defect, as the exact sequence the User specified.
+     *
+     * <p>V2-G cleared the anchor at teardown, which bounds credit inside one uninterrupted visit.
+     * But {@code TradeChainPlan} survives {@code stop()} on purpose — that is the hard lifetime
+     * Option A exists to protect — so an interruption is not the end of the chain, and the resumed
+     * chain would earn a second episode for the same bounded visit.
+     */
+    @Test
+    void mustNotHappen_aResumedChainEarnsASecondEpisode() {
+        com.noobk.spmscavenger.village.trade.TradeEpisodeLedger ledger =
+                new com.noobk.spmscavenger.village.trade.TradeEpisodeLedger();
+        com.noobk.spmscavenger.village.trade.TradeChainPlan funding = chain(1_000L);
+
+        // SELL succeeds, then combat preempts and stop() credits immediately.
+        assertTrue(ledger.consumeCreditFor(funding), "the first completed trade credits");
+
+        // Combat ends; the SAME chain resumes and its BUY leg succeeds.
+        assertFalse(ledger.consumeCreditFor(funding),
+                "one bounded chain teaches one village relationship, interruption or not");
+        assertFalse(ledger.consumeCreditFor(funding), "and no number of resumptions changes that");
+    }
+
+    /** A step transition is the same chain: {@code at()} mints a new record, not a new visit. */
+    @Test
+    void mustNotHappen_aStepTransitionCountsAsANewChain() {
+        com.noobk.spmscavenger.village.trade.TradeEpisodeLedger ledger =
+                new com.noobk.spmscavenger.village.trade.TradeEpisodeLedger();
+        com.noobk.spmscavenger.village.trade.TradeChainPlan selling = chain(1_000L);
+
+        assertTrue(ledger.consumeCreditFor(selling));
+        assertFalse(ledger.consumeCreditFor(selling.at(
+                        com.noobk.spmscavenger.village.trade.TradeChainPlan.Step.BUY_TARGET)),
+                "SELL_TO_FUND -> BUY_TARGET is one chain advancing, not a second visit");
+    }
+
+    /** A genuinely new chain is a new visit and earns its own episode. */
+    @Test
+    void mustHappen_aNewChainEarnsItsOwnEpisode() {
+        com.noobk.spmscavenger.village.trade.TradeEpisodeLedger ledger =
+                new com.noobk.spmscavenger.village.trade.TradeEpisodeLedger();
+
+        assertTrue(ledger.consumeCreditFor(chain(1_000L)));
+        ledger.onChainOpened();
+        assertTrue(ledger.consumeCreditFor(chain(9_000L)),
+                "a later visit for a later demand is a genuinely separate relationship episode");
+    }
+
+    /**
+     * Chain identity itself, exercised directly.
+     *
+     * <p>The ledger tests above always call {@code onChainOpened()} between chains, so they never
+     * reach the identity comparison — dropping {@code createdAtTick} from {@code sameChainAs} left
+     * every one of them green. In production the reset does always fire, which makes the tick
+     * defence-in-depth; but a defence nothing exercises is a defence nobody will notice losing.
+     */
+    @Test
+    void mustNotHappen_twoChainsForOneConsumerAreTreatedAsOne() {
+        com.noobk.spmscavenger.village.trade.TradeChainPlan first = chain(1_000L);
+        com.noobk.spmscavenger.village.trade.TradeChainPlan later = chain(9_000L);
+
+        assertFalse(first.sameChainAs(later),
+                "same consumer and output, different visit - the creation tick is what separates "
+                        + "a second visit from the same chain advancing");
+        assertTrue(first.sameChainAs(first.at(
+                        com.noobk.spmscavenger.village.trade.TradeChainPlan.Step.BUY_TARGET)),
+                "and a step transition preserves createdAtTick, so it stays one chain");
+        assertFalse(first.sameChainAs(null));
+    }
+
+    /** Without the reset, a later chain must still earn its own credit on identity alone. */
+    @Test
+    void mustHappen_identityAloneSeparatesTwoVisits() {
+        com.noobk.spmscavenger.village.trade.TradeEpisodeLedger ledger =
+                new com.noobk.spmscavenger.village.trade.TradeEpisodeLedger();
+
+        assertTrue(ledger.consumeCreditFor(chain(1_000L)));
+        assertTrue(ledger.consumeCreditFor(chain(9_000L)),
+                "a genuinely later chain is a separate visit even if onChainOpened were missed");
+    }
+
+    /** A terminated chain cannot be resumed, so its credit is not at risk of reuse. */
+    @Test
+    void mustHappen_aTerminatedChainStillCreditsItsCompletedTrade() {
+        com.noobk.spmscavenger.village.trade.TradeEpisodeLedger ledger =
+                new com.noobk.spmscavenger.village.trade.TradeEpisodeLedger();
+
+        assertTrue(ledger.consumeCreditFor(null),
+                "target obtained mid-round still means a trade really happened");
+    }
+
+    /** Credit is restored only by a new chain — never by teardown. */
+    @Test
+    void mustNotHappen_teardownRestoresRelationshipCredit() throws IOException {
+        String goal = goalSource();
+
+        assertFalse(methodOf(goal, "public void stop() {").contains("onChainOpened"),
+                "resetting at teardown is exactly the defect the ledger exists to fix");
+        assertFalse(methodOf(goal, "private void endRound(").contains("onChainOpened"));
+        assertTrue(methodOf(goal, "private TradeChainPolicy.ChainOutcome advanceChain(")
+                        .contains("episodeLedger.onChainOpened()"),
+                "only minting a new chain restores credit");
+        assertTrue(methodOf(goal, "private void emitTradeEpisode(")
+                        .contains("episodeLedger.consumeCreditFor(chain)"),
+                "and emission must consult it");
+    }
+
+    /** R2: both teardown paths release the greet claim before crediting, not just stop(). */
+    @Test
+    void mustNotHappen_eitherTeardownPathDelaysTheClaimRelease() throws IOException {
+        String goal = goalSource();
+
+        for (String path : new String[] {"public void stop() {", "private void endRound("}) {
+            String body = methodOf(goal, path);
+            assertTrue(body.indexOf("TradeSessionClaimWindow.release")
+                            < body.indexOf("emitTradeEpisode"),
+                    path + " must release the claim before crediting - a throwing credit would "
+                            + "otherwise leak the greet interlock");
+        }
+    }
 }

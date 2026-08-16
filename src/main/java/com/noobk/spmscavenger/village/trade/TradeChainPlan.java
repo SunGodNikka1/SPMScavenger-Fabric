@@ -100,6 +100,22 @@ public record TradeChainPlan(
         return forConsumer(consumerKey, desiredOutput, Math.max(0, heldNow) + deficit, nowTick);
     }
 
+    /**
+     * V2-G-R1 — is this the <b>same chain episode</b> as {@code other}?
+     *
+     * <p>Object identity cannot answer this: {@link #at(Step)} returns a new record on every step
+     * transition while remaining the same chain. The stable triple is consumer, desired output and
+     * <b>creation tick</b> — {@code at} preserves {@code createdAtTick}, and only
+     * {@link #forDemand} mints a new one, which is exactly the boundary a fresh relationship episode
+     * is allowed to cross.
+     */
+    public boolean sameChainAs(TradeChainPlan other) {
+        return other != null
+                && createdAtTick == other.createdAtTick
+                && consumerKey.equals(other.consumerKey)
+                && desiredOutput.equals(other.desiredOutput);
+    }
+
     public boolean expired(long nowTick) {
         return nowTick >= expiresAtTick;
     }

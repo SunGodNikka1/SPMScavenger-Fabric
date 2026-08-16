@@ -15,6 +15,7 @@ import com.noobk.spmscavenger.village.trade.TradeFundingPlanner;
 import com.noobk.spmscavenger.village.trade.TradeCandidateRound;
 import com.noobk.spmscavenger.village.trade.TradeChainPlan;
 import com.noobk.spmscavenger.village.trade.TradeChainPolicy;
+import com.noobk.spmscavenger.village.trade.TradeEpisodeLedger;
 import com.noobk.spmscavenger.village.trade.TradeDemandGate;
 import com.noobk.spmscavenger.village.trade.TradeEvaluationPolicy;
 import com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow;
@@ -107,6 +108,16 @@ public class TradeWithVillagerGoal extends Goal {
      * that opens in one settlement and succeeds in another would otherwise credit the wrong village.
      */
     private BlockPos tradeEpisodeAnchor;
+
+    /**
+     * V2-G-R1 — one relationship episode per {@link TradeChainPlan}, across preemption.
+     *
+     * <p>The anchor alone bounds credit within one uninterrupted visit, but the chain deliberately
+     * survives {@code stop()}, so a combat interruption after a successful SELL would let the same
+     * chain earn a second episode when it resumed. Never reset at teardown — only when a genuinely
+     * new chain is opened.
+     */
+    private final TradeEpisodeLedger episodeLedger = new TradeEpisodeLedger();
 
     private ResourceLocation attemptConsumer;
     private ResourceLocation attemptMaterial;
@@ -458,9 +469,11 @@ public class TradeWithVillagerGoal extends Goal {
     }
 
     private void endRound(ServerLevel level) {
+        // R2: release first here as well. stop() already did, but endRound is the other teardown
+        // path and a throwing credit would leak the greet interlock just as readily from it.
+        TradeSessionClaimWindow.release(mob.getUUID());
         emitTradeEpisode(level);
         round.endRound(level.getGameTime());
-        TradeSessionClaimWindow.release(mob.getUUID());
         target = null;
         plannedOffer = null;
         mob.getNavigation().stop();
@@ -478,6 +491,11 @@ public class TradeWithVillagerGoal extends Goal {
         BlockPos anchor = tradeEpisodeAnchor;
         tradeEpisodeAnchor = null;
         if (anchor == null) {
+            return;
+        }
+        // R1: the anchor bounds credit within one visit; the ledger bounds it across the chain's
+        // lifetime, which outlives this teardown by design.
+        if (!episodeLedger.consumeCreditFor(chain)) {
             return;
         }
         SettlementRelationshipService.onTradeEpisode(
@@ -711,6 +729,8 @@ public class TradeWithVillagerGoal extends Goal {
             chain = TradeChainPlan.forDemand(
                     demand.consumerKey(), demand.materialKey(),
                     held, demand.derivedDeficit(), now);
+            // The one event that restores relationship credit: a new chain is a new visit.
+            episodeLedger.onChainOpened();
         }
 
         TradeChainPolicy.ChainOutcome outcome = TradeChainPolicy.evaluate(

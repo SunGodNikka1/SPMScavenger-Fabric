@@ -86,9 +86,11 @@ public final class SettlementRelationshipService {
      * credit so a shopping trip is never counted as a social event. The caller owns the
      * once-per-visit rule (`D-VR-063`); this method credits whatever it is handed, exactly once.
      *
-     * @param anchorAtStart the settlement the episode belongs to, resolved when the episode began —
-     *     never re-resolved at teardown, or a mob that walked out mid-chain would credit the village
-     *     it left for the one it arrived at
+     * @param anchorAtStart the settlement the episode belongs to, resolved at the <b>first
+     *     successful transaction</b> of the visit — not at round or chain start, and never
+     *     re-resolved at teardown. First success is the moment an episode demonstrably exists and
+     *     the mob is provably standing at the villager; resolving later would credit whichever
+     *     village the mob had wandered into by teardown
      */
     public static void onTradeEpisode(
             ServerLevel level, UUID mobId, BlockPos anchorAtStart, long tick) {
