@@ -114,9 +114,17 @@ public final class Vrt2ProofCommand {
      * reference, no price, no funding decision. The AI must rediscover all of it.
      */
     private static int setup(CommandSourceStack source, ServerLevel level, Mob mob) {
-        Optional<MerchantOffer> toolsmith = findOffer(level, mob,
+        Optional<Villager> smith = uniqueMerchant(level, mob, "toolsmith");
+        Optional<Villager> fletch = uniqueMerchant(level, mob, "fletcher");
+        if (smith.isEmpty() || fletch.isEmpty()) {
+            source.sendFailure(Component.literal("[VR-T2] setup FAILED - need exactly one "
+                    + "toolsmith and one fletcher in range; an ambiguous fixture cannot say "
+                    + "which merchant the mob traded with"));
+            return 0;
+        }
+        Optional<MerchantOffer> toolsmith = offerOf(smith.get(),
                 offer -> offer.getResult().is(Items.IRON_PICKAXE));
-        Optional<MerchantOffer> fletcher = findOffer(level, mob,
+        Optional<MerchantOffer> fletcher = offerOf(fletch.get(),
                 offer -> offer.getCostA().is(Items.STICK) && offer.getResult().is(Items.EMERALD));
 
         if (toolsmith.isEmpty() || fletcher.isEmpty()) {
@@ -201,12 +209,15 @@ public final class Vrt2ProofCommand {
                 .map(d -> d.materialKey() + " x" + d.derivedDeficit())
                 .orElse("<none>")).append('\n');
 
+        // peek*, never the consumer entry points: `status` clears evidence on positive progress
+        // and `exhaustedFor` deletes on expiry/mismatch, so polling them would let observing the
+        // run change the arbitration being observed.
         sourceDemand.ifPresent(d -> out.append("  route status  = ")
-                .append(ExistingRouteFeasibility.status(level, mob.getUUID(), d, backpack,
+                .append(ExistingRouteFeasibility.peekStatus(level, mob.getUUID(), d, backpack,
                         mob.getMainHandItem(), mob.getOffhandItem(), cfg))
                 .append('\n'));
         out.append("  exhaustion    = ").append(sourceDemand
-                .map(d -> RouteExhaustionEvidence.exhaustedFor(
+                .map(d -> RouteExhaustionEvidence.peekExhaustedFor(
                         mob.getUUID(), d, level.getGameTime()) ? "PRESENT" : "absent")
                 .orElse("absent")).append('\n');
 
@@ -225,8 +236,10 @@ public final class Vrt2ProofCommand {
     }
 
     private static void appendOfferState(StringBuilder out, ServerLevel level, Mob mob) {
-        for (Villager villager : level.getEntitiesOfClass(Villager.class,
-                new AABB(mob.blockPosition()).inflate(FIXTURE_RADIUS))) {
+        for (Villager villager : java.util.stream.Stream.of(
+                        uniqueMerchant(level, mob, "toolsmith").orElse(null),
+                        uniqueMerchant(level, mob, "fletcher").orElse(null))
+                .filter(java.util.Objects::nonNull).toList()) {
             for (MerchantOffer offer : villager.getOffers()) {
                 boolean buy = offer.getResult().is(Items.IRON_PICKAXE);
                 boolean sell = offer.getCostA().is(Items.STICK)
@@ -271,20 +284,28 @@ public final class Vrt2ProofCommand {
         List<Mob> mobs = source.getLevel().getEntitiesOfClass(Mob.class,
                 new AABB(net.minecraft.core.BlockPos.containing(source.getPosition()))
                         .inflate(FIXTURE_RADIUS),
-                candidate -> PlayerMobs.backpack(candidate) != null);
+                candidate -> PlayerMobs.isPlayerMob(candidate)
+                        && PlayerMobs.backpack(candidate) != null);
         return mobs.stream().min((a, b) -> Double.compare(
                 a.distanceToSqr(source.getPosition()), b.distanceToSqr(source.getPosition())));
     }
 
     /** Reads the exact fixture villagers through <b>vanilla</b> offers, never through the adapter. */
-    private static Optional<MerchantOffer> findOffer(
-            ServerLevel level, Mob mob, java.util.function.Predicate<MerchantOffer> match) {
-        for (Villager villager : level.getEntitiesOfClass(Villager.class,
-                new AABB(mob.blockPosition()).inflate(FIXTURE_RADIUS))) {
-            for (MerchantOffer offer : villager.getOffers()) {
-                if (match.test(offer)) {
-                    return Optional.of(offer);
-                }
+    private static Optional<Villager> uniqueMerchant(
+            ServerLevel level, Mob mob, String professionPath) {
+        List<Villager> matches = level.getEntitiesOfClass(Villager.class,
+                new AABB(mob.blockPosition()).inflate(FIXTURE_RADIUS),
+                villager -> BuiltInRegistries.VILLAGER_PROFESSION
+                        .getKey(villager.getVillagerData().getProfession())
+                        .getPath().equals(professionPath));
+        return matches.size() == 1 ? Optional.of(matches.get(0)) : Optional.empty();
+    }
+
+    private static Optional<MerchantOffer> offerOf(
+            Villager merchant, java.util.function.Predicate<MerchantOffer> match) {
+        for (MerchantOffer offer : merchant.getOffers()) {
+            if (match.test(offer)) {
+                return Optional.of(offer);
             }
         }
         return Optional.empty();
