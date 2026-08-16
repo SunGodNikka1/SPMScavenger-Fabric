@@ -53,15 +53,24 @@ public final class TradeEpisodeLedger {
      * <p>Consuming: a {@code true} answer marks the chain spent, so the second call for the same
      * chain returns {@code false}.
      *
-     * @param chain the chain the completed trade belongs to, or {@code null} when it has already
-     *     terminated — a terminated chain cannot be resumed, so its credit is not at risk of reuse
+     * <h2>R3 — {@code null} fails closed</h2>
+     *
+     * Before R2 the caller passed the <b>live</b> chain, so {@code null} meant "the chain terminated
+     * between the trade and teardown" — a legitimate episode, credited on the reasoning that the
+     * next {@code forDemand} would clear the ledger anyway. R2 removed that reset and made the caller
+     * pass the chain that <b>earned</b> the episode, captured at the transaction itself.
+     *
+     * <p>So {@code null} no longer means "terminated". It means <b>pending relationship evidence
+     * arrived without its chain owner</b> — a state with no legitimate producer, since the anchor and
+     * the chain are captured together in one guard. Crediting it would be crediting an episode
+     * nothing can account for, so it is refused.
+     *
+     * @param chain the chain that earned this episode; {@code null} is a lost owner, never a
+     *     terminated one
      */
     public boolean consumeCreditFor(TradeChainPlan chain) {
         if (chain == null) {
-            // The chain ended (target obtained, consumer gone, expired) before teardown. The trade
-            // genuinely happened, and no resumption can double-credit it: the next chain is minted
-            // by forDemand, which clears this ledger.
-            return true;
+            return false;
         }
         if (creditedChain != null && creditedChain.sameChainAs(chain)) {
             return false;

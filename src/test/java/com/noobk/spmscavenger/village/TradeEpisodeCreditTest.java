@@ -309,14 +309,24 @@ class TradeEpisodeCreditTest {
                 "a genuinely later chain is a separate visit even if onChainOpened were missed");
     }
 
-    /** A terminated chain cannot be resumed, so its credit is not at risk of reuse. */
+    /**
+     * R3 — pending evidence with no chain owner is refused.
+     *
+     * <p>This test replaces a pre-R2 one that asserted the opposite. Then, the caller passed the
+     * <b>live</b> chain and {@code null} meant "terminated between the trade and teardown", which was
+     * a real episode. R2 made the caller pass the chain that <b>earned</b> the episode, captured in
+     * the same guard as the anchor — so {@code null} now has no legitimate producer at all, and
+     * crediting it would credit an episode nothing can account for.
+     */
     @Test
-    void mustHappen_aTerminatedChainStillCreditsItsCompletedTrade() {
+    void mustNotHappen_evidenceWithoutAChainOwnerIsCredited() {
         com.noobk.spmscavenger.village.trade.TradeEpisodeLedger ledger =
                 new com.noobk.spmscavenger.village.trade.TradeEpisodeLedger();
 
-        assertTrue(ledger.consumeCreditFor(null),
-                "target obtained mid-round still means a trade really happened");
+        assertFalse(ledger.consumeCreditFor(null),
+                "a lost owner is not a terminated chain - fail closed");
+        assertFalse(ledger.hasSpentCredit(),
+                "and refusing must not consume the slot a real chain will need");
     }
 
     /** Credit is restored only by a new chain — never by teardown. */
