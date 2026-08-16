@@ -122,6 +122,7 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.opinion.SocialGreetClaimWindow.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.release(mob.getUUID());
+                com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.clear(mob.getUUID());
                 if (world.getServer() != null) {
                     VillagePerceptionScheduler.forServer(world.getServer())
                             .unregisterObserver(mob.getUUID());
@@ -168,6 +169,7 @@ public class SpmScavenger implements ModInitializer {
                     com.noobk.spmscavenger.opinion.SocialGreetClaimWindow.shutdownServerState();
                     com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.shutdownServerState();
                     com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.shutdownServerState();
+                    com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.shutdownServerState();
                     VillagePerceptionScheduler.shutdown(server);
                 });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
@@ -179,6 +181,7 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.opinion.SocialGreetClaimWindow.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.release(mob.getUUID());
+                com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.clear(mob.getUUID());
                 if (mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
                     VillagePerceptionScheduler.forServer(serverLevel.getServer())
                             .unregisterObserver(mob.getUUID());

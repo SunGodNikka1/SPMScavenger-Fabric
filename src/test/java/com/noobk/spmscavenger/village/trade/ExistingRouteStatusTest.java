@@ -138,6 +138,34 @@ class ExistingRouteStatusTest {
                 ExistingRouteFeasibility.gatherStatus(null, null, null, null, null));
     }
 
+    // ------------------------------------------------- exhaustion precedence
+
+    /**
+     * The property the User required explicitly: **immediate positive evidence dominates old
+     * negative evidence**. A completed-and-empty search is a memory; a live gather route is the
+     * present, and it wins — otherwise "failed once" becomes temporary trade ownership and V2-C's
+     * convergence is lost.
+     */
+    @Test
+    void mustNotHappen_staleExhaustionOutranksALiveRoute() {
+        assertEquals(ExistingRouteStatus.FEASIBLE,
+                ExistingRouteFeasibility.reconcile(ExistingRouteStatus.FEASIBLE, true),
+                "raw iron acquired or a smelt plan appearing must beat a remembered failure");
+        assertFalse(ExistingRouteFeasibility
+                .reconcile(ExistingRouteStatus.FEASIBLE, true).permitsTradeDisplacement());
+    }
+
+    /** Exhaustion only speaks when nothing positive can be said. */
+    @Test
+    void mustHappen_exhaustionResolvesOnlyTheUnknownCase() {
+        assertEquals(ExistingRouteStatus.INFEASIBLE,
+                ExistingRouteFeasibility.reconcile(ExistingRouteStatus.UNKNOWN, true));
+        assertEquals(ExistingRouteStatus.UNKNOWN,
+                ExistingRouteFeasibility.reconcile(ExistingRouteStatus.UNKNOWN, false));
+        assertEquals(ExistingRouteStatus.INFEASIBLE,
+                ExistingRouteFeasibility.reconcile(ExistingRouteStatus.INFEASIBLE, false));
+    }
+
     // ---------------------------------------------------------------- V2-D wiring
 
     private static OfferSnapshot sellOffer(int emeraldsPerUse) {

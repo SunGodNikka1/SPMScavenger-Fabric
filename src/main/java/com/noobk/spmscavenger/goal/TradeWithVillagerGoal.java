@@ -6,6 +6,8 @@ import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
 import com.noobk.spmscavenger.village.trade.OfferSnapshot;
 import com.noobk.spmscavenger.village.trade.RouteEvidence;
+import com.noobk.spmscavenger.village.trade.SellAuthorization;
+import com.noobk.spmscavenger.village.trade.TradeFundingPlanner;
 import com.noobk.spmscavenger.village.trade.TradeCandidateRound;
 import com.noobk.spmscavenger.village.trade.TradeDemandGate;
 import com.noobk.spmscavenger.village.trade.TradeEvaluationPolicy;
@@ -323,10 +325,12 @@ public class TradeWithVillagerGoal extends Goal {
         // P0/R2: produced, tri-state, and trade proceeds only on positively proven infeasibility.
         boolean existingFeasible = !existingRouteInfeasible(level, demand.get());
 
-        // V2-D: without a live emerald deficit every SELL offer is refused by design, so a funding
-        // leg could never be entered and V2-E was a direct-BUY subset of the locked architecture.
+        // V2-D bridge: choose the BUY quote first, derive its shortfall, then authorize a disposable
+        // material to fund it. Without a live deficit every SELL is refused by design, which is why
+        // V2-E was previously a direct-BUY subset of the locked architecture.
+        TradeFundingPlanner.FundingTarget funding = fundingTarget(demand.get(), offers, backpack);
         TradeEvaluationPolicy.EmeraldDeficit deficit =
-                emeraldDeficitFor(demand.get(), offers, backpack);
+                funding == null ? null : funding.deficit();
 
         return TradeDemandGate
                 .authorize(demand.get(),
@@ -343,7 +347,7 @@ public class TradeWithVillagerGoal extends Goal {
     private boolean existingRouteInfeasible(
             ServerLevel level, WorkDemandPolicy.MaterialDemand demand) {
         return ExistingRouteFeasibility.tradeMayDisplace(
-                level, demand, PlayerMobs.backpack(mob),
+                level, mob.getUUID(), demand, PlayerMobs.backpack(mob),
                 mob.getMainHandItem(), mob.getOffhandItem(), ScavengerConfig.get());
     }
 
@@ -365,32 +369,30 @@ public class TradeWithVillagerGoal extends Goal {
      * <p>The deficit carries the <b>external consumer's</b> key, never a manufactured one: the chain
      * exists to fund that purchase and is attributed to it (V2-D req 2/3).
      */
-    private TradeEvaluationPolicy.EmeraldDeficit emeraldDeficitFor(
+    /**
+     * R3: the deficit is derived from the BUY quote this iteration will actually serve.
+     *
+     * <p>R2 took the cheapest emerald cost found anywhere, independently of the offer ranking would
+     * choose — Task 50's "right arithmetic against the wrong offer", one layer earlier. The mob would
+     * have sold exactly enough for a purchase it was not going to make.
+     */
+    private TradeFundingPlanner.FundingTarget fundingTarget(
             WorkDemandPolicy.MaterialDemand demand, List<OfferSnapshot> offers, Container backpack) {
-        int cheapestBuyCost = Integer.MAX_VALUE;
-        for (OfferSnapshot offer : offers) {
-            if (!offer.isTradeable()) {
-                continue;
-            }
-            ResourceLocation resultKey = net.minecraft.core.registries.BuiltInRegistries.ITEM
-                    .getKey(offer.result().getItem());
-            if (!demand.materialKey().equals(resultKey)) {
-                continue;
-            }
-            if (offer.costA().is(net.minecraft.world.item.Items.EMERALD)) {
-                cheapestBuyCost = Math.min(cheapestBuyCost, offer.costA().getCount());
-            }
-        }
-        if (cheapestBuyCost == Integer.MAX_VALUE) {
-            return null;   // nothing here is bought with emeralds; no funding leg is implied
-        }
-        int held = com.noobk.spmscavenger.ScavengerCrafting.count(
-                backpack, net.minecraft.world.item.Items.EMERALD);
-        int shortfall = cheapestBuyCost - held;
-        // Bounded by the purchase. No shortfall means no emerald appetite exists at all (V2-D req 2).
-        return shortfall > 0
-                ? new TradeEvaluationPolicy.EmeraldDeficit(demand.consumerKey(), shortfall)
-                : null;
+        return TradeFundingPlanner.chooseFundingTarget(demand, offers, backpack);
+    }
+
+    /**
+     * R3: which disposable material may fund that shortfall, delegated to the permission layer.
+     *
+     * <p>Reserves are read from the existing craft chain, so a log the torch chain has already
+     * claimed is not spare merely because a villager will pay for it.
+     */
+    private SellAuthorization fundingAuthorization(
+            TradeEvaluationPolicy.EmeraldDeficit deficit, List<OfferSnapshot> offers,
+            Container backpack) {
+        return TradeFundingPlanner.authorizeFunding(
+                deficit, offers, backpack, mob.getMainHandItem(), mob.getOffhandItem(),
+                material -> 0);
     }
 
     /**

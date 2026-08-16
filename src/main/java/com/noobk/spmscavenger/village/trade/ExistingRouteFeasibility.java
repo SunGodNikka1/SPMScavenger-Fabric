@@ -86,14 +86,25 @@ public final class ExistingRouteFeasibility {
 
     /** The one question the executor asks. Trade may proceed only on proven infeasibility. */
     public static boolean tradeMayDisplace(
-            ServerLevel level, WorkDemandPolicy.MaterialDemand demand, Container backpack,
-            ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
-        return status(level, demand, backpack, mainHand, offHand, cfg).permitsTradeDisplacement();
+            ServerLevel level, java.util.UUID mobId, WorkDemandPolicy.MaterialDemand demand,
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
+        return status(level, mobId, demand, backpack, mainHand, offHand, cfg)
+                .permitsTradeDisplacement();
     }
 
     public static ExistingRouteStatus status(
             ServerLevel level, WorkDemandPolicy.MaterialDemand demand, Container backpack,
             ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
+        return status(level, null, demand, backpack, mainHand, offHand, cfg);
+    }
+
+    /**
+     * @param mobId the owner, so published route-exhaustion evidence can be consulted; {@code null}
+     *     skips that source entirely
+     */
+    public static ExistingRouteStatus status(
+            ServerLevel level, java.util.UUID mobId, WorkDemandPolicy.MaterialDemand demand,
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
         if (level == null || demand == null || backpack == null || cfg == null) {
             return ExistingRouteStatus.UNKNOWN;
         }
@@ -105,7 +116,29 @@ public final class ExistingRouteFeasibility {
             return ExistingRouteStatus.FEASIBLE;
         }
 
-        return gatherStatus(demand, backpack, mainHand, offHand, cfg);
+        return reconcile(
+                gatherStatus(demand, backpack, mainHand, offHand, cfg),
+                RouteExhaustionEvidence.exhaustedFor(mobId, demand, level.getGameTime()));
+    }
+
+    /**
+     * Present beats past.
+     *
+     * <p>A live gather route outranks any memory of a failed search, so "failed once" never becomes
+     * temporary trade ownership — which is what preserves V2-C's convergence. Exhaustion evidence is
+     * consulted only when nothing positive can be said.
+     *
+     * <p>Extracted so the precedence itself is testable: a control that inverts it must fail
+     * something, and while this logic lived inline behind a {@code ServerLevel} it could not.
+     */
+    static ExistingRouteStatus reconcile(ExistingRouteStatus gather, boolean routeExhausted) {
+        if (gather == ExistingRouteStatus.FEASIBLE) {
+            return ExistingRouteStatus.FEASIBLE;
+        }
+        if (gather == ExistingRouteStatus.INFEASIBLE) {
+            return ExistingRouteStatus.INFEASIBLE;
+        }
+        return routeExhausted ? ExistingRouteStatus.INFEASIBLE : ExistingRouteStatus.UNKNOWN;
     }
 
     /**
@@ -155,13 +188,12 @@ public final class ExistingRouteFeasibility {
     }
 
     /**
-     * Seam for the existing work route to publish its own bounded-search failure.
-     *
-     * <p><b>No production callers yet.</b> Declared so the evidence has an obvious home when a gather
-     * or smelt goal is ready to report "I looked and there is nothing", rather than the trade goal
-     * inferring it. Until then {@link #status} answers {@code UNKNOWN} for those cases and trade does
-     * not displace working progression.
+     * @deprecated R2's seam did nothing — it returned a value that died at the call site while
+     *     {@link #status} never consulted it. Publish through
+     *     {@link RouteExhaustionEvidence#publish} instead, which binds the evidence to a mob, a
+     *     consumer, a material and an expiry.
      */
+    @Deprecated
     public static ExistingRouteStatus reportRouteExhausted() {
         return ExistingRouteStatus.INFEASIBLE;
     }

@@ -146,16 +146,49 @@ public final class TradeEvaluationPolicy {
                 utility(contribution, demand.derivedDeficit(), unitCost)));
     }
 
+    /**
+     * R3 — evaluate a funding SELL against an explicit authorization.
+     *
+     * <p>The authorization, not the purchase demand, says what may be spent. Passing the external
+     * demand here was the R2 bridge defect: an iron demand made every wheat-for-emerald offer
+     * {@code WRONG_MATERIAL}, so the only SELL that could fund an iron purchase was selling iron.
+     */
+    public static Result evaluateSell(
+            EmeraldDeficit deficit, SellAuthorization authorization, OfferSnapshot offer) {
+        if (deficit == null) {
+            return Result.reject(TradeRejection.NO_CONSUMER_FOR_PAYMENT);
+        }
+        if (offer == null || !offer.isTradeable()) {
+            return Result.reject(TradeRejection.NOT_TRADEABLE);
+        }
+        if (offer.outOfStock()) {
+            return Result.reject(TradeRejection.OUT_OF_STOCK);
+        }
+        if (!EMERALD.equals(keyOf(offer.result()))) {
+            return Result.reject(TradeRejection.WRONG_MATERIAL);
+        }
+        // Permission is the gate, and it is separate from desirability. An unauthorised material is
+        // refused however profitable the offer is.
+        if (authorization == null || !authorization.permits(offer.costA())) {
+            return Result.reject(TradeRejection.WRONG_MATERIAL);
+        }
+        return sellAgainst(deficit, offer);
+    }
+
     private static Result sell(
             WorkDemandPolicy.MaterialDemand demand, OfferSnapshot offer, EmeraldDeficit deficit) {
         if (deficit == null) {
             return Result.reject(TradeRejection.NO_CONSUMER_FOR_PAYMENT);
         }
-        // The mob may only sell what the demand is actually about. Selling anything else would be
-        // this class deciding, on its own, what the mob can spare.
+        // Legacy path: the demand doubles as the authorization, which only makes sense when the mob
+        // is selling the very material the demand names. R3's evaluateSell is the general form.
         if (!demand.materialKey().equals(keyOf(offer.costA()))) {
             return Result.reject(TradeRejection.WRONG_MATERIAL);
         }
+        return sellAgainst(deficit, offer);
+    }
+
+    private static Result sellAgainst(EmeraldDeficit deficit, OfferSnapshot offer) {
         int contribution = Math.min(offer.result().getCount(), deficit.emeraldsNeeded());
         if (contribution <= 0) {
             return Result.reject(TradeRejection.ZERO_CONTRIBUTION);
