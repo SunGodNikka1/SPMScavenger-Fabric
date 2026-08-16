@@ -2093,6 +2093,272 @@ Still `STATIC_CONFIRMED` only — no PlayerMob has perceived a village in a runn
 
 ---
 
+## Topic: V2-E Behavioral Prediction — physical trade executor (`Agent_Claude`, Gate MAIBS-1)
+
+**Status:** `PREDICTION ONLY` — implementation **held** at the User's instruction.
+**Gate result (stated up front): `FAIL — ARCHITECTURE_DEFECT` on the greet-collision design as
+briefed.** One defect must be resolved before code. Everything else is `BEHAVIORALLY_PLAUSIBLE` or a
+bounded stepping stone.
+
+### Evidence baseline
+
+| Fact | Value | Label |
+| --- | --- | --- |
+| `FriendlyGreetGoal` priority / flags | **1**, MOVE+LOOK | `CODE_CONFIRMED` (repo-recorded; **re-verify from the pinned jar at implementation**) |
+| `RaidContainersGoal` priority | **3** | `CODE_CONFIRMED` (`PlayerMobEntity#registerGoals`) |
+| SPM combat / flee | preempt at **0–2** | `CODE_CONFIRMED` |
+| Addon shelter goal | **2**, MOVE | `CODE_CONFIRMED` (`SpmScavenger.java:214`) |
+| Addon P3 band | craft-torches · gather · smelt · descent · tunnel, all MOVE+LOOK | `CODE_CONFIRMED` (`SpmScavenger.java:221–281`) |
+| `EnvironmentalEscapeGoal` | **0** | `CODE_CONFIRMED` |
+| Planned `TradeWithVillagerGoal` | **3**, MOVE+LOOK | design |
+| Villager wander speed vs PlayerMob | villagers stroll ~0.5, mob paths ~1.0 | `GAME_MECHANICS_INFERRED` |
+
+---
+
+### 1 — The defect, stated first
+
+**A priority-3 goal cannot hold a claim against a priority-1 goal.** `GoalSelector` re-evaluates
+every tick; when `FriendlyGreetGoal.canUse()` returns true it takes MOVE+LOOK and the P3 trade goal
+is **stopped**, not queued. A `TradeSessionClaimWindow` owned by the trade goal therefore cannot
+protect anything — the goal holding it has already lost.
+
+Worse, the collision is *likely* rather than incidental: `FriendlyGreetGoal.canUse` calls
+`nearestWhereReaction(GREET, range)` and takes the **nearest greetable entity**. A mob that has just
+walked into interaction range of a villager has made that villager the nearest greetable entity. So
+the approach itself creates the preemption.
+
+**The only mechanism that can express this claim is the one we already own:**
+`FriendlyGreetAdmissionSeamMixin` redirects that exact call. Returning `null` for the claimed
+villager makes `canUse` false and the greet never starts.
+
+**But that is the veto removed in 44D-R2** for good reason — it silently deleted native greeting.
+The resolution must therefore be *narrow*, and the difference is real:
+
+| 44D-R2 removed | V2-E needs |
+| --- | --- |
+| a **global** veto: any greet without a bound SOCIAL intent | a **targeted, expiring** suppression: this one villager, while a trade session is live |
+
+**Required shape:** the seam consults a claim keyed by `(mobUUID → villagerUUID, expiresAtTick)`,
+suppresses only that pairing, and expires on a hard tick bound. Every other greet, including this
+mob's greet of any *other* villager, proceeds untouched. Without that, V2-E as briefed produces
+WEIRD-4 on the first trade.
+
+**Rejected alternative:** raise `TradeWithVillagerGoal` above priority 1. That inverts trade above
+combat and shelter, which is unacceptable — the mob would trade through a skeleton fight.
+
+---
+
+### 2 — Exact observable loop
+
+```text
+external demand exists            (WorkDemandPolicy, live — not a cached flag)
+        ↓
+TRADE wins acquisition admission  (V2-C, existing route infeasible)
+        ↓
+filter candidate set to currently legal AND reachable      ← §6
+        ↓
+rank remaining by V2-B utility, choose best remaining
+        ↓
+path toward villager                                        MOVE claimed
+        ↓
+villager strolls / door closes / world changes
+        ↓
+repath on a bounded cadence; give up after N failures for THIS candidate
+        ↓
+enter interaction range
+        ↓
+FACE (LOOK)                        claim (mob → villager) opens here, not earlier
+        ↓
+re-fetch LIVE villager, offers, backpack, demand
+        ↓
+recompute EVERY attempt-bound fact:
+    affordability for THIS offer   (V2-C carried obligation)
+    sell uses for THIS offer       (V2-D carried obligation)
+    consumer still wants it        (live selection, not cached boolean)
+    result capacity
+        ↓
+commit (V2-A executeAgainst)      inventory + MerchantOffer.uses change
+        ↓
+release claim immediately
+        ↓
+re-perceive → chain step advances / completes / replans
+```
+
+**The claim opens at FACE and not at path start.** A claim held across a 30-second walk suppresses
+greeting for a villager the mob may never reach, and is the difference between a bounded interlock
+and a village-wide greet outage.
+
+---
+
+### 3 — GoalSelector interaction table
+
+| Goal | Priority | Flags | Interrupts trade? | State retained | Observable result |
+| --- | ---: | --- | --- | --- | --- |
+| `EnvironmentalEscapeGoal` | 0 | MOVE | **yes** | chain survives (transient, re-evaluated) | mob abandons approach to escape fire/lava; resumes if demand persists |
+| SPM combat / flee | 0–2 | MOVE+LOOK | **yes, immediately** | chain survives; claim must be released on `stop()` | mob breaks off mid-approach; **claim must not outlive the goal** |
+| Player command | SPM | MOVE | **yes** | demand survives, revalidates | commanded movement wins; trade re-admits afterwards if still legal |
+| Addon shelter | 2 | MOVE | **yes** | chain survives | at dusk, shelter outranks trade; trade cannot start during a shelter hold |
+| **`FriendlyGreetGoal`** | **1** | MOVE+LOOK | **yes — and this is the defect** | claim ineffective without the seam | see §1 |
+| `DoorOperationGoal` | 1 | stationary, finite | suspends travel | path becomes stale | door opens, **path must be discarded and rebuilt**, not resumed |
+| `EatFoodGoal` (SPM) | SPM | — | yes | chain revalidates smaller stock | survival stays authoritative; V2-D already reports `sellBlocked` rather than locking out |
+| `RaidContainersGoal` | **3** | MOVE+LOOK | **same band — alternates** | both retain intent | §5 WEIRD-2 |
+| Addon gather/smelt/craft P3 | 3 | MOVE+LOOK | same band | `TradeDemandGate` mutual exclusion | one P3 owner at a time by design |
+| `VillagePerceptionObserver` | 9 | **no flags** | no | — | flagless; cannot contend |
+
+**Two MOVE owners never run concurrently** — every row above that claims MOVE stops the trade goal
+outright rather than sharing.
+
+---
+
+### 4 — Time simulation (normal scenario)
+
+```text
+T0      demand: 1 book. Existing route infeasible. TRADE admitted.
+        Candidate set: farmer A (best offer, 18 blocks), librarian B (worse, 9 blocks).
+
+T+10    A chosen and reachable. Path built. MOVE owned by trade goal.
+        Villager A is strolling; path target is an entity, so it must be re-issued, not set once.
+
+T+60    A has walked behind a house. Path invalidated.
+        Repath #1 succeeds. (Bound: N failures for THIS candidate, then demote it — §6.)
+
+T+200   Mob arrives within interaction range. FACE.
+        FriendlyGreet.canUse fires against A — the nearest greetable entity is now A.
+        WITH the targeted claim: greet suppressed for A only; trade proceeds.
+        WITHOUT it: greet takes MOVE+LOOK, trade goal stops. → WEIRD-4.
+        Live re-fetch: offer still matches, affordable for THIS offer, room for result.
+        Commit. uses 0→1. Claim released.
+
+T+201   Re-perceive. Chain: emeralds spent, book held. Demand satisfied.
+        TradeChainPolicy → TARGET_OBTAINED (held ≥ desired). Chain terminates.
+        V2-C re-runs: no demand → EXISTING_WORK. P3 band returns to gather/smelt.
+
+T+1200  Twenty minutes. No demand → no trade goal activity beyond the flagless
+        perception observer. THE FAILURE TO WATCH FOR: `canUse` returning false
+        every tick while an unsatisfiable demand persists — cheap, but if it
+        re-runs candidate ranking each tick it is a per-tick scan (§5 WEIRD-5).
+```
+
+---
+
+### 5 — Adversarial suite
+
+| # | Scenario | Prediction | Class |
+| --- | --- | --- | --- |
+| A | villager moves during approach | entity-target path re-issued on cadence; bounded repaths | plausible |
+| B | villager sleeps before FACE | vanilla merchant refuses; must classify as *candidate unavailable*, demote, try next — **not** BLOCKED | plausible **if** §6 holds |
+| C | human player trading the target | `tradingPlayer != null`; our adapter never sets it, so we could trade *underneath* a player session. **Must refuse while `getTradingPlayer() != null`** — not currently in the V2-A adapter | `RUNTIME_QUESTION` → becomes a V2-E requirement |
+| D | another PlayerMob consumes the final use | live re-fetch sees `isOutOfStock` → `OUT_OF_STOCK`, no mutation (V2-A proven) | plausible |
+| E | FriendlyGreet on the same villager | **§1 defect** without the targeted claim | `ARCHITECTURE_DEFECT` |
+| F | combat during WALK | P0–2 preempts; claim not yet open; chain survives | plausible |
+| G | combat during FACE | preempts **with the claim open** → claim must release on `stop()`, or greeting stays suppressed for a villager nobody is trading with | `ARCHITECTURE_DEFECT` if the claim has no `stop()` release |
+| H | SPM eats a planned sell input | V2-D recalculates, reports `sellBlocked`; no lockout | plausible (proven statically) |
+| I | backpack full before commit | V2-A preflight returns `NO_ROOM`, nothing spent | plausible (proven statically) |
+| J | desired output acquired during travel | chain terminates `TARGET_OBTAINED_ELSEWHERE` mid-walk; goal must check this on `canContinueToUse`, not only at commit | plausible **if** the check is in continue |
+| K | best candidate unreachable, #2 reachable | **§6** — the central rule | `ARCHITECTURE_DEFECT` if unhandled |
+| L | `RaidContainersGoal` wants the same P3 slot | same band; alternation, not starvation, **unproven** | `RUNTIME_QUESTION` (VR-T2e) |
+| M | two PlayerMobs on one nearly-exhausted offer | both re-fetch live; one gets `OUT_OF_STOCK`; no shared reservation exists | `ACCEPTABLE_STEPPING_STONE` |
+| N | repeated path failure | must demote the candidate after N attempts (§6) | plausible **if** bounded |
+| O | no valid trade for minutes | `canUse` false cheaply; must not re-rank per tick | `RUNTIME_QUESTION` (§5 WEIRD-5) |
+
+**Omitted deliberately:** cave/ravine/elevation geometry — trade targets are entities inside a
+settlement on walkable ground, and the descent goals own vertical navigation.
+
+---
+
+### 6 — The candidate-selection rule (must be explicit before coding)
+
+> **"best-ranked offer is unreachable" ≠ "trade is unreachable".**
+
+```text
+candidate set (bounded, from V2-C ranking)
+        ↓
+filter: villager alive · awake · not player-occupied · reachable
+        ↓
+rank remaining by V2-B utility
+        ↓
+attempt best REMAINING
+        ↓
+path fails N times → demote THIS candidate for this decision cycle
+        ↓
+next legal candidate, or BLOCKED only when the set is empty
+```
+
+Without the demotion step the loop is: choose A → path fails → re-evaluate → A still ranks best →
+choose A → … That is technically correct and visibly idiotic, and it is the exact shape MAIBS exists
+to catch. **No persistent blacklist is needed** — demotion within the decision cycle is sufficient,
+and it keeps the policy stateless in the V2-C sense.
+
+---
+
+### 7 — Predicted weird behaviours
+
+| # | Behaviour | Class | Resolution / probe |
+| --- | --- | --- | --- |
+| **WEIRD-1** | villager strolls just beyond interaction range; mob follows indefinitely | `ACCEPTABLE_STEPPING_STONE` **iff** bounded by a pursuit tick budget or total attempt cap; **`ARCHITECTURE_DEFECT`** unbounded | villagers stroll slower than the mob paths, so convergence is normal; the risk is a villager pathing through a door loop. **Bound it.** |
+| **WEIRD-2** | `RaidContainersGoal` (P3) finishes, trade gets one window, chest raiding reacquires immediately, forever | `RUNTIME_QUESTION` | Same band, so the selector alternates rather than starves — but SPM's goal has a 12-block reactive trigger and ours needs a walk. **VR-T2e:** place a chest cluster and a trade candidate in range and count completed trades over 5 minutes. |
+| **WEIRD-3** | best candidate path fails; picker re-selects it every cycle; approach→fail→approach thrash | `ARCHITECTURE_DEFECT` **as briefed** | §6 demotion. Falsified by K in the adversarial suite. |
+| **WEIRD-4** | FACE claim absent/expired; P1 greet wins; trade/greet oscillation on the same villager | `ARCHITECTURE_DEFECT` | §1 targeted seam claim, released on `stop()`, hard-expiring. |
+| **WEIRD-5** | trade infeasible but demand persists → `canUse` churn, candidate re-ranking every tick | `ACCEPTABLE_STEPPING_STONE` **iff** `canUse` is cheap and ranking is cadenced; `ARCHITECTURE_DEFECT` if ranking runs per tick | Reuse the existing failed-search cooldown pattern (`SmeltAtFurnaceGoal` `FAILED_SEARCH_COOLDOWN_TICKS`). **Log-frequency sample** is the probe (RET-1d). |
+
+---
+
+### 8 — Two design options
+
+| | **Option 1 — seam-claim interlock** (recommended) | **Option 2 — trade as a SOCIAL sub-mode** |
+| --- | --- | --- |
+| Mechanism | targeted, expiring greet suppression through the existing admission redirect | trade runs *inside* `FriendlyGreetGoal`'s slot as an Opinion-bound SOCIAL execution |
+| Priority conflict | resolved: greet never starts for the claimed villager | resolved: only one goal involved |
+| Cost | reintroduces suppression logic 44D-R2 removed — must be narrow, keyed, expiring | couples trade to the GAO-10 binding machinery; a trade failure becomes a social-learning event |
+| Risk | a leaked claim silently suppresses greeting (mitigated by hard expiry + `stop()` release) | conflates two activities; `ActivityClass.VILLAGE_TRADE` (V2-F) would then be a lie |
+| Verdict | **recommended** — narrow, testable, keeps trade and social separable | rejected for gen-1 |
+
+---
+
+### 9 — Acceptance
+
+**Must happen**
+- with a live demand, a reachable villager and an affordable matching offer, the mob **walks to that
+  villager, faces it, and completes exactly one trade**, with `uses` +1 and the exact result in the
+  backpack;
+- when the best-ranked candidate is unreachable and a second legal candidate exists, the mob trades
+  with the **second**;
+- every attempt-bound fact (affordability, sell uses, consumer, capacity) is recomputed against the
+  **offer actually being attempted**.
+
+**Must not happen**
+- greeting suppressed for any villager other than the claimed one, or after the claim's expiry, or
+  after the trade goal stops;
+- approach→path-fail→approach thrash on one candidate;
+- a trade committed while a human player holds the merchant session;
+- candidate re-ranking every tick while no trade is possible.
+
+### 10 — Falsifying runtime experiment (VR-T2 family, not yet authorized)
+
+Vanilla-only instance (`tradeeverything` absent, `D-VR-069`). One PlayerMob, one demand, a village
+with **two** matching villagers — the better offer walled off behind geometry, the worse one
+reachable. A chest cluster in range to engage `RaidContainersGoal`. Run 5 minutes.
+
+**Falsifies the prediction if:** the mob never trades · it trades with the unreachable candidate's
+villager after a wall-clip · greeting stops working for unrelated villagers · the log shows candidate
+ranking at tick frequency · zero completed trades while chests remain.
+
+---
+
+### Gate MAIBS-1 result
+
+`FAIL — ARCHITECTURE_DEFECT` for V2-E **as briefed**: the greet interlock (WEIRD-4/scenario E) cannot
+work at priority 3, the claim has no defined release on `stop()` (scenario G), and candidate
+demotion (WEIRD-3/scenario K) is unspecified.
+
+**All three are resolvable in design, before code.** With §1, §6 and a `stop()`-released expiring
+claim adopted, the predicted result is `PASS — BEHAVIORALLY_PLAUSIBLE` with WEIRD-1, WEIRD-2 and
+WEIRD-5 carried as bounded stepping stones plus two named runtime probes. Scenario C
+(player-occupied merchant) becomes a new V2-E requirement on the V2-A adapter.
+
+
+---
+
 ## Topic: Trade demand integration — `WorkDemandPolicy` facade (`Agent_Cursor`)
 
 **Author:** `Agent_Cursor` (brainstorm continuation 2, 2026-08-14)
@@ -4951,6 +5217,7 @@ beside `ExplorationActivityGoal` or it fail-closes the entire discretionary dire
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Claude | 2026-08-15 | **V2-E Behavioral Prediction (Gate MAIBS-1) — implementation held.** Result: **`FAIL — ARCHITECTURE_DEFECT` as briefed**, all three resolvable in design. (1) **A P3 goal cannot hold a claim against P1.** `FriendlyGreetGoal` is priority **1** with MOVE+LOOK and its `canUse` takes the *nearest greetable entity* — which is the villager the mob just walked to, so approaching *creates* the preemption. A `TradeSessionClaimWindow` owned by the P3 trade goal protects nothing. The only mechanism that can express it is the admission seam we already own, as a **targeted, expiring, `stop()`-released** suppression of one (mob → villager) pairing — narrow enough not to reintroduce the global veto 44D-R2 removed. (2) **Claim release on `stop()`** is undefined (combat during FACE leaves greeting suppressed for a villager nobody is trading with). (3) **Candidate demotion** is unspecified: best-unreachable must not re-select forever — *"best-ranked offer is unreachable" ≠ "trade is unreachable"*. Also surfaced: nothing refuses a merchant already held by a **human player** (`getTradingPlayer() != null`) — new V2-E requirement on the V2-A adapter. Five weird behaviours classified, adversarial A–O, T0…T+1200 trace, two design options, falsifying VR-T2 experiment. **No code written.** |
 | User + Agent_Cursor | 2026-08-15 | **V2 peer review pass 2 (continuation 11).** P1: `D-VR-071` count-level exclusivity (stack partition allowed); `D-VR-073` V2-E before V2-F. P2: `D-VR-067` server-stop cleanup. P3: `D-VR-066` → `INSUFFICIENT_DISPOSABLE_QUANTITY`. **LOCK-CLEAN for task-47.** |
 | User + Agent_Cursor | 2026-08-15 | **V2 pre-task-47 peer review (continuation 10).** Locked: `D-VR-067` SOURCE-CONFIRMED mandatory; `D-VR-058` → `SellExpendabilityPolicy`; `D-VR-071` joint allocator; `D-VR-072` commit-instant SlotDelta; `D-VR-015` feasibility-before-win; `D-VR-070` reject literal `commuteTarget()`. Doc-debt sweep. **Ready for task-47.** |
 | Agent_Claude | 2026-08-15 | **V2 brainstorm — stack identity and payment shape.** The LOCKED evidence baseline pinned the Merchant seams correctly; it did not pin **stack identity**. `MerchantOffer#getResult()` returns the **live** result field while `#assemble()` copies, and `#getBaseCostA()` is live while `#getCostA()` copies — an asymmetry that will fool an implementer who checks the cost side and generalises. Aliasing the result corrupts the villager's offer permanently and persists to the world. Separately, `take(a,b)` mutates **only the two stacks handed to it** because `MerchantMenu` guarantees consolidated payment slots; an 8-slot backpack pays 20 wheat as 16+4, so V2-A must debit across slots and use `take`/`satisfiedBy` as validation only. Also linked V2-D's "protected inputs" to the shipped `FuelExpendability` permission layer (SPM-2) and V2-G's persistence to `PerMobSavedData.forgetAll` (Gate RET-1e, already build-enforced). **Checked and rejected:** level-up offer-index invalidation — `updateTrades` appends, indices are stable. B-VR-90…94; V2-A/D/G amended. **No implementation authorization.** |
