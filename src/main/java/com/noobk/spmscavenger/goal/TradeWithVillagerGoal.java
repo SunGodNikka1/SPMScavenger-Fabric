@@ -12,6 +12,7 @@ import com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence;
 import com.noobk.spmscavenger.village.trade.SellFundingLeg;
 import com.noobk.spmscavenger.village.trade.SellReserveModel;
 import com.noobk.spmscavenger.village.trade.TradeFundingPlanner;
+import com.noobk.spmscavenger.village.trade.TradePurchaseProjection;
 import com.noobk.spmscavenger.village.trade.TradeCandidateRound;
 import com.noobk.spmscavenger.village.trade.TradeChainPlan;
 import com.noobk.spmscavenger.village.trade.TradeChainPolicy;
@@ -632,7 +633,27 @@ public class TradeWithVillagerGoal extends Goal {
         // V2-D bridge: choose the BUY quote first, derive its shortfall, then authorize a disposable
         // material to fund it. Without a live deficit every SELL is refused by design, which is why
         // V2-E was previously a direct-BUY subset of the locked architecture.
-        TradeFundingPlanner.FundingTarget funding = fundingTarget(demand.get(), offers, backpack);
+        // V2-H0 / D-VR-075. The source demand is the ingredient the EXISTING route needs; the
+        // market may only sell the finished output. Direct material is tried first and always wins,
+        // so a datapack that ever sells iron ingots keeps the original path. Only when no fundable
+        // direct purchase exists does the same consumer restate its appetite in market units.
+        //
+        // `purchaseDemand` drives evaluation, the chain and execution. `demand.get()` - the source -
+        // continues to drive ExistingRouteFeasibility above, because its exhaustion evidence
+        // describes the raw-iron gather route and means nothing about crafting a pickaxe.
+        WorkDemandPolicy.MaterialDemand purchaseDemand = demand.get();
+        TradeFundingPlanner.FundingTarget funding = fundingTarget(purchaseDemand, offers, backpack);
+        if (funding == null) {
+            Optional<WorkDemandPolicy.MaterialDemand> projected =
+                    TradePurchaseProjection.activeSpecFor(
+                                    demand.get(), backpack, mob.getMainHandItem(),
+                                    mob.getOffhandItem(), ScavengerConfig.get())
+                            .flatMap(spec -> TradePurchaseProjection.ontoOutput(demand.get(), spec));
+            if (projected.isPresent()) {
+                purchaseDemand = projected.get();
+                funding = fundingTarget(purchaseDemand, offers, backpack);
+            }
+        }
         TradeEvaluationPolicy.EmeraldDeficit deficit =
                 funding == null ? null : funding.deficit();
         // R6: one exact SELL quote, carried as identity. R5 derived the chain's per-use yield from
@@ -643,7 +664,7 @@ public class TradeWithVillagerGoal extends Goal {
         // V2-D decides whether this chain may continue and which leg is next. Its verdict is taken
         // before ranking, because a terminated chain must not produce a candidate at all.
         TradeChainPolicy.ChainOutcome outcome =
-                advanceChain(level, demand.get(), backpack, funding);
+                advanceChain(level, purchaseDemand, backpack, funding);
         if (outcome == null || !outcome.active()) {
             return Optional.empty();
         }
@@ -666,11 +687,12 @@ public class TradeWithVillagerGoal extends Goal {
         // Carried, never rediscovered at execution: the BUY and the SELL routinely belong to
         // different villagers, and re-deriving the purchase while standing at the seller finds no
         // purchase at all.
+        final WorkDemandPolicy.MaterialDemand selected = purchaseDemand;
         Candidate buyCandidate = owners.get(funding.buyOffer().index());
         TradeAttemptFunding attemptContext =
                 step == TradeChainPlan.Step.SELL_TO_FUND && buyCandidate != null
                         ? new TradeAttemptFunding(
-                                demand.get().consumerKey(),
+                                selected.consumerKey(),
                                 buyCandidate.villager(),
                                 // R8: the villager's OWN offer index. `funding.buyOffer()` carries
                                 // the flattened cross-villager ranking slot, and asking buyer A for
@@ -682,7 +704,7 @@ public class TradeWithVillagerGoal extends Goal {
                         : null;
 
         return TradeDemandGate
-                .authorize(demand.get(),
+                .authorize(selected,
                         new RouteEvidence(existingFeasible, offers, affordable, deficit,
                                 sellLeg == null ? null : sellLeg.authorization()))
                 // V2-C still owns the route decision; it simply no longer chooses the quote.
