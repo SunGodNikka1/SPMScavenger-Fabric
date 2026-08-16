@@ -85,3 +85,85 @@ and the commit still precedes `notifyTrade`.
 
 VR-T2 (held, User's gate) is the only thing that can move concerns 2–4 off `UNVERIFIED`.
 Concerns 1 and 5 are static and closable before runtime if wanted.
+
+---
+
+## V2-E-R1 (2026-08-15) — review repairs
+
+**Status:** `DONE` — P0 closed, four P1s closed. Runtime still `UNVERIFIED`; VR-T2 held.
+`clean build` → **1040 tests, 0 failures** (was 1030). Six negative controls.
+
+### P0 — the caller was lying to the policy
+
+`RouteEvidence.of(false, …)` hardcoded *"the existing route is infeasible"*, which is the exact fact
+that short-circuits `TradeDemandRegistrar.decide` to `EXISTING_WORK`. Production therefore disabled
+V2-C's central guard on **every call**: *feasible work + attractive trade → EXISTING_WORK* was fully
+tested and **unreachable in the game**. Policy correct, caller lying, every unit test green.
+
+New `ExistingRouteFeasibility.canSatisfy(level, demand, backpack, main, off, cfg)` produces the fact.
+Deliberately **not** `FurnacePolicy.plan(...).isPresent()` — `EXISTING_WORK` is the broader
+gather/smelt/craft bucket, so the producer composes:
+
+- a live smelt plan whose **output matches the demanded material**;
+- for iron, whether the raw-iron chain still has somewhere to go;
+- for charcoal, whether a smelt plan exists at all (that chain is smelt-driven).
+
+**It fails toward `EXISTING_WORK`.** The wrong answers are asymmetric: wrongly *feasible* skips a
+trade (recoverable, costs a purchase); wrongly *infeasible* lets trade displace working progression,
+which is the failure V2-C's gates 3/7 exist to prevent. Anything it cannot positively rule out is
+feasible, including a null input and any material outside the chains it knows. Its coverage gaps —
+furnace/ore reachability, non-smelt crafting, future materials — are written into the class rather
+than left implicit, because a new material added without a branch will read as feasible and quietly
+disable trading for it.
+
+### P1 — attempt bounded in ticks, not only navigation refusals
+
+`recordPathFailure` counted only `moveTo` returning **false**. An accepted path that stalls against
+geometry consumed none of it, so an attempt could outlive the 1200-tick claim expiry — and at that
+moment the P1 greet sees the target again and preempts the goal the interlock was protecting.
+`APPROACH_TICK_BUDGET_PER_CANDIDATE = 400`, consumed **every tick before the repath cooldown can
+skip one**, and asserted strictly less than `MAX_CLAIM_TICKS` so the attempt always ends before its
+own backstop.
+
+### P1 — the real offer index is kept, not re-derived
+
+`resolve()` matched an offer back by result-item + cost-item, which is ambiguous when one villager
+sells the same pair at two counts. Deleted. `Map<syntheticIndex, Candidate>` now carries the villager
+and its **original** `OfferSnapshot`, real index intact. No reinspection, no reverse lookup.
+
+### P1 — offhand restored to demand selection
+
+`WorkDemandPolicy.select(backpack, mainHand, cfg)` substitutes `EMPTY` for the offhand, but tool
+ownership spans backpack + main hand + offhand. V2-E could therefore see a weaker owned tier than the
+rest of progression and manufacture a demand nobody has. Now uses the four-argument overload.
+
+### P1 — continuation revalidates route ownership
+
+`canContinueToUse` checked demand + target legality but never re-asked who owns the route, so work
+becoming feasible again mid-walk could not return ownership to `EXISTING_WORK` — defeating V2-C's
+convergence guarantee. Now: demand exists, route still infeasible, target still legal. No villager
+rescan; exact offer, affordability and capacity stay at the transaction boundary.
+
+### Negative controls
+
+| Control | Fails |
+| --- | --- |
+| restore the hardcoded `false` | `mustNotHappen_theGoalHardcodesExistingRouteFeasibility` |
+| producer defaults to infeasible | `mustHappen_theProducerFailsTowardExistingWork` |
+| drop route revalidation from continuation | `mustHappen_continuationRevalidatesRouteOwnership` |
+| drop the offhand from `select` | `mustHappen_liveDemandIncludesTheOffhand` |
+| re-derive the offer index | `mustNotHappen_theRealOfferIndexIsReDerivedByItemMatching` |
+| (earlier) four V2-E controls | interlock ordering, `stop()` release, busy merchant, demotion |
+
+**A defect in my own test, caught by its control.** The first offhand assertion was a bare substring
+that also occurs in `existingRouteFeasible`, so dropping the offhand from `select` left it passing.
+Re-anchored on the `select` call itself. Third instance this session of an assertion matching an
+incidental string rather than the property.
+
+### Still open
+
+- **Concern 5 (P3 band exclusion)** — per the User this is an RFC wording amendment, not a new
+  band-level owner: `TradeDemandGate` provides mutual exclusion for **acquisition routes competing to
+  satisfy the same selected demand**, not for unrelated P3 activities.
+- **Concerns 3 and 4** — `canUse` discovery cost and the absence of a full
+  `ServerLevel → Villager → Navigation → Goal` test remain `RUNTIME_QUESTION`s for VR-T2.

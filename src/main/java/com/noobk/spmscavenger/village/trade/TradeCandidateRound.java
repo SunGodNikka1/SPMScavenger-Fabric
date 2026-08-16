@@ -41,12 +41,27 @@ public final class TradeCandidateRound {
     /** Repath attempts for one candidate before it is demoted. */
     public static final int PATH_BUDGET_PER_CANDIDATE = 3;
 
+    /**
+     * Total approach ticks for one candidate before it is demoted, however navigation reports itself.
+     *
+     * <p>The path-failure budget only counts {@code moveTo} returning <b>false</b>. A path that is
+     * <i>accepted</i> and then stalls against geometry consumes none of it, so without a wall-clock
+     * bound an attempt can run forever while the claim quietly expires underneath it — and at that
+     * moment the priority-1 greet can see the target again and preempt the very goal the interlock
+     * was protecting. This bound is what makes "the attempt is bounded" true rather than intended.
+     *
+     * <p>Deliberately shorter than {@code TradeSessionClaimWindow.MAX_CLAIM_TICKS} so the attempt
+     * always ends before its own backstop fires.
+     */
+    public static final int APPROACH_TICK_BUDGET_PER_CANDIDATE = 400;
+
     /** Ticks before a fresh round may open after every candidate failed. */
     public static final long EXHAUSTED_ROUND_COOLDOWN_TICKS = 200L;
 
     private final Set<UUID> attempted = new LinkedHashSet<>();
     private UUID current;
     private int pathFailures;
+    private int approachTicks;
     private long cooldownUntilTick;
 
     /** Whether a candidate may be attempted in this round. */
@@ -61,6 +76,7 @@ public final class TradeCandidateRound {
         }
         current = villagerId;
         pathFailures = 0;
+        approachTicks = 0;
     }
 
     public UUID current() {
@@ -84,6 +100,26 @@ public final class TradeCandidateRound {
     }
 
     /**
+     * One tick spent approaching the current candidate.
+     *
+     * @return {@code true} when the approach budget is spent and the candidate has been demoted
+     */
+    public boolean recordApproachTick() {
+        if (current == null) {
+            return false;
+        }
+        if (++approachTicks >= APPROACH_TICK_BUDGET_PER_CANDIDATE) {
+            demoteCurrent();
+            return true;
+        }
+        return false;
+    }
+
+    public int approachTicks() {
+        return approachTicks;
+    }
+
+    /**
      * Demote the current candidate — path budget spent, villager asleep, merchant occupied, offer
      * gone. All of those mean <i>this candidate is temporarily illegal</i>, which is a different
      * thing from <i>trading is impossible</i>, and the round is what keeps them different.
@@ -93,6 +129,7 @@ public final class TradeCandidateRound {
             attempted.add(current);
             current = null;
             pathFailures = 0;
+            approachTicks = 0;
         }
     }
 
@@ -106,6 +143,7 @@ public final class TradeCandidateRound {
         attempted.clear();
         current = null;
         pathFailures = 0;
+        approachTicks = 0;
         cooldownUntilTick = gameTime + EXHAUSTED_ROUND_COOLDOWN_TICKS;
     }
 
@@ -118,6 +156,7 @@ public final class TradeCandidateRound {
         attempted.clear();
         current = null;
         pathFailures = 0;
+        approachTicks = 0;
     }
 
     public int attemptedCount() {

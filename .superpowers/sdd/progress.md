@@ -77,6 +77,6 @@ Task 49: complete (V2-C TradeDemandRegistrar - acquisition feasibility, 10 gates
 
 Task 50: complete (V2-D transient TradeChainPlan SELL->BUY; 1015 tests; 3 architecture-defect probes unreachable)
 
-Task 51: complete (V2-E TradeWithVillagerGoal P3 + targeted greet interlock + candidate rounds; 1030 tests, 4 negative controls; runtime UNVERIFIED, VR-T2 held)
+Task 51: complete (V2-E + R1 review repairs - P0 route-feasibility wiring, attempt tick bound, real offer index, offhand, continuation revalidation; 1040 tests, 6 negative controls; runtime UNVERIFIED, VR-T2 held)
 
 No commits unless user requests. No Minecraft launches unless separately approved.

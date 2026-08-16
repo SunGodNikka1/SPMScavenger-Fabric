@@ -3,6 +3,7 @@ package com.noobk.spmscavenger.goal;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.WorkDemandPolicy;
+import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
 import com.noobk.spmscavenger.village.trade.OfferSnapshot;
 import com.noobk.spmscavenger.village.trade.RouteEvidence;
 import com.noobk.spmscavenger.village.trade.TradeCandidateRound;
@@ -89,9 +90,16 @@ public class TradeWithVillagerGoal extends Goal {
         // The demand can vanish mid-walk - someone else smelted the iron, the consumer completed.
         // Checked here rather than only at commit so the mob stops walking toward a purchase nobody
         // needs, instead of arriving and then discovering it.
-        return target != null
-                && VillagerTradeAdapter.available(target)
-                && liveDemand(level).isPresent();
+        // Cheap continuation: demand, route ownership, physical legality. No villager rescan -
+        // exact offer, affordability and capacity are re-checked at the transaction boundary.
+        Optional<WorkDemandPolicy.MaterialDemand> demand = liveDemand(level);
+        if (demand.isEmpty() || target == null || !VillagerTradeAdapter.available(target)) {
+            return false;
+        }
+        // V2-C convergence depends on ownership returning to EXISTING_WORK when work becomes
+        // feasible again mid-walk. Without this the mob would keep walking to a merchant it no
+        // longer needs.
+        return !existingRouteFeasible(level, demand.get());
     }
 
     @Override
@@ -136,6 +144,12 @@ public class TradeWithVillagerGoal extends Goal {
     // ------------------------------------------------------------------ approach
 
     private void approach(ServerLevel level) {
+        // Consumed every tick, not only on a navigation refusal: an accepted path that stalls
+        // against geometry would otherwise never end the attempt.
+        if (round.recordApproachTick()) {
+            reselect(level);
+            return;
+        }
         if (repathCooldown-- > 0) {
             return;
         }
@@ -224,8 +238,11 @@ public class TradeWithVillagerGoal extends Goal {
             return Optional.empty();
         }
         // Live, never cached: a stale demand would authorize a trade nobody wants.
+        // Offhand included: tool ownership is checked across backpack + main hand + offhand, and
+        // the 3-arg overload substitutes EMPTY. Dropping the offhand here would let V2-E see a
+        // weaker owned tier than the rest of progression and manufacture a demand nobody has.
         return WorkDemandPolicy
-                .select(backpack, mob.getMainHandItem(), ScavengerConfig.get())
+                .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), ScavengerConfig.get())
                 .map(WorkDemandPolicy.WorkDemand::payload);
     }
 
@@ -253,15 +270,18 @@ public class TradeWithVillagerGoal extends Goal {
             return Optional.empty();
         }
 
+        // Ranking needs one flat index space across villagers; execution needs the villager's own
+        // offer index. Both are kept side by side rather than the real one being re-derived later -
+        // matching an offer back by item identity is ambiguous when a villager sells the same item
+        // pair at two different counts, and the identity was ours to keep in the first place.
         List<OfferSnapshot> offers = new ArrayList<>();
-        java.util.Map<Integer, Villager> owners = new java.util.HashMap<>();
+        java.util.Map<Integer, Candidate> owners = new java.util.HashMap<>();
         int slot = 0;
         for (Villager villager : nearby) {
             for (OfferSnapshot offer : VillagerTradeAdapter.inspectOffers(villager)) {
-                OfferSnapshot keyed = new OfferSnapshot(slot, offer.costA(), offer.costB(),
-                        offer.result(), offer.uses(), offer.maxUses());
-                offers.add(keyed);
-                owners.put(slot, villager);
+                offers.add(new OfferSnapshot(slot, offer.costA(), offer.costB(),
+                        offer.result(), offer.uses(), offer.maxUses()));
+                owners.put(slot, new Candidate(villager, offer));   // offer keeps its REAL index
                 slot++;
             }
         }
@@ -269,34 +289,25 @@ public class TradeWithVillagerGoal extends Goal {
         boolean affordable = offers.stream()
                 .anyMatch(offer -> VillagerTradeAdapter.canAfford(backpack, offer));
 
+        // P0 repair: this was hardcoded `false`, which told V2-C the existing route was always
+        // infeasible and so disabled its central guard on every call. The policy was correct and
+        // the caller was lying to it.
+        boolean existingFeasible = existingRouteFeasible(level, demand.get());
+
         return TradeDemandGate
-                .authorize(demand.get(), RouteEvidence.of(false, offers, affordable))
+                .authorize(demand.get(), RouteEvidence.of(existingFeasible, offers, affordable))
                 .flatMap(authorization -> authorization.rankedOffers().stream()
-                        .filter(evaluation -> owners.containsKey(evaluation.offerIndex()))
-                        .map(evaluation -> resolve(owners, offers, evaluation))
+                        .map(evaluation -> owners.get(evaluation.offerIndex()))
+                        .filter(java.util.Objects::nonNull)
                         .filter(candidate -> VillagerTradeAdapter.canAfford(
-                                PlayerMobs.backpack(mob), candidate.offer()))
+                                backpack, candidate.offer()))
                         .findFirst());
     }
 
-    private Candidate resolve(
-            java.util.Map<Integer, Villager> owners, List<OfferSnapshot> offers,
-            TradeEvaluation evaluation) {
-        Villager villager = owners.get(evaluation.offerIndex());
-        OfferSnapshot flat = offers.get(evaluation.offerIndex());
-        // Re-key to the villager's own offer index, because the adapter re-resolves against that
-        // villager's live offer list at commit time.
-        UUID id = villager.getUUID();
-        int actualIndex = 0;
-        List<OfferSnapshot> live = VillagerTradeAdapter.inspectOffers(villager);
-        for (OfferSnapshot candidate : live) {
-            if (candidate.result().getItem() == flat.result().getItem()
-                    && candidate.costA().getItem() == flat.costA().getItem()) {
-                actualIndex = candidate.index();
-                break;
-            }
-        }
-        return new Candidate(villager, new OfferSnapshot(actualIndex, flat.costA(), flat.costB(),
-                flat.result(), flat.uses(), flat.maxUses()));
+    private boolean existingRouteFeasible(
+            ServerLevel level, WorkDemandPolicy.MaterialDemand demand) {
+        return ExistingRouteFeasibility.canSatisfy(
+                level, demand, PlayerMobs.backpack(mob),
+                mob.getMainHandItem(), mob.getOffhandItem(), ScavengerConfig.get());
     }
 }

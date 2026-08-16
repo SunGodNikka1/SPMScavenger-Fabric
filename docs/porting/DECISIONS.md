@@ -1724,3 +1724,36 @@ walk: *planning permission does not authorize execution*.
 `TradeDemandGate` mutual exclusion at P3; what is implemented is per-goal admission. Two P3 goals can
 therefore both be `canUse`-true and alternate. Vanilla picks the first-registered runnable goal so it
 is bounded, but it is not the described mutual exclusion.
+
+## 2026-08-15 - V2-E-R1: the caller was lying to the policy
+
+Task 51 review repairs. 1040 tests, 6 negative controls.
+
+**P0.** `TradeWithVillagerGoal` passed `RouteEvidence.of(false, ...)` - a hardcoded *"existing route
+infeasible"* - which is precisely the fact that short-circuits `TradeDemandRegistrar.decide` to
+`EXISTING_WORK`. Production therefore disabled V2-C's central guard on every call, and the invariant
+*feasible work + attractive trade -> EXISTING_WORK* was fully tested and **unreachable in the game**.
+The defect class is worth naming: **policy correct, caller lying, all policy unit tests green.** A
+unit test cannot see a caller that never supplies the state it exercises.
+
+New `ExistingRouteFeasibility` produces the fact, composing smelt-plan output identity and the
+raw-iron chain rather than a casual `FurnacePolicy.plan(...).isPresent()` - `EXISTING_WORK` is the
+broader gather/smelt/craft bucket. **It fails toward `EXISTING_WORK`**, because the two wrong answers
+are not symmetric: wrongly feasible skips a trade; wrongly infeasible lets trade displace working
+progression.
+
+**Attempt bounding.** The path budget counted only `moveTo` returning false, so an accepted-then-
+stalled path consumed none of it and an attempt could outlive the claim's own expiry - at which point
+the P1 greet sees the target again and preempts the goal the interlock was protecting. A 400-tick
+per-candidate approach budget, asserted strictly below `MAX_CLAIM_TICKS`, makes *"the attempt is
+bounded"* true rather than intended.
+
+**Also repaired:** the villager's real offer index is retained through ranking instead of re-derived
+by item matching (ambiguous when one villager sells the same pair at two counts);
+`WorkDemandPolicy.select` receives the offhand, since tool ownership spans backpack + main hand +
+offhand; and continuation re-asks who owns the route, so work becoming feasible again mid-walk
+returns ownership to `EXISTING_WORK` as V2-C's convergence requires.
+
+**Amendment recorded (User):** `TradeDemandGate` provides mutual exclusion for **acquisition routes
+competing to satisfy the same selected demand** - not for unrelated P3 activities. A band-level owner
+over CRAFT/GATHER/SMELT/TRADE/DESCENT/TUNNEL would be another activity scheduler, and is not built.
