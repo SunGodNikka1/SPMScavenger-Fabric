@@ -45,6 +45,24 @@ public final class VillagerTradeAdapter {
     public enum TradeResult {
         TRADED,
         NO_VILLAGER,
+        /**
+         * A human player currently holds this merchant's session.
+         *
+         * <p>V2-E, mandatory: the adapter never calls {@code setTradingPlayer}, so without this check
+         * a PlayerMob would transact <b>underneath</b> a live player session. The candidate picker
+         * also skips occupied merchants, but a human can begin trading during the mob's walk —
+         * <i>planning permission does not authorize execution</i>, so it is re-checked here at the
+         * transaction boundary.
+         */
+        MERCHANT_BUSY,
+        /**
+         * Asleep, or otherwise not currently able to trade.
+         *
+         * <p>Distinct from a failure: the candidate is <b>temporarily illegal</b>, so the executor
+         * demotes and reselects rather than concluding the trade route is impossible. Nothing lower
+         * enforces this on the no-menu path — {@code performTrade} guarded only {@code isAlive()}.
+         */
+        MERCHANT_UNAVAILABLE,
         OFFER_GONE,
         OFFER_CHANGED,
         OUT_OF_STOCK,
@@ -80,6 +98,19 @@ public final class VillagerTradeAdapter {
         return snapshots;
     }
 
+    /**
+     * Whether a villager may be approached for a trade at all.
+     *
+     * <p>Selection-time legality. Re-checked at the transaction boundary by
+     * {@link #performTrade}, because both facts can change during the walk.
+     */
+    public static boolean available(Villager villager) {
+        return villager != null
+                && villager.isAlive()
+                && !villager.isSleeping()
+                && villager.getTradingPlayer() == null;
+    }
+
     /** Whether the backpack currently holds both costs. Does not mutate anything. */
     public static boolean canAfford(Container backpack, OfferSnapshot offer) {
         if (backpack == null || offer == null || !offer.isTradeable()) {
@@ -99,6 +130,14 @@ public final class VillagerTradeAdapter {
     public static TradeResult performTrade(Container backpack, Villager villager, OfferSnapshot offer) {
         if (backpack == null || villager == null || !villager.isAlive()) {
             return TradeResult.NO_VILLAGER;
+        }
+        // Race-proof, and deliberately at the transaction boundary rather than only at selection:
+        // a human may have opened this merchant while the mob was walking.
+        if (villager.getTradingPlayer() != null) {
+            return TradeResult.MERCHANT_BUSY;
+        }
+        if (villager.isSleeping()) {
+            return TradeResult.MERCHANT_UNAVAILABLE;
         }
         return executeAgainst(backpack, villager.getOffers(), offer, villager::notifyTrade);
     }

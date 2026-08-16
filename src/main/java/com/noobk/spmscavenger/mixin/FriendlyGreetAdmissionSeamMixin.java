@@ -3,6 +3,7 @@ package com.noobk.spmscavenger.mixin;
 import com.noobk.spmscavenger.compat.OptionalGoalMobResolver;
 import com.noobk.spmscavenger.opinion.OpinionFeatureGate;
 import com.noobk.spmscavenger.opinion.SocialAdmissionSeam;
+import com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow;
 import com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry;
 import com.noobk.spmscavenger.opinion.SocialGreetClaimWindow;
 import net.minecraft.world.entity.LivingEntity;
@@ -78,6 +79,25 @@ public abstract class FriendlyGreetAdmissionSeamMixin {
             @Coerce Object playerMob, @Coerce Object reaction, double range) {
         Mob mob = OptionalGoalMobResolver.resolve(this, "greet admission seam");
         LivingEntity original = SocialAdmissionSeam.invokeOriginal(playerMob, reaction, range);
+
+        // V2-E trade interlock, and it must sit HERE - before the target is published into the
+        // SOCIAL control plane. Bolted onto the end instead, the sequence would be:
+        //     trade owns Bob -> SPM says Bob is greetable -> recordObservation(Bob)
+        //     -> Opinion forms SOCIAL/Bob -> interlock finally returns null
+        // The physical greet never happens, but cognitive work has been manufactured for an
+        // executor we deliberately made unavailable. Suppressing before publication keeps trade
+        // out of Opinion entirely.
+        //
+        // Narrow on purpose: this is NOT 44D-R2's global veto. It suppresses exactly one
+        // (mob, villager) pairing while that mob is actively trying to trade with that villager.
+        // Alice is untouched, other mobs greeting Bob are untouched, and Bob becomes greetable
+        // again the moment the attempt ends.
+        if (mob != null && original != null
+                && TradeSessionClaimWindow.claims(
+                        mob.getUUID(), original.getUUID(), mob.level().getGameTime())) {
+            return null;
+        }
+
         if (mob != null) {
             // Task 44A publishes the observation and returns the host's own answer unchanged.
             // Substituting a bound target is 44B+, and must additionally require

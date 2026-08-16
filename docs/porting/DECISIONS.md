@@ -1682,3 +1682,45 @@ loop that sells exactly nine times and stops.
 **Carried into V2-E as one rule, not two:** `emeraldsPerSellUse` (V2-D) and `paymentAffordable` (V2-C)
 are both caller-supplied facts that can describe a different offer than the one finally attempted.
 **V2-E must recompute both against the offer it is about to execute.**
+
+## 2026-08-15 - V2-E: the mob walks to a villager, and stops greeting only that villager
+
+Task 51 (`.superpowers/sdd/task-51-report.md`). 1030 tests, 0 failures, 4 negative controls.
+Runtime `UNVERIFIED`; VR-T2 held.
+
+**A priority-3 goal cannot defend itself by priority.** `FriendlyGreetGoal` is P1 with MOVE+LOOK and
+its `canUse` takes the nearest greetable entity - so walking into interaction range makes the trade
+target exactly that, and the mob preempts itself by arriving. The interlock is the only mechanism
+that can express the claim, and it lives in the seam that already intercepts SPM's chosen target.
+
+**Not the 44D-R2 veto.** That was *no SOCIAL intent -> suppress greeting*, globally. This suppresses
+one `(mob, villager)` pairing while that mob is actively trying to trade with that villager: Alice
+untouched, other mobs greeting Bob untouched, Bob greetable again the moment the attempt ends. A
+lease over our own greeting, never a reservation of the villager.
+
+**The interlock runs before `recordObservation`.** Bolted onto the end, the sequence would publish
+Bob into the SOCIAL control plane, let Opinion form a SOCIAL intent for him, and only then refuse -
+manufacturing cognitive work for an executor we deliberately made unavailable.
+
+**Claim at attempt start, not at FACE.** A FACE-only claim would rest correctness on winning a race
+against a P1 goal that re-evaluates every tick. The "long walk suppresses greeting" objection is
+answered by bounding the attempt, not by letting trade greet its own target.
+
+**`stop()` is an unconditional cleanup boundary**, not one expected exit among several - combat,
+shelter, commands and goal removal all arrive there, and a claim outliving its goal suppresses
+greeting for a villager nobody is trading with.
+
+**A dead candidate is not a dead route.** Asleep, player-occupied, offer withdrawn or unreachable
+each demote *that candidate* within a transient attempt round; only an exhausted round yields to a
+cooldown. V2-C's policy stays stateless while the executor holds transient attempt state, because
+movement unfolds over time.
+
+**Two guards the adapter did not have:** `getTradingPlayer() != null` -> `MERCHANT_BUSY` and
+`isSleeping()` -> `MERCHANT_UNAVAILABLE`, both before any mutation, both distinguishable from failure
+so the executor demotes rather than abandoning the route. A human may open the merchant during the
+walk: *planning permission does not authorize execution*.
+
+**Diverged from the contract in one place, recorded not hidden:** the RFC specifies band-level
+`TradeDemandGate` mutual exclusion at P3; what is implemented is per-goal admission. Two P3 goals can
+therefore both be `canUse`-true and alternate. Vanilla picks the first-registered runnable goal so it
+is bounded, but it is not the described mutual exclusion.

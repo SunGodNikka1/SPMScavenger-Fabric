@@ -121,6 +121,7 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialGreetClaimWindow.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
+                com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.release(mob.getUUID());
                 if (world.getServer() != null) {
                     VillagePerceptionScheduler.forServer(world.getServer())
                             .unregisterObserver(mob.getUUID());
@@ -166,6 +167,7 @@ public class SpmScavenger implements ModInitializer {
                     com.noobk.spmscavenger.opinion.SocialAdmissionSeam.shutdownServerState();
                     com.noobk.spmscavenger.opinion.SocialGreetClaimWindow.shutdownServerState();
                     com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.shutdownServerState();
+                    com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.shutdownServerState();
                     VillagePerceptionScheduler.shutdown(server);
                 });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
@@ -176,6 +178,7 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.opinion.SocialAdmissionSeam.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialGreetClaimWindow.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
+                com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.release(mob.getUUID());
                 if (mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
                     VillagePerceptionScheduler.forServer(serverLevel.getServer())
                             .unregisterObserver(mob.getUUID());
@@ -222,6 +225,9 @@ public class SpmScavenger implements ModInitializer {
         selector.addGoal(3, new GatherResourcesGoal(mob, 0.9));
         // Level with craft/gather so charcoal/iron jobs are not starved by idle stroll.
         selector.addGoal(3, new SmeltAtFurnaceGoal(mob, 1.0));
+        // V2-E: the deliberate-work band. Combat (0-2), shelter (2) and commands preempt it;
+        // FriendlyGreetGoal at priority 1 would too, which is what TradeSessionClaimWindow answers.
+        selector.addGoal(3, new com.noobk.spmscavenger.goal.TradeWithVillagerGoal(mob, 1.0));
         installExploration(mob, selector, shelterGoal, campfireGoal);
     }
 
