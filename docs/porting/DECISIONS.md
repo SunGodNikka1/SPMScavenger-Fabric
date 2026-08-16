@@ -1577,3 +1577,27 @@ fails both new lane regressions; removing mining from the shared rule fails the 
 | Gather/shelter/table/furnace block-volume scans (~9.8k–16.8k positions per due scan) | **Profile before rewriting.** Phased scan clocks, 24-candidate protection cap, 3-probe path budget and furnace caching are already in place. The 14-mob profile (median MSPT 6.96, p95 29.67) predates them; the 10/50/100 rows are empty, so high-population scaling is `UNVERIFIED`. A shared chunk-aware workstation cache is the answer **only if** 50/100 shows these dominating again. |
 | `ShaderReadoutOverlay` per-label `level.clip(...)` terrain raycast | `UNVERIFIED` client cost. Capture list capped at 512 and cleared per frame, so no leak; profile with a 50–100 mob crowd before changing. |
 | Village scheduler copies a dimension queue on fair insertion | P3 allocation only; revisit if profiling shows it. |
+
+## 2026-08-15 — V2-A shipped: server-side villager trade with no menu and no fake player
+
+Task 47 slice V2-A (`.superpowers/sdd/task-47-report.md`). 968 tests, 0 failures, 3 negative controls.
+
+**The design rests on one asymmetry that is easy to get backwards.** `MerchantOffer#getCostA()`
+returns a copy; `#getResult()` returns the **live `result` field**. Checking the cost side and
+generalising hands a villager's own stack to a backpack, after which any count change rewrites that
+offer permanently and persists. `OfferSnapshot` copies everything at construction, output comes from
+`assemble()`, and a structural test bans `getResult()` / `getBaseCostA()` across the whole package.
+
+**`MerchantOffer#take` is not used for payment.** It shrinks only the two stacks handed to it because
+`MerchantMenu` guarantees consolidated slots; an 8-slot backpack pays 20 wheat as 16+4.
+`TradeTransaction.debit` spends across slots and refuses without half-spending.
+
+**Ordering is the safety property.** Costs are debited and the result preflight-inserted on a staged
+copy; the real container is written once, after every check passes; `notifyTrade` follows the commit
+exactly once, so a villager can never record a trade the mob was not paid for. A snapshot is evidence
+of what an offer looked like, never authority to execute it — the live offer is re-resolved and
+compared on item **and count** (prices move without items changing) immediately before any spend.
+
+**Not proven:** anything at runtime. `performTrade` has never met a live `Villager`. Also unexercised
+end-to-end: two-cost offers, and modded max-stack-size behaviour. VR-T2 is the missing proof and runs
+only in the vanilla-only instance with `tradeeverything` absent (`D-VR-069`).

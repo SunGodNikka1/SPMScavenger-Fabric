@@ -69,4 +69,6 @@ Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 
 **PERF:** RFC closed (task 32); craft-table phased scan shipped.
 
+Task 47: complete (V2-A VillagerTradeAdapter + OfferSnapshot + TradeTransaction; 968 tests, 3 negative controls; runtime UNVERIFIED pending VR-T2)
+
 No commits unless user requests. No Minecraft launches unless separately approved.
