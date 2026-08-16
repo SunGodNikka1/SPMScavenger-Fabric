@@ -119,6 +119,49 @@ public final class RouteExhaustionEvidence {
         return matches;
     }
 
+    /**
+     * R5 — keep the evidence only while the consumer that produced it is still asking.
+     *
+     * <h2>The gap R4 left</h2>
+     *
+     * R4 deleted evidence when a <b>different</b> demand was queried, which covers a consumer being
+     * displaced. It does not cover the ordinary success path, where the identity simply goes away and
+     * comes back:
+     *
+     * <pre>
+     * T1  gather searches, finds no iron, publishes iron exhaustion
+     * T2  trade buys the iron
+     * T3  the demand disappears        &lt;- nothing queries with a DIFFERENT demand here
+     * T4  crafting consumes the iron
+     * T5  the SAME consumer wants iron again, inside the 2400-tick lifetime
+     * </pre>
+     *
+     * At T5 the old search would authorize a new episode. Nobody ever looked for the iron this
+     * episode is about — <b>a demand that has been satisfied and re-raised is a new question</b>, and
+     * evidence is only ever an answer to the question that was actually asked.
+     *
+     * <h2>Why this is not "clear on interruption"</h2>
+     *
+     * The signal is the <b>consumer's existence</b>, not the trade goal's activity. Combat preempting
+     * the mob does not remove the demand, so this leaves legitimate search knowledge intact; only the
+     * demand genuinely resolving or changing ends the episode.
+     *
+     * @param liveDemand the consumer's current demand, or {@code null} when it has none
+     */
+    public static void retainOnly(
+            UUID mobId, WorkDemandPolicy.MaterialDemand liveDemand, long gameTime) {
+        if (mobId == null) {
+            return;
+        }
+        if (liveDemand == null) {
+            EVIDENCE.remove(mobId);
+            return;
+        }
+        // Delegated rather than duplicated: exhaustedFor already deletes on identity mismatch, and a
+        // second copy of that rule is how the two drift apart.
+        exhaustedFor(mobId, liveDemand, gameTime);
+    }
+
     /** Drop the evidence — the route made progress, or the owner is gone. */
     public static void clear(UUID mobId) {
         if (mobId != null) {

@@ -121,6 +121,12 @@ public final class TradeFundingPlanner {
             if (!offer.isTradeable() || !offer.result().is(Items.EMERALD)) {
                 continue;
             }
+            // R5: authorizing from costA while the transaction also debits costB would hand out
+            // permission for a material nobody examined. Refused at the source as well as in the
+            // evaluator, so neither path can authorize a compound-cost funding SELL alone.
+            if (!offer.costB().isEmpty()) {
+                continue;
+            }
             ItemStack wanted = offer.costA();
             int held = ScavengerCrafting.count(backpack, wanted.getItem());
             if (held <= 0) {

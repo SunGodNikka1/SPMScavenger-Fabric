@@ -68,7 +68,19 @@ public final class TradeEvaluationPolicy {
         /** A SELL offer with no named consumer waiting on emeralds. */
         NO_CONSUMER_FOR_PAYMENT,
         /** Matches, but would contribute zero units. */
-        ZERO_CONTRIBUTION
+        ZERO_CONTRIBUTION,
+        /**
+         * R5 — a funding SELL whose cost has a second item.
+         *
+         * <p>{@link SellAuthorization} authorizes exactly one stack and {@code permits} checks
+         * exactly {@code costA}, while {@link TradeTransaction} debits {@code costA} <b>and</b>
+         * {@code costB}. So {@code 20 sticks + 1 diamond -> 5 emeralds} would pass permission on the
+         * sticks and spend the diamond: <b>permission to spend A silently manufacturing permission
+         * to spend B</b>. Refused outright rather than solved with a joint reservation allocator,
+         * which gen-1 does not need — no vanilla funding trade has a second cost. BUY offers are
+         * unaffected and keep V2-A's two-cost support.
+         */
+        UNSUPPORTED_COMPOUND_COST
     }
 
     /** Either an evaluation or the reason there is none. Never both, never neither. */
@@ -169,6 +181,9 @@ public final class TradeEvaluationPolicy {
         }
         // Permission is the gate, and it is separate from desirability. An unauthorised material is
         // refused however profitable the offer is.
+        if (!offer.costB().isEmpty()) {
+            return Result.reject(TradeRejection.UNSUPPORTED_COMPOUND_COST);
+        }
         if (authorization == null || !authorization.permits(offer.costA())) {
             return Result.reject(TradeRejection.WRONG_MATERIAL);
         }

@@ -75,6 +75,15 @@ class TradeProductionWiringTest {
         }
     }
 
+    /** A closing brace at method indentation: the end of one method's body. */
+    private static final String METHOD_END = (char) 10 + "    }";
+
+    /** One method's body, so an assertion cannot be satisfied by a call in some other method. */
+    private static String bodyOf(String source, String signature) {
+        String body = source.substring(source.indexOf(signature));
+        return body.substring(0, body.indexOf(METHOD_END));
+    }
+
     private static OfferSnapshot buysWheat() {
         return OfferSnapshot.of(0, new MerchantOffer(
                 new ItemCost(Items.WHEAT, 20), Optional.empty(),
@@ -160,7 +169,8 @@ class TradeProductionWiringTest {
 
         assertFalse(goal.contains("material -> 0"),
                 "a fabricated zero reserve makes SellExpendabilityPolicy unanimously permissive");
-        assertTrue(goal.contains("SellReserveModel.reservedUnits("),
+        assertTrue(goal.substring(goal.indexOf("private SellAuthorization fundingAuthorization("))
+                        .contains("SellReserveModel.reservedUnits("),
                 "reserves must come from the model that reads the actual craft chain");
     }
 
@@ -169,9 +179,11 @@ class TradeProductionWiringTest {
     void mustHappen_theGoalPassesAuthorizationIntoTheDecision() {
         String goal = source("goal/TradeWithVillagerGoal.java");
 
-        int computed = goal.indexOf("fundingAuthorization(deficit, offers, backpack)");
-        assertTrue(computed > 0, "the authorization must be computed in the candidate path");
-        assertTrue(goal.indexOf("existingFeasible, offers, affordable, deficit, authorization")
+        String decision = bodyOf(goal, "private Optional<Candidate> authorizedCandidate(");
+
+        int computed = decision.indexOf("fundingAuthorization(deficit, offers, backpack)");
+        assertTrue(computed > 0, "the authorization must be computed in the candidate path itself");
+        assertTrue(decision.indexOf("existingFeasible, offers, affordable, deficit, authorization")
                         > computed,
                 "and then handed to RouteEvidence - computing it and dropping it is R3's defect");
     }
@@ -206,8 +218,7 @@ class TradeProductionWiringTest {
         assertFalse(goal.contains("case TRADED -> reselect("),
                 "reselect() demotes the villager and consumes its budget");
 
-        String chain = goal.substring(goal.indexOf("private void continueChain("));
-        chain = chain.substring(0, chain.indexOf("\n    }"));
+        String chain = bodyOf(goal, "private void continueChain(");
         assertFalse(chain.contains("demoteCurrent"),
                 "the seller stays selectable, with a fresh approach budget");
         assertTrue(chain.contains("authorizedCandidate(level)"),

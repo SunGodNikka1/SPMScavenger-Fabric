@@ -1,19 +1,24 @@
 package com.noobk.spmscavenger.goal;
 
 import com.noobk.spmscavenger.PlayerMobs;
+import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
 import com.noobk.spmscavenger.village.trade.OfferSnapshot;
 import com.noobk.spmscavenger.village.trade.RouteEvidence;
+import com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence;
 import com.noobk.spmscavenger.village.trade.SellAuthorization;
 import com.noobk.spmscavenger.village.trade.SellReserveModel;
 import com.noobk.spmscavenger.village.trade.TradeFundingPlanner;
 import com.noobk.spmscavenger.village.trade.TradeCandidateRound;
+import com.noobk.spmscavenger.village.trade.TradeChainPlan;
+import com.noobk.spmscavenger.village.trade.TradeChainPolicy;
 import com.noobk.spmscavenger.village.trade.TradeDemandGate;
 import com.noobk.spmscavenger.village.trade.TradeEvaluationPolicy;
 import com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow;
 import com.noobk.spmscavenger.village.trade.VillagerTradeAdapter;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -67,6 +72,23 @@ public class TradeWithVillagerGoal extends Goal {
     private Villager target;
     private OfferSnapshot plannedOffer;
     /** The consumer that authorized the attempt in progress. Identity, not a snapshot of demand. */
+    /**
+     * R5 — V2-D's chain, owned by production.
+     *
+     * <p>The decision the User posed was Option A (V2-D remains the policy owner) versus Option B
+     * (R4's live re-derivation supersedes it). <b>Option A</b>, because the two were not equivalent:
+     * R4 independently reproduced external-consumer identity, actual-inventory advancement, deficit
+     * re-derivation and stop-when-funded, but it had <b>no hard lifetime at all</b>. A chain that can
+     * never complete would have retried until the demand changed. That invariant only exists in
+     * {@link TradeChainPlan}, so the abstraction earns its place rather than being duplicated.
+     *
+     * <p>Deliberately <b>not</b> cleared in {@link #stop()}: a lifetime that resets whenever the goal
+     * yields to combat is not a lifetime. It is cleared on termination and on consumer change, which
+     * are the events that actually end a chain. RET-1: one nullable field per goal instance, bounded
+     * by the mob, with no store to sweep.
+     */
+    private TradeChainPlan chain;
+
     private ResourceLocation attemptConsumer;
     private ResourceLocation attemptMaterial;
     private int repathCooldown;
@@ -310,9 +332,20 @@ public class TradeWithVillagerGoal extends Goal {
         // Offhand included: tool ownership is checked across backpack + main hand + offhand, and
         // the 3-arg overload substitutes EMPTY. Dropping the offhand here would let V2-E see a
         // weaker owned tier than the rest of progression and manufacture a demand nobody has.
-        return WorkDemandPolicy
+        Optional<WorkDemandPolicy.MaterialDemand> demand = WorkDemandPolicy
                 .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), ScavengerConfig.get())
                 .map(WorkDemandPolicy.WorkDemand::payload);
+
+        // R5, and the reason this method has an effect at all: every path that asks "is there a
+        // consumer" funnels through here, so the exhaustion episode's lifetime is bound to the
+        // consumer in exactly one place. Scattering the same call across canUse / canContinueToUse /
+        // attemptTransaction / authorizedCandidate is how one of them ends up forgotten.
+        //
+        // Note this keys off the CONSUMER, never off the goal being interrupted: combat preempting
+        // the mob leaves the demand standing, so a legitimate completed search survives it.
+        RouteExhaustionEvidence.retainOnly(
+                mob.getUUID(), demand.orElse(null), level.getGameTime());
+        return demand;
     }
 
     /**
@@ -374,6 +407,20 @@ public class TradeWithVillagerGoal extends Goal {
         SellAuthorization authorization =
                 deficit == null ? null : fundingAuthorization(deficit, offers, backpack);
 
+        // R5: V2-D decides whether this chain may continue and which leg is next. Its verdict is
+        // taken before ranking, because a terminated chain must not produce a candidate at all.
+        TradeChainPolicy.ChainOutcome outcome =
+                advanceChain(level, demand.get(), backpack, funding, authorization, offers);
+        if (outcome == null || !outcome.active()) {
+            return Optional.empty();
+        }
+        TradeChainPlan.Step step = outcome.plan().step();
+        if (step == TradeChainPlan.Step.SELL_TO_FUND && outcome.sellBlocked()) {
+            // Not enough authorized material to close the deficit. A state to report, not a reason
+            // to attempt a purchase we cannot pay for.
+            return Optional.empty();
+        }
+
         return TradeDemandGate
                 .authorize(demand.get(),
                         new RouteEvidence(
@@ -381,9 +428,89 @@ public class TradeWithVillagerGoal extends Goal {
                 .flatMap(decision -> decision.rankedOffers().stream()
                         .map(evaluation -> owners.get(evaluation.offerIndex()))
                         .filter(java.util.Objects::nonNull)
+                        // The chain's step, not the ranking, decides which leg is legal now. Without
+                        // this a BUY the mob cannot yet afford and a SELL that funds it are ranked
+                        // against each other in one list, and the order is V2-B's opinion rather
+                        // than the chain's sequence.
+                        .filter(candidate -> isFundingSell(candidate.offer())
+                                == (step == TradeChainPlan.Step.SELL_TO_FUND))
                         .filter(candidate -> VillagerTradeAdapter.canAfford(
                                 backpack, candidate.offer()))
                         .findFirst());
+    }
+
+    private static boolean isFundingSell(OfferSnapshot offer) {
+        return offer.result().is(net.minecraft.world.item.Items.EMERALD);
+    }
+
+    /**
+     * R5 — open, advance or terminate the V2-D chain that owns this purchase.
+     *
+     * <h2>Why V2-D owns it rather than the executor</h2>
+     *
+     * R4's {@code continueChain} re-derived everything from actual inventory, which independently
+     * reproduced most of V2-D's locked invariants — external consumer identity, inventory-driven
+     * advancement, stop-when-funded. It reproduced <b>all but one</b>: there was no hard lifetime, so
+     * a chain that could never complete would retry until the demand happened to change. Rather than
+     * keep two encodings of the same state machine and add expiry to the second one, the executor
+     * supplies facts and {@link TradeChainPolicy} decides.
+     *
+     * <h2>Facts, never fetched inside the policy</h2>
+     *
+     * Everything below is read here and passed in, which is what keeps the policy pure and testable.
+     *
+     * <p>{@code desiredQuantity} is the deficit at the moment the chain opened — the amount this
+     * chain exists to acquire. Holding that many later means it was obtained elsewhere (mined,
+     * looted, gifted) and the chain stops, which is exactly V2-D's {@code TARGET_OBTAINED_ELSEWHERE}.
+     */
+    private TradeChainPolicy.ChainOutcome advanceChain(
+            ServerLevel level, WorkDemandPolicy.MaterialDemand demand, Container backpack,
+            TradeFundingPlanner.FundingTarget funding, SellAuthorization authorization,
+            List<OfferSnapshot> offers) {
+        if (funding == null) {
+            // Nothing on offer serves the demand, so there is no purchase for a chain to fund.
+            chain = null;
+            return null;
+        }
+        long now = level.getGameTime();
+        if (chain == null
+                || !chain.consumerKey().equals(demand.consumerKey())
+                || !chain.desiredOutput().equals(demand.materialKey())) {
+            chain = TradeChainPlan.forConsumer(
+                    demand.consumerKey(), demand.materialKey(), demand.derivedDeficit(), now);
+        }
+
+        TradeChainPolicy.ChainOutcome outcome = TradeChainPolicy.evaluate(
+                chain,
+                new TradeChainPolicy.ChainFacts(
+                        true,
+                        ScavengerCrafting.count(
+                                backpack, BuiltInRegistries.ITEM.get(demand.materialKey())),
+                        ScavengerCrafting.count(backpack, net.minecraft.world.item.Items.EMERALD),
+                        funding.buyOffer().costA().getCount(),
+                        emeraldsPerSellUse(authorization, offers),
+                        authorization == null ? 0 : authorization.disposableUnits()),
+                now);
+
+        // Terminated chains are dropped rather than left standing: an expired or ownerless plan that
+        // survives is the stale-ownership shape this slice keeps having to remove.
+        chain = outcome.active() ? outcome.plan() : null;
+        return outcome;
+    }
+
+    /** Emeralds the authorized funding SELL yields per use, or {@code 0} when none is authorized. */
+    private static int emeraldsPerSellUse(
+            SellAuthorization authorization, List<OfferSnapshot> offers) {
+        if (authorization == null || authorization.isEmpty()) {
+            return 0;
+        }
+        for (OfferSnapshot offer : offers) {
+            if (isFundingSell(offer) && offer.isTradeable() && !offer.outOfStock()
+                    && authorization.permits(offer.costA())) {
+                return offer.result().getCount();
+            }
+        }
+        return 0;
     }
 
     /** Trade may displace working progression only on positively proven infeasibility. */

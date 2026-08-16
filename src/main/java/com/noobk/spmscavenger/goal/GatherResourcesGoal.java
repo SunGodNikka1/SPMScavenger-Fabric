@@ -8,6 +8,9 @@ import com.noobk.spmscavenger.GatherCandidatePolicy;
 import com.noobk.spmscavenger.GatherIntentPolicy;
 import com.noobk.spmscavenger.GatherProtection;
 import com.noobk.spmscavenger.GatherTargetPolicy;
+import com.noobk.spmscavenger.WorkDemandPolicy;
+import com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence;
+import com.noobk.spmscavenger.village.trade.GatherRoutePrecursor;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.ScavengerConfig;
@@ -196,6 +199,7 @@ public class GatherResourcesGoal extends Goal {
         }
         GatherTarget selected = findTarget(cfg);
         if (selected == null) {
+            publishRouteExhaustion(cfg, now);
             scanClock.resetAfter(now);
             return false;
         }
@@ -466,6 +470,52 @@ public class GatherResourcesGoal extends Goal {
                 currentIntent(),
                 toolState -> ToolBox.ownsToolFor(mob, toolState),
                 acquisitionCost);
+    }
+
+    /**
+     * V2-E-R5 — the only production producer of {@link RouteExhaustionEvidence}.
+     *
+     * <h2>Placement: {@code canUse()}, never {@code stop()}</h2>
+     *
+     * This runs where the mob's own bounded search has just <b>completed and found nothing</b>. The
+     * tempting seam is {@code stop()}, and it is wrong: a goal preempted by combat, shelter or a
+     * command has not finished looking, so publishing there would turn every interruption into "the
+     * route is dead" and the mob would trade its way around a fight.
+     *
+     * <h2>Four conditions, and every one of them is load-bearing</h2>
+     *
+     * <ol>
+     *   <li><b>A selected demand exists.</b> The evidence names a consumer and a material; without a
+     *       live demand there is nothing to name and no episode to open.
+     *   <li><b>The scan was asked for this demand's precursor.</b> A scan that wanted logs proves
+     *       nothing about iron, however completely it ran — the mutual-exclusion rule applies to
+     *       routes serving the <i>same selected demand</i>, not to unrelated P3 work.
+     *   <li><b>The scan was the full bounded sweep.</b> Under {@code scanScope} this is a cooperative
+     *       probe restricted to what an excavation just revealed. Empty there means "nothing in this
+     *       small volume", not "nothing in range".
+     *   <li><b>Nothing matched in radius.</b> {@code CANDIDATES_ALL_REJECTED_PROTECTION} means the
+     *       material <i>is</i> there and was refused for another reason, which is emphatically not an
+     *       exhausted route. Silence is the conservative direction here: it keeps the mob gathering
+     *       rather than authorizing trade to displace working progression.
+     * </ol>
+     */
+    private void publishRouteExhaustion(ScavengerConfig cfg, long now) {
+        if (scanScope != null
+                || lastScanFailure
+                        != GatherCandidatePolicy.ScanFailureReason.NO_CANDIDATES_IN_RADIUS) {
+            return;
+        }
+        Container backpack = PlayerMobs.backpack(mob);
+        if (backpack == null) {
+            return;
+        }
+        WorkDemandPolicy
+                .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg)
+                .map(WorkDemandPolicy.WorkDemand::payload)
+                .filter(demand -> GatherRoutePrecursor.scanCovers(demand, currentIntent()))
+                .ifPresent(demand -> RouteExhaustionEvidence.publish(
+                        mob.getUUID(), demand,
+                        RouteExhaustionEvidence.Reason.SEARCH_COMPLETED_EMPTY, now));
     }
 
     /**
