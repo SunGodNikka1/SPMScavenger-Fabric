@@ -105,6 +105,16 @@ public class SpmScavenger implements ModInitializer {
 
         ServerTickEvents.END_SERVER_TICK.register(
                 server -> VillagePerceptionScheduler.forServer(server).onServerTick(server));
+        // TEMPORARY V2-H PROOF SUPPORT - remove with com.noobk.spmscavenger.debug after VR-T2.
+        // Observation only, and gated on `armed()` so an unarmed server does no work at all.
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            if (com.noobk.spmscavenger.debug.Vrt2Trace.armed()) {
+                server.getAllLevels().forEach(com.noobk.spmscavenger.debug.Vrt2Trace::sample);
+            }
+        });
+        net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
+                (dispatcher, registryAccess, environment) ->
+                        com.noobk.spmscavenger.debug.Vrt2ProofCommand.register(dispatcher));
         ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
                 OpinionExperienceRegistry.resumeOnLoad(mob);

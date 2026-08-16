@@ -45,25 +45,36 @@ import net.minecraft.world.item.Items;
  *
  * {@link #tradeMayDisplace} is the only consumer, and it admits trade on {@code INFEASIBLE} alone.
  *
- * <h2>What can currently prove INFEASIBLE, and what cannot</h2>
+ * <h2>What proves INFEASIBLE, and what cannot</h2>
  *
- * One signal, and it is deliberately narrow: <b>the mob cannot mine the precursor at all</b>. Iron
- * ore needs a stone-tier pickaxe; a mob whose best pick is wood or nothing has a gather route that is
- * dead as a matter of game rules, not of circumstance. That is evidence.
+ * Two signals, and both are evidence rather than absence.
+ *
+ * <ol>
+ *   <li><b>The mob cannot mine the precursor at all.</b> Iron ore needs a stone-tier pickaxe; a mob
+ *       whose best pick is wood or nothing has a route dead by game rule. Narrow and, for iron,
+ *       currently unreachable — {@code activeIronToolRecipe} already requires a stone-tier pick, so
+ *       the guard and the demand that reaches it are mutually exclusive. Kept because it is the
+ *       semantically correct rule and a future consumer without a tier prerequisite would need it.
+ *   <li><b>The existing route completed a bounded search and found nothing</b>
+ *       ({@link RouteExhaustionEvidence}). This is the live producer: {@code GatherResourcesGoal}
+ *       publishes from {@code canUse()} when its full-radius scan returns
+ *       {@code NO_CANDIDATES_IN_RADIUS} for a demand whose precursor that scan actually covered.
+ *       Never from {@code stop()} — an interruption has not finished looking.
+ * </ol>
  *
  * <p>Everything else is {@code UNKNOWN}: ore may be twenty blocks away or absent, a furnace may be
  * reachable or not, a craft path may exist that this class does not model. <b>Absence of a plan is
  * not proof of impossibility</b>, and this class will not pretend otherwise.
  *
- * <p><b>Consequence, stated plainly: INFEASIBLE currently has no reachable producer, so TRADE does
- * not fire at all.</b> The tool-tier guard below is semantically right and mutually exclusive with
- * the only demand that reaches it ({@code activeIronToolRecipe} already requires a stone-tier pick),
- * so it can never fire for iron. That is a real gap, not a pessimistic default: The right producer of {@code INFEASIBLE} is the gather/smelt route after its own
- * bounded search fails — evidence it already has and this class does not. Reimplementing target
- * discovery here to manufacture the answer would rebuild gather inside the trade goal, which is worse
- * than a quiet feature. {@link #reportRouteExhausted} is the seam for that evidence when a work goal
- * is ready to publish it; it has <b>no production callers yet</b>, and that is a known gap rather
- * than an oversight.
+ * <p><b>Why the evidence comes from outside.</b> Reimplementing target discovery here to manufacture
+ * the answer would rebuild gather inside the trade goal — the trade route handing itself the
+ * permission to displace working progression. So the gather route publishes what only it knows, and
+ * positive evidence always dominates: a live smelt plan or raw iron in hand clears the memory of a
+ * past failure rather than being outranked by it.
+ *
+ * <p><i>Historical note (V2-E-R3/R5): this text previously said INFEASIBLE had no reachable producer
+ * and that {@code reportRouteExhausted} had no production callers. Both were true when written and
+ * are not now.</i>
  */
 public final class ExistingRouteFeasibility {
 
