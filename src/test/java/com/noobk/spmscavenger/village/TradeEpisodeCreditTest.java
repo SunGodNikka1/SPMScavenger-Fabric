@@ -259,14 +259,19 @@ class TradeEpisodeCreditTest {
                 "SELL_TO_FUND -> BUY_TARGET is one chain advancing, not a second visit");
     }
 
-    /** A genuinely new chain is a new visit and earns its own episode. */
+    /**
+     * A genuinely new chain is a new visit and earns its own episode — on identity alone.
+     *
+     * <p>R2 deleted the explicit reset. It made planning mutate learning state, and planning runs
+     * between a completed transaction and its emission, so a pending episode could be credited after
+     * its own history had been erased. {@code sameChainAs} already separates visits.
+     */
     @Test
     void mustHappen_aNewChainEarnsItsOwnEpisode() {
         com.noobk.spmscavenger.village.trade.TradeEpisodeLedger ledger =
                 new com.noobk.spmscavenger.village.trade.TradeEpisodeLedger();
 
         assertTrue(ledger.consumeCreditFor(chain(1_000L)));
-        ledger.onChainOpened();
         assertTrue(ledger.consumeCreditFor(chain(9_000L)),
                 "a later visit for a later demand is a genuinely separate relationship episode");
     }
@@ -316,18 +321,16 @@ class TradeEpisodeCreditTest {
 
     /** Credit is restored only by a new chain — never by teardown. */
     @Test
-    void mustNotHappen_teardownRestoresRelationshipCredit() throws IOException {
+    void mustNotHappen_planningMutatesLearningState() throws IOException {
         String goal = goalSource();
 
-        assertFalse(methodOf(goal, "public void stop() {").contains("onChainOpened"),
-                "resetting at teardown is exactly the defect the ledger exists to fix");
-        assertFalse(methodOf(goal, "private void endRound(").contains("onChainOpened"));
-        assertTrue(methodOf(goal, "private TradeChainPolicy.ChainOutcome advanceChain(")
-                        .contains("episodeLedger.onChainOpened()"),
-                "only minting a new chain restores credit");
+        assertFalse(goal.contains("onChainOpened"),
+                "R2: planning must not touch learning state at all - advanceChain runs between a "
+                        + "completed transaction and its emission, so resetting there erased the "
+                        + "history of an episode that had not yet been credited");
         assertTrue(methodOf(goal, "private void emitTradeEpisode(")
-                        .contains("episodeLedger.consumeCreditFor(chain)"),
-                "and emission must consult it");
+                        .contains("episodeLedger.consumeCreditFor(earnedBy)"),
+                "and emission credits the chain that EARNED it, never the live field");
     }
 
     /** R2: both teardown paths release the greet claim before crediting, not just stop(). */
@@ -342,5 +345,64 @@ class TradeEpisodeCreditTest {
                     path + " must release the claim before crediting - a throwing credit would "
                             + "otherwise leak the greet interlock");
         }
+    }
+
+    // ------------------------------------------------- chain handoff (R2)
+
+    /**
+     * The R2 defect, as the User sequenced it.
+     *
+     * <p>Emission is not simultaneous with the transaction. {@code continueChain} records the anchor,
+     * then replans — and replanning can terminate chain A and mint chain B <b>before</b> teardown
+     * emits anything:
+     *
+     * <pre>
+     * A credited, combat, A resumes, A's BUY succeeds   -&gt; pending anchor belongs to A
+     * demand changes; advanceChain terminates A, mints B
+     * B's trade admission fails
+     * endRound emits the pending A episode ... against B
+     * </pre>
+     *
+     * Two wrongs at once: A is credited a second time (its history had just been reset), and B is
+     * marked spent without ever having traded.
+     */
+    @Test
+    void mustNotHappen_aPendingEpisodeIsCreditedAgainstTheNextChain() {
+        com.noobk.spmscavenger.village.trade.TradeEpisodeLedger ledger =
+                new com.noobk.spmscavenger.village.trade.TradeEpisodeLedger();
+        com.noobk.spmscavenger.village.trade.TradeChainPlan a = chain(1_000L);
+        com.noobk.spmscavenger.village.trade.TradeChainPlan b = chain(5_000L);
+
+        // A's first success, credited at the combat interruption.
+        assertTrue(ledger.consumeCreditFor(a));
+
+        // A resumes and succeeds again; the anchor and A's identity are captured together.
+        // Replanning then hands over to B before teardown runs.
+        assertFalse(ledger.consumeCreditFor(a),
+                "the pending episode belongs to A, and A has already been credited");
+
+        // B has NOT been marked spent by A's emission, so its own first success still earns one.
+        assertTrue(ledger.consumeCreditFor(b),
+                "B must still be able to earn exactly one episode when it actually trades");
+        assertFalse(ledger.consumeCreditFor(b), "and only one");
+    }
+
+    /** The pending anchor and the pending chain are captured and cleared as a pair. */
+    @Test
+    void mustHappen_thePendingEpisodeCarriesItsOwnChainIdentity() throws IOException {
+        String goal = goalSource();
+        String capture = methodOf(goal, "private void continueChain(");
+
+        assertTrue(capture.contains("tradeEpisodeChain = chain;"),
+                "the chain that earned the episode is recorded at the moment of success");
+        assertTrue(capture.indexOf("tradeEpisodeAnchor =") < capture.indexOf("tradeEpisodeChain ="),
+                "and inside the same first-success guard as the anchor");
+
+        String emit = methodOf(goal, "private void emitTradeEpisode(");
+        assertTrue(emit.contains("tradeEpisodeChain = null;"),
+                "both pending fields are cleared before the service is called");
+        assertTrue(emit.indexOf("tradeEpisodeChain = null;")
+                        < emit.indexOf("SettlementRelationshipService.onTradeEpisode("),
+                "cleared first, so no path can re-emit a pending episode");
     }
 }

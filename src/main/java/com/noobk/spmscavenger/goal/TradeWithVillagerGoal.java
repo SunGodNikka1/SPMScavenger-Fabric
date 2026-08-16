@@ -110,6 +110,16 @@ public class TradeWithVillagerGoal extends Goal {
     private BlockPos tradeEpisodeAnchor;
 
     /**
+     * V2-G-R2 — the chain the pending episode <b>belongs to</b>, captured with the anchor.
+     *
+     * <p>Emission is not simultaneous with the transaction: {@code continueChain} records the anchor,
+     * then replans, and replanning can terminate this chain and mint the next one before teardown
+     * emits anything. Crediting against the <i>current</i> chain therefore credited whichever chain
+     * happened to be live at teardown — the wrong one.
+     */
+    private TradeChainPlan tradeEpisodeChain;
+
+    /**
      * V2-G-R1 — one relationship episode per {@link TradeChainPlan}, across preemption.
      *
      * <p>The anchor alone bounds credit within one uninterrupted visit, but the chain deliberately
@@ -320,6 +330,9 @@ public class TradeWithVillagerGoal extends Goal {
             tradeEpisodeAnchor = SettlementRelationshipService
                     .nearestSettlementAnchorAt(level, mob.getUUID(), mob.blockPosition())
                     .orElse(null);
+            // Captured together and never separately: the anchor says WHERE the episode happened,
+            // this says WHICH chain earned it. Reading the chain later reads a different answer.
+            tradeEpisodeChain = chain;
         }
         // Captured before the attempt is torn down: the purchase this sale just funded is the one
         // thing the re-centred discovery below cannot rediscover on its own.
@@ -489,13 +502,20 @@ public class TradeWithVillagerGoal extends Goal {
      */
     private void emitTradeEpisode(ServerLevel level) {
         BlockPos anchor = tradeEpisodeAnchor;
+        // R2: both pending fields cleared before anything else, so no path can re-emit them.
+        TradeChainPlan earnedBy = tradeEpisodeChain;
         tradeEpisodeAnchor = null;
+        tradeEpisodeChain = null;
         if (anchor == null) {
             return;
         }
         // R1: the anchor bounds credit within one visit; the ledger bounds it across the chain's
         // lifetime, which outlives this teardown by design.
-        if (!episodeLedger.consumeCreditFor(chain)) {
+        //
+        // R2: against the chain that EARNED it, never the live field. Replanning between the
+        // transaction and teardown can have moved `chain` on to an entirely different consumer,
+        // which would both re-credit the old chain and mark the new one spent without it trading.
+        if (!episodeLedger.consumeCreditFor(earnedBy)) {
             return;
         }
         SettlementRelationshipService.onTradeEpisode(
@@ -729,8 +749,6 @@ public class TradeWithVillagerGoal extends Goal {
             chain = TradeChainPlan.forDemand(
                     demand.consumerKey(), demand.materialKey(),
                     held, demand.derivedDeficit(), now);
-            // The one event that restores relationship credit: a new chain is a new visit.
-            episodeLedger.onChainOpened();
         }
 
         TradeChainPolicy.ChainOutcome outcome = TradeChainPolicy.evaluate(

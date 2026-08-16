@@ -31,8 +31,17 @@ package com.noobk.spmscavenger.village.trade;
  * <h2>Lifetime</h2>
  *
  * Transient, one instance per goal, holding one reference to a record the goal already holds. Nothing
- * is persisted and no store is introduced, so Gate RET-1e has nothing to sweep — a chain that
- * disappears takes its ledger entry with it when {@link #onChainOpened()} runs for the next one.
+ * is persisted and no store is introduced, so Gate RET-1e has nothing to sweep: the single slot is
+ * overwritten by the next chain that earns credit, never accumulated.
+ *
+ * <h2>R2 — no explicit reset, by design</h2>
+ *
+ * An earlier revision had the goal call {@code onChainOpened()} whenever {@code forDemand} minted a
+ * chain. That made <b>planning mutate learning state</b>, and planning happens between a completed
+ * transaction and its emission — so a pending episode could be credited after its own history had
+ * been erased. {@link TradeChainPlan#sameChainAs} already restores eligibility naturally: a chain
+ * with a different {@code createdAtTick} simply does not match the credited one. The reset was both
+ * redundant and harmful, so there is no reset API at all.
  */
 public final class TradeEpisodeLedger {
 
@@ -59,17 +68,6 @@ public final class TradeEpisodeLedger {
         }
         creditedChain = chain;
         return true;
-    }
-
-    /**
-     * A genuinely new chain was opened — the only event that restores credit.
-     *
-     * <p>Deliberately <b>not</b> called from {@code stop()}. Resetting on teardown is precisely the
-     * defect this class exists to fix, and it would make the ledger a more elaborate spelling of the
-     * field it replaced.
-     */
-    public void onChainOpened() {
-        creditedChain = null;
     }
 
     /** Whether the current chain has already been credited. Diagnostics and tests only. */
