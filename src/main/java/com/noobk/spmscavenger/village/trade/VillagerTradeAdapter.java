@@ -97,11 +97,32 @@ public final class VillagerTradeAdapter {
      *     live offer before anything is spent
      */
     public static TradeResult performTrade(Container backpack, Villager villager, OfferSnapshot offer) {
-        if (backpack == null || villager == null || !villager.isAlive() || offer == null) {
+        if (backpack == null || villager == null || !villager.isAlive()) {
+            return TradeResult.NO_VILLAGER;
+        }
+        return executeAgainst(backpack, villager.getOffers(), offer, villager::notifyTrade);
+    }
+
+    /**
+     * The whole transaction, minus the entity.
+     *
+     * <p>Split out so the complete chain — revalidation, joint payment, preflight, commit ordering
+     * and the single {@code notifyTrade} — is provable without a live {@code Villager} and therefore
+     * without a server. {@code performTrade} is the thin wrapper that supplies the villager's own
+     * offer list and its {@code notifyTrade}; there is no second implementation to drift.
+     *
+     * @param notify invoked exactly once, after the commit, with the <b>live</b> offer
+     */
+    static TradeResult executeAgainst(
+            Container backpack,
+            MerchantOffers offers,
+            OfferSnapshot offer,
+            java.util.function.Consumer<MerchantOffer> notify) {
+        if (backpack == null || offers == null || offer == null) {
             return TradeResult.NO_VILLAGER;
         }
 
-        MerchantOffer live = liveOfferAt(villager, offer.index());
+        MerchantOffer live = liveOfferAt(offers, offer.index());
         if (live == null) {
             return TradeResult.OFFER_GONE;
         }
@@ -116,23 +137,24 @@ public final class VillagerTradeAdapter {
         if (!TradeTransaction.debit(staged, live.getCostA())) {
             return TradeResult.CANNOT_AFFORD;
         }
+        // Both costs are debited from the same staging array, so cost B spends what cost A left.
+        // An offer paid in one item for both costs must not be affordable twice over.
         if (!TradeTransaction.debit(staged, live.getCostB())) {
             return TradeResult.CANNOT_AFFORD;
         }
         // Preflight: if the output cannot fit, the mob must keep its payment. Doing this on the
-        // staged copy is the whole reason the debit above is safe to have run already.
+        // staged copy is the whole reason the debits above are safe to have run already.
         if (!TradeTransaction.insert(staged, live.assemble())) {
             return TradeResult.NO_ROOM;
         }
 
         TradeTransaction.commit(backpack, staged);
         // Exactly once, and only after the mob actually holds the goods.
-        villager.notifyTrade(live);
+        notify.accept(live);
         return TradeResult.TRADED;
     }
 
-    private static MerchantOffer liveOfferAt(Villager villager, int index) {
-        MerchantOffers offers = villager.getOffers();
+    private static MerchantOffer liveOfferAt(MerchantOffers offers, int index) {
         if (index < 0 || index >= offers.size()) {
             return null;
         }

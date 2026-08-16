@@ -686,7 +686,7 @@ Minecraft launch.
 
 **Evidence baseline (`CODE_CONFIRMED`, pinned 1.21.1 jar):**
 
-- `MerchantOffer#satisfiedBy` / `#take` mutate payment stacks without `MerchantMenu`.
+- `MerchantOffer#satisfiedBy` / `#take` mutate payment stacks without `MerchantMenu`. **Wording reconciled 2026-08-15 (task-47):** this line established that a menu is not required; it is **not** a mandate to use `#take` for payment. `#take` is menu-shaped (it shrinks only the two stacks passed) and is **superseded for payment** by `D-VR-061`/`D-VR-071`'s staged multi-slot allocator. **V2-A as shipped calls `take` zero times**; `satisfiedBy`-equivalent affordability is performed by `TradeTransaction.debit`'s pre-check.
 - `AbstractVillager#notifyTrade(MerchantOffer)` increments uses, awards villager XP, plays sound — **no `Player` parameter**; `CriteriaTriggers.TRADE` and NeoForge `TradeWithVillagerEvent` fire only when `tradingPlayer instanceof ServerPlayer` (absent for PlayerMob — acceptable gen-1).
 - `Villager#setTradingPlayer` / `#updateSpecialPrices(Player)` remain **player-typed** — hero discount stays **V6** (B-VR-34); gen-1 does **not** call `setTradingPlayer`.
 - Production inventory seam: `PlayerMobs.backpack(mob)` (`ExplorationActivityGoal.java`).
@@ -2758,7 +2758,7 @@ Director admission uses **`VillageScenarioProfile`** (`PROPOSED` — B-VR-24) �
 | ID | Behaviour | Feasibility | Integration method | Notes |
 | --- | --- | --- | --- | --- |
 | VR-1 | Village POI discovery | **PARTIAL** | `PoiManager` query on `PoiTypeTags.VILLAGE` + `IS_OCCUPIED` — vanilla's own village predicate, bounded to loaded chunks | `Agent_Claude` F3; no `/locate`; **must not** read unloaded POI sections |
-| VR-2 | Trade execution | **PARTIAL** (mixin-free core) | `VillagerTradeAdapter` + `TradeWithVillagerGoal` (no fake GUI; `D-VR-053`) | `MerchantOffer#take` + `notifyTrade` |
+| VR-2 | Trade execution | **PARTIAL** (mixin-free core) | `VillagerTradeAdapter` + `TradeWithVillagerGoal` (no fake GUI; `D-VR-053`) | `notifyTrade`. **`#take` SUPERSEDED by `D-VR-061`/`D-VR-071`** — payment ownership moved to the staged multi-slot allocator; V2-A never calls `take` (task-47, shipped). `#satisfiedBy` retains its validation role |
 | VR-3 | Offer scoring | **PARTIAL** | Pure policy on `MerchantOffer` cost/result | Unit-testable |
 | VR-4 | Reputation awareness | **ALREADY NATIVE (write)** / accessor (read) | Gossip write path is entity-agnostic and running today; read needs a `Villager.gossips` accessor, not a bridge | `Agent_Claude` F2 — `onReputationEventFrom(…, Entity)` has no `Player` check |
 | VR-5 | Raid state detection | **PARTIAL** | `level.getRaidAt(pos)` poll | No planner needed |

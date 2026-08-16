@@ -192,20 +192,30 @@ class TradeAdapterContractTest {
     void mustHappen_commitPrecedesNotifyAndFollowsEveryCheck() throws IOException {
         String body = source("VillagerTradeAdapter.java");
 
-        int insert = body.indexOf("TradeTransaction.insert");
-        int commit = body.indexOf("TradeTransaction.commit");
-        int notify = body.indexOf("notifyTrade");
+        // Ordering is asserted inside executeAgainst - the real transaction body. performTrade is a
+        // wrapper that merely supplies the villager's offer list and its notifyTrade reference, so
+        // its mention of `notifyTrade` sits earlier in the file and must not be read as the call.
+        int core = body.indexOf("static TradeResult executeAgainst");
+        assertTrue(core > 0, "the transaction core exists");
+        String transaction = body.substring(core);
+
+        int insert = transaction.indexOf("TradeTransaction.insert");
+        int commit = transaction.indexOf("TradeTransaction.commit");
+        int notify = transaction.indexOf("notify.accept");
 
         assertTrue(insert > 0 && commit > insert,
                 "the result must be preflighted before the backpack is written");
         assertTrue(notify > commit,
-                "notifyTrade must follow the commit, so a villager cannot record an unpaid trade");
+                "the notify must follow the commit, so a villager cannot record an unpaid trade");
+        assertEquals(1, transaction.split("notify.accept", -1).length - 1,
+                "exactly one notify call site in the transaction");
         assertEquals(1, body.split("notifyTrade", -1).length - 1,
-                "exactly one notifyTrade call site");
+                "exactly one binding of the villager's notifyTrade");
 
         for (String check : List.of("OFFER_GONE", "OFFER_CHANGED", "OUT_OF_STOCK", "CANNOT_AFFORD",
                 "NO_ROOM")) {
-            assertTrue(body.indexOf("return TradeResult." + check) < commit,
+            int refusal = transaction.indexOf("return TradeResult." + check);
+            assertTrue(refusal > 0 && refusal < commit,
                     check + " must be refused before anything is committed");
         }
     }

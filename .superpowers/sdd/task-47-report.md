@@ -1,6 +1,6 @@
 # Task 47 report: V2-A — `VillagerTradeAdapter` + `OfferSnapshot`
 
-**Status:** `DONE_WITH_CONCERNS` — static complete; **runtime `UNVERIFIED`** (no Minecraft launch).
+**Status:** `DONE` — static complete, two-cost gap closed; **runtime `UNVERIFIED`** (no Minecraft launch, deferred by the User until V2-E/H can produce a real walk → face → transact chain).
 
 ## Files changed
 
@@ -90,3 +90,54 @@ Every refusal returns before step 8, so the backpack and the villager are untouc
 
 V2-B (`TradeEvaluationPolicy`) per the LOCKED sequencing. VR-T2 remains separately authorized and
 must run with `tradeeverything` **absent** (`D-VR-069`).
+
+---
+
+## Closure addendum (2026-08-15) — two-cost E2E, `#take` reconciliation, placement rule
+
+### Two-cost gap closed (User: REQUIRED before V2-B)
+
+`performTrade`'s body was extracted to package-private `executeAgainst(Container, MerchantOffers,
+OfferSnapshot, Consumer<MerchantOffer>)`. `performTrade` is now a thin wrapper supplying the
+villager's offer list and its `notifyTrade`, so the tests exercise **the shipping path**, not a
+parallel one — and the whole chain becomes provable without a live entity.
+
+`TwoCostTradeTest` (6 tests):
+
+| Test | Proves |
+| --- | --- |
+| two-cost trade across slots | A spans slots 0+4, B spans 1+6; exact debit of both, exact result, `notifyTrade` once with the **live** offer, uses +1 |
+| second cost insufficient | A affordable, B one short → `CANNOT_AFFORD`, **zero** inventory mutation, **zero** offer mutation, no notify |
+| wrong second-cost item | a different item does not satisfy B |
+| same item for both costs | both costs draw from **one** staging array, so 8 emeralds cannot pay 8+8; 16 can |
+| result cannot fit | both costs returned in full, no use recorded |
+| changed second cost | B rising 4 → 6 is `OFFER_CHANGED`, not a silent overpay |
+
+Negative controls added: debiting B from a **fresh** staging array (independent costs) fails the
+multi-slot and same-item tests; moving `notify` before `commit` fails the ordering test.
+
+### `#take` wording reconciled (User: RECONCILE)
+
+The locked evidence line said `#satisfiedBy` / `#take` "mutate payment stacks without
+`MerchantMenu`", which established *a menu is not required* — it was never a mandate to pay through
+`take`. RFC updated in both places to mark `#take` **superseded for payment** by `D-VR-061` /
+`D-VR-071`, with the reason (menu-shaped: it shrinks only the two stacks handed to it) and the fact
+that **V2-A calls `take` zero times**. `satisfiedBy`'s validation role is retained and noted.
+
+### Placement rule recorded (User: WATCH)
+
+`inspectOffers` calls `getOffers()`, which lazily populates a villager's offers. **It must not be
+called from a broad passive per-tick villager scan** — that would initialise offers across every
+villager the mob walks past. Offer inspection belongs to bounded trade-candidate evaluation and
+admission only. This is a constraint on V2-E's goal, recorded here so it is not discovered there.
+
+### Deferred by the User
+
+| Item | Status |
+| --- | --- |
+| VR-T2 runtime | **DEFER** — V2-A has no autonomous executor; runtime becomes meaningful at V2-E/H |
+| modded stack-limit behaviour | **DEFER** — vanilla baseline first; compatibility evidence, not a 1.12.0 blocker |
+
+### Final
+
+`.\gradlew.bat clean build` → **974 tests, 0 failures**. Five negative controls across the slice.
