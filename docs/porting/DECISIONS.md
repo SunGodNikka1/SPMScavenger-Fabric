@@ -1601,3 +1601,29 @@ compared on item **and count** (prices move without items changing) immediately 
 **Not proven:** anything at runtime. `performTrade` has never met a live `Villager`. Also unexercised
 end-to-end: two-cost offers, and modded max-stack-size behaviour. VR-T2 is the missing proof and runs
 only in the vanilla-only instance with `tradeeverything` absent (`D-VR-069`).
+
+## 2026-08-15 — V2-B: an offer is scored, a route is not chosen
+
+Task 48 (`.superpowers/sdd/task-48-report.md`). 986 tests, 0 failures, 3 negative controls.
+
+`TradeEvaluationPolicy.evaluate(demand, offer[, emeraldDeficit])` returns a contribution and a price,
+or a typed rejection. It never concludes that trading wins — comparing trade against gather / smelt /
+craft is V2-C's. The boundary is enforced structurally rather than by convention: the policy may not
+reference `Container`, `WorkDemandPolicy.select`, the adapter, any entity, or a clock. **V2-B must
+not become a second demand selector**, and the erosion would be gradual, so the ban is a test.
+
+**Three invariants, each with a negative control:**
+
+- **Contribution is capped at the deficit.** Contributing more than was asked is how a bounded need
+  becomes an unbounded appetite.
+- **Value grants no permission.** Demand *iron ingot*, offer *3 emeralds → diamond sword* →
+  `WRONG_MATERIAL`. The project's recurring invariant (*preference affects choice; preference does not
+  create permission*) applied to acquisition — the same shape as burnable-is-not-expendable.
+- **Selling invents nothing.** An offer that pays emeralds is not a discovery that emeralds are
+  desirable. SELL requires an emerald deficit a **named** consumer already established toward a BUY
+  step; the evaluation is attributed to *that* consumer, not to the one that named the material.
+
+**Stated limits:** the utility function (`coverage * 100 - unitCost`) is an ordering with a
+defensible shape and no calibration — V2-C may need a different scale. Emeralds are hardcoded as the
+currency, which is correct for vanilla merchants and is a compatibility hardcode worth tracking. One
+demand, one offer: ranking a set is V2-C/V2-E.

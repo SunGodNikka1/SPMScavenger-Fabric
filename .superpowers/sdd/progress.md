@@ -71,4 +71,6 @@ Archived briefs/reports: `archive/` (tasks 6–32). Index: `archive/INDEX.md`.
 
 Task 47: complete (V2-A CLOSED — VillagerTradeAdapter + OfferSnapshot + TradeTransaction, two-cost E2E; 974 tests, 5 negative controls; #take wording reconciled; runtime VR-T2 deferred to V2-E/H)
 
+Task 48: complete (V2-B TradeEvaluationPolicy — pure offer scoring; 986 tests, 3 negative controls; V2-C owns route admission)
+
 No commits unless user requests. No Minecraft launches unless separately approved.
