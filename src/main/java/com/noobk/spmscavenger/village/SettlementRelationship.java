@@ -16,6 +16,7 @@ public final class SettlementRelationship {
     private long lastPresenceTick;
     private long lastOutsideTick;
     private int socialEventCount;
+    private int tradeEpisodeCount;
 
     public SettlementRelationship(int familiarityScore, long lastVisitTick, int socialEventCount) {
         this(familiarityScore, lastVisitTick, socialEventCount, 0, 0L, 0L);
@@ -36,12 +37,25 @@ public final class SettlementRelationship {
             int presenceFamiliarity,
             long lastPresenceTick,
             long lastOutsideTick) {
+        this(familiarityScore, lastVisitTick, socialEventCount, presenceFamiliarity,
+                lastPresenceTick, lastOutsideTick, 0);
+    }
+
+    public SettlementRelationship(
+            int familiarityScore,
+            long lastVisitTick,
+            int socialEventCount,
+            int presenceFamiliarity,
+            long lastPresenceTick,
+            long lastOutsideTick,
+            int tradeEpisodeCount) {
         this.familiarityScore = clampFamiliarity(familiarityScore);
         this.presenceFamiliarity = clampPresenceFamiliarity(presenceFamiliarity);
         this.lastVisitTick = lastVisitTick;
         this.lastPresenceTick = lastPresenceTick;
         this.lastOutsideTick = lastOutsideTick;
         this.socialEventCount = Math.max(0, socialEventCount);
+        this.tradeEpisodeCount = Math.max(0, tradeEpisodeCount);
     }
 
     /**
@@ -79,6 +93,17 @@ public final class SettlementRelationship {
 
     public int socialEventCount() {
         return socialEventCount;
+    }
+
+    /**
+     * V2-G — completed trade visits/chains, counted <b>separately</b> from social events.
+     *
+     * <p>Separate by requirement, not by taste (`D-VR-057`): trade must not increment
+     * {@code socialEventCount}, or the inspector and any future social-threshold logic would read a
+     * shopping trip as a friendship.
+     */
+    public int tradeEpisodeCount() {
+        return tradeEpisodeCount;
     }
 
     public AttachmentBand attachmentBand() {
@@ -127,6 +152,19 @@ public final class SettlementRelationship {
         return lastOutsideTick > lastVisitTick;
     }
 
+    /**
+     * V2-G — one completed bounded trade visit/chain (`D-VR-063`).
+     *
+     * <p>Emitted once per visit regardless of how many offer uses it contained: ten clicks in one
+     * visit must not teach ten independent village relationships. Path failure, abort and a round
+     * that never transacted emit nothing at all — there is no episode to learn from.
+     */
+    public SettlementRelationship recordTradeEpisode(long tick) {
+        tradeEpisodeCount = Math.min(
+                SettlementTuning.MAX_TRADE_EPISODE_COUNT, tradeEpisodeCount + 1);
+        return bumpFamiliarity(SettlementTuning.TRADE_FAMILIARITY_BUMP, tick);
+    }
+
     public SettlementRelationship recordSocialEpisode(long tick) {
         socialEventCount = Math.min(
                 SettlementTuning.MAX_SOCIAL_EVENT_COUNT, socialEventCount + 1);
@@ -150,6 +188,9 @@ public final class SettlementRelationship {
         socialEventCount = Math.min(
                 SettlementTuning.MAX_SOCIAL_EVENT_COUNT,
                 socialEventCount + other.socialEventCount);
+        tradeEpisodeCount = Math.min(
+                SettlementTuning.MAX_TRADE_EPISODE_COUNT,
+                tradeEpisodeCount + other.tradeEpisodeCount);
         return this;
     }
 
@@ -161,6 +202,7 @@ public final class SettlementRelationship {
         tag.putLong("lastPresence", lastPresenceTick);
         tag.putLong("lastOutside", lastOutsideTick);
         tag.putInt("socialEvents", socialEventCount);
+        tag.putInt("tradeEpisodes", tradeEpisodeCount);
         return tag;
     }
 
@@ -178,7 +220,9 @@ public final class SettlementRelationship {
                 tag.getInt("socialEvents"),
                 presence,
                 tag.getLong("lastPresence"),
-                tag.getLong("lastOutside"));
+                tag.getLong("lastOutside"),
+                // Absent in pre-V2-G saves; getInt returns 0, which is the correct starting count.
+                tag.getInt("tradeEpisodes"));
     }
 
     static SettlementRelationship clampMerged(SettlementRelationship left, SettlementRelationship right) {

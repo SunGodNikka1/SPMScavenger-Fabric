@@ -79,6 +79,30 @@ public final class SettlementRelationshipService {
         VillageMemorySavedData.get(level).markDirty();
     }
 
+    /**
+     * V2-G — credit one completed trade visit/chain to the settlement it happened in.
+     *
+     * <p>Deliberately <b>not</b> routed through {@link #onSocialEpisode}: `D-VR-057` separates the
+     * credit so a shopping trip is never counted as a social event. The caller owns the
+     * once-per-visit rule (`D-VR-063`); this method credits whatever it is handed, exactly once.
+     *
+     * @param anchorAtStart the settlement the episode belongs to, resolved when the episode began —
+     *     never re-resolved at teardown, or a mob that walked out mid-chain would credit the village
+     *     it left for the one it arrived at
+     */
+    public static void onTradeEpisode(
+            ServerLevel level, UUID mobId, BlockPos anchorAtStart, long tick) {
+        if (level == null || mobId == null || anchorAtStart == null) {
+            return;
+        }
+        MobVillageMemory memory = VillageMemorySavedData.get(level).memoryOf(mobId);
+        SettlementRelationship relationship = memory.relationshipAt(anchorAtStart)
+                .orElseGet(SettlementRelationship::empty);
+        relationship.recordTradeEpisode(tick);
+        memory.putRelationship(anchorAtStart, relationship);
+        VillageMemorySavedData.get(level).markDirty();
+    }
+
     public static void onHomeDesignated(ServerLevel level, UUID mobId, BlockPos anchor, long tick) {
         if (level == null || mobId == null || anchor == null) {
             return;

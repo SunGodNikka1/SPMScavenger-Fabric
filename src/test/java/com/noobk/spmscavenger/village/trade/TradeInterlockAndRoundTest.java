@@ -206,7 +206,24 @@ class TradeInterlockAndRoundTest {
         assertTrue(body.contains("TradeSessionClaimWindow.release"),
                 "combat, shelter and commands all arrive at stop(); a claim outliving its goal "
                         + "suppresses greeting for a villager nobody is trading with");
-        assertFalse(body.contains("if ("), "release must be unconditional, not one of several exits");
+        // V2-G: restated as the actual property. This was `!body.contains("if (")`, a proxy that
+        // held only while stop() happened to be branchless - it broke the moment a guarded statement
+        // was added AFTER the release, which cannot make the release conditional. The real rule is
+        // that the release sits at method-body top level and nothing precedes it.
+        String[] lines = body.split(String.valueOf((char) 10));
+        int releaseLine = -1;
+        for (int i = 0; i < lines.length; i++) {
+            if (lines[i].contains("TradeSessionClaimWindow.release")) {
+                releaseLine = i;
+                break;
+            }
+        }
+        assertTrue(lines[releaseLine].startsWith("        TradeSessionClaimWindow.release"),
+                "release must be a top-level statement of stop(), never nested in a branch");
+        for (int i = 0; i < releaseLine; i++) {
+            assertFalse(lines[i].trim().startsWith("if ("),
+                    "nothing may branch before the release - an early return would leak the claim");
+        }
     }
 
     /** Locked constraint 5: released on unload, death and server stop as well. */

@@ -21,6 +21,22 @@ public final class SettlementTuning {
     public static final int SOCIAL_FAMILIARITY_BUMP = 40;
     public static final int MAX_SOCIAL_EVENT_COUNT = 10_000;
 
+    /**
+     * V2-G — familiarity for one completed trade visit/chain (`D-VR-057`, `D-VR-063`).
+     *
+     * <p>Set equal to {@link #SOCIAL_FAMILIARITY_BUMP} deliberately, and that parity is a <b>default,
+     * not a finding</b>. A completed trade is plausibly a weightier interaction than a greeting, but
+     * nothing measured says by how much, and inventing a larger number would be exactly the kind of
+     * unfounded tuning this RFC labels `UNVERIFIED`. Revisit with VR-T2 evidence.
+     *
+     * <p>Bounded by construction rather than by this constant: {@code D-VR-063} normalizes to one
+     * episode per visit/chain, so a ten-use chain teaches one relationship, not ten.
+     */
+    public static final int TRADE_FAMILIARITY_BUMP = 40;
+
+    /** Same ceiling shape as the social counter; the two never share a total. */
+    public static final int MAX_TRADE_EPISODE_COUNT = 10_000;
+
     public static final int HOME_DESIGNATION_FAMILIARITY_FLOOR = MEDIUM_BAND_MIN;
 
     public static final double COMMUTE_MIN_DISTANCE = 128.0;

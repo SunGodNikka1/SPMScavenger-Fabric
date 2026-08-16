@@ -5,6 +5,7 @@ import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
+import com.noobk.spmscavenger.village.SettlementRelationshipService;
 import com.noobk.spmscavenger.village.trade.OfferSnapshot;
 import com.noobk.spmscavenger.village.trade.RouteEvidence;
 import com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence;
@@ -18,6 +19,7 @@ import com.noobk.spmscavenger.village.trade.TradeDemandGate;
 import com.noobk.spmscavenger.village.trade.TradeEvaluationPolicy;
 import com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow;
 import com.noobk.spmscavenger.village.trade.VillagerTradeAdapter;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -92,6 +94,20 @@ public class TradeWithVillagerGoal extends Goal {
     /** R7 — the purchase this attempt funds; null unless a funding SELL is in progress. */
     private TradeAttemptFunding attemptFunding;
 
+    /**
+     * V2-G — the settlement this visit's trade episode belongs to, or {@code null} when this round
+     * has not yet transacted.
+     *
+     * <p>This field <b>is</b> the once-per-visit rule (`D-VR-063`). Set at the first successful
+     * transaction and cleared when the episode is emitted, so a ten-use chain teaches one village
+     * relationship rather than ten, and a round that only walked and failed teaches nothing.
+     *
+     * <p>Captured at first success rather than at round start on purpose: that is the moment a trade
+     * episode demonstrably exists <i>and</i> the mob is provably standing at the villager. A round
+     * that opens in one settlement and succeeds in another would otherwise credit the wrong village.
+     */
+    private BlockPos tradeEpisodeAnchor;
+
     private ResourceLocation attemptConsumer;
     private ResourceLocation attemptMaterial;
     private int repathCooldown;
@@ -154,7 +170,17 @@ public class TradeWithVillagerGoal extends Goal {
      */
     @Override
     public void stop() {
+        // Unconditional and first. A claim outliving its goal suppresses greeting for a villager
+        // nobody is trading with, so nothing - including a throwing episode emit below - may come
+        // between stop() and this release.
         TradeSessionClaimWindow.release(mob.getUUID());
+        if (mob.level() instanceof ServerLevel level) {
+            // V2-G, also here and not only in endRound: a visit interrupted by combat after a
+            // successful trade still happened, and the mob should remember the village it traded in.
+            // Idempotent by construction - emitTradeEpisode clears the anchor - so the ordinary
+            // endRound-then-stop teardown credits once, not twice.
+            emitTradeEpisode(level);
+        }
         round.clear();
         target = null;
         plannedOffer = null;
@@ -276,6 +302,14 @@ public class TradeWithVillagerGoal extends Goal {
      * ({@code exhausted}, the cooldown, and the demand itself going away) end the round.
      */
     private void continueChain(ServerLevel level) {
+        // V2-G: the visit has now produced at least one real transaction. First success only - the
+        // anchor is not re-resolved on later uses in the same chain, which is what keeps the episode
+        // count per visit rather than per click.
+        if (tradeEpisodeAnchor == null) {
+            tradeEpisodeAnchor = SettlementRelationshipService
+                    .nearestSettlementAnchorAt(level, mob.getUUID(), mob.blockPosition())
+                    .orElse(null);
+        }
         // Captured before the attempt is torn down: the purchase this sale just funded is the one
         // thing the re-centred discovery below cannot rediscover on its own.
         Villager carriedBuyer = attemptFunding == null ? null : attemptFunding.buyer();
@@ -424,11 +458,30 @@ public class TradeWithVillagerGoal extends Goal {
     }
 
     private void endRound(ServerLevel level) {
+        emitTradeEpisode(level);
         round.endRound(level.getGameTime());
         TradeSessionClaimWindow.release(mob.getUUID());
         target = null;
         plannedOffer = null;
         mob.getNavigation().stop();
+    }
+
+    /**
+     * V2-G — emit at most one settlement relationship episode for this visit.
+     *
+     * <p>Idempotent: clearing the anchor is what makes the two teardown paths safe to both call it.
+     * Emits nothing when the round never transacted, and nothing when the mob was outside any
+     * remembered settlement's bounds — a trade in the wilderness is a real trade but not a village
+     * relationship, and there is no anchor to credit.
+     */
+    private void emitTradeEpisode(ServerLevel level) {
+        BlockPos anchor = tradeEpisodeAnchor;
+        tradeEpisodeAnchor = null;
+        if (anchor == null) {
+            return;
+        }
+        SettlementRelationshipService.onTradeEpisode(
+                level, mob.getUUID(), anchor, level.getGameTime());
     }
 
     /**
