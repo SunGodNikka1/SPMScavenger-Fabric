@@ -9,9 +9,9 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + V1.5 CLOSED**; **V2 design CLOSED** (implementation not authorized) |
-| **Status** | `DESIGNING` → **V2 Trading ready for task-47** |
+| **Status** | `DESIGNING` → **V2 LOCK-CLEAN — ready for task-47** |
 | **Nearest frontier** | **Authorize task-47 / Begin vanilla V2** → `1.12.0` slices A–H (+ optional I); V2-TE remains a separately authorized post-core compatibility task |
-| **Last update** | 2026-08-15 (User peer review — D-VR-058/061/015/067/070 amendments; doc-debt sweep) |
+| **Last update** | 2026-08-15 (User peer review pass 2 — D-VR-071/066/067 + V2-E/F sequencing repair) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -767,21 +767,23 @@ VR-T2 **PASS** in the vanilla-only instance (`D-VR-068`).
 | **V2-B** | `TradeEvaluationPolicy` — score `MerchantOffer` vs `WorkDemandPolicy.MaterialDemand` (D-VR-015 / B-VR-20 facade; no rename blocker) |
 | **V2-C** | `TradeDemandRegistrar` + **feasibility filter before `select()` wins** (`D-VR-015`); parallel acquisition candidates per `ConsumerRecipeSpec` (CRAFT/SMELT vs TRADE); no autonomous emerald-hoarding loop |
 | **V2-D** | transient bounded `TradeChainPlan` SELL → BUY ticket (D-VR-029); **`SellExpendabilityPolicy`** disposable-quantity math (`D-VR-058`); re-evaluate before every transaction; expiry; re-resolve current offer/villager after interruption or reload |
-| **V2-E** | `TradeWithVillagerGoal` @ priority **3** with one selected `TradeDemandGate` owner (same band as smelt/gather); let an already-running host P3 episode finish, then admit trade during its bounded cooldown |
-| **V2-F** | `ActivityClass.VILLAGE_TRADE` + `MoveHolderClassifier` pin (taxonomy lesson from V1.5) |
+| **V2-E** | `TradeWithVillagerGoal` @ priority **3** with one selected `TradeDemandGate` owner; introduces `ActivityClass.VILLAGE_TRADE` enum value and goal class (executor may stub until adapter wired) |
+| **V2-F** | `MoveHolderClassifier` pin: `TradeWithVillagerGoal` → `VILLAGE_TRADE` — **co-lands with V2-E or immediately follows in the same task batch** (`D-VR-073`); classifier cannot precede the goal type it classifies |
 | **V2-G** | `SettlementRelationshipService.onTradeEpisode` familiarity bump once per completed visit/chain; no persistent `KnownVillager` or offer-index memory in gen-1. **If any part persists per-mob, it must register in `PerMobSavedData.forgetAll`** or `PerMobRemovalContractTest` fails the build (B-VR-93, Gate RET-1e) |
 | **V2-H** | `test-datapacks/phase-village-raid/` trade presets for VR-T2 / VR-T2b |
 | **V2-I** *(optional, post-VR-T2 static)* | O-panel trade inspector row (`B-VR-79`): active `consumerKey`, anchor, villager id, `TradeBlockedReason` — no new debug command |
 | **V2-TE** *(optional follow-up; does not block core)* | Trade Everything v0.3.0 Fabric compatibility through `TradeOpportunitySource`; no fake player/menu/session; exact quote revalidation; fail closed when absent/incompatible (`D-VR-068`) |
 
-**Implementation dependency order (`LOCKED` sequencing):**
+**Implementation dependency order (`LOCKED` sequencing — amended pass 2):**
 
 ```text
-V2-A (adapter) → V2-B (evaluation) → V2-C (demand registrar) → V2-F (taxonomy)
+V2-A (adapter) → V2-B (evaluation) → V2-C (demand registrar) → V2-D (chain ticket)
         ↓
-V2-D (chain ticket) → V2-E (goal + TradeDemandGate) → V2-G (onTradeEpisode)
+V2-E (goal + TradeDemandGate + VILLAGE_TRADE enum/goal class)
         ↓
-V2-H (datapack fixture) — may land with static tests once V2-A/B exist
+V2-F (MoveHolderClassifier pin) — same task batch as V2-E or next commit; never before E (D-VR-073)
+        ↓
+V2-G (onTradeEpisode) → V2-H (datapack fixture)
 V2-I (inspector) — optional after VR-T2 static green; not a release gate
 V2-TE (Trade Everything compat) — separate task after V2-A/B static green; not part of task-47 core acceptance
 ```
@@ -892,11 +894,12 @@ notifyTrade exactly once
 
 **Transaction boundary (`LOCKED` design — `D-VR-061` + `D-VR-071` + `D-VR-072`):** copy all
 backpack slots at **commit instant**; run a bounded **joint** allocation for cost A and optional cost B
-(one physical stack satisfies at most one cost; find a valid partition when one exists — greedy
-pay-A-then-B can falsely reject overlapping predicates, e.g. generic diamond + component-specific
-diamond); simulate removal and result insertion on copies; revalidate live offer; apply one slot-index
-delta; then `notifyTrade` once. `MerchantOffer#take` validates only — not the allocator. Mineflayer's
-menu consolidates payment into two slots; our 8-slot `SimpleContainer` cannot assume that.
+(**one item count may satisfy at most one cost allocation** — stacks may be **partitioned** across costs,
+e.g. one stack of 2 emeralds paying cost A=1 and cost B=1; find a valid partition when one exists —
+greedy pay-A-then-B can falsely reject overlapping predicates, e.g. generic diamond + component-specific
+diamond in different slots); simulate removal and result insertion on copies; revalidate live offer; apply
+one slot-index delta; then `notifyTrade` once. `MerchantOffer#take` validates only — not the allocator.
+Mineflayer's menu consolidates payment into two slots; our 8-slot `SimpleContainer` cannot assume that.
 
 **Interruption/arbitration:** a temporary P1 greet/door helper discards the current navigation path,
 not the demand/chain meaning; resume re-resolves a fresh path and offer. Player command, combat,
@@ -906,9 +909,9 @@ cooldown should then expose P3 to trade. This is `CODE_INFERRED`, not runtime pr
 release gate; if trade remains starved, use a thin centralized *exact admitted-trade* suppression
 hook rather than raising trade above command/shelter or prematurely shipping full V3 storage policy.
 
-**Must happen (static):** offer scoring unit tests; staged transaction tests for split costs, **joint two-cost partition** (D-VR-071 negative control: generic + component-specific diamonds), full/near-full backpack, component mismatch, stale price/use, human customer, and two sequential mobs; successful trade removes exact cost, inserts exact result, and increments uses once; **SlotDelta built only after FACE with fresh backpack**; taxonomy regression for `VILLAGE_TRADE`; chain step advance + **SellExpendability** negative control (SPM may eat; trade replans with reduced disposable qty); **trade candidate blocked from winning `select()` when no feasible route**; `TradeDemandGate` excludes concurrent Scavenger P3 work when chain active; one relationship episode for a multi-click visit.
+**Must happen (static):** offer scoring unit tests; staged transaction tests for split costs, **joint two-cost partition** (D-VR-071 negative controls: (1) generic + component-specific diamonds in different slots; (2) **one stack of 2 emeralds** paying cost A=1 + cost B=1), full/near-full backpack, component mismatch, stale price/use, human customer, and two sequential mobs; successful trade removes exact cost, inserts exact result, and increments uses once; **SlotDelta built only after FACE with fresh backpack**; taxonomy regression for `VILLAGE_TRADE`; chain step advance + **SellExpendability** negative control (SPM may eat; trade replans with reduced disposable qty); **trade candidate blocked from winning `select()` when no feasible route**; `TradeDemandGate` excludes concurrent Scavenger P3 work when chain active; one relationship episode for a multi-click visit.
 
-**Must not happen:** mutate costs before result capacity is known; **persist SlotDelta across ticks**; greedy two-cost allocator double-spend or false reject; double `increaseUses`; use a stale offer index after restock/reload; automate a villager while a real player is its customer; greet completion credited as trade; one ten-trade visit grants ten familiarity episodes; **global food lock against SPM EatFoodGoal**; selling below disposable quantity; create emeralds with no external consumer; **trade wins `select()` then suppresses feasible smelt/craft path**; call `commuteTarget()` for trade settlement choice; raise trade priority over command/combat/shelter to hide P3 arbitration.
+**Must not happen:** mutate costs before result capacity is known; **persist SlotDelta across ticks**; greedy two-cost allocator **double-counting item counts** or false reject when stack partition is valid; double `increaseUses`; use a stale offer index after restock/reload; automate a villager while a real player is its customer; greet completion credited as trade; one ten-trade visit grants ten familiarity episodes; **global food lock against SPM EatFoodGoal**; selling below disposable quantity; create emeralds with no external consumer; **trade wins `select()` then suppresses feasible smelt/craft path**; call `commuteTarget()` for trade settlement choice; raise trade priority over command/combat/shelter to hide P3 arbitration.
 
 **Verification:** `.\gradlew.bat test --tests "*trade*"` + `*village*` structural extensions; VR-T2 /
 VR-T2b runtime after launch approval in a **vanilla-only** instance (`D-VR-069` — no
@@ -3190,9 +3193,21 @@ pins four transaction/arbitration traps before implementation.
 | Vanilla-only VR-T2 baseline | **SOUND** | `D-VR-069` unchanged |
 | Early RFC doc debt (mixin/menu/KnownVillager) | **SWEPT** | Scenario B, mixin table, KnownVillager header |
 
-**Verdict:** V2 design **ready for task-47** after these contract amendments. Implementation may start
-at **V2-A** without walking into known greet-collision, allocator, stale-slot, feasibility, or
-commute-target traps.
+**Verdict:** V2 design **ready for task-47** after these contract amendments. Superseded by
+continuation 11 pass-2 repairs.
+
+### Brainstorm continuation 11 — User peer review pass 2 (`User` + `Agent_Cursor`, 2026-08-15)
+
+**Contribution type:** `REVIEW / CONTRACT REPAIR`. Four findings; no scope expansion.
+
+| ID | Severity | Finding | Repair |
+| --- | --- | --- | --- |
+| P1 | **BLOCKING** | `D-VR-071` stack exclusivity too strict — falsely rejects valid stack partition (2 emeralds → A=1, B=1) | **Amended:** invariant is **no double-counting of item counts**; stacks may partition across costs |
+| P1 | **BLOCKING** | Locked order `V2-F` before `V2-E` — classifier cannot pin goal that does not exist | **`D-VR-073`:** E introduces goal class; F co-lands or immediately follows |
+| P2 | Minor | `D-VR-067` missing server-stop cleanup | **`shutdownServerState()`** — mirror `SocialGreetClaimWindow` |
+| P3 | Doc debt | `D-VR-066` `protected-input conflict` stale vs `SellExpendabilityPolicy` | **`INSUFFICIENT_DISPOSABLE_QUANTITY`**; reject `PROTECTED_INPUT` enum |
+
+**Verdict:** **LOCK-CLEAN for task-47** — architecture PASS; contract defects repaired.
 
 ---
 
@@ -3374,7 +3389,7 @@ ProgressGoal: ACQUIRE_ITEM(book_mending)
 | Required plan field | Purpose |
 | --- | --- |
 | Originating demand + consumer | Prevent autonomous arbitrage from becoming its own objective |
-| Required output + protected inputs | Preserve the item actually demanded and food/tool survival reserves |
+| Required output + disposable-quantity bounds | Preserve demanded output; sell only above `SellExpendabilityPolicy` reserves (`D-VR-058`) |
 | Budget + expiration | Bound emerald/input spending and stale plans |
 | Current step + revalidation evidence | Recheck villager, offer, inventory and whether the output was acquired elsewhere before every step |
 | `consumerKey` | `"trade:chain:<goalId>"` on `WorkDemandPolicy.MaterialDemand` (D-VR-015) |
@@ -4532,7 +4547,7 @@ directly applying Bad Omen; blanket “bottle requires mixin” classification.
 
 **Status:** `LOCKED` (`User` + `Agent_Cursor`; amended/peer-reviewed `Agent_Codex` 2026-08-15)
 **Accepted:** an external demand owns a bounded, expiring, revalidated SELL → BUY acquisition plan
-with protected inputs and consumer identity. Gen-1 uses a transient `TradeChainPlan`; save/reload
+with **disposable-quantity bounds** (`SellExpendabilityPolicy`, `D-VR-058`) and consumer identity. Gen-1 uses a transient `TradeChainPlan`; save/reload
 closes neutrally and the still-valid external demand rebuilds from current world/offer state. Reuse a generic
 `AcquisitionPlan` only if it satisfies the contract; `TradeChainTicket` is not mandated.
 **Rejected:** Hardcoded single-hop trades only; selling last food; stale step execution; autonomous
@@ -4661,14 +4676,16 @@ offer evidence; profitable-trade loops that manufacture their own demand.
 
 ### D-VR-066: `VillagerTradeAvailability` + `TradeBlockedReason` (`Agent_Cursor`, 2026-08-15)
 
-**Status:** `LOCKED`
+**Status:** `LOCKED` — amended User peer review pass 2 (2026-08-15)
 **Accepted:** pure predicate pack for gen-1 defer paths: baby, zombified, sleeping, no currently
 useful offer, outside `SettlementBoundsPolicy`, real-player customer (`getTradingPlayer() != null`),
-unreachable/offline villager, night defer (`D-VR-059`), demand expired, protected-input conflict.
-Each failure maps to a stable `TradeBlockedReason` enum consumed by `TradeWithVillagerGoal`,
-`TaskLifecycle.BLOCKED`, and optional `V2-I` inspector — not ad-hoc log strings.
+unreachable/offline villager, night defer (`D-VR-059`), demand expired,
+**`INSUFFICIENT_DISPOSABLE_QUANTITY`** (`SellExpendabilityPolicy` — fresh calculation per attempt;
+not a global protected-input lock). Each failure maps to a stable `TradeBlockedReason` enum consumed
+by `TradeWithVillagerGoal`, `TaskLifecycle.BLOCKED`, and optional `V2-I` inspector — not ad-hoc log strings.
 **Rejected:** silent `canUse()` false with no reason; spinning path retries when all villagers sleep;
-treating `TradeBlockedReason` as persistent saved state (ephemeral episode only).
+treating `TradeBlockedReason` as persistent saved state (ephemeral episode only); **`PROTECTED_INPUT`
+/ reservation-style blocked reasons** that imply SPM inventory locks (`D-VR-058`).
 
 ### D-VR-067: Bilateral trade/greet claim windows (`Agent_Cursor`, 2026-08-15)
 
@@ -4678,7 +4695,9 @@ while `TradeWithVillagerGoal` is in **FACE or EXECUTE** against villager `V`, gr
 same villager `V` only** defers until trade completes, aborts, or bounded expiry. SPM
 `FriendlyGreetGoal` owns MOVE+LOOK and classifies villagers as GREET targets — a real collision, not
 defensive plumbing. Existing trade `canUse()` guards (no active greet / SOCIAL binding) remain. RET-1:
-bounded per-mob map keyed by mob UUID; `clear` on episode end, unload, and death.
+bounded per-mob map keyed by mob UUID; `clear` on episode end, unload, death, and **server stop**
+(`shutdownServerState()` — mirror `SocialGreetClaimWindow.java` L74–76; prevents stale UUID claims on
+integrated-server world switch in the same JVM).
 **Rejected:** indefinite greet veto; taxonomy-only guard without time-bounded face-phase claim;
 persistent per-villager reservation registry; optional/skip `TradeSessionClaimWindow` in task-47.
 
@@ -4694,12 +4713,16 @@ omniscient offer memory for unloaded settlements in V2.
 
 ### D-VR-071: Joint two-cost slot allocation (`User`, 2026-08-15)
 
-**Status:** `LOCKED`
+**Status:** `LOCKED` — amended User peer review pass 2 (2026-08-15)
 **Accepted:** when an offer has cost A and optional cost B, allocate across up to 8 backpack slots
-with a bounded matching/backtracking pass: **one physical stack satisfies at most one cost**; find a
-valid partition when one exists. Required static negative control: generic diamond + component-specific
-diamond in different slots (greedy A-then-B falsely rejects; joint assignment succeeds).
-**Rejected:** sequential greedy pay-A-then-pay-B as sole allocator; double-spending one stack for both costs.
+with a bounded matching/backtracking pass. **Invariant: one item count may not be double-counted
+across cost allocations** — not "one stack per cost." A single stack **may be partitioned** between
+costs (e.g. cost A = 1 emerald, cost B = 1 emerald, one stack of 2 emeralds — valid human payment).
+Required static negative controls: (1) generic diamond + component-specific diamond in different slots
+(greedy A-then-B falsely rejects; joint assignment succeeds); (2) single emerald stack partitioned across
+two emerald costs.
+**Rejected:** sequential greedy pay-A-then-pay-B as sole allocator; **stack-level exclusivity** that
+forbids partitioning one stack across costs; double-counting the same items toward both costs.
 
 ### D-VR-072: `SlotDelta` is commit-instant only (`User`, 2026-08-15)
 
@@ -4709,6 +4732,14 @@ diamond in different slots (greedy A-then-B falsely rejects; joint assignment su
 backpack and applied in the same tick** — no staged payment surviving WALK/animation/yields. Execution:
 WALK → FACE → re-fetch → stage → simulate → revalidate → APPLY → `notifyTrade` once.
 **Rejected:** multi-tick staged payment while SPM eat/loot/gift can mutate the container.
+
+### D-VR-073: V2-F taxonomy pin follows V2-E goal type (`User`, 2026-08-15)
+
+**Status:** `LOCKED`
+**Accepted:** `MoveHolderClassifier` pin for `TradeWithVillagerGoal` → `VILLAGE_TRADE` lands in the
+**same task batch as V2-E** or the immediately following commit. V2-E introduces the goal class (and
+enum value) first; V2-F cannot complete ahead of E because the classifier target does not exist yet.
+**Rejected:** locked sequence `… → V2-F → … → V2-E`; taxonomy pin before goal class exists.
 
 ### D-VR-068: Trade Everything is an optional post-core `TradeOpportunitySource` (`User` + `Agent_Codex`, 2026-08-15)
 
@@ -4920,6 +4951,7 @@ beside `ExplorationActivityGoal` or it fail-closes the entire discretionary dire
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| User + Agent_Cursor | 2026-08-15 | **V2 peer review pass 2 (continuation 11).** P1: `D-VR-071` count-level exclusivity (stack partition allowed); `D-VR-073` V2-E before V2-F. P2: `D-VR-067` server-stop cleanup. P3: `D-VR-066` → `INSUFFICIENT_DISPOSABLE_QUANTITY`. **LOCK-CLEAN for task-47.** |
 | User + Agent_Cursor | 2026-08-15 | **V2 pre-task-47 peer review (continuation 10).** Locked: `D-VR-067` SOURCE-CONFIRMED mandatory; `D-VR-058` → `SellExpendabilityPolicy`; `D-VR-071` joint allocator; `D-VR-072` commit-instant SlotDelta; `D-VR-015` feasibility-before-win; `D-VR-070` reject literal `commuteTarget()`. Doc-debt sweep. **Ready for task-47.** |
 | Agent_Claude | 2026-08-15 | **V2 brainstorm — stack identity and payment shape.** The LOCKED evidence baseline pinned the Merchant seams correctly; it did not pin **stack identity**. `MerchantOffer#getResult()` returns the **live** result field while `#assemble()` copies, and `#getBaseCostA()` is live while `#getCostA()` copies — an asymmetry that will fool an implementer who checks the cost side and generalises. Aliasing the result corrupts the villager's offer permanently and persists to the world. Separately, `take(a,b)` mutates **only the two stacks handed to it** because `MerchantMenu` guarantees consolidated payment slots; an 8-slot backpack pays 20 wheat as 16+4, so V2-A must debit across slots and use `take`/`satisfiedBy` as validation only. Also linked V2-D's "protected inputs" to the shipped `FuelExpendability` permission layer (SPM-2) and V2-G's persistence to `PerMobSavedData.forgetAll` (Gate RET-1e, already build-enforced). **Checked and rejected:** level-up offer-index invalidation — `updateTrades` appends, indices are stable. B-VR-90…94; V2-A/D/G amended. **No implementation authorization.** |
 | User + Agent_Cursor | 2026-08-15 | **D-VR-069 LOCKED — uncontaminated VR-T2 baseline.** First V2 proof chain: Scavenger → vanilla Villager → vanilla MerchantOffer → exact cost/result → uses+1. VR-T2…T2h require `tradeeverything` **absent**; VR-T2k/l only after VR-T2 PASS in separate instance. |
