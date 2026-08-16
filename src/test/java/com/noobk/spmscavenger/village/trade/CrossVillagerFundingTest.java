@@ -149,8 +149,13 @@ class CrossVillagerFundingTest {
                 "the purchase is attempt evidence, carried from selection");
         assertFalse(body.contains("fundingTarget("),
                 "rebuilding the whole market from the seller is what broke cross-villager funding");
-        assertTrue(body.contains("VillagerTradeAdapter.available(context.buyer())"),
-                "the buyer's liveness is checked without inspecting its offers");
+        // R8 strengthened this: liveness alone was never the question. The PURCHASE must still
+        // exist, which only re-resolving the recorded offer can establish.
+        assertTrue(body.contains("VillagerTradeAdapter.revalidateOffer(context.buyer()"),
+                "the recorded purchase is re-resolved, not merely the buyer entity checked");
+        assertTrue(body.contains("canAffordNonEmerald("),
+                "and its non-emerald payment must still be held - owedToPurchase only covers the "
+                        + "material being sold, so a diamond spent elsewhere is invisible to it");
     }
 
     // ------------------------------------------------- 2. leg selection is V2-B's job
@@ -334,5 +339,150 @@ class CrossVillagerFundingTest {
 
         assertTrue(body.contains("TradeChainPolicy.withoutMarketEvidence("),
                 "an absent quote is evaluated by V2-D, which owns termination");
+    }
+
+    // ------------------------------------------------- 5. the purchase must still exist (R8)
+
+    private static String goalSource() throws IOException {
+        return Files.readString(Path.of(
+                        "src/main/java/com/noobk/spmscavenger/goal/TradeWithVillagerGoal.java"))
+                .replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("(?m)//.*$", "");
+    }
+
+    private static String methodOf(String source, String signature) {
+        String body = source.substring(source.indexOf(signature));
+        return body.substring(0, body.indexOf((char) 10 + "    }"));
+    }
+
+    /**
+     * The R7 P0: <b>liveness is not existence.</b>
+     *
+     * <p>{@code available(buyer)} proves the entity is alive, awake and unoccupied. It says nothing
+     * about whether the trade justifying this sale is still on the board — and a player emptying that
+     * offer during the walk leaves all three of those facts true.
+     */
+    @Test
+    void mustNotHappen_anExhaustedOrRepricedPurchaseStillJustifiesTheSale() {
+        OfferSnapshot recorded = buyIron(0, 2);
+
+        assertFalse(offer(0, new ItemStack(Items.EMERALD, 2), ItemStack.EMPTY,
+                        new ItemStack(Items.IRON_INGOT, 1), 12, 12).isTradeable(),
+                "a spent offer cannot be bought from");
+        assertFalse(recorded.matchesLive(new MerchantOffer(
+                        new ItemCost(Items.EMERALD, 3), Optional.empty(),
+                        new ItemStack(Items.IRON_INGOT, 1), 0, 12, 0, 0f)),
+                "and a reprice from 2 to 3 is a different purchase than the one planned");
+        assertTrue(recorded.matchesLive(new MerchantOffer(
+                        new ItemCost(Items.EMERALD, 2), Optional.empty(),
+                        new ItemStack(Items.IRON_INGOT, 1), 0, 12, 0, 0f)),
+                "unchanged is unchanged");
+    }
+
+    /**
+     * The purchase's unrelated payment vanishing during the walk.
+     *
+     * <p>{@code owedToPurchase} reserves the BUY's non-emerald cost only when it is <b>the same
+     * material being sold</b>. A diamond consumed elsewhere while the mob walks off to sell sticks is
+     * invisible to it, which is exactly why the boundary asks separately.
+     */
+    @Test
+    void mustNotHappen_aPurchaseWhosePaymentVanishedIsStillFunded() {
+        OfferSnapshot buyWithDiamond = offer(0, new ItemStack(Items.EMERALD, 5),
+                new ItemStack(Items.DIAMOND, 1), new ItemStack(Items.IRON_INGOT, 1), 0, 12);
+
+        SimpleContainer stillHasIt = new SimpleContainer(9);
+        stillHasIt.setItem(0, new ItemStack(Items.DIAMOND, 1));
+        assertTrue(VillagerTradeAdapter.canAffordNonEmerald(stillHasIt, buyWithDiamond));
+
+        SimpleContainer spentIt = new SimpleContainer(9);
+        spentIt.setItem(0, new ItemStack(Items.STICK, 64));
+        assertFalse(VillagerTradeAdapter.canAffordNonEmerald(spentIt, buyWithDiamond),
+                "selling sticks to fund a purchase whose diamond is gone funds nothing");
+        assertEquals(0, TradeFundingPlanner.owedToPurchase(
+                        buyWithDiamond, new ItemStack(Items.STICK)),
+                "and the stick reserve is blind to it - different material, zero owed");
+    }
+
+    /** Emeralds are excluded: requiring them would refuse every funding sale by construction. */
+    @Test
+    void mustHappen_theEmeraldCostIsNotRequiredBeforeFunding() {
+        assertTrue(VillagerTradeAdapter.canAffordNonEmerald(new SimpleContainer(9), buyIron(0, 5)),
+                "the emeralds are exactly what the chain is selling to obtain");
+    }
+
+    /**
+     * The index trap: a flattened ranking slot is not a merchant's board position.
+     *
+     * <p>Discovery builds one flat index space across all villagers for ranking, while each candidate
+     * keeps its villager-local index for execution. Carrying the flattened snapshot into revalidation
+     * would ask buyer A for global index 7 when its actual offer sits at index 2 — revalidating a
+     * different trade, or none at all.
+     */
+    @Test
+    void mustNotHappen_theFlattenedRankingIndexAddressesAMerchantsBoard() throws IOException {
+        String decision = methodOf(goalSource(),
+                "private Optional<AuthorizedAttempt> authorizedCandidate(");
+        String context = decision.substring(decision.indexOf("new TradeAttemptFunding("));
+        context = context.substring(0, context.indexOf("));"));
+
+        assertTrue(context.contains("buyCandidate.offer()"),
+                "the villager's OWN offer is carried, so its index addresses its own board");
+        assertFalse(context.contains("funding.buyOffer()"),
+                "the flattened ranking snapshot must never become an addressing key");
+    }
+
+    // ------------------------------------------------- 6. geometry after the sale (R8)
+
+    /**
+     * The R7 P1, and it is Minecraft physics rather than policy.
+     *
+     * <pre>
+     * buyer A        mob        seller B
+     *   -15           0           +15       both inside the 16-block scan
+     *
+     * walk to B, sell, then re-scan around the mob's NEW position (+15)
+     *   A is now 30 blocks away and drops out of cognition
+     * </pre>
+     *
+     * A never moved, never died, and still offers the exact purchase the executor is holding in
+     * {@code attemptFunding} the entire time. With two sales required it is worse: the second never
+     * happens, because the purchase justifying it disappeared after the first.
+     */
+    @Test
+    void mustHappen_theGeometryThatLosesTheBuyerIsReal() {
+        double radius = com.noobk.spmscavenger.goal.TradeWithVillagerGoal.CANDIDATE_RADIUS;
+
+        assertTrue(15.0 <= radius, "both villagers are discoverable from the starting point");
+        assertTrue(30.0 > radius,
+                "and the buyer is out of range once the mob has walked to the seller, so a "
+                        + "re-centred scan alone loses it");
+    }
+
+    /** The executor carries it — and only as a hint: every fact about it is revalidated. */
+    @Test
+    void mustHappen_theCarriedBuyerIsAHintNeverAuthority() throws IOException {
+        String goal = goalSource();
+        String chain = methodOf(goal, "private void continueChain(");
+        String discovery = methodOf(goal,
+                "private Optional<AuthorizedAttempt> authorizedCandidate(");
+
+        assertTrue(chain.contains("attemptFunding.buyer()") && chain.contains("carriedBuyer"),
+                "the buyer of the leg just completed is captured before teardown");
+        assertTrue(discovery.contains("nearby.add(carriedBuyer)"),
+                "and re-admitted to the candidate set despite the re-centred radius");
+        assertTrue(discovery.contains("VillagerTradeAdapter.available(carriedBuyer)")
+                        && discovery.contains("round.available(carriedBuyer.getUUID())"),
+                "a dead, occupied or demoted buyer is not carried - evidence, never authority");
+        assertTrue(discovery.contains("nearby.stream().noneMatch("),
+                "and a buyer already inside the radius is not added twice");
+    }
+
+    /** Only the post-SELL replan carries one; a demoted candidate has no purchase to inherit. */
+    @Test
+    void mustNotHappen_reselectInheritsAPurchaseItNeverMade() throws IOException {
+        assertTrue(methodOf(goalSource(), "private void reselect(")
+                        .contains("authorizedCandidate(level, null)"),
+                "a demoted attempt carries nothing forward - inventing a buyer here would be "
+                        + "durable villager identity by the back door");
     }
 }

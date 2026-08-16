@@ -207,6 +207,7 @@ public final class TradeFundingPlanner {
         SellFundingLeg best = null;
         boolean bestFunds = false;
         float bestUtility = -Float.MAX_VALUE;
+        int bestIndex = Integer.MAX_VALUE;
 
         for (OfferSnapshot offer : sellOffers) {
             SellFundingLeg leg = legFor(
@@ -226,10 +227,15 @@ public final class TradeFundingPlanner {
             // is the registrar's own ordering.
             if (best == null
                     || (funds && !bestFunds)
-                    || (funds == bestFunds && utility > bestUtility)) {
+                    || (funds == bestFunds && utility > bestUtility)
+                    // R8: the documented index tie-break, made explicit. It previously relied on the
+                    // caller happening to build the list in ascending index order - true today, and
+                    // exactly the kind of accidental invariant that stops being true silently.
+                    || (funds == bestFunds && utility == bestUtility && leg.offer().index() < bestIndex)) {
                 best = leg;
                 bestFunds = funds;
                 bestUtility = utility;
+                bestIndex = leg.offer().index();
             }
         }
         return best;

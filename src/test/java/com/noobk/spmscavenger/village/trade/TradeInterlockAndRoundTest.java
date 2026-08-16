@@ -281,5 +281,18 @@ class TradeInterlockAndRoundTest {
             from += CALL.length();
         }
         assertTrue(sites >= 1, "the discovery call site must still exist");
+
+        // R8: the same invariant, applied to the revalidation seam. Re-resolving one recorded offer
+        // is not a sweep - that villager was selected, and is carried as attempt evidence precisely
+        // because the executor chose it. What must stay impossible is reaching an arbitrary villager.
+        final String REVALIDATE = "VillagerTradeAdapter.revalidateOffer(";
+        from = 0;
+        while ((from = goal.indexOf(REVALIDATE, from)) >= 0) {
+            String argument = goal.substring(from + REVALIDATE.length());
+            argument = argument.substring(0, argument.indexOf(','));
+            assertEquals("context.buyer()", argument.trim(),
+                    "only the carried, already-selected buyer may be revalidated");
+            from += REVALIDATE.length();
+        }
     }
 }

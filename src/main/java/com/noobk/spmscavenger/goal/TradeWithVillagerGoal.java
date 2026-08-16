@@ -111,7 +111,7 @@ public class TradeWithVillagerGoal extends Goal {
         if (round.coolingDown(now)) {
             return false;
         }
-        return authorizedCandidate(level).isPresent();
+        return authorizedCandidate(level, null).isPresent();
     }
 
     @Override
@@ -140,7 +140,7 @@ public class TradeWithVillagerGoal extends Goal {
     @Override
     public void start() {
         if (mob.level() instanceof ServerLevel level) {
-            authorizedCandidate(level)
+            authorizedCandidate(level, null)
                     .ifPresent(attempt -> beginAttempt(level, attempt));
         }
     }
@@ -276,6 +276,9 @@ public class TradeWithVillagerGoal extends Goal {
      * ({@code exhausted}, the cooldown, and the demand itself going away) end the round.
      */
     private void continueChain(ServerLevel level) {
+        // Captured before the attempt is torn down: the purchase this sale just funded is the one
+        // thing the re-centred discovery below cannot rediscover on its own.
+        Villager carriedBuyer = attemptFunding == null ? null : attemptFunding.buyer();
         // Released immediately: the interlock covers an attempt, never a relationship.
         TradeSessionClaimWindow.release(mob.getUUID());
         // R6: begin() is idempotent for the candidate already in progress, so re-selecting this same
@@ -286,7 +289,7 @@ public class TradeWithVillagerGoal extends Goal {
         target = null;
         plannedOffer = null;
 
-        Optional<AuthorizedAttempt> next = authorizedCandidate(level);
+        Optional<AuthorizedAttempt> next = authorizedCandidate(level, carriedBuyer);
         if (next.isPresent()) {
             beginAttempt(level, next.get());
         } else {
@@ -310,10 +313,22 @@ public class TradeWithVillagerGoal extends Goal {
             // A funding SELL with no recorded purchase behind it has no justification at all.
             return false;
         }
-        // The buyer must still exist and be tradeable. Checked with `available`, which reads liveness
-        // only - inspecting its offers from here would be the passive sweep the round exists to
-        // prevent, and would lazily populate a villager we are not standing at.
-        if (!VillagerTradeAdapter.available(context.buyer())) {
+        // R8: the PURCHASE must still exist, not merely the buyer. `available` proves the entity is
+        // usable and nothing more - a player emptying that trade, a demand reprice, or the offer
+        // simply moving would all leave it true while the reason for this sale had evaporated.
+        //
+        // Inspecting this one villager is not the sweep the round forbids: that rule is about
+        // touching offer lists for villagers never selected, and this one is carried precisely
+        // because the executor selected it.
+        java.util.Optional<OfferSnapshot> liveBuy =
+                VillagerTradeAdapter.revalidateOffer(context.buyer(), context.buyQuote());
+        if (liveBuy.isEmpty()) {
+            return false;
+        }
+        // And its non-emerald payment must still be in the backpack. `owedToPurchase` protects that
+        // material only when it is the same one being sold; a diamond consumed elsewhere during the
+        // walk is invisible to a stick sale.
+        if (!VillagerTradeAdapter.canAffordNonEmerald(backpack, liveBuy.get())) {
             return false;
         }
         int deficit = context.emeraldsRequired()
@@ -400,7 +415,7 @@ public class TradeWithVillagerGoal extends Goal {
         plannedOffer = null;
         mob.getNavigation().stop();
 
-        Optional<AuthorizedAttempt> next = authorizedCandidate(level);
+        Optional<AuthorizedAttempt> next = authorizedCandidate(level, null);
         if (next.isPresent()) {
             beginAttempt(level, next.get());
         } else {
@@ -466,7 +481,8 @@ public class TradeWithVillagerGoal extends Goal {
      * never in a passive sweep, because {@code getOffers()} lazily populates a villager's trades and
      * a broad scan would initialise them across a whole village.
      */
-    private Optional<AuthorizedAttempt> authorizedCandidate(ServerLevel level) {
+    private Optional<AuthorizedAttempt> authorizedCandidate(
+            ServerLevel level, Villager carriedBuyer) {
         Optional<WorkDemandPolicy.MaterialDemand> demand = liveDemand(level);
         if (demand.isEmpty()) {
             return Optional.empty();
@@ -476,11 +492,25 @@ public class TradeWithVillagerGoal extends Goal {
             return Optional.empty();
         }
 
-        List<Villager> nearby = level.getEntitiesOfClass(
+        List<Villager> nearby = new ArrayList<>(level.getEntitiesOfClass(
                 Villager.class,
                 new AABB(mob.blockPosition()).inflate(CANDIDATE_RADIUS),
                 villager -> VillagerTradeAdapter.available(villager)
-                        && round.available(villager.getUUID()));
+                        && round.available(villager.getUUID())));
+        // R8: discovery re-centres on the mob, and the mob has just walked to the seller. With buyer
+        // and seller each 15 blocks from the start point on opposite sides, the buyer is 30 blocks
+        // away by the time the sale completes and vanishes from a 16-block scan - despite never
+        // moving, still being alive, and still offering the exact purchase this chain exists for.
+        //
+        // So the buyer from the leg just completed is re-admitted as an already-selected candidate.
+        // It is a hint, never authority: every fact about it is revalidated below, and if the quote
+        // has gone it simply drops out and ordinary discovery replans.
+        if (carriedBuyer != null
+                && VillagerTradeAdapter.available(carriedBuyer)
+                && round.available(carriedBuyer.getUUID())
+                && nearby.stream().noneMatch(v -> v.getUUID().equals(carriedBuyer.getUUID()))) {
+            nearby.add(carriedBuyer);
+        }
         if (nearby.isEmpty()) {
             return Optional.empty();
         }
@@ -545,13 +575,20 @@ public class TradeWithVillagerGoal extends Goal {
         // Carried, never rediscovered at execution: the BUY and the SELL routinely belong to
         // different villagers, and re-deriving the purchase while standing at the seller finds no
         // purchase at all.
-        TradeAttemptFunding attemptContext = step == TradeChainPlan.Step.SELL_TO_FUND
-                ? new TradeAttemptFunding(
-                        demand.get().consumerKey(),
-                        owners.get(funding.buyOffer().index()).villager(),
-                        funding.buyOffer(),
-                        funding.emeraldsRequired())
-                : null;
+        Candidate buyCandidate = owners.get(funding.buyOffer().index());
+        TradeAttemptFunding attemptContext =
+                step == TradeChainPlan.Step.SELL_TO_FUND && buyCandidate != null
+                        ? new TradeAttemptFunding(
+                                demand.get().consumerKey(),
+                                buyCandidate.villager(),
+                                // R8: the villager's OWN offer index. `funding.buyOffer()` carries
+                                // the flattened cross-villager ranking slot, and asking buyer A for
+                                // global index 7 when its real index is 2 revalidates a different
+                                // trade - or none at all. The flat index is a ranking key; only the
+                                // local one addresses a merchant's board.
+                                buyCandidate.offer(),
+                                funding.emeraldsRequired())
+                        : null;
 
         return TradeDemandGate
                 .authorize(demand.get(),

@@ -220,7 +220,9 @@ class TradeProductionWiringTest {
         String chain = bodyOf(goal, "private void continueChain(");
         assertFalse(chain.contains("demoteCurrent"),
                 "the seller stays selectable, with a fresh approach budget");
-        assertTrue(chain.contains("authorizedCandidate(level)"),
-                "the next step is re-derived from actual inventory, never from a remembered count");
+        assertTrue(chain.contains("authorizedCandidate(level, carriedBuyer)"),
+                "the next step is re-derived from actual inventory, never from a remembered count - "
+                        + "and the buyer just funded is carried, because re-centred discovery on the "
+                        + "seller cannot see a buyer 30 blocks the other way");
     }
 }

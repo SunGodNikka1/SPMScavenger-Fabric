@@ -99,6 +99,50 @@ public final class VillagerTradeAdapter {
     }
 
     /**
+     * V2-E-R8 — is <b>this exact recorded offer</b> still on this villager's board, unchanged?
+     *
+     * <h2>Why liveness was not enough</h2>
+     *
+     * R7 justified a funding SELL with {@code available(buyer)}, which proves only that the buyer
+     * entity is currently usable. It does not prove the purchase still exists:
+     *
+     * <pre>
+     * selection   toolsmith A: 5 emerald + 1 diamond -&gt; iron    fletcher B: sticks -&gt; emeralds
+     * walk to B   a player trades with A, exhausting the offer / demand repricing moves the cost
+     * at B        A is alive, awake, unoccupied -&gt; available(A) == true
+     *             the sale proceeds, funding a purchase that no longer exists
+     * </pre>
+     *
+     * Planning permission does not authorize execution, and the purchase is a fact the sale rests on.
+     *
+     * <h2>This is not the passive sweep the round forbids</h2>
+     *
+     * The forbidden thing is touching offer lists for villagers that were <b>not already selected</b>,
+     * because {@code getOffers()} lazily populates trades across a whole village. This villager was
+     * selected — it is carried as attempt evidence precisely because the executor chose it. Read-only:
+     * no {@code notifyTrade}, no menu, no FakePlayer, no mutation.
+     *
+     * @param recorded the snapshot taken at selection, carrying the <b>villager-local</b> index
+     * @return the live snapshot when it still matches exactly, otherwise empty
+     */
+    public static java.util.Optional<OfferSnapshot> revalidateOffer(
+            Villager villager, OfferSnapshot recorded) {
+        if (!available(villager) || recorded == null) {
+            return java.util.Optional.empty();
+        }
+        MerchantOffers offers = villager.getOffers();
+        int index = recorded.index();
+        if (index < 0 || index >= offers.size()) {
+            return java.util.Optional.empty();
+        }
+        MerchantOffer live = offers.get(index);
+        if (live == null || live.isOutOfStock() || !recorded.matchesLive(live)) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(OfferSnapshot.of(index, live));
+    }
+
+    /**
      * Whether a villager may be approached for a trade at all.
      *
      * <p>Selection-time legality. Re-checked at the transaction boundary by
@@ -109,6 +153,29 @@ public final class VillagerTradeAdapter {
                 && villager.isAlive()
                 && !villager.isSleeping()
                 && villager.getTradingPlayer() == null;
+    }
+
+    /**
+     * R8 — are this quote's <b>non-emerald</b> costs still in the backpack?
+     *
+     * <p>Asked before a funding SELL, about the purchase being funded. Emerald components are
+     * deliberately excluded: those are exactly what the chain is selling to obtain, so requiring them
+     * here would refuse every funding sale ever made.
+     */
+    public static boolean canAffordNonEmerald(Container backpack, OfferSnapshot offer) {
+        if (backpack == null || offer == null) {
+            return false;
+        }
+        for (ItemStack cost : new ItemStack[] {offer.costA(), offer.costB()}) {
+            if (cost.isEmpty() || cost.is(net.minecraft.world.item.Items.EMERALD)) {
+                continue;
+            }
+            if (com.noobk.spmscavenger.ScavengerCrafting.count(backpack, cost.getItem())
+                    < cost.getCount()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Whether the backpack currently holds both costs. Does not mutate anything. */
