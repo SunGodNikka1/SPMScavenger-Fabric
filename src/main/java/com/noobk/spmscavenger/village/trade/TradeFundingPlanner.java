@@ -75,7 +75,16 @@ public final class TradeFundingPlanner {
          * appears first.
          */
         public boolean actionable() {
-            return funded() || (sellLeg != null && sellLeg.usable());
+            if (funded()) {
+                return true;
+            }
+            // R2: `usable` only says the leg can perform one sale. A leg that yields 2 emeralds
+            // against a 10-emerald deficit is usable and still cannot complete the purchase, and
+            // treating it as actionable suppressed a fully fundable projected route - the previous
+            // round's defect narrowed from "no SELL leg" to "partial SELL leg".
+            return deficit != null
+                    && sellLeg != null
+                    && sellLeg.fullyFunds(deficit.emeraldsNeeded());
         }
     }
 

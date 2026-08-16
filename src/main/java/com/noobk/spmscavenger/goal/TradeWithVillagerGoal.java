@@ -670,7 +670,7 @@ public class TradeWithVillagerGoal extends Goal {
         // V2-D decides whether this chain may continue and which leg is next. Its verdict is taken
         // before ranking, because a terminated chain must not produce a candidate at all.
         TradeChainPolicy.ChainOutcome outcome =
-                advanceChain(level, purchaseDemand, backpack, funding);
+                advanceChain(level, demand.get(), purchaseDemand, backpack, funding);
         if (outcome == null || !outcome.active()) {
             return Optional.empty();
         }
@@ -747,13 +747,22 @@ public class TradeWithVillagerGoal extends Goal {
      * looted, gifted) and the chain stops, which is exactly V2-D's {@code TARGET_OBTAINED_ELSEWHERE}.
      */
     private TradeChainPolicy.ChainOutcome advanceChain(
-            ServerLevel level, WorkDemandPolicy.MaterialDemand demand, Container backpack,
+            ServerLevel level,
+            WorkDemandPolicy.MaterialDemand sourceDemand,
+            WorkDemandPolicy.MaterialDemand demand,
+            Container backpack,
             TradeFundingPlanner.FundingTarget funding) {
         long now = level.getGameTime();
         int held = ScavengerCrafting.count(
                 backpack, BuiltInRegistries.ITEM.get(demand.materialKey()));
 
         if (funding == null) {
+            // R2: count what the CHAIN is buying, not whichever representation the market happened
+            // to select this iteration. A surviving pickaxe chain evaluated against a held iron
+            // INGOT read 1 >= 1 and terminated as TARGET_OBTAINED_ELSEWHERE while the mob owned no
+            // pickaxe at all - the V2-D R6 coordinate-system defect, in the units dimension.
+            int heldForChain = chain == null ? held : ScavengerCrafting.count(
+                    backpack, BuiltInRegistries.ITEM.get(chain.desiredOutput()));
             // R7: no usable quote right now is NOT a reason to destroy the plan. Nulling it here let
             // a villager strolling out of range reset the hard lifetime, and the next quote start a
             // fresh 6000 ticks - the same defect the review rejected for combat interruption, keyed
@@ -761,17 +770,27 @@ public class TradeWithVillagerGoal extends Goal {
             // is missing. V2-D still gets to expire it.
             if (chain != null) {
                 TradeChainPolicy.ChainOutcome idle =
-                        TradeChainPolicy.withoutMarketEvidence(chain, held, now);
+                        TradeChainPolicy.withoutMarketEvidence(chain, heldForChain, now);
                 chain = idle.active() ? idle.plan() : null;
             }
             return null;
         }
 
+        ScavengerCrafting.ConsumerRecipeSpec spec = TradePurchaseProjection
+                .activeSpecFor(sourceDemand, backpack, mob.getMainHandItem(),
+                        mob.getOffhandItem(), ScavengerConfig.get())
+                .orElse(null);
+        // R2: judged against the SOURCE demand, and in both directions. Using the selected purchase
+        // demand made direct -> projected fail: `ontoOutput(iron_pickaxe, ...)` has no projection
+        // back to the ingot, so the executor reminted and the market flip restarted the clock after
+        // all. Both the old and the new target must be representations of the same source appetite.
         if (chain != null
                 && chain.consumerKey().equals(demand.consumerKey())
                 && !chain.desiredOutput().equals(demand.materialKey())
                 && TradePurchaseProjection.isPurchaseTargetFor(
-                        demand, activeSpec(backpack).orElse(null), chain.desiredOutput())) {
+                        sourceDemand, spec, chain.desiredOutput())
+                && TradePurchaseProjection.isPurchaseTargetFor(
+                        sourceDemand, spec, demand.materialKey())) {
             // Same appetite, other representation. Preserve the clock: minting a fresh plan whenever
             // a direct seller wanders in or out of range would restart the hard lifetime on every
             // market flip - R7's reset defect through a new door.

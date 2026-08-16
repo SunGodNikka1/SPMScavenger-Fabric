@@ -161,8 +161,9 @@ class TradePurchaseProjectionTest {
         String decision = methodOf(goalSource(),
                 "private Optional<AuthorizedAttempt> authorizedCandidate(");
 
-        assertTrue(decision.contains("advanceChain(level, purchaseDemand, backpack, funding)"),
-                "the chain's desired output is what will actually be bought");
+        assertTrue(decision.contains("advanceChain(level, demand.get(), purchaseDemand, backpack, funding)"),
+                "R2: the chain needs BOTH - the source demand to judge which targets are valid "
+                        + "representations, and the purchase demand for what is actually bought");
         assertTrue(decision.contains(".authorize(selected,"),
                 "V2-C evaluates offers against the demand being purchased");
         assertTrue(decision.contains("selected.consumerKey()"),
@@ -272,5 +273,89 @@ class TradePurchaseProjectionTest {
                 "same consumer, other representation - preserve the lifetime");
         assertTrue(body.contains("TradePurchaseProjection.isPurchaseTargetFor("),
                 "and only when the new output really is a target for this consumer");
+    }
+
+    // ------------------------------------------------- R2
+
+    /**
+     * Representation switching must work in <b>both</b> directions.
+     *
+     * <p>R1 judged the retarget against the selected purchase demand, so projected → direct worked
+     * and direct → projected did not: {@code ontoOutput(iron_pickaxe, …)} has no projection back to
+     * the ingot. The executor reminted, and the market flip restarted the 6000-tick clock after all.
+     */
+    @Test
+    void mustHappen_bothRepresentationsAreTargetsOfTheSourceDemand() {
+        var spec = ScavengerCrafting.IRON_PICKAXE_RECIPE;
+        var source = ironIngotDemand();
+
+        assertTrue(TradePurchaseProjection.isPurchaseTargetFor(
+                source, spec, BuiltInRegistries.ITEM.getKey(Items.IRON_PICKAXE)));
+        assertTrue(TradePurchaseProjection.isPurchaseTargetFor(
+                source, spec, BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT)));
+
+        // The asymmetry that broke R1: judged from the OUTPUT demand, the ingot is not a target.
+        var outputDemand = new WorkDemandPolicy.MaterialDemand(
+                BuiltInRegistries.ITEM.getKey(Items.IRON_PICKAXE), 1, spec.consumerKey());
+        assertFalse(TradePurchaseProjection.isPurchaseTargetFor(
+                        outputDemand, spec, BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT)),
+                "which is exactly why the retarget must be judged against the SOURCE demand");
+    }
+
+    @Test
+    void mustHappen_theRetargetIsJudgedAgainstTheSourceDemand() throws IOException {
+        String body = methodOf(goalSource(), "private TradeChainPolicy.ChainOutcome advanceChain(");
+
+        assertTrue(body.contains("sourceDemand, spec, chain.desiredOutput()"),
+                "the old target is judged against the source appetite");
+        assertTrue(body.contains("sourceDemand, spec, demand.materialKey()"),
+                "and so is the new one - both must be representations of the same appetite");
+    }
+
+    /** A retarget is the same economic episode, so it must not earn a second familiarity credit. */
+    @Test
+    void mustNotHappen_aRetargetEarnsASecondRelationshipEpisode() {
+        TradeChainPlan projected = chainFor(BuiltInRegistries.ITEM.getKey(Items.IRON_PICKAXE));
+        TradeChainPlan retargeted = projected.retargetedTo(
+                BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT), 3);
+        TradeEpisodeLedger ledger = new TradeEpisodeLedger();
+
+        assertTrue(ledger.consumeCreditFor(projected));
+        assertFalse(ledger.consumeCreditFor(retargeted),
+                "D-VR-075: switching representation is not a new economic episode, so identity "
+                        + "cannot include the mutable target");
+        assertTrue(projected.sameChainAs(retargeted));
+    }
+
+    /** The no-market path counts the chain's own output, never the selected representation. */
+    @Test
+    void mustNotHappen_theIdleChainIsMeasuredInTheWrongUnits() throws IOException {
+        String body = methodOf(goalSource(), "private TradeChainPolicy.ChainOutcome advanceChain(");
+
+        assertTrue(body.contains("withoutMarketEvidence(chain, heldForChain, now)"),
+                "a surviving pickaxe chain measured against held INGOTS read 1 >= 1 and terminated "
+                        + "as TARGET_OBTAINED_ELSEWHERE while the mob owned no pickaxe");
+        assertTrue(body.contains("BuiltInRegistries.ITEM.get(chain.desiredOutput())"),
+                "the count is of what the chain is buying");
+    }
+
+    /** actionable() must mean completable, not merely one legal sale. */
+    @Test
+    void mustNotHappen_aPartialSellLegCountsAsActionable() {
+        OfferSnapshot sale = OfferSnapshot.of(1, new net.minecraft.world.item.trading.MerchantOffer(
+                new net.minecraft.world.item.trading.ItemCost(Items.STICK, 32), Optional.empty(),
+                new net.minecraft.world.item.ItemStack(Items.EMERALD, 2), 11, 12, 0, 0f));
+        SellFundingLeg partial = new SellFundingLeg(sale, new SellAuthorization(
+                new net.minecraft.world.item.ItemStack(Items.STICK, 32), 64,
+                ScavengerCrafting.IRON_PICKAXE_RECIPE.consumerKey()), 2, 1);
+
+        assertTrue(partial.usable(), "it can perform one sale");
+        assertFalse(partial.fullyFunds(10), "but two emeralds cannot close a ten-emerald deficit");
+
+        var target = new TradeFundingPlanner.FundingTarget(sale, 10,
+                new TradeEvaluationPolicy.EmeraldDeficit(
+                        ScavengerCrafting.IRON_PICKAXE_RECIPE.consumerKey(), 10), partial);
+        assertFalse(target.actionable(),
+                "a target that cannot complete must not suppress a fully fundable projection");
     }
 }

@@ -110,10 +110,13 @@ public record TradeChainPlan(
      * is allowed to cross.
      */
     public boolean sameChainAs(TradeChainPlan other) {
+        // V2-H0-R2: desiredOutput is deliberately NOT part of identity. `retargetedTo` switches
+        // between the two representations of one appetite while preserving the clock, so including
+        // the target here made a retarget look like a new chain - and V2-G's ledger would have paid
+        // a second familiarity episode for one economic episode, contradicting D-VR-075 directly.
         return other != null
                 && createdAtTick == other.createdAtTick
-                && consumerKey.equals(other.consumerKey)
-                && desiredOutput.equals(other.desiredOutput);
+                && consumerKey.equals(other.consumerKey);
     }
 
     public boolean expired(long nowTick) {
