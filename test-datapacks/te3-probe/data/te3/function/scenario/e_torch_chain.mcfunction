@@ -9,4 +9,5 @@ item replace entity @e[tag=te3_mob,limit=1] weapon.mainhand with iron_pickaxe
 item replace entity @e[tag=te3_mob,limit=1] weapon.offhand with iron_axe
 item replace entity @e[tag=te3_mob,limit=1] inventory.0 with oak_log 64
 item replace entity @e[tag=te3_mob,limit=1] inventory.1 with oak_log 64
-say [TE3] scenario E: torch chain, no torches, surplus logs. Watch for COAL payout vs CHARCOAL demand.
+say [TE3] scenario E: torch chain. Run: /spmscavenger debug te3 index
+say [TE3] then: /spmscavenger debug te3 scan minecraft:charcoal   (watch for a COAL payout)

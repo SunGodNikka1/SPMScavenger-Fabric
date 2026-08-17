@@ -14,11 +14,11 @@ technically correct dead machinery — the `D-VR-075` lesson, caught one slice e
 
 ```mcfunction
 /function te3:scenario/a_iron_frontier
-/spmscavenger debug te3 index      # cold + repeated ensureIndexed timings
-/spmscavenger debug te3 scan       # A/B/C/D/E classification + steady-state quote cost
+/spmscavenger debug te3 index                              # cold + repeated ensureIndexed
+/spmscavenger debug te3 scan minecraft:iron_ingot          # asserts the demand, then classifies
 
 /function te3:scenario/e_torch_chain
-/spmscavenger debug te3 scan
+/spmscavenger debug te3 scan minecraft:charcoal
 
 /function te3:scenario/d_protected
 /spmscavenger debug te3 scan
@@ -68,6 +68,13 @@ If bucket E is non-empty, the fix is whether the torch chain should demand *a fu
 
 ## Limitations
 
+- **Only the first `index` after a fresh launch is genuinely cold.** Trade Everything memoizes on
+  `(RecipeManager, config)` identity, and `te3 reset` clears only the probe's own flag — it cannot
+  and must not clear TE's index. Later `index` calls measure the memoized path.
+- **`scan` takes an optional expected demand** and refuses when `WorkDemandPolicy` selected
+  something else. Without it, `a_iron_frontier` could silently run as a torch scenario: `SURVIVAL`
+  outranks `PROGRESSION`, so surplus logs with torches below target select `CHARCOAL` over
+  `IRON_INGOT`. The scenario now stocks torches first; the assertion is what proves it worked.
 - **Never executed.** Written from source and verified by compilation only.
 - Reachability is not desirability. A non-empty A/B says a bridge *could* pay off, not that
   autonomous behaviour would be sensible — that is V2-TE's own design question.

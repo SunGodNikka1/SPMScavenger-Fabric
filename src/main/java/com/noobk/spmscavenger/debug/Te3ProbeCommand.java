@@ -63,12 +63,21 @@ public final class Te3ProbeCommand {
         dispatcher.register(Commands.literal("spmscavenger").then(Commands.literal("debug")
                 .then(Commands.literal("te3").requires(src -> src.hasPermission(2))
                         .then(Commands.literal("index").executes(c -> index(c.getSource())))
-                        .then(Commands.literal("scan").executes(c -> scan(c.getSource())))
+                        .then(Commands.literal("scan")
+                                .executes(c -> scan(c.getSource(), null))
+                                .then(Commands.argument("expectDemand",
+                                                com.mojang.brigadier.arguments.StringArgumentType.string())
+                                        .executes(c -> scan(c.getSource(),
+                                                com.mojang.brigadier.arguments.StringArgumentType
+                                                        .getString(c, "expectDemand")))))
                         .then(Commands.literal("reset").executes(c -> {
                             indexed = false;
                             coldIndexNanos = warmIndexNanos = -1L;
                             c.getSource().sendSuccess(() -> Component.literal(
-                                    "[TE3] probe state reset (TE's own index is not cleared)"), false);
+                                    "[TE3] probe state reset. NOTE: TE memoizes its index on "
+                                            + "(RecipeManager, config) identity and this does not "
+                                            + "clear it - only the FIRST `index` after a fresh "
+                                            + "launch is a genuine cold measurement."), false);
                             return 1;
                         })))));
     }
@@ -110,7 +119,7 @@ public final class Te3ProbeCommand {
 
     private enum Bucket { A_DIRECT, B_FUNDING, C_IRRELEVANT, D_ILLEGAL, E_REPRESENTATION_MISS }
 
-    private static int scan(CommandSourceStack source) {
+    private static int scan(CommandSourceStack source, String expectDemand) {
         if (!indexed) {
             source.sendFailure(Component.literal(
                     "[TE3] refused - run `index` first. OfferQuoter.quote never calls "
@@ -139,8 +148,23 @@ public final class Te3ProbeCommand {
                                 mob.getOffhandItem(), cfg)
                         .flatMap(spec -> TradePurchaseProjection.ontoOutput(d, spec)));
 
+        // Fixture entities only. Scanning every nearby AbstractVillager would admit the modpack's
+        // own villagers and any passing WanderingTrader - manufacturing A/B reachability from the
+        // environment, including the wandering-trader path we agreed must not prove ordinary
+        // Villager compatibility.
         List<AbstractVillager> merchants = level.getEntitiesOfClass(AbstractVillager.class,
-                new AABB(mob.blockPosition()).inflate(RADIUS));
+                new AABB(mob.blockPosition()).inflate(RADIUS),
+                v -> v.getTags().contains("te3"));
+        if (expectDemand != null) {
+            String actual = demand.map(d -> d.materialKey().toString()).orElse("<none>");
+            if (!actual.equals(expectDemand)) {
+                source.sendFailure(Component.literal("[TE3] scenario INVALID - expected demand "
+                        + expectDemand + " but WorkDemandPolicy selected " + actual
+                        + ". SURVIVAL outranks PROGRESSION, so surplus logs with torches below "
+                        + "target select CHARCOAL over IRON_INGOT. Fix the scenario, not the probe."));
+                return 0;
+            }
+        }
         List<String> lines = new ArrayList<>();
         int[] tally = new int[Bucket.values().length];
         long quoteNanos = 0L;
@@ -151,7 +175,7 @@ public final class Te3ProbeCommand {
             if (input.isEmpty()) {
                 continue;
             }
-            boolean authorized = disposable(input, backpack, cfg) > 0;
+            int disposableUnits = disposable(input, backpack, cfg);
             for (AbstractVillager merchant : merchants) {
                 long t0 = System.nanoTime();
                 Optional<MerchantOffer> quoted =
@@ -162,7 +186,13 @@ public final class Te3ProbeCommand {
                     continue;
                 }
                 MerchantOffer offer = quoted.get();
-                Bucket bucket = classify(offer, authorized, demand, projected, backpack, cfg);
+                // Disposition is judged against the EXACT quote, not against "some units are
+                // spare". One disposable log does not authorize a quote costing eight, and the
+                // production funding path already requires the count to be covered.
+                boolean authorized = disposableUnits >= offer.getCostA().getCount()
+                        && ItemStack.isSameItemSameComponents(offer.getCostA(), input);
+                Bucket bucket = classify(offer, authorized, demand, projected, backpack, cfg,
+                        merchant);
                 tally[bucket.ordinal()]++;
                 if (bucket != Bucket.C_IRRELEVANT) {
                     lines.add("  " + bucket + "  " + describe(offer.getCostA())
@@ -205,7 +235,7 @@ public final class Te3ProbeCommand {
             MerchantOffer offer, boolean authorized,
             Optional<WorkDemandPolicy.MaterialDemand> demand,
             Optional<WorkDemandPolicy.MaterialDemand> projected,
-            Container backpack, ScavengerConfig cfg) {
+            Container backpack, ScavengerConfig cfg, AbstractVillager merchant) {
         if (!authorized) {
             return Bucket.D_ILLEGAL;
         }
@@ -223,12 +253,27 @@ public final class Te3ProbeCommand {
         }
         if (offer.getResult().is(Items.EMERALD)) {
             // B only if a concrete BUY currently exists for those emeralds to fund.
-            boolean fundable = demand
-                    .map(d -> TradeFundingPlanner.chooseFundingTarget(
-                            projected.orElse(d), List.of(OfferSnapshot.of(0, offer)), backpack,
-                            ItemStack.EMPTY, ItemStack.EMPTY,
-                            m -> SellReserveModel.reservedUnits(m, backpack, cfg)) != null)
-                    .orElse(false);
+            // The planner needs a real BUY to fund. Handing it only the TE SELL quote meant it
+            // searched that single emerald-paying offer for a purchase satisfying the demand, found
+            // none, and returned null - reporting genuine TE -> emerald -> BUY routes as C.
+            List<OfferSnapshot> candidates = new ArrayList<>();
+            List<MerchantOffer> live = merchant.getOffers();
+            for (int i = 0; i < live.size(); i++) {
+                candidates.add(OfferSnapshot.of(i, live.get(i)));
+            }
+            OfferSnapshot synthetic = OfferSnapshot.of(live.size(), offer);
+            candidates.add(synthetic);
+
+            boolean fundable = demand.map(d -> {
+                TradeFundingPlanner.FundingTarget target = TradeFundingPlanner.chooseFundingTarget(
+                        projected.orElse(d), candidates, backpack,
+                        ItemStack.EMPTY, ItemStack.EMPTY,
+                        m -> SellReserveModel.reservedUnits(m, backpack, cfg));
+                // And the funding leg must be THIS TE quote, not some vanilla sale that happened to
+                // be available - otherwise B would credit Trade Everything for a vanilla route.
+                return target != null && target.sellLeg() != null
+                        && target.sellLeg().offer().index() == synthetic.index();
+            }).orElse(false);
             return fundable ? Bucket.B_FUNDING : Bucket.C_IRRELEVANT;
         }
         return Bucket.C_IRRELEVANT;
@@ -266,7 +311,8 @@ public final class Te3ProbeCommand {
         return source.getLevel().getEntitiesOfClass(Mob.class,
                         new AABB(net.minecraft.core.BlockPos.containing(source.getPosition()))
                                 .inflate(RADIUS),
-                        m -> PlayerMobs.isPlayerMob(m) && PlayerMobs.backpack(m) != null)
+                        m -> m.getTags().contains("te3_mob")
+                                && PlayerMobs.isPlayerMob(m) && PlayerMobs.backpack(m) != null)
                 .stream().findFirst().orElse(null);
     }
 }
