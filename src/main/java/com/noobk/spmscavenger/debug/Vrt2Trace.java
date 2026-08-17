@@ -55,6 +55,9 @@ import java.util.UUID;
 public final class Vrt2Trace {
 
     private static final int MAX_ENTRIES = 160;
+    /** The projected purchase this fixture proves (`D-VR-075`). */
+    private static final net.minecraft.resources.ResourceLocation EXPECTED_OUTPUT =
+            net.minecraft.resources.ResourceLocation.withDefaultNamespace("iron_pickaxe");
 
     private static final List<String> ENTRIES = new ArrayList<>();
     /** Latched: once a must-not condition fires it is never removed. */
@@ -75,6 +78,8 @@ public final class Vrt2Trace {
     private static int episodesNow;
     /** First chain identity witnessed; every later chain must match it until the consumer closes. */
     private static Long chainCreatedAt;
+    private static Long chainExpiresAt;
+    private static boolean sellPhaseWitnessed;
     private static String lastChainStep;
     private static boolean chainSeenInBuyTarget;
 
@@ -96,6 +101,8 @@ public final class Vrt2Trace {
         toolMatched = false;
         episodesNow = captured.episodeBaseline();
         chainCreatedAt = null;
+        chainExpiresAt = null;
+        sellPhaseWitnessed = false;
         lastChainStep = null;
         chainSeenInBuyTarget = false;
         record("T0 armed");
@@ -286,24 +293,57 @@ public final class Vrt2Trace {
         TradeWithVillagerGoal.DebugChainSnapshot chain = snapshot.get();
         if (chainCreatedAt == null) {
             chainCreatedAt = chain.createdAtTick();
+            chainExpiresAt = chain.expiresAtTick();
             record("CHAIN OPEN consumer=" + chain.consumerKey() + " createdAt="
                     + chain.createdAtTick() + " expiresAt=" + chain.expiresAtTick()
-                    + " output=" + chain.desiredOutput() + " step=" + chain.step());
+                    + " output=" + chain.desiredOutput() + " target="
+                    + chain.targetHeldQuantity() + " step=" + chain.step());
+        }
+        if (!consumerClosed) {
+            // Identity is consumer + creation tick, and the whole reason V2-D's chain survived
+            // every revision is that the hard lifetime must not silently reset - so expiry is
+            // asserted too. The same createdAtTick with a stretched expiry is still a reset.
             if (!Vrt2Oracle.REQUIRED_CONSUMER.equals(chain.consumerKey())) {
-                fail("chain opened for " + chain.consumerKey() + ", not "
+                fail("chain consumer is " + chain.consumerKey() + ", not "
                         + Vrt2Oracle.REQUIRED_CONSUMER);
             }
-        } else if (chainCreatedAt != chain.createdAtTick() && !consumerClosed) {
-            fail("a second chain appeared (createdAt " + chain.createdAtTick() + " != "
-                    + chainCreatedAt + ") before the consumer closed - the hard lifetime was reset");
+            if (chain.createdAtTick() != chainCreatedAt) {
+                fail("a second chain appeared (createdAt " + chain.createdAtTick() + " != "
+                        + chainCreatedAt + ") before closure - the hard lifetime was reset");
+            }
+            if (chain.expiresAtTick() != chainExpiresAt) {
+                fail("chain expiry moved " + chainExpiresAt + " -> " + chain.expiresAtTick()
+                        + " - the same creation tick with a stretched expiry is still a reset");
+            }
+            if (!EXPECTED_OUTPUT.equals(chain.desiredOutput())) {
+                fail("chain desiredOutput is " + chain.desiredOutput() + ", not " + EXPECTED_OUTPUT
+                        + " - the projected purchase is what this fixture proves");
+            }
+            if (chain.targetHeldQuantity() != 1) {
+                fail("chain targetHeldQuantity is " + chain.targetHeldQuantity()
+                        + ", not 1 - one finished tool closes the consumer");
+            }
         }
         String step = chain.step().name();
         if (!step.equals(lastChainStep)) {
             record("  chain " + chain.createdAtTick() + " step " + lastChainStep + " -> " + step);
             lastChainStep = step;
         }
-        if (chain.step() == TradeChainPlan.Step.BUY_TARGET) {
+        if (chain.step() == TradeChainPlan.Step.SELL_TO_FUND) {
+            sellPhaseWitnessed = true;
+        }
+        if (chain.step() == TradeChainPlan.Step.BUY_TARGET && !chainSeenInBuyTarget) {
             chainSeenInBuyTarget = true;
+            // observeMerchants ran earlier in this same sample, so the fourth sale is already
+            // counted. The phase change must be BOUGHT by exactly four real funding sales.
+            int sells = lastFletcherUses - oracle.fletcherBaselineUses();
+            if (!sellPhaseWitnessed) {
+                fail("BUY_TARGET reached without SELL_TO_FUND ever being witnessed");
+            }
+            if (sells != Vrt2Oracle.EXPECTED_SELLS) {
+                fail("BUY_TARGET reached after " + sells + " funding sales, not exactly "
+                        + Vrt2Oracle.EXPECTED_SELLS);
+            }
         }
     }
 
