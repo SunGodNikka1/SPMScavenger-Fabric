@@ -10,6 +10,7 @@ Copy into the test world's `datapacks/`, `/reload`, stand on flat ground, then:
 ```mcfunction
 /function spm_vrt2:quickstart          # arena + merchants, AI enabled beside their workstations
 # ... wait a few seconds for vanilla to claim the workstation POIs ...
+/function spm_vrt2:pick_toolsmith       # keep the one board that rolled an iron-pickaxe route
 /function spm_vrt2:settle               # verify job sites, freeze, OPEN the stalls, spawn the mob
 /spmscavenger debug vrt2 setup
 /spmscavenger debug vrt2 status
@@ -60,7 +61,7 @@ choose initial conditions; it may not shape the market.
 | Allowed | Forbidden |
 |---|---|
 | read the live price `E`, seed `E-4` emeralds and 131 sticks | author or edit any `Offers` NBT |
-| place exactly one vanilla Toolsmith and one vanilla Fletcher | reroll until the price is favourable |
+| generate a bounded pool and keep the one board that has the route | reroll until the price is favourable |
 | clear the gather prism, freeze time and weather | publish route exhaustion, force a transaction |
 | let vanilla claim POIs, then freeze the merchants | author Brain memories, POI occupancy, `KnownVillage` or relationship state |
 
@@ -122,10 +123,32 @@ infers a sale from inventory. PASS requires **all** of:
 Any must-not condition latches `FAIL` permanently; a later correct-looking state cannot restore
 `PASS`.
 
+## Why a pool of Toolsmiths
+
+**First VR-T2 runtime finding:** `setup FAILED — missing Toolsmith iron_pickaxe offer`. The fixture
+used a **level-2** Toolsmith; the iron pickaxe is a **level-3** listing. The static test that was
+supposed to cover this found the listing and kept only its price, discarding the profession and
+level — so it proved *"vanilla lists an iron pickaxe somewhere"* and was read as *"the fixture's
+Toolsmith will have one"*.
+
+Correcting the level is not sufficient. `Villager#updateTrades` draws **2** listings from the
+level's pool, and level 3 has **5**, so roughly 40% of boards carry the pickaxe. A single summoned
+Toolsmith is an unreliable fixture.
+
+Hence the bounded natural pool: four level-3 Toolsmiths, and `pick_toolsmith` keeps the first whose
+board **naturally contains** the route. Selection is on **route presence alone** — never price,
+never enchantment — and whatever that board rolled is what the proof runs against. No offer is
+authored anywhere. If no candidate rolled it, `pick_toolsmith` refuses and asks for a fresh pool.
+
 ## Known limitations
 
-- **Never executed.** Every part of this fixture and its harness has been reasoned from source and
-  verified by compilation only. Treat a first-run `PASS` with more suspicion than a `FAIL`.
+- `pick_toolsmith` reads `Offers.Recipes[{sell:{id:"minecraft:iron_pickaxe"}}]`. **Villager offers
+  generate lazily**, so if a summoned villager has no `Offers` tag until something calls
+  `getOffers()`, every candidate will read as routeless and `pick_toolsmith` will refuse. That is
+  the correct direction to fail, but it is the next thing to verify at runtime — the fix would be to
+  give the merchants a moment (or a player interaction) before picking, not to author offers.
+- **Otherwise unexecuted.** The rest of this fixture and its harness has been reasoned from source
+  and verified by compilation only. Treat a first-run `PASS` with more suspicion than a `FAIL`.
 - `/setup` refuses rather than guessing: no unique Toolsmith/Fletcher pair, no settlement anchor, an
   unresolvable offer index, a non-emerald-only purchase, or a Fletcher quote that is not
   `32 sticks → 1 emerald` all abort with a reason.

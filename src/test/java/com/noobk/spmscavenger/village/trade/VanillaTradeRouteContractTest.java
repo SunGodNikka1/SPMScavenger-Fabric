@@ -275,4 +275,54 @@ class VanillaTradeRouteContractTest {
         assertTrue(min >= 1 && max <= 64, "the vanilla clamp bounds the envelope");
         assertTrue(max > min, "the price genuinely varies - a fixed-price fixture would be a lie");
     }
+
+    /**
+     * VR-T2 runtime finding: {@code setup FAILED - missing Toolsmith iron_pickaxe offer}.
+     *
+     * <p>The envelope test above found an {@code EnchantedItemForEmeralds} for the iron pickaxe and
+     * kept only its price — it discarded the profession and level that contained it. So it proved
+     * "vanilla has an iron-pickaxe listing somewhere" and was read as "the fixture's level-2
+     * Toolsmith will have one". This reports the containing profession and level, and how many
+     * listings compete at that level, because a villager's board is <b>rolled from</b> the level's
+     * listings rather than containing all of them.
+     */
+    @Test
+    void mustHappen_theIronPickaxeListingLevelIsKnown() {
+        List<String> sites = new ArrayList<>();
+        java.util.Map<String, Integer> levelSize = new java.util.TreeMap<>();
+
+        for (Listing entry : allListings()) {
+            String key = entry.profession() + " lvl" + entry.level();
+            levelSize.merge(key, 1, Integer::sum);
+            if (field(entry.listing(), "itemStack") instanceof ItemStack stack
+                    && stack.is(Items.IRON_PICKAXE)) {
+                sites.add(key + " via " + entry.listing().getClass().getSimpleName());
+            }
+        }
+
+        System.out.println("[VR-T2 fix] iron_pickaxe listing sites: " + sites);
+        for (String site : sites) {
+            String key = site.substring(0, site.indexOf(" via "));
+            System.out.println("[VR-T2 fix] competing listings at " + key + " = "
+                    + levelSize.get(key));
+        }
+        // The regression the old fixture needed. A level-2 Toolsmith cannot expose this route at
+        // all, which is exactly what `setup FAILED - missing Toolsmith iron_pickaxe offer` was.
+        assertEquals(List.of("toolsmith lvl3 via EnchantedItemForEmeralds"), sites,
+                "the iron pickaxe is a level-3 Toolsmith listing; a level-2 fixture merchant can "
+                        + "never roll it");
+
+        // And it is not guaranteed even at the right level: Villager#updateTrades draws 2 listings
+        // from the level's pool, so with 5 competitors the pickaxe appears on roughly 40% of boards.
+        // A single naturally generated Toolsmith is therefore NOT a reliable fixture - hence the
+        // bounded natural pool, which selects on route presence alone and never authors an offer.
+        assertEquals(5, levelSize.get("toolsmith lvl3").intValue(),
+                "competing listings at toolsmith lvl3 - if this changes, the pool size needs "
+                        + "revisiting");
+        assertTrue(levelSize.get("toolsmith lvl3") > VANILLA_OFFERS_PER_LEVEL,
+                "more listings than a board can hold means the route is probabilistic, not certain");
+    }
+
+    /** {@code Villager#updateTrades} adds this many listings per level. */
+    private static final int VANILLA_OFFERS_PER_LEVEL = 2;
 }
