@@ -1,3 +1,7 @@
+# TEMPORARY V2-H PROOF SUPPORT. Safe to re-run: clears any previous fixture entities first, so a
+# second quickstart cannot leave two toolsmiths in range (which /vrt2 setup would refuse anyway,
+# but only after the arena had already been rebuilt around them).
+kill @e[tag=vrt2]
 function spm_vrt2:setup
 function spm_vrt2:arena/_clear
 function spm_vrt2:arena/build

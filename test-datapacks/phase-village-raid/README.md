@@ -10,7 +10,7 @@ Copy into the test world's `datapacks/`, `/reload`, stand on flat ground, then:
 ```mcfunction
 /function spm_vrt2:quickstart          # arena + merchants, AI enabled beside their workstations
 # ... wait a few seconds for vanilla to claim the workstation POIs ...
-/function spm_vrt2:settle               # freeze the merchants, then spawn the PlayerMob
+/function spm_vrt2:settle               # verify job sites, freeze, OPEN the stalls, spawn the mob
 /spmscavenger debug vrt2 setup
 /spmscavenger debug vrt2 status
 # ... let the mob act ...
@@ -23,6 +23,13 @@ workstations and are frozen only in `settle`, once vanilla has claimed the POIs 
 at summon time would leave them unable to ever acquire a workstation, and the "village" the mob then
 perceived would be one vanilla never formed. The PlayerMob is spawned last, so its own perception
 records a settlement that genuinely exists.
+
+`settle` is **fail-closed on the real signal**: it proceeds only when *both* merchants hold a
+naturally acquired `minecraft:job_site` memory, and otherwise refuses and asks you to wait. Reading
+that memory is not authoring one — nothing writes Brain state.
+
+**`quickstart` is safe to re-run.** It clears previously tagged fixture entities first, so a second
+run cannot leave two toolsmiths standing in a freshly rebuilt arena.
 
 ## What this proves
 
@@ -76,6 +83,13 @@ lets the AI-enabled merchants acquire them, and only then freezes. Nothing write
 Brain memories directly — a hand-authored village would prove the mob can trade in a world state
 vanilla never produces.
 
+**The stalls are warm-up machinery, and `settle` removes them.** They exist only to give POI
+acquisition a short unambiguous path. Production navigates directly to the Villager entity until
+within 3 blocks, so a merchant left walled in would either burn the path and approach budget on an
+unreachable target or permit an unnatural through-wall transaction — neither is the physical trade
+VR-T2 is meant to prove. `settle` freezes first, then removes only the walls; workstations,
+merchants and their claimed POIs stay exactly as they were.
+
 **The merchants are 18 blocks apart.** Both are inside the 16-block trade candidate radius of the
 centre but far outside each other's 3-block interaction range, so after the fourth sale the mob must
 **walk**. That walk is what gives the 1-tick observer a window to witness the same chain sitting in
@@ -114,6 +128,9 @@ Any must-not condition latches `FAIL` permanently; a later correct-looking state
 - The mob must already remember a settlement or `/setup` aborts — the one-episode requirement
   cannot be proven without an anchor. That is why the merchants claim their POIs *before* the mob
   is spawned, and why the mob may need a few seconds of perception time before `setup` succeeds.
-- **How long "a few seconds" is has not been measured.** If `settle` freezes the merchants before
-  vanilla has claimed the workstations, the village is not occupied and `setup` will abort on the
-  missing anchor. That is a fixture-timing question for the first live run, not a code change.
+- **How long POI acquisition takes has not been measured.** `settle` now refuses rather than
+  proceeding early, so the failure mode is an explicit "wait and run settle again" rather than a
+  silently under-formed village — but how many attempts that needs is a first-run question.
+- The job-site check reads `Brain.memories."minecraft:job_site"`. That NBT path is **unverified at
+  runtime**; if it does not resolve, `settle` will refuse indefinitely rather than proceed, which is
+  the correct direction to fail but would need the path corrected before the fixture is usable.
