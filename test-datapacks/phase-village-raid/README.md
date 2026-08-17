@@ -8,12 +8,21 @@
 Copy into the test world's `datapacks/`, `/reload`, stand on flat ground, then:
 
 ```mcfunction
-/function spm_vrt2:quickstart
+/function spm_vrt2:quickstart          # arena + merchants, AI enabled beside their workstations
+# ... wait a few seconds for vanilla to claim the workstation POIs ...
+/function spm_vrt2:settle               # freeze the merchants, then spawn the PlayerMob
 /spmscavenger debug vrt2 setup
 /spmscavenger debug vrt2 status
 # ... let the mob act ...
 /spmscavenger debug vrt2 trace
+/function spm_vrt2:cleanup
 ```
+
+The two-step start is deliberate. Merchants are summoned **with AI** next to their matching
+workstations and are frozen only in `settle`, once vanilla has claimed the POIs by itself. Freezing
+at summon time would leave them unable to ever acquire a workstation, and the "village" the mob then
+perceived would be one vanilla never formed. The PlayerMob is spawned last, so its own perception
+records a settlement that genuinely exists.
 
 ## What this proves
 
@@ -44,6 +53,7 @@ choose initial conditions; it may not shape the market.
 | read the live price `E`, seed `E-4` emeralds and 131 sticks | author or edit any `Offers` NBT |
 | place exactly one vanilla Toolsmith and one vanilla Fletcher | reroll until the price is favourable |
 | clear the gather prism, freeze time and weather | publish route exhaustion, force a transaction |
+| let vanilla claim POIs, then freeze the merchants | author Brain memories, POI occupancy, `KnownVillage` or relationship state |
 
 No offer is written anywhere in this datapack. Prices come out of vanilla's own
 `EnchantedItemForEmeralds` roll, verified as `8..22` emeralds by `VanillaTradeRouteContractTest`.
@@ -54,8 +64,17 @@ No offer is written anywhere in this datapack. Prices come out of vanilla's own
 exhaustion only on **zero pass-one candidates**, across logs, coal, cobble, raw iron and diamond
 together. A single log in range yields `CANDIDATES_ALL_REJECTED_PROTECTION` instead, and the
 `UNKNOWN → INFEASIBLE` transition this whole proof waits for never happens. "No iron nearby" is not
-the precondition — *nothing the intent wants, anywhere in the prism* is. Hence smooth stone, no
-planks, no logs, and a clear margin beyond the radius-20 / `dy ±4` scan volume.
+the precondition — *nothing the intent wants, anywhere in the prism* is. Hence smooth stone (not
+cobblestone, which *is* a candidate), no logs, and a clear margin beyond the radius-20 / `dy ±4`
+scan volume. Planks are **not** a gather candidate — the intent covers logs, coal, cobblestone, raw
+iron and diamond — they are simply avoided because they come from logs.
+
+**The village must be real.** `VillagePerception` reads `PoiTypeTags.VILLAGE` with
+`Occupancy.IS_OCCUPIED`, so a bell and some furniture are not enough: a villager has to have claimed
+the site. The fixture therefore builds bounded stalls with a smithing table and a fletching table,
+lets the AI-enabled merchants acquire them, and only then freezes. Nothing writes POI occupancy or
+Brain memories directly — a hand-authored village would prove the mob can trade in a world state
+vanilla never produces.
 
 **The merchants are 18 blocks apart.** Both are inside the 16-block trade candidate radius of the
 centre but far outside each other's 3-block interaction range, so after the fourth sale the mob must
@@ -92,5 +111,9 @@ Any must-not condition latches `FAIL` permanently; a later correct-looking state
 - `/setup` refuses rather than guessing: no unique Toolsmith/Fletcher pair, no settlement anchor, an
   unresolvable offer index, a non-emerald-only purchase, or a Fletcher quote that is not
   `32 sticks → 1 emerald` all abort with a reason.
-- The mob must already remember a settlement (the bell and bed exist for that) or `/setup` aborts —
-  the one-episode requirement cannot be proven without an anchor.
+- The mob must already remember a settlement or `/setup` aborts — the one-episode requirement
+  cannot be proven without an anchor. That is why the merchants claim their POIs *before* the mob
+  is spawned, and why the mob may need a few seconds of perception time before `setup` succeeds.
+- **How long "a few seconds" is has not been measured.** If `settle` freezes the merchants before
+  vanilla has claimed the workstations, the village is not occupied and `setup` will abort on the
+  missing anchor. That is a fixture-timing question for the first live run, not a code change.

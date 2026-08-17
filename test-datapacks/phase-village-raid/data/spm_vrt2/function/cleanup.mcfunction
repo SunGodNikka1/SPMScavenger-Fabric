@@ -1,5 +1,6 @@
-kill @e[type=villager,tag=!vrt2_keep,distance=..40]
-kill @e[type=playermob:player_mob,distance=..40]
+# TEMPORARY V2-H PROOF SUPPORT. Removes only entities this fixture tagged.
+kill @e[tag=vrt2]
 gamerule doMobSpawning true
 gamerule doDaylightCycle true
+gamerule doWeatherCycle true
 gamerule randomTickSpeed 3

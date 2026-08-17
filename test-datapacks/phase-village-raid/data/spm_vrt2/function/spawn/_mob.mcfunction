@@ -1,5 +1,9 @@
 # TEMPORARY V2-H PROOF SUPPORT.
-# Inventory is NOT seeded here - `/spmscavenger debug vrt2 setup` does that, because the emerald
-# count depends on the live Toolsmith price E, which only exists once the merchant has generated
-# its offers. A datapack cannot know E.
-playermob summon Bob ~ ~ ~ named VRT2Mob
+#
+# Spawned LAST, after the village POIs are real and claimed, so the mob's own perception records a
+# settlement it can actually anchor a relationship to. `/spmscavenger debug vrt2 setup` refuses when
+# there is no anchor - the V2-G one-episode requirement cannot be proven without one.
+#
+# Inventory is NOT seeded here: the emerald count is E-4, and E only exists once the Toolsmith has
+# generated its offers. A datapack cannot know E.
+summon playermob:player_mob ~ ~ ~2 {CustomName:'"VRT2Mob"',PersistenceRequired:1b,Tags:["vrt2","vrt2_mob"]}
