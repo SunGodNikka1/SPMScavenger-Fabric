@@ -9,8 +9,8 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + V1.5 CLOSED**; **V2 CLOSED — VR-T2 RUNTIME PASS** (A–H) |
-| **Status** | `RUNTIME VERIFIED` → **VR-T2 PASS**;  **V2-A…V2-D CLOSED**; **V2-E CLOSED — STATIC ACCEPT** (`CODE_CONFIRMED`, runtime **`UNVERIFIED`**, MAIBS `BEHAVIORALLY_PLAUSIBLE`); **V2-F CLOSED**; **V2-G CLOSED** |
-| **Nearest frontier** | **V2-TE** (Trade Everything compat, separately authorized) / **V2-I** (optional inspector). Core vanilla trading is closed. ~~V2-H~~ (`test-datapacks/phase-village-raid/` fixtures — including the bounded-purchase-consumer semantics fix) → **VR-T2 runtime**, which stays **HOLD** until A–H are statically prepared. V2-I and V2-TE remain separately authorized post-core tasks |
+| **Status** | `RUNTIME VERIFIED` — **VR-T2 PASS**. `A` transaction, `B` evaluation, `C` route admission, `D` SELL→BUY chain, `F` arbitration **CLOSED**; `E` physical executor **CLOSED + runtime exercised**; `G` relationship learning **CLOSED + runtime exercised**; `H` vanilla supply/projection **CLOSED — RUNTIME PASS** |
+| **Nearest frontier** | **V2-TE** — Trade Everything compatibility (`D-VR-068`), separately authorized. `V2-I` optional inspector remains available. **Core vanilla trading is closed and runtime-verified.** |
 | **Last update** | 2026-08-16 (**VR-T2 RUNTIME PASS** — V2-A…V2-H closed; proof support removed) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
@@ -767,7 +767,7 @@ VR-T2 **PASS** in the vanilla-only instance (`D-VR-068`).
 | **V2-B** | `TradeEvaluationPolicy` — score `MerchantOffer` vs `WorkDemandPolicy.MaterialDemand` (D-VR-015 / B-VR-20 facade; no rename blocker) |
 | **V2-C** | `TradeDemandRegistrar` + **feasibility filter before `select()` wins** (`D-VR-015`); parallel acquisition candidates per `ConsumerRecipeSpec` (CRAFT/SMELT vs TRADE); no autonomous emerald-hoarding loop |
 | **V2-D** | transient bounded `TradeChainPlan` SELL → BUY ticket (D-VR-029); **`SellExpendabilityPolicy`** disposable-quantity math (`D-VR-058`); re-evaluate before every transaction; expiry; re-resolve current offer/villager after interruption or reload |
-| **V2-E** *(CLOSED 2026-08-16 — STATIC ACCEPT; runtime `UNVERIFIED`)* | Introduces **`TradeWithVillagerGoal`** @ priority **3** (MOVE+LOOK) with one selected `TradeDemandGate` owner, the bounded `TradeCandidateRound`, the greet interlock, and the full executor: exact-quote binding, execute-time SELL reauthorization, cross-villager `TradeAttemptFunding`, and post-SELL chain continuation. The `ActivityClass.VILLAGE_TRADE` **enum value and its classifier pin belong to V2-F** (`D-VR-073`: the goal type must exist before anything classifies it) |
+| **V2-E** *(CLOSED 2026-08-16 — STATIC ACCEPT after R1–R8; integrated execution path **runtime-covered by VR-T2**)* | Introduces **`TradeWithVillagerGoal`** @ priority **3** (MOVE+LOOK) with one selected `TradeDemandGate` owner, the bounded `TradeCandidateRound`, the greet interlock, and the full executor: exact-quote binding, execute-time SELL reauthorization, cross-villager `TradeAttemptFunding`, and post-SELL chain continuation. The `ActivityClass.VILLAGE_TRADE` **enum value and its classifier pin belong to V2-F** (`D-VR-073`: the goal type must exist before anything classifies it) |
 | **V2-F** *(CLOSED 2026-08-16)* | Introduces **`ActivityClass.VILLAGE_TRADE`**, the `MoveHolderClassifier.staticActivityClass` pin `TradeWithVillagerGoal` → `VILLAGE_TRADE`, and the `classify()` mapping → **`ORDINARY_HOST_WORK`** (`D-VR-074`). **Co-lands with V2-E or immediately follows in the same task batch** (`D-VR-073`); the classifier cannot precede the goal type it classifies |
 | **V2-G** *(CLOSED 2026-08-16)* | `SettlementRelationshipService.onTradeEpisode` familiarity bump once per completed visit/chain; no persistent `KnownVillager` or offer-index memory in gen-1. **If any part persists per-mob, it must register in `PerMobSavedData.forgetAll`** or `PerMobRemovalContractTest` fails the build (B-VR-93, Gate RET-1e) |
 | **V2-H** | `test-datapacks/phase-village-raid/` trade presets for VR-T2 / VR-T2b |
@@ -5153,6 +5153,15 @@ consumer  spmscavenger:iron_pickaxe_upgrade
 EXISTING_WORK   raw iron -> smelt -> iron_ingot x3 -> craft -> iron_pickaxe
 TRADE           emeralds -> villager                       -> iron_pickaxe
 ```
+
+**Runtime status (2026-08-16).** V2-E closed on **static acceptance** — `CODE_CONFIRMED`, MAIBS
+`BEHAVIORALLY_PLAUSIBLE`, runtime `UNVERIFIED` — and that was the correct label at the time: its
+executor had never been observed running. **VR-T2's PASS now covers that execution path
+end-to-end**, exercising the bounded candidate round, exact-quote binding, execute-time SELL
+reauthorization, cross-villager funding and post-SELL chain continuation across four sales and a
+purchase. The distinction is worth keeping rather than flattening: V2-E was *accepted* on static
+evidence and is *verified* by a later integration proof, which is not the same as having been
+runtime-verified when it closed.
 
 **Accepted.** A narrow pure projection, `TradePurchaseProjection`: source `MaterialDemand` +
 active `ConsumerRecipeSpec` → recipe **output**, deficit **1**, **same `consumerKey`**. Live only
