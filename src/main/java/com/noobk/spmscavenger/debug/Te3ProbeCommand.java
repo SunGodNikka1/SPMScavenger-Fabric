@@ -117,7 +117,18 @@ public final class Te3ProbeCommand {
 
     // ------------------------------------------------------------------ the probe
 
-    private enum Bucket { A_DIRECT, B_FUNDING, C_IRRELEVANT, D_ILLEGAL, E_REPRESENTATION_MISS }
+    enum Bucket { A_DIRECT, B_FUNDING, C_IRRELEVANT, D_ILLEGAL, E_REPRESENTATION_MISS }
+
+    /**
+     * One merchant's board as plain data — the minimum seam needed to test the <b>caller</b>.
+     *
+     * <p>Every revision of this defect was caller-scope: first a single offer, then one merchant's
+     * board, while {@code TradeFundingPlanner} was correct throughout. A test that exercised the
+     * planner would have proved the component that was never broken. Temporary and package-private;
+     * no permanent market abstraction is created for a probe that gets deleted.
+     */
+    record MarketBoard(String label, List<OfferSnapshot> offers) {
+    }
 
     private static int scan(CommandSourceStack source, String expectDemand) {
         if (!indexed) {
@@ -198,7 +209,8 @@ public final class Te3ProbeCommand {
                         && ItemStack.isSameItemSameComponents(offer.getCostA(), input);
                 String[] evidence = new String[1];
                 Bucket bucket = classify(offer, authorized, demand, projected, backpack, cfg,
-                        merchants, evidence);
+                        boardsOf(merchants), evidence,
+                        m -> SellReserveModel.reservedUnits(m, backpack, cfg));
                 tally[bucket.ordinal()]++;
                 if (bucket != Bucket.C_IRRELEVANT) {
                     lines.add("  " + bucket + "  " + describe(offer.getCostA())
@@ -226,11 +238,19 @@ public final class Te3ProbeCommand {
         }
         out.append(lines.isEmpty() ? "  (no A/B/D/E results)\n"
                 : String.join("\n", lines) + "\n");
-        out.append("  VERDICT: A+B = ")
-                .append(tally[Bucket.A_DIRECT.ordinal()] + tally[Bucket.B_FUNDING.ordinal()])
-                .append(tally[Bucket.A_DIRECT.ordinal()] + tally[Bucket.B_FUNDING.ordinal()] == 0
-                        ? "  -> NO REACHABLE INTERSECTION. Do not implement V2-TE." : "")
-                .append('\n');
+        int ab = tally[Bucket.A_DIRECT.ordinal()] + tally[Bucket.B_FUNDING.ordinal()];
+        int e = tally[Bucket.E_REPRESENTATION_MISS.ordinal()];
+        out.append("  VERDICT: A+B=").append(ab).append("  E=").append(e).append("  -> ");
+        if (ab > 0) {
+            out.append("REACHABLE - a current V2-TE intersection exists.");
+        } else if (e > 0) {
+            // Not the same answer as "dead machinery": the market CAN serve the consumer and the
+            // demand simply cannot express it. Compatibility code would not fix that.
+            out.append("REPRESENTATION BLOCKED - repair demand representation BEFORE V2-TE.");
+        } else {
+            out.append("NO USEFUL INTERSECTION - V2-TE would presently be dead machinery.");
+        }
+        out.append("  (D is informational.)").append((char) 10);
         source.sendSuccess(() -> Component.literal(out.toString()), false);
         return 1;
     }
@@ -239,12 +259,13 @@ public final class Te3ProbeCommand {
      * A–E. The order matters: disposition is checked <b>before</b> value, exactly as `W-5` requires,
      * so a lucrative quote on a protected input is `D` and never `A`.
      */
-    private static Bucket classify(
+    static Bucket classify(
             MerchantOffer offer, boolean authorized,
             Optional<WorkDemandPolicy.MaterialDemand> demand,
             Optional<WorkDemandPolicy.MaterialDemand> projected,
             Container backpack, ScavengerConfig cfg,
-            List<net.minecraft.world.entity.npc.Villager> market, String[] evidence) {
+            List<MarketBoard> market, String[] evidence,
+            java.util.function.Function<ItemStack, OptionalInt> reservedUnits) {
         if (!authorized) {
             return Bucket.D_ILLEGAL;
         }
@@ -273,16 +294,14 @@ public final class Te3ProbeCommand {
             final int syntheticIndex = 9_999;
             OfferSnapshot synthetic = OfferSnapshot.of(syntheticIndex, offer);
 
-            for (net.minecraft.world.entity.npc.Villager buyer : market) {
-                List<MerchantOffer> board = buyer.getOffers();
-                for (int i = 0; i < board.size(); i++) {
-                    OfferSnapshot buyCandidate = OfferSnapshot.of(i, board.get(i));
+            for (MarketBoard buyer : market) {
+                for (OfferSnapshot buyCandidate : buyer.offers()) {
                     boolean matched = demand.map(d -> {
                         TradeFundingPlanner.FundingTarget target =
                                 TradeFundingPlanner.chooseFundingTarget(
                                         projected.orElse(d), List.of(buyCandidate, synthetic),
                                         backpack, ItemStack.EMPTY, ItemStack.EMPTY,
-                                        m -> SellReserveModel.reservedUnits(m, backpack, cfg));
+                                        reservedUnits);
                         return target != null
                                 && target.buyOffer().index() == buyCandidate.index()
                                 && target.sellLeg() != null
@@ -290,7 +309,7 @@ public final class Te3ProbeCommand {
                     }).orElse(false);
                     if (matched) {
                         evidence[0] = describe(buyCandidate.costA()) + " -> "
-                                + describe(buyCandidate.result()) + "   BUY @" + id(buyer);
+                                + describe(buyCandidate.result()) + "   BUY @" + buyer.label();
                         return Bucket.B_FUNDING;
                     }
                 }
@@ -298,6 +317,21 @@ public final class Te3ProbeCommand {
             return Bucket.C_IRRELEVANT;
         }
         return Bucket.C_IRRELEVANT;
+    }
+
+    /** Buyer-LOCAL indexes preserved; never flattened across merchants. */
+    private static List<MarketBoard> boardsOf(
+            List<net.minecraft.world.entity.npc.Villager> merchants) {
+        List<MarketBoard> boards = new ArrayList<>();
+        for (net.minecraft.world.entity.npc.Villager merchant : merchants) {
+            List<OfferSnapshot> offers = new ArrayList<>();
+            List<MerchantOffer> live = merchant.getOffers();
+            for (int i = 0; i < live.size(); i++) {
+                offers.add(OfferSnapshot.of(i, live.get(i)));
+            }
+            boards.add(new MarketBoard(id(merchant), offers));
+        }
+        return boards;
     }
 
     /** Interchangeable for the consumer that raised the demand. Deliberately tiny and explicit. */
