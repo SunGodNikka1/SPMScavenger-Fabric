@@ -5132,6 +5132,88 @@ backpack and applied in the same tick** — no staged payment surviving WALK/ani
 WALK → FACE → re-fetch → stage → simulate → revalidate → APPLY → `notifyTrade` once.
 **Rejected:** multi-tick staged payment while SPM eat/loot/gift can mutate the container.
 
+### D-VR-076: Wealth trading is a separate consumer, not part of V2-TE (`User`, 2026-08-16)
+
+**Status:** `LOCKED` (architecture + sequence) · **amendments A–D `OPEN`** (see below)
+
+**Accepted — the layering.** Trade Everything is **opportunity truth, never economic motive**. It
+answers *"given this villager and this item, what exact trade exists?"* and never *"should Bob become
+rich?"* That stays Scavenger cognition, which preserves the `TradeOpportunitySource` boundary and
+keeps `VillagerTradeAdapter` the sole transaction owner.
+
+```text
+NEED (WorkDemandPolicy)  ─┐
+                          ├─► economic motive ─► TradeOpportunitySource ─► hard disposition gate
+WEALTH (Portfolio)       ─┘                       (vanilla | Trade Everything)      │
+                                                                                    ▼
+                                          TradeWithVillagerGoal ─► VillagerTradeAdapter
+```
+
+**Sequence (locked).** 1. **V2-TE** — compatibility only; no Wealth motive, so the first
+compatibility runtime test stays interpretable (VR-T2k/l). 2. **V2-W** — Portfolio utility + Greed
+authorizing discretionary trades, reusing the proven executor. 3. **Portfolio evolution** —
+`D-VP-MI-022` first; `D-VP-MI-023` scarcity and `D-VP-MI-024` consumption velocity only after the
+NEED/WEALTH split earns its complexity.
+
+**Locked invariants.**
+
+| | |
+|---|---|
+| **W-1** | Trade Everything is opportunity truth, never economic motive |
+| **W-2** | NEED and WEALTH are separate reasons to trade; NEED has authority precedence |
+| **W-3** | Wealth trading uses whole-portfolio before/after utility, not per-stack market value |
+| **W-4** | Every discretionary wealth transaction must strictly increase one common `PortfolioUtility` by ε |
+| **W-5** | Disposition/reservation runs **before** valuation; Greed can never manufacture spend permission |
+| **W-6** | Unknown input value, output value, or reserve → refuse the Wealth trade |
+| **W-7** | Progression SELL keeps the named BUY-deficit rule unchanged |
+| **W-8** | Currency wealth, if ever allowed, needs an explicit bounded Portfolio owner; never revive ownerless emerald appetite |
+| **W-9** | Wealth gets no new Goal and no second transaction engine |
+| **W-10** | No speculative chain in gen-1: a Wealth trade may not accept a present loss on the hope of a later gain |
+
+**Why `W-3` is not pedantry.** `wealthValue` is explicitly the marginal value of *one more unit at
+the current amount*, so `value(3 emeralds) − value(32 logs)` is wrong for a 32-log transfer: the 1st
+log given away may be worthless at saturation while the 32nd is valuable near the reserve. The
+correct comparison is over the whole inventory transition, which needs
+`StockUtility(category, N) = Σ marginal values for units 1..N`.
+
+**`CONFIRMED` — the integral is well-formed.** `ResourceWealthPolicy.wealthValue` is a pure function
+of `(category, currentAmount, greed, wealthLevel)`, and `wealthFactor` decreases linearly above the
+comfortable band (`1 − 0.95·over/span`). Marginal value is therefore non-increasing in amount, so
+`U(N)` is well-defined and **concave** — exactly the shape a potential function needs. `W-3`/`W-4`
+are implementable against the shipped policy, not aspirational.
+
+---
+
+**Amendment A (`OPEN`) — `W-4`'s anti-loop guarantee must be narrowed.** The potential-function
+argument holds only while the *quotes* are unchanged. Villager offers restock, prices drift with
+demand and reputation, and other goals mutate inventory. `A→B` improving at T1 and `B→A` improving
+at T2 is legitimate if the market moved. So the honest claim is: **no A→B→A loop against the same
+offers**, not "no loop ever". Critically, this only holds if `PortfolioUtility` is computed from
+**inventory alone** — the moment market price enters `U`, it stops being a potential function of the
+mob's state and the invariant collapses.
+
+**Amendment B (`OPEN`) — `U` is stable only while greed is.** `greed` and `wealthLevel` are
+`ScavengerConfig` fields, so a config reload mid-chain rescales every marginal value and can invert a
+previously-improving comparison. `V2-W` must snapshot both for the duration of an evaluation, and
+`D-VP-MI-019` (per-mob greed) will make this sharper, not softer.
+
+**Amendment C (`OPEN`) — NEED/WEALTH separability.** `wealthValue` consumes a context carrying need
+allocations. If `U` is computed across a changing need state, the potential moves for reasons that
+have nothing to do with the trade. `U` must be evaluated against a **fixed need-allocation
+snapshot**, or NEED and WEALTH must be provably separable terms.
+
+**Amendment D (`OPEN`) — `W-8` is load-bearing, and Option B is the riskier half.** Emeralds have no
+use value in a portfolio except purchasing power. If `U(emeralds) > 0` with no reachable purchase,
+ownerless appetite has returned wearing a portfolio hat — the exact defect `D-VR-065` banned. Option
+B is viable only if liquidity saturates hard **and** a Wealth trade may never sell genuinely useful
+goods for currency the mob has no path to spend. Option A (liquidity worth nothing without a known
+purchase) is strictly safer and should be the gen-1 default unless evidence says otherwise.
+
+**Rejected.** Folding Wealth into V2-TE (it introduces an entirely new *reason* to trade, and would
+make the first compatibility runtime test uninterpretable); a second trade Goal or transaction
+engine (`W-9`); "remember recent trades and don't repeat them" as the loop defence — that hides a
+valuation defect rather than fixing it.
+
 ### D-VR-075: Consumer-preserving trade output projection (`User`, 2026-08-16)
 
 **Status:** `LOCKED` — discovered while constructing V2-H; scoped as prerequisite **V2-H0**.
@@ -5461,6 +5543,7 @@ beside `ExplorationActivityGoal` or it fail-closes the entire discretionary dire
 | User + Agent_Claude | 2026-08-16 | **V2-G CLOSED (R3 accepted); V2-H0 implemented under new `D-VR-075`.** R3: `consumeCreditFor(null)` **fails closed** — post-R2 the caller passes the chain that *earned* the episode, so `null` no longer means "terminated" but "pending evidence lost its owner", a state with no legitimate producer; the terminated-chain test is replaced by a lost-owner negative that also asserts refusal does not consume the ledger slot. NC-45 fires. **V2-H stopped before writing the fixture**: a vanilla supply probe showed no villager sells `iron_ingot`, `charcoal` or `coal`, so the whole V2-E path was economically unreachable in vanilla — see `D-VR-075`. `TradePurchaseProjection` added (pure, direct-material-first, same `consumerKey`, deficit 1, no profession hardcoding); feasibility and exhaustion stay on the source demand. 1169 tests; NC-46 (projection before direct), NC-48 (consumer check dropped), NC-49 (ingredient deficit carried) fire. **NC-47 is inexpressible**: feasibility is computed before `purchaseDemand` is declared, so no compiling mutation can feed it the projection — structural protection, recorded rather than claimed as a passing control. **Probe method note:** two earlier instruments were wrong — a `javap` window-heuristic contradicted itself on `IRON_INGOT`, and a runtime probe reached 7 of ~128 items because `ItemsForEmeralds` throws on a null entity. The finding only held once listing result fields were read directly and coverage was reported; `VanillaTradeSupplyProbeTest` now carries a coverage guard so a broken instrument fails loudly instead of looking like a finding. **Next: V2-H fixture on untouched vanilla offers.** |
 | User + Agent_Claude | 2026-08-16 | **V2-G-R2 — chain-handoff repair.** R1's `onChainOpened()` reset made **planning mutate learning state**, and planning runs *between* a completed transaction and its emission: `continueChain` records the anchor, then replans, and `advanceChain` can terminate chain A and mint B before teardown emits anything. The pending A episode was then credited against B — **A re-credited** (its history had just been reset) and **B marked spent without ever trading**. Repair: `tradeEpisodeChain` is captured *with* the anchor inside the same first-success guard, `emitTradeEpisode` consumes credit for that captured chain (`earnedBy`) rather than the live field, and both pending fields are cleared before the relationship service is called. The reset API is **deleted, not merely uncalled** — `sameChainAs` already restores eligibility naturally via `createdAtTick`, so the reset was redundant as well as harmful, and a method with zero production callers is the shape Gate RET-1a exists to reject. Claim-release ordering from R1 preserved unchanged. 1159 tests; NC-42 (credit the live chain), NC-43 (planning resets learning state), NC-44 (pending chain not captured) all fire. |
 | User + Agent_Claude | 2026-08-16 | **V2-G-R1 — two lifecycle repairs.** (1) **`D-VR-063` across preemption:** V2-G bounded credit with an anchor cleared at teardown, correct *within* one visit — but `TradeChainPlan` deliberately survives `stop()` (the hard lifetime Option A protects), so `SELL → combat → stop credits #1 → same chain resumes → BUY → credits #2` gave one bounded chain two relationship episodes. New transient **`TradeEpisodeLedger`** keyed on `TradeChainPlan.sameChainAs` (consumer + output + **`createdAtTick`**, since `at()` mints a new record per step while remaining one chain). Credit still fires immediately at the interruption — deferring to chain completion would lose the episode whenever a chain is abandoned after a real trade — and is restored **only** by `forDemand` minting a new chain, never at teardown. No persistence, no store; RET-1e unaffected. (2) **Claim release precedes credit in `endRound` too**, not only `stop()`; a throwing credit would leak the greet interlock from either path. Doc repaired: `onTradeEpisode(anchorAtStart)` is resolved at the **first successful transaction**, not round or chain start. Untouched as instructed: separate trade/social counters, `VillageMemorySavedData` ownership, the settlement-bounds requirement, and the `UNVERIFIED` `TRADE_FAMILIARITY_BUMP = 40`. 1157 tests. NC-38 (ledger reset at teardown), NC-39 (ledger not consulted), NC-40 (identity ignores `createdAtTick`), NC-41 (`endRound` credits before releasing) all fire. **Process note:** NC-40 initially did *not* fire — every ledger test called `onChainOpened()` between chains, so the identity comparison was never reached and the tick was untested; a direct `sameChainAs` control was added. Separately, an NC restore from a **stale** `/tmp` snapshot deleted `sameChainAs` outright — the second occurrence this session of restoring a backup older than the edit being protected. |
+| User + Agent_Claude | 2026-08-16 | **`D-VR-076` LOCKED — Wealth trading is a separate consumer, not part of V2-TE.** Layering: Trade Everything supplies opportunity truth; NEED and WEALTH are two motives feeding the one proven executor. Sequence **V2-TE → V2-W → portfolio evolution**. `W-1…W-10` locked, including whole-portfolio before/after utility (`W-3`), the strict-increase anti-loop invariant (`W-4`), disposition-before-valuation (`W-5`) and no speculative chain (`W-10`). **`CONFIRMED`:** `wealthValue` is pure in `(category, amount, greed, wealthLevel)` and marginal value is non-increasing above the comfortable band, so `StockUtility(N) = Σ` is well-defined and concave — `W-3`/`W-4` are implementable against shipped code. **Four amendments left `OPEN`:** (A) `W-4` prevents loops only against *unchanged quotes*, and only if `U` is inventory-only — market price inside `U` destroys the potential function; (B) `U` is stable only while `greed`/`wealthLevel` are snapshotted, since both are live config; (C) `U` needs a fixed need-allocation snapshot or NEED/WEALTH must be provably separable; (D) `W-8` is the load-bearing rule — emeralds have no use value but purchasing power, so Option B liquidity revives ownerless appetite unless it saturates hard and cannot buy currency with useful goods. Option A recommended for gen-1. **No implementation authorized.** |
 | User + Agent_Claude | 2026-08-16 | **VR-T2 CLOSED — RUNTIME PASS. V2 vanilla trading is complete.** First and only runtime acceptance run, against untouched vanilla economics: `T0 consumer spmscavenger:iron_pickaxe_upgrade`, `route UNKNOWN`; naturally rolled Toolsmith BUY **11 emerald → enchanted iron_pickaxe**; Fletcher **32 sticks → 1 emerald**; mob seeded exactly four emerald short. **Fletcher uses 0→4, Toolsmith uses 0→1**, final sticks 3 (the craft reserve, untouched), final emeralds 0, final pick tier **IRON**, consumer/source/projection all closed, **settlement episodes 0→1** — four sales and a purchase taught exactly one relationship episode. **Latched fails 0. Harness verdict PASS against the captured oracle.** This closes the loop the north star demands: an autonomous mob went from a stone pickaxe and no reachable iron to a finished iron pickaxe, through the real vanilla economy, having earned its own `INFEASIBLE` from a completed empty gather scan. **Runtime finding preserved (do not rediscover):** the original fixture used a **level-2** Toolsmith and failed with `setup FAILED - missing Toolsmith iron_pickaxe offer`. The iron pickaxe is a **level-3** `EnchantedItemForEmeralds` listing, and level 3 has **5** competing listings while `updateTrades` draws only **2** — so the route appears on roughly 40% of boards and is **probabilistic, not guaranteed**. Hence the bounded natural pool: several level-3 candidates, keep the first whose board naturally contains the route, selected on route presence alone, never price or enchantment. Pinned permanently by `VanillaTradeRouteContractTest.mustHappen_theIronPickaxeListingLevelIsKnown`. The static test that should have caught this found the listing and kept only its price, discarding the containing profession and level — proving "vanilla lists an iron pickaxe somewhere" while being cited for "the fixture's Toolsmith will have one". Same shape as this slice's other near-misses: a test whose subject was narrower than the claim it was read as supporting. |
 | User + Agent_Claude | 2026-08-16 | **V2-H proof support removed.** Deleted `com.noobk.spmscavenger.debug` (`Vrt2ProofCommand`, `Vrt2Trace`, `Vrt2Oracle`), its tick sampler and command registration, `TradeWithVillagerGoal.DebugChainSnapshot`, the `peekStatus`/`peekExhaustedFor` observation seams, and `test-datapacks/phase-village-raid/`. All carried `TEMPORARY V2-H PROOF SUPPORT` and had no production callers once VR-T2 was captured — leaving them would be the zero-caller shape Gate RET-1a exists to reject. **Kept:** `VanillaTradeSupplyProbeTest` and `VanillaTradeRouteContractTest`, which are permanent regressions documenting the vanilla-supply and level-3 findings. |
 | User + Agent_Claude | 2026-08-16 | **V2-G CLOSED.** `SettlementRelationship.recordTradeEpisode` + `SettlementRelationshipService.onTradeEpisode`, satisfying `D-VR-057` (separate credit — trade never touches `socialEventCount`) and `D-VR-063` (one episode per completed bounded visit/chain). **The once-per-visit rule lives in the executor, not the policy**: `TradeWithVillagerGoal.tradeEpisodeAnchor` is captured on the *first* successful transaction and cleared on emission, so a ten-use chain teaches one relationship and both teardown paths (`endRound`, `stop`) credit exactly once. Anchor captured at first success rather than round start — that is the moment an episode demonstrably exists *and* the mob is provably at the villager; a round opening in one settlement and succeeding in another would otherwise credit the wrong village. A round that never transacted, or one outside `SettlementBoundsPolicy`, credits nothing. **Gate RET-1e / B-VR-93: no new store.** The count persists inside `VillageMemorySavedData`, already registered in `PerMobSavedData.forgetAll`; `PerMobRemovalContractTest` green. Pre-V2-G saves load as `0` — absence and *never traded* are the same value, the one case where reading a missing field as zero is honest. `TRADE_FAMILIARITY_BUMP = 40` is set equal to the social bump as a **declared default, not a finding** — revisit with VR-T2 evidence. Also restated `mustHappen_stopReleasesTheClaimUnconditionally`: its `!body.contains("if (")` proxy held only while `stop()` was branchless and broke on a guarded statement *after* the release, which cannot make it conditional; it now checks the release is a top-level statement with no branch before it, and the release was moved first so a throwing credit cannot delay it. 1149 tests; NC-34 (social credit), NC-35 (per-click), NC-36 (non-idempotent emit), NC-37 (release delayed) all fire. **Next: V2-H.** |
