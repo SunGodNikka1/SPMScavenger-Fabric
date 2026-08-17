@@ -6,7 +6,11 @@ import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.village.SettlementRelationship;
 import com.noobk.spmscavenger.village.VillageMemorySavedData;
+import com.noobk.spmscavenger.goal.TradeWithVillagerGoal;
+import com.noobk.spmscavenger.mixin.MobGoalSelectorAccessor;
 import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
+import com.noobk.spmscavenger.village.trade.TradeChainPlan;
+import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -69,6 +73,10 @@ public final class Vrt2Trace {
     private static int lastToolsmithUses;
     private static boolean toolMatched;
     private static int episodesNow;
+    /** First chain identity witnessed; every later chain must match it until the consumer closes. */
+    private static Long chainCreatedAt;
+    private static String lastChainStep;
+    private static boolean chainSeenInBuyTarget;
 
     private Vrt2Trace() {
     }
@@ -87,6 +95,9 @@ public final class Vrt2Trace {
         lastToolsmithUses = captured.toolsmithBaselineUses();
         toolMatched = false;
         episodesNow = captured.episodeBaseline();
+        chainCreatedAt = null;
+        lastChainStep = null;
+        chainSeenInBuyTarget = false;
         record("T0 armed");
         if (!Vrt2Oracle.REQUIRED_CONSUMER.equals(captured.t0Consumer())) {
             fail("T0 consumer was " + captured.t0Consumer() + ", not "
@@ -132,6 +143,7 @@ public final class Vrt2Trace {
         observeMerchants(level);
         observeNarrative(backpack);
         observeToolAndClosure(backpack, demand);
+        observeChain(mob);
         observeEpisodes(level, mob);
     }
 
@@ -157,7 +169,8 @@ public final class Vrt2Trace {
     /** The proof oracle: the exact captured offers, by index, on the exact captured merchants. */
     private static void observeMerchants(ServerLevel level) {
         offerOf(level, oracle.fletcherId(), oracle.fletcherOfferIndex()).ifPresent(offer -> {
-            if (!Vrt2Oracle.sameQuote(offer, oracle.fletcherCost(), oracle.fletcherResult())) {
+            if (!Vrt2Oracle.sameQuote(offer, oracle.fletcherCostA(), oracle.fletcherCostB(),
+                    oracle.fletcherResult())) {
                 fail("Fletcher offer#" + oracle.fletcherOfferIndex() + " is no longer the captured "
                         + "quote - its uses can no longer be attributed to the fixture's sale");
                 return;
@@ -179,8 +192,10 @@ public final class Vrt2Trace {
             lastFletcherUses = offer.getUses();
         });
         offerOf(level, oracle.toolsmithId(), oracle.toolsmithOfferIndex()).ifPresent(offer -> {
-            if (!Vrt2Oracle.sameQuote(offer, offer.getCostA(), oracle.toolsmithResult())
-                    || offer.getCostA().getCount() != oracle.price()) {
+            // Against the CAPTURED cost, never the live one - passing offer.getCostA() back as its
+            // own expected value made this comparison a tautology that could never fail.
+            if (!Vrt2Oracle.sameQuote(offer, oracle.toolsmithCostA(), oracle.toolsmithCostB(),
+                    oracle.toolsmithResult())) {
                 fail("Toolsmith offer#" + oracle.toolsmithOfferIndex() + " is no longer the captured "
                         + "quote (price or result changed) - its uses cannot be attributed to the "
                         + "purchase this fixture planned");
@@ -255,6 +270,52 @@ public final class Vrt2Trace {
         episodesNow = episodes;
     }
 
+    /**
+     * One chain across four sales and a purchase.
+     *
+     * <p>Resolved through the goal the mob already has installed — no registry, no static map, no
+     * transaction hook. A second {@code createdAtTick} appearing before the consumer closes means
+     * the hard lifetime was reset, which is the defect the four-sale design exists to detect.
+     */
+    private static void observeChain(Mob mob) {
+        Optional<TradeWithVillagerGoal.DebugChainSnapshot> snapshot = tradeGoalOf(mob)
+                .flatMap(TradeWithVillagerGoal::debugChainSnapshot);
+        if (snapshot.isEmpty()) {
+            return;
+        }
+        TradeWithVillagerGoal.DebugChainSnapshot chain = snapshot.get();
+        if (chainCreatedAt == null) {
+            chainCreatedAt = chain.createdAtTick();
+            record("CHAIN OPEN consumer=" + chain.consumerKey() + " createdAt="
+                    + chain.createdAtTick() + " expiresAt=" + chain.expiresAtTick()
+                    + " output=" + chain.desiredOutput() + " step=" + chain.step());
+            if (!Vrt2Oracle.REQUIRED_CONSUMER.equals(chain.consumerKey())) {
+                fail("chain opened for " + chain.consumerKey() + ", not "
+                        + Vrt2Oracle.REQUIRED_CONSUMER);
+            }
+        } else if (chainCreatedAt != chain.createdAtTick() && !consumerClosed) {
+            fail("a second chain appeared (createdAt " + chain.createdAtTick() + " != "
+                    + chainCreatedAt + ") before the consumer closed - the hard lifetime was reset");
+        }
+        String step = chain.step().name();
+        if (!step.equals(lastChainStep)) {
+            record("  chain " + chain.createdAtTick() + " step " + lastChainStep + " -> " + step);
+            lastChainStep = step;
+        }
+        if (chain.step() == TradeChainPlan.Step.BUY_TARGET) {
+            chainSeenInBuyTarget = true;
+        }
+    }
+
+    private static Optional<TradeWithVillagerGoal> tradeGoalOf(Mob mob) {
+        return ((MobGoalSelectorAccessor) mob).spmscavenger$getGoalSelector()
+                .getAvailableGoals().stream()
+                .map(WrappedGoal::getGoal)
+                .filter(TradeWithVillagerGoal.class::isInstance)
+                .map(TradeWithVillagerGoal.class::cast)
+                .findFirst();
+    }
+
     // ------------------------------------------------------------------ verdict
 
     private static List<String> unmetRequirements() {
@@ -275,6 +336,12 @@ public final class Vrt2Trace {
         }
         if (!consumerClosed) {
             unmet.add(oracle.t0Consumer() + " never stopped being selected");
+        }
+        if (chainCreatedAt == null) {
+            unmet.add("no trade chain was ever observed");
+        } else if (!chainSeenInBuyTarget) {
+            unmet.add("chain " + chainCreatedAt + " never reached BUY_TARGET - the four sales must "
+                    + "close the deficit before the purchase");
         }
         int episodes = episodesNow - oracle.episodeBaseline();
         if (episodes != Vrt2Oracle.EXPECTED_EPISODES) {

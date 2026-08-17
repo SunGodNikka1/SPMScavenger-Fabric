@@ -195,9 +195,11 @@ public final class Vrt2ProofCommand {
             return 0;
         }
         if (toolsmith.get().getResult().getCount() != 1
-                || !toolsmith.get().getCostA().is(Items.EMERALD)) {
+                || !toolsmith.get().getCostA().is(Items.EMERALD)
+                || !toolsmith.get().getCostB().isEmpty()) {
             source.sendFailure(Component.literal("[VR-T2] setup FAILED - Toolsmith quote is not "
-                    + "emeralds -> exactly one iron_pickaxe"));
+                    + "emeralds-only -> exactly one iron_pickaxe; the E-4 fixture assumes the "
+                    + "purchase has no second cost"));
             return 0;
         }
 
@@ -221,9 +223,11 @@ public final class Vrt2ProofCommand {
         Vrt2Trace.arm(new Vrt2Oracle(
                 mob.getUUID(),
                 fletch.get().getUUID(), fletcherIndex, fletcher.get().getUses(),
-                fletcher.get().getCostA().copy(), fletcher.get().getResult().copy(),
+                fletcher.get().getCostA().copy(), fletcher.get().getCostB().copy(),
+                fletcher.get().getResult().copy(),
                 smith.get().getUUID(), toolsmithIndex, toolsmith.get().getUses(),
-                price, toolsmith.get().getResult().copy(),
+                price, toolsmith.get().getCostA().copy(), toolsmith.get().getCostB().copy(),
+                toolsmith.get().getResult().copy(),
                 anchor,
                 episodeBaseline,
                 t0Demand.map(WorkDemandPolicy.MaterialDemand::consumerKey).orElse(null),

@@ -35,12 +35,15 @@ public record Vrt2Oracle(
         UUID fletcherId,
         int fletcherOfferIndex,
         int fletcherBaselineUses,
-        ItemStack fletcherCost,
+        ItemStack fletcherCostA,
+        ItemStack fletcherCostB,
         ItemStack fletcherResult,
         UUID toolsmithId,
         int toolsmithOfferIndex,
         int toolsmithBaselineUses,
         int price,
+        ItemStack toolsmithCostA,
+        ItemStack toolsmithCostB,
         ItemStack toolsmithResult,
         BlockPos settlementAnchor,
         int episodeBaseline,
@@ -55,9 +58,16 @@ public record Vrt2Oracle(
     public static final int EXPECTED_EPISODES = 1;
 
     public Vrt2Oracle {
-        fletcherCost = fletcherCost == null ? ItemStack.EMPTY : fletcherCost.copy();
-        fletcherResult = fletcherResult == null ? ItemStack.EMPTY : fletcherResult.copy();
-        toolsmithResult = toolsmithResult == null ? ItemStack.EMPTY : toolsmithResult.copy();
+        fletcherCostA = copyOf(fletcherCostA);
+        fletcherCostB = copyOf(fletcherCostB);
+        fletcherResult = copyOf(fletcherResult);
+        toolsmithCostA = copyOf(toolsmithCostA);
+        toolsmithCostB = copyOf(toolsmithCostB);
+        toolsmithResult = copyOf(toolsmithResult);
+    }
+
+    private static ItemStack copyOf(ItemStack stack) {
+        return stack == null ? ItemStack.EMPTY : stack.copy();
     }
 
     /** The consumer VR-T2 exists to prove; any other T0 consumer invalidates the fixture. */
@@ -73,12 +83,18 @@ public record Vrt2Oracle(
      * attributing its uses to the captured offer would silently credit the wrong transaction.
      */
     public static boolean sameQuote(
-            net.minecraft.world.item.trading.MerchantOffer live, ItemStack cost, ItemStack result) {
+            net.minecraft.world.item.trading.MerchantOffer live,
+            ItemStack costA, ItemStack costB, ItemStack result) {
         return live != null
-                && ItemStack.isSameItemSameComponents(live.getCostA(), cost)
-                && live.getCostA().getCount() == cost.getCount()
-                && ItemStack.isSameItemSameComponents(live.getResult(), result)
-                && live.getResult().getCount() == result.getCount();
+                && exact(live.getCostA(), costA)
+                && exact(live.getCostB(), costB)
+                && exact(live.getResult(), result);
+    }
+
+    private static boolean exact(ItemStack live, ItemStack captured) {
+        return (live.isEmpty() && captured.isEmpty())
+                || (ItemStack.isSameItemSameComponents(live, captured)
+                        && live.getCount() == captured.getCount());
     }
 
     /** Whether an acquired stack is the exact tool the Toolsmith quoted, components included. */
