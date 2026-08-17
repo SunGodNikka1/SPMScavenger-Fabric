@@ -116,7 +116,10 @@ public final class Vrt2Trace {
                 .map(WorkDemandPolicy.WorkDemand::payload);
 
         // Route feasibility - the UNKNOWN -> INFEASIBLE transition VR-T2 exists to witness.
-        String route = demand.map(d -> ExistingRouteFeasibility.status(level, mob.getUUID(), d,
+        // peekStatus, never status: `status` clears exhaustion evidence on positive progress, so a
+        // 5-tick sampler polling it would let ARMING THE OBSERVER alter the route arbitration under
+        // test. The observer must be unable to change the outcome it reports.
+        String route = demand.map(d -> ExistingRouteFeasibility.peekStatus(level, mob.getUUID(), d,
                 backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg).name()).orElse("NONE");
         if (!route.equals(lastRouteStatus)) {
             if ("INFEASIBLE".equals(route) && "UNKNOWN".equals(lastRouteStatus)) {

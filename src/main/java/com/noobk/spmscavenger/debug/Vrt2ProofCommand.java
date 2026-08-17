@@ -161,8 +161,14 @@ public final class Vrt2ProofCommand {
         backpack.setItem(5, new ItemStack(Items.COBBLESTONE, 6));
         mob.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
                 new ItemStack(Items.STONE_PICKAXE));
+        // IRON axe, not stone. `activeIronToolRecipe` is ordered pickaxe-then-axe, so a stone axe
+        // means the purchase does not close the consumer - it hands the frontier straight to
+        // `iron_axe_upgrade`, and the mob would carry on trading past the five transactions this
+        // proof is supposed to bound. Config targets DIAMOND for both by default, so the stone axe
+        // stays upgrade-eligible; seeding the iron axe isolates the one consumer VR-T2 is proving
+        // without mutating global progression config to make the proof easier.
         mob.setItemInHand(net.minecraft.world.InteractionHand.OFF_HAND,
-                new ItemStack(Items.STONE_AXE));
+                new ItemStack(Items.IRON_AXE));
 
         // The route must be earned. Clearing rather than publishing is the whole point.
         RouteExhaustionEvidence.clear(mob.getUUID());
