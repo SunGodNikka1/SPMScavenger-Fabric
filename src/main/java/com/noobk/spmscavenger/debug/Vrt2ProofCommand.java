@@ -173,9 +173,27 @@ public final class Vrt2ProofCommand {
         // The route must be earned. Clearing rather than publishing is the whole point.
         RouteExhaustionEvidence.clear(mob.getUUID());
 
-        Vrt2Trace.arm(mob.getUUID(), price,
+        // Oracle capture. Held privately by the harness: a uses-delta or a component comparison is
+        // meaningless without a baseline. None of it is supplied to the mob.
+        int fletcherIndex = fletch.get().getOffers().indexOf(fletcher.get());
+        int toolsmithIndex = smith.get().getOffers().indexOf(toolsmith.get());
+        Optional<WorkDemandPolicy.MaterialDemand> t0Demand = WorkDemandPolicy
+                .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), ScavengerConfig.get())
+                .map(WorkDemandPolicy.WorkDemand::payload);
+        Vrt2Trace.arm(new Vrt2Oracle(
+                mob.getUUID(),
+                fletch.get().getUUID(), fletcherIndex, fletcher.get().getUses(),
+                fletcher.get().getCostA().copy(),
+                smith.get().getUUID(), toolsmithIndex, toolsmith.get().getUses(),
+                price, toolsmith.get().getResult().copy(),
                 SettlementRelationshipService.nearestSettlementAnchorAt(
-                        level, mob.getUUID(), mob.blockPosition()).orElse(null), level);
+                        level, mob.getUUID(), mob.blockPosition()).orElse(null),
+                0,
+                t0Demand.map(WorkDemandPolicy.MaterialDemand::consumerKey).orElse(null),
+                t0Demand.map(d -> ExistingRouteFeasibility.peekStatus(level, mob.getUUID(), d,
+                                backpack, mob.getMainHandItem(), mob.getOffhandItem(),
+                                ScavengerConfig.get()).name())
+                        .orElse("NONE")));
 
         source.sendSuccess(() -> Component.literal(String.join("\n",
                 "[VR-T2] T0 established (TEMPORARY V2-H PROOF SUPPORT)",

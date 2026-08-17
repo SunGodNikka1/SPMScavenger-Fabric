@@ -4,7 +4,6 @@ import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.WorkDemandPolicy;
-import com.noobk.spmscavenger.village.KnownVillage;
 import com.noobk.spmscavenger.village.SettlementRelationship;
 import com.noobk.spmscavenger.village.VillageMemorySavedData;
 import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
@@ -12,101 +11,110 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.trading.MerchantOffer;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * <b>TEMPORARY V2-H PROOF SUPPORT — remove after VR-T2 is captured.</b>
  *
- * <p>Records the <i>semantic</i> transitions of one VR-T2 run. Deliberately <b>not</b> a tick log:
- * an entry appears when the story changes, so the readout is the proof narrative rather than a
- * transcript to grep.
+ * <p>Two separate things, deliberately not mixed:
  *
- * <h2>Derived, never injected</h2>
+ * <pre>
+ * NARRATIVE   human-readable transitions; may infer from inventory
+ * ORACLE      the verdict; compares only exact captured MerchantOffer uses and result components
+ * </pre>
  *
- * Every transition is computed from the same read-only state {@code status} reads. Nothing in this
- * class is called from production, so the trade path is byte-identical whether or not the proof
- * harness exists — which matters because the harness is trying to prove that path unaided.
+ * <p>Inventory inference cannot tell the fixture's Fletcher from any other villager, cannot see a
+ * trade made against a different offer, and would count a pickup as a sale. It makes a readable
+ * story and an unsound proof, so PASS never consults it.
  *
- * <p>The cost is honest and worth stating: <b>sampling can miss a transition that occurs and reverts
- * inside one window</b>, and it attributes a change to the sample that observed it rather than the
- * tick that caused it. For the transitions VR-T2 cares about — all of which persist — that is
- * acceptable. It would not be acceptable for anything transient.
+ * <h2>Failures latch</h2>
  *
- * <h2>What it must never do</h2>
+ * Once a must-not condition is observed the verdict can never return to PASS. Without that, a run
+ * that traded five times and then settled into a correct-looking end state would report PASS on its
+ * final sample.
  *
- * Observe only. No publishing exhaustion, no opening or advancing a chain, no mutating offer uses,
- * no forcing a transaction, no closing the consumer.
+ * <h2>Observe only</h2>
+ *
+ * {@code peekStatus} throughout — the consumer entry points clear and delete evidence, so polling
+ * them would let arming the observer alter the arbitration under test. Nothing here is called from
+ * production; the trade path is byte-identical whether or not this exists.
  */
 public final class Vrt2Trace {
 
-    private static final int MAX_ENTRIES = 128;
-    private static final int SAMPLE_INTERVAL_TICKS = 5;
+    private static final int MAX_ENTRIES = 160;
 
     private static final List<String> ENTRIES = new ArrayList<>();
-    private static UUID armedMob;
-    private static int observedPrice;
-    private static BlockPos anchor;
-    private static int episodeBaseline;
+    /** Latched: once a must-not condition fires it is never removed. */
+    private static final Set<String> FAILURES = new LinkedHashSet<>();
+
+    private static Vrt2Oracle oracle;
     private static long nextSampleTick;
 
-    // Last observed values, so only CHANGES are recorded.
     private static String lastRouteStatus;
-    private static String lastPurchaseTarget;
+    private static boolean infeasibleWitnessed;
+    private static boolean consumerClosed;
     private static int lastEmeralds = Integer.MIN_VALUE;
     private static int lastSticks = Integer.MIN_VALUE;
-    private static int lastIronPickaxes = Integer.MIN_VALUE;
-    private static int lastEpisodes = Integer.MIN_VALUE;
-    private static boolean consumerClosed;
-    private static int sellCount;
+    private static int narrativeSells;
+    private static int lastFletcherUses;
+    private static int lastToolsmithUses;
+    private static boolean toolMatched;
+    private static int episodesNow;
 
     private Vrt2Trace() {
     }
 
-    public static void arm(UUID mobId, int price, BlockPos settlementAnchor, ServerLevel level) {
+    public static void arm(Vrt2Oracle captured) {
         ENTRIES.clear();
-        armedMob = mobId;
-        observedPrice = price;
-        anchor = settlementAnchor;
-        lastRouteStatus = null;
-        lastPurchaseTarget = null;
-        lastEmeralds = lastSticks = lastIronPickaxes = Integer.MIN_VALUE;
-        consumerClosed = false;
-        sellCount = 0;
+        FAILURES.clear();
+        oracle = captured;
         nextSampleTick = 0L;
-        episodeBaseline = episodeCount(level, mobId, settlementAnchor);
-        lastEpisodes = episodeBaseline;
-        record("T0 armed — price " + price + ", episode baseline " + episodeBaseline);
+        lastRouteStatus = captured.t0RouteStatus();
+        infeasibleWitnessed = false;
+        consumerClosed = false;
+        lastEmeralds = lastSticks = Integer.MIN_VALUE;
+        narrativeSells = 0;
+        lastFletcherUses = captured.fletcherBaselineUses();
+        lastToolsmithUses = captured.toolsmithBaselineUses();
+        toolMatched = false;
+        episodesNow = captured.episodeBaseline();
+        record("T0 armed");
+        if (!"UNKNOWN".equals(captured.t0RouteStatus())) {
+            fail("T0 route was " + captured.t0RouteStatus() + ", not UNKNOWN - the run cannot "
+                    + "prove UNKNOWN -> INFEASIBLE if it did not start UNKNOWN");
+        }
     }
 
     public static void disarm() {
-        armedMob = null;
+        oracle = null;
         ENTRIES.clear();
+        FAILURES.clear();
     }
 
     public static boolean armed() {
-        return armedMob != null;
+        return oracle != null;
     }
 
-    /** Called from the server tick hook only while armed. Pure observation. */
+    /** One-tick observation while armed. Pure. */
     public static void sample(ServerLevel level) {
-        if (armedMob == null || level.getGameTime() < nextSampleTick) {
+        if (oracle == null || level.getGameTime() < nextSampleTick) {
             return;
         }
-        nextSampleTick = level.getGameTime() + SAMPLE_INTERVAL_TICKS;
+        nextSampleTick = level.getGameTime() + 1L;
 
-        List<Mob> found = level.getEntitiesOfClass(Mob.class,
-                new net.minecraft.world.phys.AABB(BlockPos.ZERO).inflate(3.0E7D),
-                m -> armedMob.equals(m.getUUID()));
-        if (found.isEmpty()) {
+        if (!(level.getEntity(oracle.mobId()) instanceof Mob mob)) {
             return;
         }
-        final Mob mob = found.get(0);
-        final Container backpack = PlayerMobs.backpack(mob);
+        Container backpack = PlayerMobs.backpack(mob);
         if (backpack == null) {
             return;
         }
@@ -115,96 +123,214 @@ public final class Vrt2Trace {
                 .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg)
                 .map(WorkDemandPolicy.WorkDemand::payload);
 
-        // Route feasibility - the UNKNOWN -> INFEASIBLE transition VR-T2 exists to witness.
-        // peekStatus, never status: `status` clears exhaustion evidence on positive progress, so a
-        // 5-tick sampler polling it would let ARMING THE OBSERVER alter the route arbitration under
-        // test. The observer must be unable to change the outcome it reports.
+        observeRoute(level, mob, backpack, cfg, demand);
+        observeMerchants(level);
+        observeNarrative(backpack);
+        observeToolAndClosure(backpack, demand);
+        observeEpisodes(level, mob);
+    }
+
+    // ------------------------------------------------------------------ observations
+
+    private static void observeRoute(
+            ServerLevel level, Mob mob, Container backpack, ScavengerConfig cfg,
+            Optional<WorkDemandPolicy.MaterialDemand> demand) {
         String route = demand.map(d -> ExistingRouteFeasibility.peekStatus(level, mob.getUUID(), d,
                 backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg).name()).orElse("NONE");
-        if (!route.equals(lastRouteStatus)) {
-            if ("INFEASIBLE".equals(route) && "UNKNOWN".equals(lastRouteStatus)) {
-                record("gather scan completed empty — route UNKNOWN -> INFEASIBLE, TRADE admissible");
-            } else {
-                record("route status " + lastRouteStatus + " -> " + route);
-            }
-            lastRouteStatus = route;
+        if (route.equals(lastRouteStatus)) {
+            return;
         }
+        if ("INFEASIBLE".equals(route) && "UNKNOWN".equals(lastRouteStatus)) {
+            infeasibleWitnessed = true;
+            record("gather scan completed empty - UNKNOWN -> INFEASIBLE, TRADE admissible");
+        } else {
+            record("route " + lastRouteStatus + " -> " + route);
+        }
+        lastRouteStatus = route;
+    }
 
+    /** The proof oracle: the exact captured offers, by index, on the exact captured merchants. */
+    private static void observeMerchants(ServerLevel level) {
+        offerOf(level, oracle.fletcherId(), oracle.fletcherOfferIndex()).ifPresent(offer -> {
+            if (offer.getUses() == lastFletcherUses) {
+                return;
+            }
+            int delta = offer.getUses() - oracle.fletcherBaselineUses();
+            record("Fletcher offer uses " + lastFletcherUses + " -> " + offer.getUses()
+                    + "  (delta " + delta + ")");
+            if (!infeasibleWitnessed) {
+                fail("Fletcher traded before UNKNOWN -> INFEASIBLE - trade must not precede the "
+                        + "evidence that authorises it");
+            }
+            if (delta > Vrt2Oracle.EXPECTED_SELLS) {
+                fail("Fletcher uses delta " + delta + " exceeds the bounded "
+                        + Vrt2Oracle.EXPECTED_SELLS);
+            }
+            lastFletcherUses = offer.getUses();
+        });
+        offerOf(level, oracle.toolsmithId(), oracle.toolsmithOfferIndex()).ifPresent(offer -> {
+            if (offer.getUses() == lastToolsmithUses) {
+                return;
+            }
+            int delta = offer.getUses() - oracle.toolsmithBaselineUses();
+            record("Toolsmith offer uses " + lastToolsmithUses + " -> " + offer.getUses()
+                    + "  (delta " + delta + ")");
+            if (!infeasibleWitnessed) {
+                fail("Toolsmith traded before UNKNOWN -> INFEASIBLE");
+            }
+            if (delta > Vrt2Oracle.EXPECTED_BUYS) {
+                fail("Toolsmith uses delta " + delta + " exceeds the bounded "
+                        + Vrt2Oracle.EXPECTED_BUYS);
+            }
+            lastToolsmithUses = offer.getUses();
+        });
+    }
+
+    /** Narrative only - never consulted by the verdict. */
+    private static void observeNarrative(Container backpack) {
         int emeralds = ScavengerCrafting.count(backpack, Items.EMERALD);
         int sticks = ScavengerCrafting.count(backpack, Items.STICK);
-        int picks = ScavengerCrafting.count(backpack, Items.IRON_PICKAXE);
-
-        // A SELL is sticks down and emeralds up in the same window.
         if (lastSticks != Integer.MIN_VALUE && sticks < lastSticks && emeralds > lastEmeralds) {
-            sellCount++;
-            int shortfall = observedPrice - emeralds;
-            record("SELL #" + sellCount + " — sticks " + lastSticks + " -> " + sticks
+            narrativeSells++;
+            int shortfall = oracle.price() - emeralds;
+            record("  narrative: sale #" + narrativeSells + " sticks " + lastSticks + " -> " + sticks
                     + ", emeralds " + lastEmeralds + " -> " + emeralds
-                    + (shortfall <= 0
-                            ? "  [deficit closed: SELL_TO_FUND -> BUY_TARGET]"
-                            : "  [still " + shortfall + " short]"));
-        }
-        // A BUY is emeralds down and the tool present.
-        if (lastIronPickaxes != Integer.MIN_VALUE && picks > lastIronPickaxes) {
-            record("BUY — paid " + (lastEmeralds - emeralds) + " emerald, received iron_pickaxe"
-                    + " (expected live price " + observedPrice + ")");
+                    + (shortfall <= 0 ? "  [deficit closed]" : "  [" + shortfall + " short]"));
         }
         lastEmeralds = emeralds;
         lastSticks = sticks;
-        lastIronPickaxes = picks;
+    }
 
-        String target = demand.map(d -> d.materialKey().toString()).orElse("<none>");
-        if (!target.equals(lastPurchaseTarget)) {
-            record("source demand -> " + target);
-            lastPurchaseTarget = target;
+    private static void observeToolAndClosure(
+            Container backpack, Optional<WorkDemandPolicy.MaterialDemand> demand) {
+        if (!toolMatched) {
+            for (int slot = 0; slot < backpack.getContainerSize(); slot++) {
+                if (oracle.matchesQuotedTool(backpack.getItem(slot))) {
+                    toolMatched = true;
+                    record("acquired tool matches the exact quoted Toolsmith result "
+                            + "(item and components)");
+                    break;
+                }
+            }
         }
-        if (demand.isEmpty() && !consumerClosed && picks > 0) {
+        // The actual claim: THIS consumer stopped being selected. `demand.isEmpty()` would also be
+        // true if the mob simply had no work at all, and `activeIronToolRecipe` falls through
+        // pickaxe -> axe, so a purchase can change the consumer rather than end it.
+        boolean stillOurs = demand.isPresent()
+                && demand.get().consumerKey().equals(oracle.t0Consumer());
+        if (!stillOurs && !consumerClosed && toolMatched) {
             consumerClosed = true;
-            record("consumer CLOSED — iron_pickaxe_upgrade no longer demanded");
-        }
-
-        int episodes = episodeCount(level, mob.getUUID(), anchor);
-        if (episodes != lastEpisodes) {
-            record("relationship episode emitted — total " + episodes
-                    + " (baseline " + episodeBaseline + ")");
-            lastEpisodes = episodes;
-        }
-        if (consumerClosed && ENTRIES.stream().noneMatch(e -> e.contains("VERDICT"))) {
-            int earned = lastEpisodes - episodeBaseline;
-            record("VERDICT " + (sellCount >= 1 && picks > 0 && earned == 1 ? "PASS" : "FAIL")
-                    + " — sells=" + sellCount + " pickaxes=" + picks
-                    + " episodes=" + earned + " (expected exactly 1)");
+            record("consumer CLOSED - " + oracle.t0Consumer() + " is no longer selected");
         }
     }
 
-    static String chainAndEpisodeReadout(ServerLevel level, Mob mob) {
-        int episodes = episodeCount(level, mob.getUUID(), anchor);
-        return "  episodes      = " + episodes + "  (baseline " + episodeBaseline + ")\n"
-                + "  sells seen    = " + sellCount + "\n"
-                + "  armed         = " + armed() + "\n";
+    private static void observeEpisodes(ServerLevel level, Mob mob) {
+        int episodes = episodeCount(level, mob.getUUID(), oracle.settlementAnchor());
+        if (episodes == episodesNow) {
+            return;
+        }
+        int delta = episodes - oracle.episodeBaseline();
+        record("relationship episode emitted - delta " + delta);
+        if (delta > Vrt2Oracle.EXPECTED_EPISODES) {
+            fail("relationship episode delta " + delta + " - four sales and one purchase must "
+                    + "still teach exactly " + Vrt2Oracle.EXPECTED_EPISODES);
+        }
+        episodesNow = episodes;
+    }
+
+    // ------------------------------------------------------------------ verdict
+
+    private static List<String> unmetRequirements() {
+        List<String> unmet = new ArrayList<>();
+        if (!infeasibleWitnessed) {
+            unmet.add("UNKNOWN -> INFEASIBLE not witnessed");
+        }
+        int sells = lastFletcherUses - oracle.fletcherBaselineUses();
+        if (sells != Vrt2Oracle.EXPECTED_SELLS) {
+            unmet.add("Fletcher uses delta " + sells + " != " + Vrt2Oracle.EXPECTED_SELLS);
+        }
+        int buys = lastToolsmithUses - oracle.toolsmithBaselineUses();
+        if (buys != Vrt2Oracle.EXPECTED_BUYS) {
+            unmet.add("Toolsmith uses delta " + buys + " != " + Vrt2Oracle.EXPECTED_BUYS);
+        }
+        if (!toolMatched) {
+            unmet.add("acquired tool never matched the exact quoted result");
+        }
+        if (!consumerClosed) {
+            unmet.add(oracle.t0Consumer() + " never stopped being selected");
+        }
+        int episodes = episodesNow - oracle.episodeBaseline();
+        if (episodes != Vrt2Oracle.EXPECTED_EPISODES) {
+            unmet.add("episode delta " + episodes + " != " + Vrt2Oracle.EXPECTED_EPISODES);
+        }
+        return unmet;
     }
 
     static String readout() {
-        if (armedMob == null) {
-            return "[VR-T2] trace — not armed. Run `/spmscavenger debug vrt2 setup` first.";
+        if (oracle == null) {
+            return "[VR-T2] trace - not armed. Run `/spmscavenger debug vrt2 setup` first.";
         }
-        return "[VR-T2] trace (TEMPORARY V2-H PROOF SUPPORT)\n  " + String.join("\n  ", ENTRIES);
+        List<String> unmet = unmetRequirements();
+        StringBuilder out = new StringBuilder("[VR-T2] trace (TEMPORARY V2-H PROOF SUPPORT)\n");
+        out.append(oracle.describe()).append("  --- transitions ---\n  ")
+                .append(String.join("\n  ", ENTRIES)).append("\n  --- verdict ---\n");
+        if (!FAILURES.isEmpty()) {
+            out.append("  FAIL (latched):\n    ").append(String.join("\n    ", FAILURES))
+                    .append('\n');
+        } else if (!unmet.isEmpty()) {
+            out.append("  INCOMPLETE:\n    ").append(String.join("\n    ", unmet)).append('\n');
+        } else {
+            out.append("  PASS - every VR-T2 requirement met against the captured oracle\n");
+        }
+        return out.toString();
     }
 
-    private static int episodeCount(ServerLevel level, UUID mobId, BlockPos settlementAnchor) {
-        if (settlementAnchor == null) {
+    static String chainAndEpisodeReadout(ServerLevel level, Mob mob) {
+        if (oracle == null) {
+            return "  armed         = false\n";
+        }
+        return "  fletcher uses = " + lastFletcherUses + " (T0 " + oracle.fletcherBaselineUses()
+                + ", expect +" + Vrt2Oracle.EXPECTED_SELLS + ")\n"
+                + "  toolsmith uses= " + lastToolsmithUses + " (T0 " + oracle.toolsmithBaselineUses()
+                + ", expect +" + Vrt2Oracle.EXPECTED_BUYS + ")\n"
+                + "  episodes      = " + episodesNow + " (T0 " + oracle.episodeBaseline() + ")\n"
+                + "  latched fails = " + FAILURES.size() + "\n";
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    /** Direct UUID resolution - no world-scale entity query. */
+    private static Optional<MerchantOffer> offerOf(
+            ServerLevel level, UUID villagerId, int offerIndex) {
+        if (!(level.getEntity(villagerId) instanceof Villager villager)) {
+            return Optional.empty();
+        }
+        var offers = villager.getOffers();
+        return offerIndex >= 0 && offerIndex < offers.size()
+                ? Optional.of(offers.get(offerIndex))
+                : Optional.empty();
+    }
+
+    private static int episodeCount(ServerLevel level, UUID mobId, BlockPos anchor) {
+        if (anchor == null) {
             return 0;
         }
         return VillageMemorySavedData.get(level).peek(mobId)
-                .flatMap(memory -> memory.relationshipAt(settlementAnchor))
+                .flatMap(memory -> memory.relationshipAt(anchor))
                 .map(SettlementRelationship::tradeEpisodeCount)
                 .orElse(0);
     }
 
     private static void record(String entry) {
-        if (ENTRIES.size() >= MAX_ENTRIES) {
-            return;
+        if (ENTRIES.size() < MAX_ENTRIES) {
+            ENTRIES.add(entry);
         }
-        ENTRIES.add(entry);
+    }
+
+    /** Latched: a must-not condition, permanent for the run. */
+    private static void fail(String reason) {
+        if (FAILURES.add(reason)) {
+            record("FAIL(latched) " + reason);
+        }
     }
 }
