@@ -63,6 +63,8 @@ public final class Te3ProbeCommand {
         dispatcher.register(Commands.literal("spmscavenger").then(Commands.literal("debug")
                 .then(Commands.literal("te3").requires(src -> src.hasPermission(2))
                         .then(Commands.literal("index").executes(c -> index(c.getSource())))
+                        .then(Commands.literal("fixture")
+                                .executes(c -> fixture(c.getSource())))
                         .then(Commands.literal("seed")
                                 .then(Commands.argument("scenario",
                                                 com.mojang.brigadier.arguments.StringArgumentType.word())
@@ -126,6 +128,19 @@ public final class Te3ProbeCommand {
                 backpack.setItem(0, new ItemStack(Items.OAK_LOG, 64));
                 backpack.setItem(1, new ItemStack(Items.OAK_LOG, 64));
             }
+            case "funding" -> {
+                if (backpack.getContainerSize() < FUNDING_SLOTS) {
+                    source.sendFailure(Component.literal(
+                            "[TE3] backpack has " + backpack.getContainerSize() + " slots, the "
+                                    + "funding fixture needs " + FUNDING_SLOTS));
+                    return 0;
+                }
+                mob.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
+                        new ItemStack(Items.STONE_PICKAXE));
+                mob.setItemInHand(net.minecraft.world.InteractionHand.OFF_HAND,
+                        new ItemStack(Items.IRON_AXE));
+                seedFundingInventory(backpack);
+            }
             case "protected" -> {
                 mob.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
                         new ItemStack(Items.STONE_PICKAXE));
@@ -136,7 +151,7 @@ public final class Te3ProbeCommand {
             }
             default -> {
                 source.sendFailure(Component.literal(
-                        "[TE3] unknown scenario - use iron | torch | protected"));
+                        "[TE3] unknown scenario - use iron | torch | protected | funding"));
                 return 0;
             }
         }
@@ -150,6 +165,67 @@ public final class Te3ProbeCommand {
         source.sendSuccess(() -> Component.literal(
                 "[TE3] seeded '" + scenario + "' - " + count + " backpack stacks"), false);
         return 1;
+    }
+
+    static final int FUNDING_SLOTS = 8;
+
+    /**
+     * R12 — the capacity-safe B-witness inventory, as a <b>pure</b> function of the container so its
+     * capacity safety is unit-testable without a world.
+     *
+     * <h2>Why not 484 logs and no emeralds</h2>
+     *
+     * The census arithmetic said "&ge;484 logs covers the worst-case price", and it does — as
+     * <i>value</i>. It is wrong as <i>inventory</i>. The backpack has {@value #FUNDING_SLOTS} slots;
+     * filling every one with logs leaves the first {@code 22 oak_log -> 1 emerald} transaction with
+     * nowhere to put its emerald, and {@code VillagerTradeAdapter} debits a staged inventory and
+     * requires the result to insert before it commits. The route would fail {@code NO_ROOM} on step
+     * one of seventeen — a fixture that disproves nothing.
+     *
+     * <p>So the fixture keeps 6 log stacks (384 logs) and spends the 7th slot on a <b>5-emerald
+     * stack the TE payout can merge into</b>, and the 8th on the torches that keep the SURVIVAL
+     * charcoal demand off (SURVIVAL outranks PROGRESSION). Purchasing power is unchanged at 22:
+     * {@code floor(383/22) = 17} TE uses plus the 5 already held.
+     *
+     * <p>The final BUY then empties the emerald stack, which is what frees the slot the iron pickaxe
+     * arrives in. Capacity is not merely tolerated here; it is what makes the route close.
+     */
+    static void seedFundingInventory(Container backpack) {
+        backpack.clearContent();
+        for (int slot = 0; slot < 6; slot++) {
+            backpack.setItem(slot, new ItemStack(Items.OAK_LOG, 64));
+        }
+        backpack.setItem(6, new ItemStack(Items.EMERALD, 5));
+        backpack.setItem(7, new ItemStack(Items.TORCH, 16));
+    }
+
+    /**
+     * Raw capacity facts, reported and never classified on.
+     *
+     * <p>{@code classify} has no insertion model and must not grow one: {@code TradeFundingPlanner}
+     * is the production transaction contract, and a second one written for a probe would be a
+     * private oracle agreeing with itself. Execution capacity stays <b>P0-2</b>. What this does is
+     * report the two facts that decide whether a seeded fixture can physically run, so a
+     * {@code B_FUNDING} result is never quietly read as "and it would execute".
+     */
+    static boolean hasEmeraldMergeRoom(Container backpack) {
+        for (int slot = 0; slot < backpack.getContainerSize(); slot++) {
+            ItemStack stack = backpack.getItem(slot);
+            if (stack.is(Items.EMERALD) && stack.getCount() < stack.getMaxStackSize()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static int freeSlots(Container backpack) {
+        int free = 0;
+        for (int slot = 0; slot < backpack.getContainerSize(); slot++) {
+            if (backpack.getItem(slot).isEmpty()) {
+                free++;
+            }
+        }
+        return free;
     }
 
     /** Cold vs repeated {@code ensureIndexed}. TE memoizes on (RecipeManager, config) identity. */
@@ -183,6 +259,156 @@ public final class Te3ProbeCommand {
 
     private static String ms(long nanos) {
         return String.format("%.3f ms", nanos / 1_000_000.0D);
+    }
+
+    // --------------------------------------------------------------- R12 fixture conditioning
+
+    /** Bounded: 0.4^40 and 0.6^40 are both below 1e-8, so exhaustion is a real fault, not bad luck. */
+    private static final int MAX_NATURAL_ROLLS = 40;
+
+    /**
+     * R12 — condition the te3 merchants into the exact board the source census proved reachable.
+     *
+     * <h2>Re-roll, never author</h2>
+     *
+     * Both boards this witness needs are ordinary vanilla draws that simply are not certain:
+     *
+     * <ul>
+     *   <li><b>Novice armorer, all-sell.</b> The level-1 pool is {@code EmeraldForItems(COAL,15)}
+     *       plus four {@code ItemsForEmeralds} iron-armour listings, and {@code updateTrades} draws
+     *       2. Both drawn from the four sell listings — probability {@code C(4,2)/C(5,2) = 0.6} —
+     *       leaves no non-emerald cost on the board, so {@code DefaultBuyItemSelector} falls through
+     *       to its {@code EMERALD} return. That fallback is the <i>only</i> way an authorized
+     *       log/plank/stick can be paid in emeralds: escalation is structurally impossible, because
+     *       {@code payoutFor} compares <b>one</b> item's value (count-independent — 1 x 0.75) against
+     *       {@code unit x cap}, whose smallest possible value is 1.</li>
+     *   <li><b>Level-3 toolsmith with the iron pickaxe.</b> That pool is
+     *       {@code EmeraldForItems(FLINT,30)}, three {@code EnchantedItemForEmeralds}
+     *       (axe/shovel/pickaxe) and {@code ItemsForEmeralds(DIAMOND_HOE)} — 2 drawn, so the pickaxe
+     *       appears {@code 1 - C(4,2)/C(5,2) = 0.4} of the time. This is the exact draw that failed
+     *       VR-T2's first setup.</li>
+     * </ul>
+     *
+     * <p>So the fixture <b>discards vanilla boards until vanilla produces the one it needs</b>, and
+     * never writes an {@code Offers} tag. Authoring the toolsmith's listing would have made "read
+     * its exact live price" vacuous — the price would be the one this file chose. Every offer the
+     * scan then measures is generated by {@code Villager#updateTrades}, at whatever price and
+     * enchantment vanilla rolled.
+     *
+     * <p>The seller predicate is TE's own {@link games.brennan.tradeeverything.trade.ItemValuation
+     * #selectBuyItem}, not a re-derivation of it. GVC-6: mirror the consuming mod's predicate, and a
+     * re-derived copy would drift from the thing being measured.
+     */
+    private static int fixture(CommandSourceStack source) {
+        ServerLevel level = source.getLevel();
+        List<net.minecraft.world.entity.npc.Villager> present = level.getEntitiesOfClass(
+                net.minecraft.world.entity.npc.Villager.class,
+                new AABB(net.minecraft.core.BlockPos.containing(source.getPosition()))
+                        .inflate(RADIUS),
+                v -> v.getTags().contains("te3"));
+        if (present.isEmpty()) {
+            source.sendFailure(Component.literal(
+                    "[TE3] no te3-tagged villagers - run the scenario function first"));
+            return 0;
+        }
+        List<String> report = new ArrayList<>();
+        try {
+            // Same exposure as `index`: TE is modCompileOnly, so its absence is a missing class at
+            // the first call, not a load failure. Reported as an install problem rather than a stack
+            // trace, because that is what it always is.
+            games.brennan.tradeeverything.trade.ItemValuation.class.getName();
+        } catch (NoClassDefFoundError missing) {
+            source.sendFailure(Component.literal(
+                    "[TE3] Trade Everything is not on the runtime classpath - install "
+                            + "tradeeverything-fabric-0.3.0.jar in this instance"));
+            return 0;
+        }
+        for (net.minecraft.world.entity.npc.Villager seed : present) {
+            String profession = id(seed);
+            java.util.function.Predicate<net.minecraft.world.entity.npc.Villager> wanted =
+                    switch (profession) {
+                        case "armorer" -> Te3ProbeCommand::sellsOnlyForEmeralds;
+                        case "toolsmith" -> Te3ProbeCommand::listsIronPickaxe;
+                        default -> null;
+                    };
+            if (wanted == null) {
+                report.add("  " + profession + " - no condition, left as rolled");
+                continue;
+            }
+            int[] rolls = new int[1];
+            net.minecraft.world.entity.npc.Villager settled = rerollNaturally(level, seed, wanted, rolls);
+            if (settled == null) {
+                source.sendFailure(Component.literal("[TE3] " + profession + " did not roll the "
+                        + "required board in " + MAX_NATURAL_ROLLS + " vanilla draws. At p>=0.4 "
+                        + "that is ~1e-8 - suspect the pool, not the dice."));
+                return 0;
+            }
+            report.add("  " + profession + " settled after " + rolls[0] + " vanilla draw(s): "
+                    + describeBoard(settled));
+        }
+        source.sendSuccess(() -> Component.literal("[TE3] fixture conditioned (no Offers authored)\n"
+                + String.join("\n", report)), false);
+        return 1;
+    }
+
+    /** True when TE's own selector finds no non-emerald cost, so the payout falls back to emerald. */
+    private static boolean sellsOnlyForEmeralds(net.minecraft.world.entity.npc.Villager villager) {
+        return !villager.getOffers().isEmpty()
+                && games.brennan.tradeeverything.trade.ItemValuation
+                        .selectBuyItem(villager, villager.getOffers()) == Items.EMERALD;
+    }
+
+    private static boolean listsIronPickaxe(net.minecraft.world.entity.npc.Villager villager) {
+        for (MerchantOffer offer : villager.getOffers()) {
+            if (offer.getResult().is(Items.IRON_PICKAXE)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Discard and re-summon until vanilla rolls an acceptable board. {@code AbstractVillager} builds
+     * offers lazily and exposes no reset, so a fresh entity is the only way to draw again without
+     * writing the field ourselves.
+     */
+    private static net.minecraft.world.entity.npc.Villager rerollNaturally(
+            ServerLevel level, net.minecraft.world.entity.npc.Villager seed,
+            java.util.function.Predicate<net.minecraft.world.entity.npc.Villager> wanted,
+            int[] rollsOut) {
+        net.minecraft.world.entity.npc.Villager current = seed;
+        for (int roll = 1; roll <= MAX_NATURAL_ROLLS; roll++) {
+            if (wanted.test(current)) {
+                rollsOut[0] = roll;
+                return current;
+            }
+            net.minecraft.world.entity.npc.Villager next =
+                    net.minecraft.world.entity.EntityType.VILLAGER.create(level);
+            if (next == null) {
+                return null;
+            }
+            next.moveTo(current.getX(), current.getY(), current.getZ(),
+                    current.getYRot(), current.getXRot());
+            next.setVillagerData(current.getVillagerData());
+            next.setPersistenceRequired();
+            next.setNoAi(true);
+            next.setCustomName(current.getCustomName());
+            for (String tag : current.getTags()) {
+                next.addTag(tag);
+            }
+            current.discard();
+            level.addFreshEntity(next);
+            current = next;
+        }
+        return null;
+    }
+
+    private static String describeBoard(net.minecraft.world.entity.npc.Villager villager) {
+        List<String> parts = new ArrayList<>();
+        for (MerchantOffer offer : villager.getOffers()) {
+            parts.add(describe(offer.getCostA()) + " -> " + describe(offer.getResult()));
+        }
+        return String.join(" | ", parts);
     }
 
     // ------------------------------------------------------------------ the probe
@@ -251,7 +477,10 @@ public final class Te3ProbeCommand {
                 return 0;
             }
         }
-        List<String> lines = new ArrayList<>();
+        // Deduplicated: 384 logs occupy 6 slots and every one of them quotes identically against
+        // the same merchant, so the raw list would print the single witness six times. The bucket
+        // tally below is untouched - only the presentation collapses.
+        java.util.LinkedHashMap<String, Integer> lines = new java.util.LinkedHashMap<>();
         int[] tally = new int[Bucket.values().length];
         long quoteNanos = 0L;
         int quotes = 0;
@@ -287,11 +516,12 @@ public final class Te3ProbeCommand {
                         m -> SellReserveModel.reservedUnits(m, backpack, cfg));
                 tally[bucket.ordinal()]++;
                 if (bucket != Bucket.C_IRRELEVANT) {
-                    lines.add("  " + bucket + "  " + describe(offer.getCostA())
+                    lines.merge("  " + bucket + "  " + describe(offer.getCostA())
                             + " -> " + describe(offer.getResult())
                             + "   SELL @" + id(merchant)
                             + (evidence[0] == null ? ""
-                                    : (char) 10 + "        funds: " + evidence[0]));
+                                    : (char) 10 + "        funds: " + evidence[0]),
+                            1, Integer::sum);
                 }
             }
         }
@@ -310,13 +540,30 @@ public final class Te3ProbeCommand {
         for (Bucket b : Bucket.values()) {
             out.append("  ").append(b).append(" = ").append(tally[b.ordinal()]).append('\n');
         }
-        out.append(lines.isEmpty() ? "  (no A/B/D/E results)\n"
-                : String.join("\n", lines) + "\n");
+        if (lines.isEmpty()) {
+            out.append("  (no A/B/D/E results)\n");
+        } else {
+            lines.forEach((line, seen) ->
+                    out.append(line).append(seen > 1 ? "   [x" + seen + " input stacks]" : "")
+                            .append((char) 10));
+        }
         out.append("  backpack slots=").append(backpack.getContainerSize())
                 .append("  non-empty=").append(candidateStacks)
                 .append("  merchants=").append(merchants.size())
                 .append("  quote attempts=").append(quotes)
                 .append("  quotes returned=").append(returned).append((char) 10);
+        // Reported, never classified on. B_FUNDING answers "can this route be assembled"; these two
+        // numbers answer "could the assembled route physically start", which is P0-2's question and
+        // not this probe's. Printing them keeps the two from being read as one result.
+        out.append("  capacity: free slots=").append(freeSlots(backpack))
+                .append("  mergeable emerald stack=").append(hasEmeraldMergeRoom(backpack))
+                .append((char) 10);
+        if (freeSlots(backpack) == 0 && !hasEmeraldMergeRoom(backpack)) {
+            out.append("  CAPACITY WARNING: no free slot and no emerald stack to merge into. A "
+                            + "B_FUNDING result here is NOT physically executable - the first SELL "
+                            + "would fail NO_ROOM, and classification cannot represent that (P0-2).")
+                    .append((char) 10);
+        }
 
         // R10: quotes == 0 means NO economic classification happened, so every bucket is 0 for the
         // trivial reason that nothing was measured. Reporting that as "no useful intersection"

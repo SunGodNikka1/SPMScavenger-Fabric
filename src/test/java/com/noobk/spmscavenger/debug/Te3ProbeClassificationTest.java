@@ -54,9 +54,21 @@ class Te3ProbeClassificationTest {
                 Optional.empty(), result, 0, 12, 0, 0f);
     }
 
+    /**
+     * A <b>TE synthetic</b> offer. {@code maxUses} is not decoration:
+     * {@code SyntheticOfferFactory.MAX_USES = 999_999} (verified at pinned commit {@code fe305e6}),
+     * and {@code SellFundingLeg.affordableUses} is {@code min(inventoryUses, maxUses - uses)}. Minting
+     * a TE quote with vanilla's 12 silently caps a 17-use plan at 12 and turns a real witness into
+     * {@code C_IRRELEVANT} - which is exactly what this helper's absence did on the first run.
+     */
+    private static MerchantOffer teQuote(ItemStack costA, ItemStack result) {
+        return new MerchantOffer(new ItemCost(costA.getItem(), costA.getCount()),
+                Optional.empty(), result, 0, 999_999, 0, 0f);
+    }
+
     /** The TE synthetic quote: logs in, emeralds out. Never a BUY for anything. */
     private static MerchantOffer teSellsLogsForEmeralds() {
-        return offer(new ItemStack(Items.OAK_LOG, 16), new ItemStack(Items.EMERALD, 6));
+        return teQuote(new ItemStack(Items.OAK_LOG, 16), new ItemStack(Items.EMERALD, 6));
     }
 
     private static WorkDemandPolicy.MaterialDemand pickaxeDemand() {
@@ -139,7 +151,7 @@ class Te3ProbeClassificationTest {
         String[] evidence = new String[1];
 
         assertEquals(Te3ProbeCommand.Bucket.D_ILLEGAL, Te3ProbeCommand.classify(
-                        offer(new ItemStack(Items.OAK_LOG, 1), new ItemStack(Items.EMERALD, 64)),
+                        teQuote(new ItemStack(Items.OAK_LOG, 1), new ItemStack(Items.EMERALD, 64)),
                         false,
                         Optional.of(pickaxeDemand()), Optional.empty(),
                         backpackWithLogs(), new ScavengerConfig(),
@@ -156,7 +168,7 @@ class Te3ProbeClassificationTest {
         String[] evidence = new String[1];
 
         assertEquals(Te3ProbeCommand.Bucket.A_DIRECT, Te3ProbeCommand.classify(
-                offer(new ItemStack(Items.OAK_LOG, 40), new ItemStack(Items.IRON_PICKAXE, 1)),
+                teQuote(new ItemStack(Items.OAK_LOG, 40), new ItemStack(Items.IRON_PICKAXE, 1)),
                 true, Optional.of(pickaxeDemand()), Optional.empty(),
                 backpackWithLogs(), new ScavengerConfig(), List.of(), evidence, SPARE));
     }
@@ -174,7 +186,7 @@ class Te3ProbeClassificationTest {
                 ResourceLocation.fromNamespaceAndPath("spmscavenger", "torch_chain"));
 
         assertEquals(Te3ProbeCommand.Bucket.E_REPRESENTATION_MISS, Te3ProbeCommand.classify(
-                offer(new ItemStack(Items.OAK_LOG, 16), new ItemStack(Items.COAL, 4)),
+                teQuote(new ItemStack(Items.OAK_LOG, 16), new ItemStack(Items.COAL, 4)),
                 true, Optional.of(charcoal), Optional.empty(),
                 backpackWithLogs(), new ScavengerConfig(), List.of(), evidence, SPARE));
     }
@@ -195,7 +207,7 @@ class Te3ProbeClassificationTest {
         String[] evidence = new String[1];
 
         Te3ProbeCommand.Bucket bucket = Te3ProbeCommand.classify(
-                offer(new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1)),
+                teQuote(new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1)),
                 true, Optional.of(pickaxeDemand()), Optional.empty(),
                 backpack, new ScavengerConfig(),
                 List.of(new Te3ProbeCommand.MarketBoard("toolsmith", List.of(
@@ -206,6 +218,128 @@ class Te3ProbeClassificationTest {
         assertEquals(Te3ProbeCommand.Bucket.C_IRRELEVANT, bucket,
                 "2 affordable uses x 1 emerald cannot close a 13-emerald deficit");
         assertNull(evidence[0], "and a route that cannot complete must not be evidenced as B");
+    }
+
+    // ------------------------------------------------------------------ R12 B witness
+
+    /** The exact fixture the b_funding_witness scenario seeds, as a pure container. */
+    private static SimpleContainer fundingFixture() {
+        SimpleContainer backpack = new SimpleContainer(Te3ProbeCommand.FUNDING_SLOTS);
+        Te3ProbeCommand.seedFundingInventory(backpack);
+        return backpack;
+    }
+
+    /**
+     * R12 — <b>value is not capacity.</b>
+     *
+     * <p>The census recommended "&ge;484 logs", which is arithmetically right and physically wrong:
+     * 8 slots of logs leaves the first {@code 22 oak_log -> 1 emerald} nowhere to put its emerald,
+     * and {@code VillagerTradeAdapter} requires the result to insert before it commits. The
+     * seventeen-use plan would die on use one.
+     */
+    @Test
+    void mustHappen_theFundingFixtureLeavesSomewhereForTheTePayoutToLand() {
+        SimpleContainer backpack = fundingFixture();
+
+        assertEquals(384, com.noobk.spmscavenger.ScavengerCrafting.count(backpack, Items.OAK_LOG),
+                "6 stacks of logs - value enough for the whole 8..22 envelope at 22 logs/emerald");
+        org.junit.jupiter.api.Assertions.assertTrue(
+                Te3ProbeCommand.hasEmeraldMergeRoom(backpack),
+                "the TE payout must have an existing emerald stack to merge into");
+        assertEquals(0, Te3ProbeCommand.freeSlots(backpack),
+                "and it must not need a free slot to do it - the fixture is deliberately full, so "
+                        + "this passes because of the merge target, not because of spare room");
+    }
+
+    /**
+     * The capacity negative control, and the documented limit it exposes.
+     *
+     * <p>An all-logs backpack is <i>worth more</i> and classifies <b>identically</b> as
+     * {@code B_FUNDING} — because {@code classify} asks whether the route can be assembled, and
+     * insertion headroom is not part of that question. Writing a second transaction model inside the
+     * probe to close the gap would have produced an oracle agreeing with itself, so the gap is
+     * reported instead: {@code freeSlots == 0 && !hasEmeraldMergeRoom} is the signal, and execution
+     * capacity remains <b>P0-2</b>.
+     */
+    @Test
+    void mustNotHappen_aBFundingResultIsReadAsPhysicallyExecutable() {
+        SimpleContainer allLogs = new SimpleContainer(Te3ProbeCommand.FUNDING_SLOTS);
+        for (int slot = 0; slot < Te3ProbeCommand.FUNDING_SLOTS; slot++) {
+            allLogs.setItem(slot, new ItemStack(Items.OAK_LOG, 64));
+        }
+        var toolsmith = List.of(new Te3ProbeCommand.MarketBoard("toolsmith", List.of(
+                OfferSnapshot.of(0, offer(new ItemStack(Items.EMERALD, 22),
+                        new ItemStack(Items.IRON_PICKAXE, 1))))));
+
+        assertEquals(Te3ProbeCommand.Bucket.B_FUNDING, Te3ProbeCommand.classify(
+                        teQuote(new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1)),
+                        true, Optional.of(pickaxeDemand()), Optional.empty(),
+                        allLogs, new ScavengerConfig(), toolsmith, new String[1], SPARE),
+                "classification sees only assembly - 512 logs fund 22 emeralds");
+        org.junit.jupiter.api.Assertions.assertFalse(
+                Te3ProbeCommand.hasEmeraldMergeRoom(allLogs), "no emerald stack to merge into");
+        assertEquals(0, Te3ProbeCommand.freeSlots(allLogs), "and no free slot either");
+        // Both conditions together are what the scan prints a CAPACITY WARNING for. The fixture
+        // above must never satisfy them.
+        org.junit.jupiter.api.Assertions.assertTrue(
+                Te3ProbeCommand.hasEmeraldMergeRoom(fundingFixture()),
+                "the shipped fixture must not be this case");
+    }
+
+    /**
+     * R12 — the witness itself, at the <b>worst</b> price in the confirmed envelope.
+     *
+     * <p>22 emeralds is the ceiling of the iron-pickaxe range, so if this funds, every legal roll
+     * funds: 5 held + {@code floor(383/22) = 17} TE uses = exactly 22. The armorer board carries no
+     * qualifying BUY, so a regression to same-merchant search turns this red rather than merely
+     * making it less thorough.
+     */
+    @Test
+    void mustHappen_theWitnessFundsTheWorstPriceInTheEnvelopeAcrossVillagers() {
+        String[] evidence = new String[1];
+
+        Te3ProbeCommand.Bucket bucket = Te3ProbeCommand.classify(
+                teQuote(new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1)),
+                true, Optional.of(pickaxeDemand()), Optional.empty(),
+                fundingFixture(), new ScavengerConfig(),
+                List.of(
+                        // The TE seller's own board: two vanilla ItemsForEmeralds armour listings,
+                        // which is exactly why DefaultBuyItemSelector fell back to EMERALD. Nothing
+                        // here can fund an iron pickaxe.
+                        new Te3ProbeCommand.MarketBoard("armorer", List.of(
+                                OfferSnapshot.of(0, offer(new ItemStack(Items.EMERALD, 4),
+                                        new ItemStack(Items.IRON_BOOTS, 1))),
+                                OfferSnapshot.of(1, offer(new ItemStack(Items.EMERALD, 5),
+                                        new ItemStack(Items.IRON_HELMET, 1))))),
+                        new Te3ProbeCommand.MarketBoard("toolsmith", List.of(
+                                OfferSnapshot.of(0, offer(new ItemStack(Items.EMERALD, 22),
+                                        new ItemStack(Items.IRON_PICKAXE, 1)))))),
+                evidence, SPARE);
+
+        assertEquals(Te3ProbeCommand.Bucket.B_FUNDING, bucket,
+                "5 held + 17 TE uses = 22 emeralds against the ceiling price");
+        assertNotNull(evidence[0], "B must name the purchase it funds");
+        org.junit.jupiter.api.Assertions.assertTrue(evidence[0].contains("toolsmith"),
+                "and the BUY owner must be the OTHER villager: " + evidence[0]);
+    }
+
+    /** One emerald short of the ceiling is not a witness. Stock, not structure, is the difference. */
+    @Test
+    void mustNotHappen_aFixtureOneEmeraldShortStillReportsAWitness() {
+        SimpleContainer thin = new SimpleContainer(Te3ProbeCommand.FUNDING_SLOTS);
+        Te3ProbeCommand.seedFundingInventory(thin);
+        // 361 logs -> floor(361/22) = 16 uses; 5 held + 16 = 21 against a 22-emerald pickaxe.
+        thin.setItem(5, new ItemStack(Items.OAK_LOG, 41));
+
+        assertEquals(Te3ProbeCommand.Bucket.C_IRRELEVANT, Te3ProbeCommand.classify(
+                        teQuote(new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1)),
+                        true, Optional.of(pickaxeDemand()), Optional.empty(),
+                        thin, new ScavengerConfig(),
+                        List.of(new Te3ProbeCommand.MarketBoard("toolsmith", List.of(
+                                OfferSnapshot.of(0, offer(new ItemStack(Items.EMERALD, 22),
+                                        new ItemStack(Items.IRON_PICKAXE, 1)))))),
+                        new String[1], SPARE),
+                "21 of 22 emeralds is a purchase that never completes");
     }
 
     /** The boundary: enough stock to fully fund is B, one use short is not. */
@@ -219,14 +353,14 @@ class Te3ProbeClassificationTest {
         SimpleContainer enough = new SimpleContainer(9);
         enough.setItem(0, new ItemStack(Items.OAK_LOG, 40));   // floor(40/10)=4 uses x1 = 4 >= 4
         assertEquals(Te3ProbeCommand.Bucket.B_FUNDING, Te3ProbeCommand.classify(
-                offer(new ItemStack(Items.OAK_LOG, 10), new ItemStack(Items.EMERALD, 1)),
+                teQuote(new ItemStack(Items.OAK_LOG, 10), new ItemStack(Items.EMERALD, 1)),
                 true, Optional.of(pickaxeDemand()), Optional.empty(),
                 enough, new ScavengerConfig(), buy, evidence, SPARE));
 
         SimpleContainer oneShort = new SimpleContainer(9);
         oneShort.setItem(0, new ItemStack(Items.OAK_LOG, 39));  // floor(39/10)=3 uses x1 = 3 < 4
         assertEquals(Te3ProbeCommand.Bucket.C_IRRELEVANT, Te3ProbeCommand.classify(
-                offer(new ItemStack(Items.OAK_LOG, 10), new ItemStack(Items.EMERALD, 1)),
+                teQuote(new ItemStack(Items.OAK_LOG, 10), new ItemStack(Items.EMERALD, 1)),
                 true, Optional.of(pickaxeDemand()), Optional.empty(),
                 oneShort, new ScavengerConfig(), buy, new String[1], SPARE));
     }
