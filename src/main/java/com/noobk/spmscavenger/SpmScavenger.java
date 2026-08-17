@@ -105,6 +105,10 @@ public class SpmScavenger implements ModInitializer {
 
         ServerTickEvents.END_SERVER_TICK.register(
                 server -> VillagePerceptionScheduler.forServer(server).onServerTick(server));
+        // TEMPORARY V2-TE P0-3 PROBE SUPPORT - remove with com.noobk.spmscavenger.debug.
+        net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
+                (dispatcher, registryAccess, environment) ->
+                        com.noobk.spmscavenger.debug.Te3ProbeCommand.register(dispatcher));
         ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
                 OpinionExperienceRegistry.resumeOnLoad(mob);
