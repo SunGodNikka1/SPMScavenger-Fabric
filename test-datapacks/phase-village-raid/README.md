@@ -24,9 +24,11 @@ at summon time would leave them unable to ever acquire a workstation, and the "v
 perceived would be one vanilla never formed. The PlayerMob is spawned last, so its own perception
 records a settlement that genuinely exists.
 
-`settle` is **fail-closed on the real signal**: it proceeds only when *both* merchants hold a
-naturally acquired `minecraft:job_site` memory, and otherwise refuses and asks you to wait. Reading
-that memory is not authoring one — nothing writes Brain state.
+`settle` is **fail-closed on the real signal**: it proceeds only when a `vrt2_toolsmith` *and* a
+`vrt2_fletcher` each hold a naturally acquired `minecraft:job_site` memory, and otherwise names
+which one is missing. The two roles are asserted **positively**, by tag — "no unsited merchant
+exists" is vacuously true when a merchant failed to spawn, or when none did, and would have advanced
+a malformed fixture. Reading a memory is not authoring one; nothing writes Brain state.
 
 **`quickstart` is safe to re-run.** It clears previously tagged fixture entities first, so a second
 run cannot leave two toolsmiths standing in a freshly rebuilt arena.
@@ -87,8 +89,10 @@ vanilla never produces.
 acquisition a short unambiguous path. Production navigates directly to the Villager entity until
 within 3 blocks, so a merchant left walled in would either burn the path and approach budget on an
 unreachable target or permit an unnatural through-wall transaction — neither is the physical trade
-VR-T2 is meant to prove. `settle` freezes first, then removes only the walls; workstations,
-merchants and their claimed POIs stay exactly as they were.
+VR-T2 is meant to prove. `settle` freezes first, then removes only the walls
+(`replace smooth_stone`); the claimed workstations are deliberately **not** re-set afterwards, since
+re-asserting a block a villager has already claimed raises a question about its POI record that this
+fixture has no reason to ask.
 
 **The merchants are 18 blocks apart.** Both are inside the 16-block trade candidate radius of the
 centre but far outside each other's 3-block interaction range, so after the fourth sale the mob must
