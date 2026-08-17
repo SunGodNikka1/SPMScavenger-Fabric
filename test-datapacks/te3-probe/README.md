@@ -47,7 +47,7 @@ assumptions of the thing it is measuring, and its agreement would prove nothing.
 | | |
 |---|---|
 | **A DIRECT** | payout exactly satisfies the current demand or its `D-VR-075` projection |
-| **B FUNDING** | payout is emeralds *and* a concrete current BUY can be funded by them |
+| **B FUNDING** | payout is emeralds *and* a concrete current BUY can be funded by them — tested **pairwise across fixture villagers**, since V2-E R7 supports a SELL on one merchant funding a BUY on another and VR-T2 proved it (Fletcher sticks→emeralds ×4, then Toolsmith emeralds→pickaxe) |
 | **C IRRELEVANT** | safe quote, no current consumer benefits |
 | **D ILLEGAL** | input is not disposition-authorized — checked **before** value, per `W-5` |
 | **E REPRESENTATION MISS** | payout would actually serve the consumer, but the demand names a different item |
@@ -75,6 +75,11 @@ If bucket E is non-empty, the fix is whether the torch chain should demand *a fu
   something else. Without it, `a_iron_frontier` could silently run as a torch scenario: `SURVIVAL`
   outranks `PROGRESSION`, so surplus logs with torches below target select `CHARCOAL` over
   `IRON_INGOT`. The scenario now stocks torches first; the assertion is what proves it worked.
+- **The fixture mob is `NoAI`.** `scenario → index → scan` is a manual sequence with ticks in
+  between; a live mob would mutate the inventory the scenario established. Pairing is done over
+  one exact BUY plus one exact TE SELL at a time — never a flattened global board, because
+  `OfferSnapshot.index()` is buyer-local and a fake global market would reintroduce the
+  flattened-index defect R8 removed.
 - **Never executed.** Written from source and verified by compilation only.
 - Reachability is not desirability. A non-empty A/B says a bridge *could* pay off, not that
   autonomous behaviour would be sensible — that is V2-TE's own design question.

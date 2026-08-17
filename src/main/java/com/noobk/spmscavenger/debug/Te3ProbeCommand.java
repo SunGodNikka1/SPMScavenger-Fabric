@@ -152,7 +152,12 @@ public final class Te3ProbeCommand {
         // own villagers and any passing WanderingTrader - manufacturing A/B reachability from the
         // environment, including the wandering-trader path we agreed must not prove ordinary
         // Villager compatibility.
-        List<AbstractVillager> merchants = level.getEntitiesOfClass(AbstractVillager.class,
+        // Villager.class, not AbstractVillager: P0-3 asks about ORDINARY villagers, and a
+        // WanderingTrader must not be able to prove ordinary-villager reachability. Enforced by
+        // type rather than by fixture convention, so an externally tagged trader still cannot slip
+        // in. `quote` accepts AbstractVillager, so Villager passes fine.
+        List<net.minecraft.world.entity.npc.Villager> merchants = level.getEntitiesOfClass(
+                net.minecraft.world.entity.npc.Villager.class,
                 new AABB(mob.blockPosition()).inflate(RADIUS),
                 v -> v.getTags().contains("te3"));
         if (expectDemand != null) {
@@ -176,7 +181,7 @@ public final class Te3ProbeCommand {
                 continue;
             }
             int disposableUnits = disposable(input, backpack, cfg);
-            for (AbstractVillager merchant : merchants) {
+            for (net.minecraft.world.entity.npc.Villager merchant : merchants) {
                 long t0 = System.nanoTime();
                 Optional<MerchantOffer> quoted =
                         OfferQuoter.quote(merchant, input, merchant.getOffers());
@@ -191,13 +196,16 @@ public final class Te3ProbeCommand {
                 // production funding path already requires the count to be covered.
                 boolean authorized = disposableUnits >= offer.getCostA().getCount()
                         && ItemStack.isSameItemSameComponents(offer.getCostA(), input);
+                String[] evidence = new String[1];
                 Bucket bucket = classify(offer, authorized, demand, projected, backpack, cfg,
-                        merchant);
+                        merchants, evidence);
                 tally[bucket.ordinal()]++;
                 if (bucket != Bucket.C_IRRELEVANT) {
                     lines.add("  " + bucket + "  " + describe(offer.getCostA())
                             + " -> " + describe(offer.getResult())
-                            + "   @" + id(merchant));
+                            + "   SELL @" + id(merchant)
+                            + (evidence[0] == null ? ""
+                                    : (char) 10 + "        funds: " + evidence[0]));
                 }
             }
         }
@@ -235,7 +243,8 @@ public final class Te3ProbeCommand {
             MerchantOffer offer, boolean authorized,
             Optional<WorkDemandPolicy.MaterialDemand> demand,
             Optional<WorkDemandPolicy.MaterialDemand> projected,
-            Container backpack, ScavengerConfig cfg, AbstractVillager merchant) {
+            Container backpack, ScavengerConfig cfg,
+            List<net.minecraft.world.entity.npc.Villager> market, String[] evidence) {
         if (!authorized) {
             return Bucket.D_ILLEGAL;
         }
@@ -253,28 +262,40 @@ public final class Te3ProbeCommand {
         }
         if (offer.getResult().is(Items.EMERALD)) {
             // B only if a concrete BUY currently exists for those emeralds to fund.
-            // The planner needs a real BUY to fund. Handing it only the TE SELL quote meant it
-            // searched that single emerald-paying offer for a purchase satisfying the demand, found
-            // none, and returned null - reporting genuine TE -> emerald -> BUY routes as C.
-            List<OfferSnapshot> candidates = new ArrayList<>();
-            List<MerchantOffer> live = merchant.getOffers();
-            for (int i = 0; i < live.size(); i++) {
-                candidates.add(OfferSnapshot.of(i, live.get(i)));
-            }
-            OfferSnapshot synthetic = OfferSnapshot.of(live.size(), offer);
-            candidates.add(synthetic);
+            // Cross-villager funding, pairwise. V2-E R7 supports a SELL on one merchant funding a
+            // BUY on another, and VR-T2 proved it physically: Fletcher 32 sticks -> 1 emerald x4,
+            // then Toolsmith 11 emerald -> enchanted iron pickaxe. Searching only the SELLING
+            // merchant's own board for that BUY would report exactly that route as C.
+            //
+            // Pairwise rather than a flattened market: OfferSnapshot.index() is BUYER-LOCAL, and a
+            // fake global board would reintroduce the flattened-index defect R8 removed. Each pair
+            // is one exact BUY candidate plus this one exact TE SELL candidate.
+            final int syntheticIndex = 9_999;
+            OfferSnapshot synthetic = OfferSnapshot.of(syntheticIndex, offer);
 
-            boolean fundable = demand.map(d -> {
-                TradeFundingPlanner.FundingTarget target = TradeFundingPlanner.chooseFundingTarget(
-                        projected.orElse(d), candidates, backpack,
-                        ItemStack.EMPTY, ItemStack.EMPTY,
-                        m -> SellReserveModel.reservedUnits(m, backpack, cfg));
-                // And the funding leg must be THIS TE quote, not some vanilla sale that happened to
-                // be available - otherwise B would credit Trade Everything for a vanilla route.
-                return target != null && target.sellLeg() != null
-                        && target.sellLeg().offer().index() == synthetic.index();
-            }).orElse(false);
-            return fundable ? Bucket.B_FUNDING : Bucket.C_IRRELEVANT;
+            for (net.minecraft.world.entity.npc.Villager buyer : market) {
+                List<MerchantOffer> board = buyer.getOffers();
+                for (int i = 0; i < board.size(); i++) {
+                    OfferSnapshot buyCandidate = OfferSnapshot.of(i, board.get(i));
+                    boolean matched = demand.map(d -> {
+                        TradeFundingPlanner.FundingTarget target =
+                                TradeFundingPlanner.chooseFundingTarget(
+                                        projected.orElse(d), List.of(buyCandidate, synthetic),
+                                        backpack, ItemStack.EMPTY, ItemStack.EMPTY,
+                                        m -> SellReserveModel.reservedUnits(m, backpack, cfg));
+                        return target != null
+                                && target.buyOffer().index() == buyCandidate.index()
+                                && target.sellLeg() != null
+                                && target.sellLeg().offer().index() == syntheticIndex;
+                    }).orElse(false);
+                    if (matched) {
+                        evidence[0] = describe(buyCandidate.costA()) + " -> "
+                                + describe(buyCandidate.result()) + "   BUY @" + id(buyer);
+                        return Bucket.B_FUNDING;
+                    }
+                }
+            }
+            return Bucket.C_IRRELEVANT;
         }
         return Bucket.C_IRRELEVANT;
     }
