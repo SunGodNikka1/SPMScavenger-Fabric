@@ -401,7 +401,14 @@ public final class Te3ProbeCommand {
                                         projected.orElse(d), List.of(buyCandidate, synthetic),
                                         backpack, ItemStack.EMPTY, ItemStack.EMPTY,
                                         reservedUnits);
+                        // R11: actionable(), not merely "a target came back". Runtime #2 produced
+                        // 22 oak_log -> 1 emerald against a 13-emerald BUY with 48 logs held:
+                        // floor(48/22) = 2 uses = 2 emerald, so the purchase can never complete.
+                        // The production contract already encodes this - an unfunded target is
+                        // actionable only when sellLeg.fullyFunds(deficit) - so it is reused rather
+                        // than re-derived here. B means REACHABLE, not merely quotable.
                         return target != null
+                                && target.actionable()
                                 && target.buyOffer().index() == buyCandidate.index()
                                 && target.sellLeg() != null
                                 && target.sellLeg().offer().index() == syntheticIndex;

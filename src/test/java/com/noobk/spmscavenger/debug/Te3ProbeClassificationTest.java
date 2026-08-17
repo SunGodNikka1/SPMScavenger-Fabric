@@ -178,4 +178,56 @@ class Te3ProbeClassificationTest {
                 true, Optional.of(charcoal), Optional.empty(),
                 backpackWithLogs(), new ScavengerConfig(), List.of(), evidence, SPARE));
     }
+
+    /**
+     * R11 — the runtime false positive. <b>Quotable is not fundable.</b>
+     *
+     * <p>Run #2 produced {@code 22 oak_log -> 1 emerald} against a {@code 13 emerald} purchase with
+     * 48 logs held: {@code floor(48/22) = 2} affordable uses yielding 2 emeralds against a deficit
+     * of 13. A planner target exists, so the earlier check passed — but the purchase can never
+     * complete, and calling that a funding route would have reported V2-TE as reachable on the
+     * strength of trades the mob could not finish.
+     */
+    @Test
+    void mustNotHappen_aPartiallyFundingTeQuoteCountsAsAFundingRoute() {
+        SimpleContainer backpack = new SimpleContainer(9);
+        backpack.setItem(0, new ItemStack(Items.OAK_LOG, 48));
+        String[] evidence = new String[1];
+
+        Te3ProbeCommand.Bucket bucket = Te3ProbeCommand.classify(
+                offer(new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1)),
+                true, Optional.of(pickaxeDemand()), Optional.empty(),
+                backpack, new ScavengerConfig(),
+                List.of(new Te3ProbeCommand.MarketBoard("toolsmith", List.of(
+                        OfferSnapshot.of(0, offer(new ItemStack(Items.EMERALD, 13),
+                                new ItemStack(Items.IRON_PICKAXE, 1)))))),
+                evidence, SPARE);
+
+        assertEquals(Te3ProbeCommand.Bucket.C_IRRELEVANT, bucket,
+                "2 affordable uses x 1 emerald cannot close a 13-emerald deficit");
+        assertNull(evidence[0], "and a route that cannot complete must not be evidenced as B");
+    }
+
+    /** The boundary: enough stock to fully fund is B, one use short is not. */
+    @Test
+    void mustHappen_theFundingBoundaryIsExact() {
+        String[] evidence = new String[1];
+        var buy = List.of(new Te3ProbeCommand.MarketBoard("toolsmith", List.of(
+                OfferSnapshot.of(0, offer(new ItemStack(Items.EMERALD, 4),
+                        new ItemStack(Items.IRON_PICKAXE, 1))))));
+
+        SimpleContainer enough = new SimpleContainer(9);
+        enough.setItem(0, new ItemStack(Items.OAK_LOG, 40));   // floor(40/10)=4 uses x1 = 4 >= 4
+        assertEquals(Te3ProbeCommand.Bucket.B_FUNDING, Te3ProbeCommand.classify(
+                offer(new ItemStack(Items.OAK_LOG, 10), new ItemStack(Items.EMERALD, 1)),
+                true, Optional.of(pickaxeDemand()), Optional.empty(),
+                enough, new ScavengerConfig(), buy, evidence, SPARE));
+
+        SimpleContainer oneShort = new SimpleContainer(9);
+        oneShort.setItem(0, new ItemStack(Items.OAK_LOG, 39));  // floor(39/10)=3 uses x1 = 3 < 4
+        assertEquals(Te3ProbeCommand.Bucket.C_IRRELEVANT, Te3ProbeCommand.classify(
+                offer(new ItemStack(Items.OAK_LOG, 10), new ItemStack(Items.EMERALD, 1)),
+                true, Optional.of(pickaxeDemand()), Optional.empty(),
+                oneShort, new ScavengerConfig(), buy, new String[1], SPARE));
+    }
 }
