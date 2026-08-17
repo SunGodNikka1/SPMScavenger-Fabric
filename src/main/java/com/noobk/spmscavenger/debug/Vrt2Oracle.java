@@ -36,6 +36,7 @@ public record Vrt2Oracle(
         int fletcherOfferIndex,
         int fletcherBaselineUses,
         ItemStack fletcherCost,
+        ItemStack fletcherResult,
         UUID toolsmithId,
         int toolsmithOfferIndex,
         int toolsmithBaselineUses,
@@ -55,7 +56,29 @@ public record Vrt2Oracle(
 
     public Vrt2Oracle {
         fletcherCost = fletcherCost == null ? ItemStack.EMPTY : fletcherCost.copy();
+        fletcherResult = fletcherResult == null ? ItemStack.EMPTY : fletcherResult.copy();
         toolsmithResult = toolsmithResult == null ? ItemStack.EMPTY : toolsmithResult.copy();
+    }
+
+    /** The consumer VR-T2 exists to prove; any other T0 consumer invalidates the fixture. */
+    public static final net.minecraft.resources.ResourceLocation REQUIRED_CONSUMER =
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+                    "spmscavenger", "iron_pickaxe_upgrade");
+
+    /**
+     * Is the offer now at the captured index still the offer that was captured?
+     *
+     * <p>{@code UUID + index} is a <b>location</b>; {@code UUID + index + quote} is <b>evidence</b>.
+     * A merchant that restocks, levels or reorders can leave a different trade at that index, and
+     * attributing its uses to the captured offer would silently credit the wrong transaction.
+     */
+    public static boolean sameQuote(
+            net.minecraft.world.item.trading.MerchantOffer live, ItemStack cost, ItemStack result) {
+        return live != null
+                && ItemStack.isSameItemSameComponents(live.getCostA(), cost)
+                && live.getCostA().getCount() == cost.getCount()
+                && ItemStack.isSameItemSameComponents(live.getResult(), result)
+                && live.getResult().getCount() == result.getCount();
     }
 
     /** Whether an acquired stack is the exact tool the Toolsmith quoted, components included. */

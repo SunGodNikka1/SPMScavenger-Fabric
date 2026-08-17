@@ -88,6 +88,11 @@ public final class Vrt2Trace {
         toolMatched = false;
         episodesNow = captured.episodeBaseline();
         record("T0 armed");
+        if (!Vrt2Oracle.REQUIRED_CONSUMER.equals(captured.t0Consumer())) {
+            fail("T0 consumer was " + captured.t0Consumer() + ", not "
+                    + Vrt2Oracle.REQUIRED_CONSUMER + " - VR-T2 proves that specific consumer, and "
+                    + "closure measured against an arbitrary one proves nothing");
+        }
         if (!"UNKNOWN".equals(captured.t0RouteStatus())) {
             fail("T0 route was " + captured.t0RouteStatus() + ", not UNKNOWN - the run cannot "
                     + "prove UNKNOWN -> INFEASIBLE if it did not start UNKNOWN");
@@ -152,6 +157,11 @@ public final class Vrt2Trace {
     /** The proof oracle: the exact captured offers, by index, on the exact captured merchants. */
     private static void observeMerchants(ServerLevel level) {
         offerOf(level, oracle.fletcherId(), oracle.fletcherOfferIndex()).ifPresent(offer -> {
+            if (!Vrt2Oracle.sameQuote(offer, oracle.fletcherCost(), oracle.fletcherResult())) {
+                fail("Fletcher offer#" + oracle.fletcherOfferIndex() + " is no longer the captured "
+                        + "quote - its uses can no longer be attributed to the fixture's sale");
+                return;
+            }
             if (offer.getUses() == lastFletcherUses) {
                 return;
             }
@@ -169,6 +179,13 @@ public final class Vrt2Trace {
             lastFletcherUses = offer.getUses();
         });
         offerOf(level, oracle.toolsmithId(), oracle.toolsmithOfferIndex()).ifPresent(offer -> {
+            if (!Vrt2Oracle.sameQuote(offer, offer.getCostA(), oracle.toolsmithResult())
+                    || offer.getCostA().getCount() != oracle.price()) {
+                fail("Toolsmith offer#" + oracle.toolsmithOfferIndex() + " is no longer the captured "
+                        + "quote (price or result changed) - its uses cannot be attributed to the "
+                        + "purchase this fixture planned");
+                return;
+            }
             if (offer.getUses() == lastToolsmithUses) {
                 return;
             }

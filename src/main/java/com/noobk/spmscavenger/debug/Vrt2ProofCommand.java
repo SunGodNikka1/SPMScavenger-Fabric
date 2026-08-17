@@ -7,11 +7,14 @@ import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.ToolTierPolicy;
 import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.village.SettlementRelationshipService;
+import com.noobk.spmscavenger.village.VillageMemorySavedData;
+import com.noobk.spmscavenger.village.SettlementRelationship;
 import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
 import com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence;
 import com.noobk.spmscavenger.village.trade.TradePurchaseProjection;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -173,22 +176,56 @@ public final class Vrt2ProofCommand {
         // The route must be earned. Clearing rather than publishing is the whole point.
         RouteExhaustionEvidence.clear(mob.getUUID());
 
-        // Oracle capture. Held privately by the harness: a uses-delta or a component comparison is
-        // meaningless without a baseline. None of it is supplied to the mob.
+        // Oracle capture. Held privately by the harness: a uses-delta or a component comparison
+        // is meaningless without a baseline. None of it is supplied to the mob.
         int fletcherIndex = fletch.get().getOffers().indexOf(fletcher.get());
         int toolsmithIndex = smith.get().getOffers().indexOf(toolsmith.get());
+        if (fletcherIndex < 0 || toolsmithIndex < 0) {
+            source.sendFailure(Component.literal("[VR-T2] setup FAILED - could not resolve a local "
+                    + "offer index; refusing rather than carrying corrupted oracle state forward"));
+            return 0;
+        }
+        // The fixture arithmetic (131 sticks, E-4 emeralds, four sales) is built on these exact
+        // semantics, so assert them rather than assuming the vanilla table still matches.
+        if (fletcher.get().getCostA().getCount() != 32
+                || !fletcher.get().getCostB().isEmpty()
+                || fletcher.get().getResult().getCount() != 1) {
+            source.sendFailure(Component.literal("[VR-T2] setup FAILED - Fletcher quote is not the "
+                    + "expected 32 sticks -> 1 emerald with no second cost"));
+            return 0;
+        }
+        if (toolsmith.get().getResult().getCount() != 1
+                || !toolsmith.get().getCostA().is(Items.EMERALD)) {
+            source.sendFailure(Component.literal("[VR-T2] setup FAILED - Toolsmith quote is not "
+                    + "emeralds -> exactly one iron_pickaxe"));
+            return 0;
+        }
+
+        BlockPos anchor = SettlementRelationshipService
+                .nearestSettlementAnchorAt(level, mob.getUUID(), mob.blockPosition()).orElse(null);
+        if (anchor == null) {
+            source.sendFailure(Component.literal("[VR-T2] setup FAILED - no remembered settlement "
+                    + "anchor; the V2-G one-episode requirement cannot be proven without one"));
+            return 0;
+        }
+        // The REAL baseline. A hardcoded 0 here would let a pre-existing episode count as the one
+        // this run was supposed to earn - a false PASS with no transaction behind it.
+        int episodeBaseline = VillageMemorySavedData.get(level).peek(mob.getUUID())
+                .flatMap(memory -> memory.relationshipAt(anchor))
+                .map(SettlementRelationship::tradeEpisodeCount)
+                .orElse(0);
+
         Optional<WorkDemandPolicy.MaterialDemand> t0Demand = WorkDemandPolicy
                 .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), ScavengerConfig.get())
                 .map(WorkDemandPolicy.WorkDemand::payload);
         Vrt2Trace.arm(new Vrt2Oracle(
                 mob.getUUID(),
                 fletch.get().getUUID(), fletcherIndex, fletcher.get().getUses(),
-                fletcher.get().getCostA().copy(),
+                fletcher.get().getCostA().copy(), fletcher.get().getResult().copy(),
                 smith.get().getUUID(), toolsmithIndex, toolsmith.get().getUses(),
                 price, toolsmith.get().getResult().copy(),
-                SettlementRelationshipService.nearestSettlementAnchorAt(
-                        level, mob.getUUID(), mob.blockPosition()).orElse(null),
-                0,
+                anchor,
+                episodeBaseline,
                 t0Demand.map(WorkDemandPolicy.MaterialDemand::consumerKey).orElse(null),
                 t0Demand.map(d -> ExistingRouteFeasibility.peekStatus(level, mob.getUUID(), d,
                                 backpack, mob.getMainHandItem(), mob.getOffhandItem(),
