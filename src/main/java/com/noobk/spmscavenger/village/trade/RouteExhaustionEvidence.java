@@ -162,26 +162,6 @@ public final class RouteExhaustionEvidence {
         exhaustedFor(mobId, liveDemand, gameTime);
     }
 
-    /**
-     * <b>TEMPORARY V2-H PROOF SUPPORT</b> — read the evidence without touching it.
-     *
-     * <p>{@link #exhaustedFor} deletes on expiry and on demand mismatch, which is correct for a
-     * consumer but disqualifying for an observer: a proof harness that polls it would be deleting
-     * the very evidence it exists to witness, and could change the arbitration it is meant to
-     * measure. This answers the same question and mutates nothing.
-     */
-    public static boolean peekExhaustedFor(
-            UUID mobId, WorkDemandPolicy.MaterialDemand demand, long gameTime) {
-        if (mobId == null || demand == null) {
-            return false;
-        }
-        Evidence evidence = EVIDENCE.get(mobId);
-        return evidence != null
-                && gameTime < evidence.expiresAtTick()
-                && evidence.consumerKey().equals(demand.consumerKey())
-                && evidence.materialKey().equals(demand.materialKey());
-    }
-
     /** Drop the evidence — the route made progress, or the owner is gone. */
     public static void clear(UUID mobId) {
         if (mobId != null) {

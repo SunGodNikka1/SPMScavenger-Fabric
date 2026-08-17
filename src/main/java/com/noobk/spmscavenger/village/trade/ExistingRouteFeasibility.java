@@ -143,33 +143,6 @@ public final class ExistingRouteFeasibility {
     }
 
     /**
-     * <b>TEMPORARY V2-H PROOF SUPPORT</b> — the same verdict, with no side effects.
-     *
-     * <p>{@link #status} clears exhaustion evidence when positive evidence appears, and its
-     * {@code exhaustedFor} call deletes expired or mismatched records. Both are right for the
-     * consumer and wrong for an observer — polling {@code status} from a proof harness would let
-     * merely watching the run alter the route arbitration under test.
-     */
-    public static ExistingRouteStatus peekStatus(
-            ServerLevel level, java.util.UUID mobId, WorkDemandPolicy.MaterialDemand demand,
-            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
-        if (level == null || demand == null || backpack == null || cfg == null) {
-            return ExistingRouteStatus.UNKNOWN;
-        }
-        if (FurnacePolicy.plan(level, backpack, mainHand, offHand, cfg)
-                .filter(plan -> producesDemanded(plan, demand))
-                .isPresent()) {
-            return ExistingRouteStatus.FEASIBLE;
-        }
-        ExistingRouteStatus gather = gatherStatus(demand, backpack, mainHand, offHand, cfg);
-        if (gather == ExistingRouteStatus.FEASIBLE) {
-            return ExistingRouteStatus.FEASIBLE;
-        }
-        return reconcile(gather, RouteExhaustionEvidence.peekExhaustedFor(
-                mobId, demand, level.getGameTime()));
-    }
-
-    /**
      * Present beats past.
      *
      * <p>A live gather route outranks any memory of a failed search, so "failed once" never becomes

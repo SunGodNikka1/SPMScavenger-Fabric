@@ -855,37 +855,6 @@ public class TradeWithVillagerGoal extends Goal {
         }
     }
 
-    /**
-     * <b>TEMPORARY V2-H PROOF SUPPORT — remove with {@code com.noobk.spmscavenger.debug}.</b>
-     *
-     * <p>An immutable view of the chain, for the VR-T2 observer only. Read-only by construction:
-     * no setter, no advance method, nothing that lets a harness affect the chain it is watching.
-     *
-     * <p>Exists because the chain is a private field that deliberately <b>survives {@code stop()}</b>
-     * to preserve the hard lifetime, so its identity is exactly what VR-T2 needs to witness holding
-     * across four sales and a purchase — and there is no other way to see it without a registry or a
-     * transaction hook, both of which would put debug scaffolding in the trade path.
-     */
-    public record DebugChainSnapshot(
-            ResourceLocation consumerKey,
-            ResourceLocation desiredOutput,
-            int targetHeldQuantity,
-            long createdAtTick,
-            long expiresAtTick,
-            TradeChainPlan.Step step) {
-    }
-
-    /** TEMPORARY V2-H PROOF SUPPORT. Empty when no chain is open. */
-    public Optional<DebugChainSnapshot> debugChainSnapshot() {
-        TradeChainPlan current = chain;
-        return current == null
-                ? Optional.empty()
-                : Optional.of(new DebugChainSnapshot(
-                        current.consumerKey(), current.desiredOutput(),
-                        current.targetHeldQuantity(), current.createdAtTick(),
-                        current.expiresAtTick(), current.step()));
-    }
-
     /** The live consumer recipe behind the current demand, if any. */
     private Optional<ScavengerCrafting.ConsumerRecipeSpec> activeSpec(Container backpack) {
         return liveDemandPayload(backpack).flatMap(source -> TradePurchaseProjection.activeSpecFor(
