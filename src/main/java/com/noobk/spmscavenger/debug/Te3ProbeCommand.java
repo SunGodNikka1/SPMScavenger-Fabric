@@ -63,6 +63,12 @@ public final class Te3ProbeCommand {
         dispatcher.register(Commands.literal("spmscavenger").then(Commands.literal("debug")
                 .then(Commands.literal("te3").requires(src -> src.hasPermission(2))
                         .then(Commands.literal("index").executes(c -> index(c.getSource())))
+                        .then(Commands.literal("seed")
+                                .then(Commands.argument("scenario",
+                                                com.mojang.brigadier.arguments.StringArgumentType.word())
+                                        .executes(c -> seed(c.getSource(),
+                                                com.mojang.brigadier.arguments.StringArgumentType
+                                                        .getString(c, "scenario")))))
                         .then(Commands.literal("scan")
                                 .executes(c -> scan(c.getSource(), null))
                                 .then(Commands.argument("expectDemand",
@@ -80,6 +86,70 @@ public final class Te3ProbeCommand {
                                             + "launch is a genuine cold measurement."), false);
                             return 1;
                         })))));
+    }
+
+    /**
+     * Seed the fixture backpack from Java, because the datapack cannot.
+     *
+     * <p><b>Run #1 finding:</b> {@code /item replace entity ... inventory.N} addresses vanilla
+     * entity slots, which are <i>not</i> the {@code InventoryCarrier} backpack every Scavenger goal
+     * reads. The scenarios appeared to seed inventory, the backpack stayed empty, and the probe
+     * reported {@code A=B=C=D=E=0} from zero quote attempts.
+     *
+     * <p>So inventory ownership moves here — the same reason VR-T2's setup seeded from Java. The
+     * datapack still owns villagers, professions, positions and progression.
+     */
+    private static int seed(CommandSourceStack source, String scenario) {
+        Mob mob = nearestScavenger(source);
+        Container backpack = mob == null ? null : PlayerMobs.backpack(mob);
+        if (backpack == null) {
+            source.sendFailure(Component.literal("[TE3] no te3-tagged PlayerMob with a backpack"));
+            return 0;
+        }
+        backpack.clearContent();
+        switch (scenario) {
+            case "iron" -> {
+                mob.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
+                        new ItemStack(Items.STONE_PICKAXE));
+                mob.setItemInHand(net.minecraft.world.InteractionHand.OFF_HAND,
+                        new ItemStack(Items.IRON_AXE));
+                backpack.setItem(0, new ItemStack(Items.OAK_LOG, 48));
+                backpack.setItem(1, new ItemStack(Items.STICK, 64));
+                backpack.setItem(2, new ItemStack(Items.OAK_PLANKS, 32));
+                backpack.setItem(3, new ItemStack(Items.TORCH, 16));
+            }
+            case "torch" -> {
+                mob.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
+                        new ItemStack(Items.IRON_PICKAXE));
+                mob.setItemInHand(net.minecraft.world.InteractionHand.OFF_HAND,
+                        new ItemStack(Items.IRON_AXE));
+                backpack.setItem(0, new ItemStack(Items.OAK_LOG, 64));
+                backpack.setItem(1, new ItemStack(Items.OAK_LOG, 64));
+            }
+            case "protected" -> {
+                mob.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
+                        new ItemStack(Items.STONE_PICKAXE));
+                backpack.setItem(0, new ItemStack(Items.DIAMOND, 8));
+                backpack.setItem(1, new ItemStack(Items.IRON_INGOT, 12));
+                backpack.setItem(2, new ItemStack(Items.WHEAT, 64));
+                backpack.setItem(3, new ItemStack(Items.STICK, 2));
+            }
+            default -> {
+                source.sendFailure(Component.literal(
+                        "[TE3] unknown scenario - use iron | torch | protected"));
+                return 0;
+            }
+        }
+        int filled = 0;
+        for (int i = 0; i < backpack.getContainerSize(); i++) {
+            if (!backpack.getItem(i).isEmpty()) {
+                filled++;
+            }
+        }
+        final int count = filled;
+        source.sendSuccess(() -> Component.literal(
+                "[TE3] seeded '" + scenario + "' - " + count + " backpack stacks"), false);
+        return 1;
     }
 
     /** Cold vs repeated {@code ensureIndexed}. TE memoizes on (RecipeManager, config) identity. */
@@ -185,12 +255,15 @@ public final class Te3ProbeCommand {
         int[] tally = new int[Bucket.values().length];
         long quoteNanos = 0L;
         int quotes = 0;
+        int returned = 0;
+        int candidateStacks = 0;
 
         for (int slot = 0; slot < backpack.getContainerSize(); slot++) {
             ItemStack input = backpack.getItem(slot);
             if (input.isEmpty()) {
                 continue;
             }
+            candidateStacks++;
             int disposableUnits = disposable(input, backpack, cfg);
             for (net.minecraft.world.entity.npc.Villager merchant : merchants) {
                 long t0 = System.nanoTime();
@@ -201,6 +274,7 @@ public final class Te3ProbeCommand {
                 if (quoted.isEmpty()) {
                     continue;
                 }
+                returned++;
                 MerchantOffer offer = quoted.get();
                 // Disposition is judged against the EXACT quote, not against "some units are
                 // spare". One disposable log does not authorize a quote costing eight, and the
@@ -238,6 +312,31 @@ public final class Te3ProbeCommand {
         }
         out.append(lines.isEmpty() ? "  (no A/B/D/E results)\n"
                 : String.join("\n", lines) + "\n");
+        out.append("  backpack slots=").append(backpack.getContainerSize())
+                .append("  non-empty=").append(candidateStacks)
+                .append("  merchants=").append(merchants.size())
+                .append("  quote attempts=").append(quotes)
+                .append("  quotes returned=").append(returned).append((char) 10);
+
+        // R10: quotes == 0 means NO economic classification happened, so every bucket is 0 for the
+        // trivial reason that nothing was measured. Reporting that as "no useful intersection"
+        // would be an architectural conclusion drawn from an empty sample - the exact shape of the
+        // level-2 Toolsmith failure, where a probe answered a question it had never asked.
+        if (quotes == 0) {
+            String why = candidateStacks == 0
+                    ? "INVALID FIXTURE - EMPTY/UNSEEDED BACKPACK (no candidate input stacks; the "
+                            + "PlayerMob's InventoryCarrier backpack is not the entity slots that "
+                            + "`/item replace entity ... inventory.N` addresses)"
+                    : merchants.size() == 0
+                            ? "INVALID FIXTURE - NO FIXTURE MERCHANTS (no te3-tagged Villager in range)"
+                            : "INVALID - candidate stacks and merchants exist but no quote was attempted";
+            out.append("  VERDICT: ").append(why).append((char) 10)
+                    .append("  No A/B/E architectural conclusion may be drawn from this run.")
+                    .append((char) 10);
+            source.sendSuccess(() -> Component.literal(out.toString()), false);
+            return 0;
+        }
+
         int ab = tally[Bucket.A_DIRECT.ordinal()] + tally[Bucket.B_FUNDING.ordinal()];
         int e = tally[Bucket.E_REPRESENTATION_MISS.ordinal()];
         out.append("  VERDICT: A+B=").append(ab).append("  E=").append(e).append("  -> ");
