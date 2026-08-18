@@ -141,6 +141,88 @@ class TradeOpportunityContractTest {
         assertTrue(ItemStack.isSameItemSameComponents(after.get(0), new ItemStack(Items.OAK_LOG)));
     }
 
+    // ------------------------------------------------------------------ bounded, structurally
+
+    /** Distinct wood kinds, so each is a genuinely different quotable input. */
+    private static List<ItemStack> distinctKinds(int howMany) {
+        List<net.minecraft.world.item.Item> pool = List.of(
+                Items.OAK_LOG, Items.SPRUCE_LOG, Items.BIRCH_LOG, Items.JUNGLE_LOG,
+                Items.ACACIA_LOG, Items.DARK_OAK_LOG, Items.MANGROVE_LOG, Items.CHERRY_LOG,
+                Items.OAK_PLANKS, Items.SPRUCE_PLANKS, Items.BIRCH_PLANKS, Items.JUNGLE_PLANKS,
+                Items.ACACIA_PLANKS, Items.DARK_OAK_PLANKS, Items.MANGROVE_PLANKS,
+                Items.CHERRY_PLANKS, Items.STICK, Items.BAMBOO_PLANKS);
+        List<ItemStack> stacks = new java.util.ArrayList<>();
+        for (int i = 0; i < howMany; i++) {
+            stacks.add(new ItemStack(pool.get(i), 64));
+        }
+        return stacks;
+    }
+
+    @Test
+    void mustHappen_theMaximumDistinctKindsIsAccepted() {
+        TradeOpportunityQuery query = TradeOpportunityQuery.of(
+                distinctKinds(TradeOpportunityQuery.MAX_AUTHORIZED_INPUTS));
+
+        assertEquals(TradeOpportunityQuery.MAX_AUTHORIZED_INPUTS,
+                query.authorizedSellInputs().size(), "the cap is inclusive");
+    }
+
+    /**
+     * Refuse, never truncate.
+     *
+     * <p>Dropping the tail would make which kinds a source may quote depend on the caller's
+     * iteration order — a permission decided by accident, which is the failure this type exists to
+     * prevent.
+     */
+    @Test
+    void mustNotHappen_anOverLargeSetIsSilentlyTruncated() {
+        List<ItemStack> tooMany = distinctKinds(TradeOpportunityQuery.MAX_AUTHORIZED_INPUTS + 1);
+
+        assertThrows(IllegalArgumentException.class, () -> TradeOpportunityQuery.of(tooMany));
+        assertThrows(IllegalArgumentException.class, () -> new TradeOpportunityQuery(tooMany));
+    }
+
+    /** The limit is on distinct KINDS, so repeating one cannot use up capacity. */
+    @Test
+    void mustNotHappen_duplicatesConsumeCapacity() {
+        List<ItemStack> withDuplicates =
+                new java.util.ArrayList<>(distinctKinds(TradeOpportunityQuery.MAX_AUTHORIZED_INPUTS));
+        for (int i = 0; i < 40; i++) {
+            withDuplicates.add(new ItemStack(Items.OAK_LOG, i + 1));
+        }
+
+        assertEquals(TradeOpportunityQuery.MAX_AUTHORIZED_INPUTS,
+                TradeOpportunityQuery.of(withDuplicates).authorizedSellInputs().size(),
+                "40 more oak_log stacks are still one kind");
+    }
+
+    /**
+     * Both entry points obey the same rule.
+     *
+     * <p>{@code of} used to wrap the argument in {@code List.copyOf}, which throws on a {@code null}
+     * element <b>before</b> the constructor's documented tolerance could apply. The two doors
+     * disagreed about identical input and only one of them said so.
+     */
+    @Test
+    void mustHappen_bothEntryPointsIgnoreNullAndEmptyEntriesIdentically() {
+        List<ItemStack> ragged = new java.util.ArrayList<>();
+        ragged.add(new ItemStack(Items.OAK_LOG, 64));
+        ragged.add(null);
+        ragged.add(ItemStack.EMPTY);
+        ragged.add(new ItemStack(Items.STICK, 3));
+
+        List<ItemStack> viaConstructor = new TradeOpportunityQuery(ragged).authorizedSellInputs();
+        List<ItemStack> viaFactory = TradeOpportunityQuery.of(ragged).authorizedSellInputs();
+
+        assertEquals(2, viaConstructor.size(), "gaps are ignored, not rejected");
+        assertEquals(viaConstructor.size(), viaFactory.size(), "and both doors agree");
+        for (int i = 0; i < viaConstructor.size(); i++) {
+            assertTrue(ItemStack.isSameItemSameComponents(
+                            viaConstructor.get(i), viaFactory.get(i)),
+                    "same kinds, same order, from either entry point");
+        }
+    }
+
     // ------------------------------------------------------------------ the contract shape
 
     /**

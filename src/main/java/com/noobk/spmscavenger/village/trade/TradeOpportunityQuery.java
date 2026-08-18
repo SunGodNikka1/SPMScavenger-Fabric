@@ -39,6 +39,39 @@ import java.util.List;
  */
 public record TradeOpportunityQuery(List<ItemStack> authorizedSellInputs) {
 
+    /**
+     * The most distinct stack kinds a caller may authorize in one query.
+     *
+     * <h2>Where the number comes from</h2>
+     *
+     * The caller contract is "the {@code SellReserveModel}-modelled kinds the mob is currently
+     * holding", and a mob can hold at most one distinct kind per backpack slot. That producer bound
+     * is <b>Social Player Mobs'</b> — the backpack is its {@code InventoryCarrier} inventory, eight
+     * slots today — and copying another mod's constant into our source is a hardcode with a delayed
+     * fuse. So this sits one doubling above it: SPM may grow its inventory without this failing
+     * closed on the first user who updates.
+     *
+     * <h2>What it is not</h2>
+     *
+     * <b>Not a performance budget.</b> Quoting cost scales with kinds <i>times villagers</i>, and
+     * the villager side is the caller's to bound by only inspecting merchants it already selected.
+     * A cap here cannot make that safe and should not pretend to.
+     *
+     * <p>What it does do is make "bounded" <b>structural</b> rather than a promise in a comment.
+     * Exceeding it means the caller broke its own contract — most plausibly by handing over raw
+     * inventory, which is the failure this whole type exists to prevent — so it fails closed rather
+     * than quietly quoting whatever arrived.
+     */
+    public static final int MAX_AUTHORIZED_INPUTS = 16;
+
+    /**
+     * Canonicalizes, de-duplicates, and refuses an over-large set.
+     *
+     * <p>{@code null} and empty entries are <b>ignored</b>, not rejected: a caller filtering its
+     * backpack legitimately produces gaps, and this is the one rule both entry points follow.
+     * Duplicates are collapsed <i>before</i> the capacity check, so repeating a kind cannot consume
+     * capacity — the limit is on distinct kinds, which is what a source actually quotes.
+     */
     public TradeOpportunityQuery {
         List<ItemStack> canonical = new ArrayList<>();
         if (authorizedSellInputs != null) {
@@ -55,6 +88,15 @@ public record TradeOpportunityQuery(List<ItemStack> authorizedSellInputs) {
                     }
                 }
                 if (!seen) {
+                    if (canonical.size() == MAX_AUTHORIZED_INPUTS) {
+                        // Refuse, never truncate. Silently dropping the tail would make which kinds
+                        // a source may quote depend on the caller's iteration order - a permission
+                        // decided by accident.
+                        throw new IllegalArgumentException(
+                                "at most " + MAX_AUTHORIZED_INPUTS + " distinct authorized sell "
+                                        + "inputs; a larger set means the caller passed something "
+                                        + "wider than its own disposition policy");
+                    }
                     canonical.add(key);
                 }
             }
@@ -72,8 +114,17 @@ public record TradeOpportunityQuery(List<ItemStack> authorizedSellInputs) {
         return List.copyOf(copies);
     }
 
+    /**
+     * Same rules as the constructor.
+     *
+     * <p>This previously wrapped the argument in {@code List.copyOf}, which throws on a {@code null}
+     * element <b>before</b> the constructor's tolerance can apply — so the two entry points
+     * disagreed about the same input, and only one of them was documented. {@code ArrayList} accepts
+     * nulls and lets the single canonicalization rule run.
+     */
     public static TradeOpportunityQuery of(Collection<ItemStack> authorized) {
-        return new TradeOpportunityQuery(authorized == null ? List.of() : List.copyOf(authorized));
+        return new TradeOpportunityQuery(
+                authorized == null ? List.of() : new ArrayList<>(authorized));
     }
 
     /** A source with nothing to quote still answers; it simply has no authorized inputs. */

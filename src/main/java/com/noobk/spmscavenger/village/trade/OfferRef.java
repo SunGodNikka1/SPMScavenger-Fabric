@@ -28,10 +28,11 @@ import net.minecraft.world.item.ItemStack;
  * <h2>Why sealed</h2>
  *
  * A future Trade Everything source resolves by <b>re-quoting</b>, not by address — there is no
- * index to hold. Sealing makes "this ref is not addressable" a compile-time fact when that arrives,
- * instead of a sentinel value like {@code 9_999} that type-checks fine and then indexes into
- * somebody's offer list. For this step exactly one variant exists, so a non-{@code BoardIndex} ref
- * is structurally impossible rather than merely unexpected.
+ * index to hold. Sealing makes "this ref is not addressable" a compile-time fact
+ * rather than a sentinel value like {@code 9_999} that type-checks fine and then indexes into
+ * somebody's offer list. Both variants now exist, so {@code VillagerTradeAdapter}'s
+ * {@code instanceof BoardIndex} check is a live guard rather than a formality — a {@link Requote}
+ * reaching board resolution is refused, not addressed.
  *
  * <p>Deliberately <b>no</b> {@code tieBreak()} method. Deriving the round ordinal from the ref is
  * how the two meanings got merged in the first place.

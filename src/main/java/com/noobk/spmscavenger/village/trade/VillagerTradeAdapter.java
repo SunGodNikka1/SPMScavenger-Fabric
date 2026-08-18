@@ -132,8 +132,9 @@ public final class VillagerTradeAdapter {
         }
         MerchantOffers offers = villager.getOffers();
         // D-VR-077: this class is the only code permitted to read an OfferRef as an address, and
-        // the pattern is exhaustive because OfferRef is sealed. A source that resolves by re-quoting
-        // will not reach here at all.
+        // OfferRef is sealed, so this is exhaustive. Since Requote exists it is also a live
+        // guard: a re-quoting source's offer has no board address, and refusing it here is correct
+        // rather than defensive - it must be resolved by its own source, not by this adapter.
         if (!(recorded.ref() instanceof OfferRef.BoardIndex board)) {
             return java.util.Optional.empty();
         }
