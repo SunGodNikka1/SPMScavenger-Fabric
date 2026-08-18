@@ -1,5 +1,7 @@
 package com.noobk.spmscavenger.village.trade;
 
+import net.minecraft.world.item.ItemStack;
+
 /**
  * D-VR-077 — <b>how a source re-resolves one of its own offers</b>, and nothing else.
  *
@@ -34,7 +36,7 @@ package com.noobk.spmscavenger.village.trade;
  * <p>Deliberately <b>no</b> {@code tieBreak()} method. Deriving the round ordinal from the ref is
  * how the two meanings got merged in the first place.
  */
-public sealed interface OfferRef permits OfferRef.BoardIndex {
+public sealed interface OfferRef permits OfferRef.BoardIndex, OfferRef.Requote {
 
     /**
      * A position in one villager's {@code MerchantOffers}. Villager-local, never global.
@@ -53,7 +55,75 @@ public sealed interface OfferRef permits OfferRef.BoardIndex {
         }
     }
 
+    /**
+     * An offer with <b>no address</b>, re-resolved by asking its source to quote the same input
+     * again.
+     *
+     * <h2>Identity is item + components, never count</h2>
+     *
+     * Trade Everything's own repricer settles this: it compares its remembered input with
+     * {@code ItemStack.isSameItemSameComponents} and stores it as {@code input.copyWithCount(1)}
+     * (`CONFIRMED` from {@code MerchantContainerMixin}). Its price is a function of the item and its
+     * components; the held count decides how many uses are affordable, which is inventory's business
+     * and not identity's.
+     *
+     * <p>So {@code 64x oak_log} and {@code 42x oak_log} are the <b>same</b> requote key, and the
+     * count is canonicalized to 1 on the way in. Letting quantity into identity here would
+     * re-create the conflation step 2 removed, one layer down.
+     *
+     * <h2>Why equals and hashCode are hand-written</h2>
+     *
+     * {@code ItemStack} inherits <b>identity</b> equality, so the record's generated {@code equals}
+     * would call two independently copied but component-identical stacks different. That is not a
+     * data-class quirk: {@code SellFundingLeg.covers} compares {@code attempted.ref().equals(...)}
+     * at the execution boundary, so a wrong {@code equals} here becomes a mob refusing its own
+     * authorized trade — exactly the step-2 regression, arriving by a different road.
+     *
+     * <h2>Defensively immutable</h2>
+     *
+     * The stack is copied in and copied out. A caller mutating the stack it passed, or the stack it
+     * received from {@link #inputKey()}, cannot reach the identity this ref stores.
+     */
+    record Requote(ItemStack inputKey) implements OfferRef {
+        public Requote {
+            if (inputKey == null || inputKey.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "a requote key needs an input - an empty stack identifies no offer");
+            }
+            inputKey = inputKey.copyWithCount(1);
+        }
+
+        /** A copy, so the caller cannot reach the stored identity. */
+        @Override
+        public ItemStack inputKey() {
+            return inputKey.copy();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return this == other
+                    || (other instanceof Requote requote
+                            && ItemStack.isSameItemSameComponents(inputKey, requote.inputKey));
+        }
+
+        /** Consistent with {@link #equals}: the same item-and-components hash it compares on. */
+        @Override
+        public int hashCode() {
+            return ItemStack.hashItemAndComponents(inputKey);
+        }
+
+        @Override
+        public String toString() {
+            return "Requote[" + inputKey.getItem() + " " + inputKey.getComponents() + "]";
+        }
+    }
+
     static OfferRef board(int index) {
         return new BoardIndex(index);
+    }
+
+    /** Count is canonicalized away; pass the stack as held. */
+    static OfferRef requote(ItemStack input) {
+        return new Requote(input);
     }
 }

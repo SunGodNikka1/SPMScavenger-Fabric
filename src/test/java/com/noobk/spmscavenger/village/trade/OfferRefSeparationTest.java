@@ -50,13 +50,13 @@ class OfferRefSeparationTest {
     private static OfferSnapshot buy(int boardIndex, int rankOrdinal, int emeralds) {
         return new OfferSnapshot(OfferRef.board(boardIndex), rankOrdinal,
                 new ItemStack(Items.EMERALD, emeralds), ItemStack.EMPTY,
-                new ItemStack(Items.IRON_INGOT, 1), 0, 12);
+                new ItemStack(Items.IRON_INGOT, 1), 0, 12, 0, 0f, 0, 0, true);
     }
 
     private static OfferSnapshot sell(int boardIndex, int rankOrdinal) {
         return new OfferSnapshot(OfferRef.board(boardIndex), rankOrdinal,
                 new ItemStack(Items.STICK, 32), ItemStack.EMPTY,
-                new ItemStack(Items.EMERALD, 1), 0, 16);
+                new ItemStack(Items.EMERALD, 1), 0, 16, 0, 0f, 0, 0, true);
     }
 
     private static SellFundingLeg legFor(OfferSnapshot offer) {
@@ -126,7 +126,7 @@ class OfferRefSeparationTest {
     void mustNotHappen_aRepricedOfferAtTheSameRefIsCovered() {
         OfferSnapshot repriced = new OfferSnapshot(OfferRef.board(0), 0,
                 new ItemStack(Items.STICK, 48), ItemStack.EMPTY,
-                new ItemStack(Items.EMERALD, 1), 0, 16);
+                new ItemStack(Items.EMERALD, 1), 0, 16, 0, 0f, 0, 0, true);
 
         assertFalse(legFor(sell(0, 0)).covers(repriced),
                 "48 sticks is not the 32-stick sale that was authorized");

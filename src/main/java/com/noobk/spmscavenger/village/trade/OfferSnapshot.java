@@ -39,7 +39,22 @@ public record OfferSnapshot(
         ItemStack costB,
         ItemStack result,
         int uses,
-        int maxUses) {
+        int maxUses,
+        /**
+         * D-VR-077 step 4 — the rest of the offer's semantic state, captured so an
+         * <b>independently re-quoting</b> source can demand strict correspondence between what it
+         * planned and what it re-derives.
+         *
+         * <p><b>Observational for vanilla.</b> {@link #matchesLive} is unchanged and must stay that
+         * way: it asks transaction-equivalence, and {@code demand} / {@code specialPriceDiff}
+         * legitimately move between selection and execution while the vanilla path executes the live
+         * object anyway. Strengthening it with these fields would abort trades that succeed today.
+         */
+        int xp,
+        float priceMultiplier,
+        int demand,
+        int specialPriceDiff,
+        boolean rewardExp) {
 
     public OfferSnapshot {
         costA = costA == null ? ItemStack.EMPTY : costA.copy();
@@ -64,7 +79,12 @@ public record OfferSnapshot(
                 offer.getCostB(),
                 offer.assemble(),
                 offer.getUses(),
-                offer.getMaxUses());
+                offer.getMaxUses(),
+                offer.getXp(),
+                offer.getPriceMultiplier(),
+                offer.getDemand(),
+                offer.getSpecialPriceDiff(),
+                offer.shouldRewardExp());
     }
 
     /**
@@ -76,7 +96,8 @@ public record OfferSnapshot(
      * board address.
      */
     public OfferSnapshot withRankOrdinal(int ordinal) {
-        return new OfferSnapshot(ref, ordinal, costA, costB, result, uses, maxUses);
+        return new OfferSnapshot(ref, ordinal, costA, costB, result, uses, maxUses,
+                xp, priceMultiplier, demand, specialPriceDiff, rewardExp);
     }
 
     public boolean outOfStock() {

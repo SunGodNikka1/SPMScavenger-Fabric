@@ -5985,6 +5985,31 @@ Plus one explicit **buyback** case, since upstream source says live-price drift 
    `isModLoaded`).
 7. Deterministic mutation → reject → replan → converge runtime witness.
 
+#### Implementation tightening — `revalidate` takes no backpack (added post-lock by `User`, 2026-08-17)
+
+The locked sketch read `revalidate(Villager, OfferSnapshot, Container backpack)`. Neither proven
+source needs inventory to establish market truth:
+
+```
+VANILLA   villager board + BoardIndex + matchesLive
+TE        villager board + Requote inputKey + fresh OfferQuoter.quote
+```
+
+Affordability and payment belong to `VillagerTradeAdapter` after resolution. Passing the raw backpack
+would hand a market source authority it does not need — the same ownership temptation already removed
+from `offers(...)`. The interface is therefore:
+
+```java
+interface TradeOpportunitySource {
+    TradeSourceKey key();
+    List<OfferSnapshot> offers(Villager villager, TradeOpportunityQuery query);
+    Optional<MerchantOffer> revalidate(Villager villager, OfferSnapshot planned);
+}
+```
+
+Not a change of meaning — the existing rule applied consistently: **the source reports opportunity
+and world truth; it does not decide spend permission.**
+
 #### Implementation invariant — attribution binding (added post-lock by `User`, 2026-08-17)
 
 > Every production PlayerMob villager transaction must reach `notifyTrade` through the

@@ -35,4 +35,18 @@ public record TradeAttemptFunding(
         TradeSourceKey buySource,
         OfferSnapshot buyQuote,
         int emeraldsRequired) {
+
+    /**
+     * Fail closed on missing provenance.
+     *
+     * <p>Once step 5 dispatches revalidation on {@link #buySource}, a null would have exactly one
+     * plausible-looking repair — {@code source == null ? inferFrom(ref) : source} — which is the
+     * inference D-VR-077 rejects. Rejecting it at construction means that repair can never be
+     * needed. Production never builds one today; the point is that it cannot start to.
+     */
+    public TradeAttemptFunding {
+        java.util.Objects.requireNonNull(buySource,
+                "a carried purchase must name the source that will revalidate it - provenance is "
+                        + "carried, never inferred");
+    }
 }
