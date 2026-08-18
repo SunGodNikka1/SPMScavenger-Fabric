@@ -62,6 +62,11 @@ public final class TradeEverythingTradeSource implements TradeOpportunitySource 
             return quotes;
         }
         bridge.ensureIndexed(villager.level().getServer());
+        // Explicit, not incidental: a failed index disables the bridge, and quoting against an index
+        // that could not be built is exactly the wrong-economy mistake P0-1 exists to prevent.
+        if (!bridge.available()) {
+            return quotes;
+        }
         for (ItemStack input : query.authorizedSellInputs()) {
             // The board is passed because upstream prices against it - which commodity it buys
             // decides the payout. It is read, never written.

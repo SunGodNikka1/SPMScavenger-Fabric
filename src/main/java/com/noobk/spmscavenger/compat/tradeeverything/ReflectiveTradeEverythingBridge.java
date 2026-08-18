@@ -33,9 +33,13 @@ import java.util.Optional;
  * <h2>Degrade, never break</h2>
  *
  * Missing class, missing method, wrong return type, {@code LinkageError} — all mean
- * {@link #available()} is false, no source is registered, and vanilla trading is untouched. A quote
- * that throws at runtime is logged once and treated as "no opportunity", because a market source
- * failing is not a reason to take the mob's trading away.
+ * {@link #available()} is false at startup, no source is registered, and vanilla trading is
+ * untouched.
+ *
+ * <p>A failure <i>after</i> a successful handshake disables the bridge <b>permanently</b> for the
+ * session. The current call returns no opportunity, {@link #available()} becomes false, and every
+ * later call is a no-op — so a broken reflective method is invoked exactly once, not once per
+ * planning pass. The registered source stays in the registry and goes inert.
  *
  * <p>What it must never do is fail <i>silently</i>: found, absent and broken are all logged once at
  * startup, so "Trade Everything is installed but Scavenger ignores it" is diagnosable from the log
@@ -50,7 +54,20 @@ public final class ReflectiveTradeEverythingBridge implements QuoteBridge {
 
     private final Method ensureIndexed;
     private final Method quote;
-    private boolean quoteFailureLogged;
+    /**
+     * Runtime health, separate from resolution success.
+     *
+     * <p>The handshake proves the pinned shapes <i>exist</i>. It cannot prove they will keep
+     * working: an upstream change, a mixin conflict, or a state assumption we do not share can make
+     * an invocation throw long after startup. The first such failure disables the bridge for good.
+     *
+     * <p>This was the repair. The previous version suppressed repeated <b>logs</b> and said "no
+     * opportunity from now on" while {@code available()} stayed true — so the broken call was
+     * re-invoked on every planning pass, and the one warning that would have explained it had
+     * already been printed. Quiet is not the same as closed.
+     */
+    private volatile boolean healthy = true;
+    private volatile boolean failureLogged;
 
     private ReflectiveTradeEverythingBridge(Method ensureIndexed, Method quote) {
         this.ensureIndexed = ensureIndexed;
@@ -101,18 +118,24 @@ public final class ReflectiveTradeEverythingBridge implements QuoteBridge {
 
     @Override
     public boolean available() {
-        return ensureIndexed != null && quote != null;
+        return healthy && ensureIndexed != null && quote != null;
     }
 
+    /**
+     * @param server non-null by caller contract — {@code TradeEverythingTradeSource.usable} checks
+     *     it, and the prewarm hook receives it from {@code SERVER_STARTED}. Deliberately not
+     *     re-guarded here: a guard that cannot fire in production is dead weight that also makes the
+     *     invocation untestable.
+     */
     @Override
     public void ensureIndexed(MinecraftServer server) {
-        if (!available() || server == null) {
+        if (!available()) {
             return;
         }
         try {
             ensureIndexed.invoke(null, server);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            logQuoteFailureOnce("ensureIndexed", e);
+            failClosed("ensureIndexed", e);
         }
     }
 
@@ -120,7 +143,9 @@ public final class ReflectiveTradeEverythingBridge implements QuoteBridge {
     @SuppressWarnings("unchecked")
     public Optional<MerchantOffer> quote(
             Villager villager, ItemStack input, MerchantOffers offers) {
-        if (!available() || villager == null || input == null || input.isEmpty()) {
+        // available() first, so a bridge disabled by a previous failure never invokes again - this
+        // is what makes a failed ensureIndexed genuinely stop the quotation that follows it.
+        if (!available() || input == null || input.isEmpty()) {
             return Optional.empty();
         }
         try {
@@ -131,17 +156,36 @@ public final class ReflectiveTradeEverythingBridge implements QuoteBridge {
                     ? (Optional<MerchantOffer>) optional
                     : Optional.empty();
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            logQuoteFailureOnce("quote", e);
+            failClosed("quote", e);
             return Optional.empty();
         }
     }
 
-    /** Once. A per-tick failure must not turn a compatibility problem into a log-flood problem. */
-    private void logQuoteFailureOnce(String what, Throwable cause) {
-        if (!quoteFailureLogged) {
-            quoteFailureLogged = true;
-            LOGGER.warn("[spmscavenger] Trade Everything {} failed; treating it as 'no opportunity' "
-                    + "from now on. Vanilla trading is unaffected.", what, cause);
+    /**
+     * Disable permanently, then warn once.
+     *
+     * <p>Both halves matter and they are different. Disabling stops the reflective call being
+     * re-invoked every planning pass — an exception flood on the server thread is not better than a
+     * log flood, it is worse, because it is invisible. Logging once keeps the compatibility problem
+     * from becoming a log problem. The order is deliberate: health is cleared before anything else
+     * can observe it.
+     *
+     * <p>The registered source stays in the registry and simply goes inert, because
+     * {@code TradeEverythingTradeSource.usable} consults {@code available()} on every call. Vanilla
+     * is untouched throughout.
+     */
+    private void failClosed(String what, Throwable cause) {
+        healthy = false;
+        if (!failureLogged) {
+            failureLogged = true;
+            LOGGER.warn("[spmscavenger] Trade Everything {} failed; the compatibility bridge is now "
+                    + "DISABLED for this session and will not be retried. Vanilla trading is "
+                    + "unaffected.", what, cause);
         }
+    }
+
+    /** Test seam: build a bridge over arbitrary static methods, bypassing upstream resolution. */
+    static QuoteBridge overMethods(Method ensureIndexed, Method quote) {
+        return new ReflectiveTradeEverythingBridge(ensureIndexed, quote);
     }
 }

@@ -248,4 +248,136 @@ class TradeEverythingSourceTest {
         assertTrue(sourceFile.contains("return fresh;"),
                 "Q2 itself is returned - rebuilding it strips the mixin-injected synthetic marker");
     }
+
+    // ------------------------------------------------------------------ runtime fail-closed
+
+    /**
+     * Fake upstream. Reflection needs real static methods, and these are the only two shapes the
+     * bridge ever invokes.
+     */
+    public static final class FakeUpstream {
+        static int ensureCalls;
+        static int quoteCalls;
+        static boolean ensureThrows;
+        static boolean quoteThrows;
+
+        static void reset() {
+            ensureCalls = 0;
+            quoteCalls = 0;
+            ensureThrows = false;
+            quoteThrows = false;
+        }
+
+        public static void ensureIndexed(net.minecraft.server.MinecraftServer server) {
+            ensureCalls++;
+            if (ensureThrows) {
+                throw new IllegalStateException("upstream ensureIndexed blew up");
+            }
+        }
+
+        public static Optional<MerchantOffer> quote(
+                net.minecraft.world.entity.npc.AbstractVillager villager, ItemStack input,
+                net.minecraft.world.item.trading.MerchantOffers offers) {
+            quoteCalls++;
+            if (quoteThrows) {
+                throw new IllegalStateException("upstream quote blew up");
+            }
+            return Optional.of(new MerchantOffer(
+                    new ItemCost(Items.OAK_LOG, 22), Optional.empty(),
+                    new ItemStack(Items.EMERALD, 1), 0, 999_999, 0, 0f));
+        }
+    }
+
+    private static QuoteBridge bridgeOverFake() throws NoSuchMethodException {
+        FakeUpstream.reset();
+        return ReflectiveTradeEverythingBridge.overMethods(
+                FakeUpstream.class.getMethod("ensureIndexed",
+                        net.minecraft.server.MinecraftServer.class),
+                FakeUpstream.class.getMethod("quote",
+                        net.minecraft.world.entity.npc.AbstractVillager.class, ItemStack.class,
+                        net.minecraft.world.item.trading.MerchantOffers.class));
+    }
+
+    /**
+     * The step-6 repair.
+     *
+     * <p>The first version suppressed repeated <b>logs</b> while {@code available()} stayed true, so
+     * a broken reflective call was re-invoked every planning pass with the one explanatory warning
+     * already printed. An invisible exception flood on the server thread is worse than a visible log
+     * flood, not better.
+     */
+    @Test
+    void mustHappen_aRuntimeQuoteFailureDisablesTheBridgePermanently() throws Exception {
+        QuoteBridge bridge = bridgeOverFake();
+        FakeUpstream.quoteThrows = true;
+
+        assertTrue(bridge.available(), "healthy after a successful handshake");
+        assertTrue(bridge.quote(null, new ItemStack(Items.OAK_LOG, 64), null).isEmpty(),
+                "the failing call yields no opportunity");
+        assertEquals(1, FakeUpstream.quoteCalls);
+        assertFalse(bridge.available(), "and the bridge is now closed, not merely quiet");
+
+        assertTrue(bridge.quote(null, new ItemStack(Items.OAK_LOG, 64), null).isEmpty());
+        assertEquals(1, FakeUpstream.quoteCalls,
+                "the broken method is invoked ONCE per session, not once per planning pass");
+    }
+
+    @Test
+    void mustHappen_aRuntimeIndexFailureDisablesTheBridgePermanently() throws Exception {
+        QuoteBridge bridge = bridgeOverFake();
+        FakeUpstream.ensureThrows = true;
+
+        bridge.ensureIndexed(null);
+        assertEquals(1, FakeUpstream.ensureCalls);
+        assertFalse(bridge.available(), "a failed index closes the bridge too");
+
+        bridge.ensureIndexed(null);
+        assertEquals(1, FakeUpstream.ensureCalls, "and is not retried");
+    }
+
+    /**
+     * The consequence that matters most: quoting against an index that could not be built is exactly
+     * the wrong-economy mistake P0-1 exists to prevent.
+     */
+    @Test
+    void mustNotHappen_quotingContinuesAfterAFailedIndex() throws Exception {
+        QuoteBridge bridge = bridgeOverFake();
+        FakeUpstream.ensureThrows = true;
+
+        bridge.ensureIndexed(null);
+        assertTrue(bridge.quote(null, new ItemStack(Items.OAK_LOG, 64), null).isEmpty());
+        assertEquals(0, FakeUpstream.quoteCalls,
+                "the quote method is never reached once indexing has failed");
+    }
+
+    /** A healthy bridge still works, so the guard is not simply refusing everything. */
+    @Test
+    void mustHappen_aHealthyBridgeStillQuotes() throws Exception {
+        QuoteBridge bridge = bridgeOverFake();
+
+        assertTrue(bridge.quote(null, new ItemStack(Items.OAK_LOG, 64), null).isPresent());
+        assertEquals(1, FakeUpstream.quoteCalls);
+        assertTrue(bridge.available(), "success does not close anything");
+    }
+
+    /** Vanilla is untouched by a broken optional source. */
+    @Test
+    void mustHappen_vanillaSurvivesABrokenBridge() throws Exception {
+        QuoteBridge bridge = bridgeOverFake();
+        FakeUpstream.quoteThrows = true;
+        TradeSources.clearOptionalSources();
+        TradeSources.registerTradeEverything(new TradeEverythingTradeSource(bridge));
+        try {
+            bridge.quote(null, new ItemStack(Items.OAK_LOG, 64), null);
+
+            assertFalse(bridge.available());
+            assertTrue(TradeSources.of(TradeSourceKey.VANILLA).isPresent(),
+                    "vanilla remains registered and available throughout");
+            assertEquals(2, TradeSources.all().size(),
+                    "the broken source stays in the registry and simply goes inert - usable() "
+                            + "consults available() on every call");
+        } finally {
+            TradeSources.clearOptionalSources();
+        }
+    }
 }
