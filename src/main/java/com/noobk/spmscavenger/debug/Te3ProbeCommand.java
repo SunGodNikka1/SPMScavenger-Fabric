@@ -69,6 +69,8 @@ public final class Te3ProbeCommand {
                         .then(Commands.literal("parity")
                                 .then(Commands.literal("snapshot")
                                         .executes(c -> paritySnapshot(c.getSource())))
+                                .then(Commands.literal("arm")
+                                        .executes(c -> parityArm(c.getSource())))
                                 .then(Commands.literal("live")
                                         .executes(c -> parityLive(c.getSource())))
                                 .then(Commands.literal("closed")
@@ -93,6 +95,10 @@ public final class Te3ProbeCommand {
                             parityDirect = null;
                             parityBoard = null;
                             parityInput = ItemStack.EMPTY;
+                            parityArmed = false;
+                            parityCaptured = null;
+                            parityCapturedBoard = null;
+                            paritySessionSeen = false;
                             c.getSource().sendSuccess(() -> Component.literal(
                                     "[TE3] probe state reset. NOTE: TE memoizes its index on "
                                             + "(RecipeManager, config) identity and this does not "
@@ -328,15 +334,19 @@ public final class Te3ProbeCommand {
             return 0;
         }
         MerchantOffers board = villager.getOffers();
-        // Ordering is the whole proof. A synthetic row already present means a session has happened
-        // in this process, and the "direct" quote would then be measured against a board TE has
-        // already touched. Fresh process, then snapshot, then session - in that order or not at all.
+        // R1 - stated correctly. A synthetic row present RIGHT NOW proves a session is or was open.
+        // Its ABSENCE proves nothing of the kind: TE removes the row on setTradingPlayer(null), so a
+        // completed earlier session leaves the board looking exactly like a virgin one. This check
+        // is therefore NECESSARY AND NOT SUFFICIENT, and "fresh process" remains a PROCEDURAL
+        // precondition that this probe does not verify. The only session evidence it owns is
+        // paritySessionSeen, tracked from `arm` onward - see observe().
         for (MerchantOffer existing : board) {
             if (games.brennan.tradeeverything.trade.SyntheticOfferFactory.isSynthetic(existing)) {
                 source.sendFailure(Component.literal(
-                        "[TE3] refused - this villager already carries a synthetic row, so a "
-                                + "merchant session has already occurred. Restart the process and "
-                                + "snapshot BEFORE opening any merchant."));
+                        "[TE3] refused - this villager carries a synthetic row NOW, so a session is "
+                                + "or was open. Close it and restart the process. NOTE: the absence "
+                                + "of this row does not prove no session has occurred - TE removes "
+                                + "it on close - so a fresh process stays your responsibility."));
                 return 0;
             }
         }
@@ -354,6 +364,11 @@ public final class Te3ProbeCommand {
         parityInput = input;
         parityDirect = quoted.get();
         parityBoard = fingerprint(board);
+        parityArmed = true;
+        parityArmRemaining = ARM_WINDOW_TICKS;
+        parityCaptured = null;
+        parityCapturedBoard = null;
+        paritySessionSeen = false;
         final String subject = id(villager) + " " + paritySubject;
         source.sendSuccess(() -> Component.literal(String.join(String.valueOf((char) 10),
                 "[TE3] P0-1 direct snapshot taken BEFORE any session",
@@ -361,7 +376,9 @@ public final class Te3ProbeCommand {
                 "  input   = " + describe(parityInput),
                 "  direct  = " + describeOffer(parityDirect),
                 "  board   = " + parityBoard.size() + " non-synthetic offers fingerprinted",
-                "  now open THIS villager as a player, place that exact stack in the trade slot,",
+                "  observer ARMED for " + (ARM_WINDOW_TICKS / 20) + "s - no command is needed",
+                "  while the merchant screen is open.",
+                "  Open THIS villager, place that exact stack in the trade slot, close the screen,",
                 "  then run: /spmscavenger debug te3 parity live")), false);
         return 1;
     }
@@ -371,56 +388,49 @@ public final class Te3ProbeCommand {
             source.sendFailure(Component.literal("[TE3] no snapshot - run `parity snapshot` first"));
             return 0;
         }
-        net.minecraft.world.entity.npc.Villager villager = subjectVillager(source);
-        if (villager == null) {
-            source.sendFailure(Component.literal(
-                    "[TE3] the snapshotted villager is not in range - parity is per-villager"));
+        if (parityCaptured == null) {
+            source.sendFailure(Component.literal(String.join(String.valueOf((char) 10),
+                    "[TE3] the observer captured nothing.",
+                    "  armed            = " + parityArmed,
+                    "  session observed = " + paritySessionSeen
+                            + "  (a synthetic row was seen on the subject since arming)",
+                    paritySessionSeen
+                            ? "  A session happened but no PRICED quote for the snapshotted input "
+                                    + "appeared. Place that exact stack in the trade slot so "
+                                    + "repriceInner replaces the placeholder."
+                            : "  No session was observed at all. Re-arm and open the pinned "
+                                    + "villager: /spmscavenger debug te3 parity arm")));
             return 0;
         }
-        MerchantOffers board = villager.getOffers();
-        if (board.isEmpty()
-                || !games.brennan.tradeeverything.trade.SyntheticOfferFactory
-                        .isSynthetic(board.get(0))) {
-            source.sendFailure(Component.literal(
-                    "[TE3] no synthetic row at index 0 - open the merchant and leave it open. TE "
-                            + "installs the row on setTradingPlayer and removes it on close."));
-            return 0;
-        }
-        MerchantOffer live = board.get(0);
-        if (games.brennan.tradeeverything.trade.SyntheticOfferFactory.isPlaceholder(live)) {
-            source.sendFailure(Component.literal(
-                    "[TE3] index 0 is still the PLACEHOLDER, not a priced quote - put the exact "
-                            + "snapshotted stack in the trade slot so repriceInner runs."));
-            return 0;
-        }
-        List<String> boardNow = fingerprint(board);
-        List<String> drift = new ArrayList<>(parityBoard);
-        drift.removeAll(boardNow);
-        List<String> fields = diffOffers(parityDirect, live);
+        List<String> boardDrift = diffBoards(parityBoard, parityCapturedBoard);
+        List<String> fields = diffOffers(parityDirect, parityCaptured);
         StringBuilder out = new StringBuilder("[TE3] P0-1 exact quote parity");
         out.append((char) 10);
         out.append("  input   = ").append(describe(parityInput)).append((char) 10);
         out.append("  direct  = ").append(describeOffer(parityDirect)).append((char) 10);
-        out.append("  TE live = ").append(describeOffer(live)).append((char) 10);
-        if (!drift.isEmpty()) {
-            // The non-synthetic offers must be the same offers, or the two paths priced against
-            // different boards and equality would be a coincidence rather than a result.
-            out.append("  BOARD DRIFT - these non-synthetic offers changed between snapshot and "
-                    + "session: ").append(drift).append((char) 10);
+        out.append("  TE live = ").append(describeOffer(parityCaptured)).append((char) 10);
+        if (!boardDrift.isEmpty()) {
+            // Ordered and multiplicity-sensitive. The two paths must have priced against the SAME
+            // real board, or field equality is a coincidence rather than a result.
+            out.append("  BOARD DRIFT between snapshot and session:").append((char) 10);
+            for (String line : boardDrift) {
+                out.append("    ").append(line).append((char) 10);
+            }
         }
-        if (fields.isEmpty() && drift.isEmpty()) {
-            out.append("  VERDICT: EXACT PARITY - every compared field identical. The direct path "
-                    + "is what the player would be shown.").append((char) 10);
+        if (fields.isEmpty() && boardDrift.isEmpty()) {
+            out.append("  VERDICT: EXACT PARITY - every compared field identical, on an unchanged "
+                    + "real board. The direct path is what the player would be shown.")
+                    .append((char) 10);
         } else {
             out.append("  VERDICT: DIVERGENT").append((char) 10);
             for (String field : fields) {
                 out.append("    ").append(field).append((char) 10);
             }
         }
-        out.append("  then close the merchant and run: /spmscavenger debug te3 parity closed")
-                .append((char) 10);
+        out.append("  now close the merchant if it is still open, then: ")
+                .append("/spmscavenger debug te3 parity closed").append((char) 10);
         source.sendSuccess(() -> Component.literal(out.toString()), false);
-        return fields.isEmpty() && drift.isEmpty() ? 1 : 0;
+        return fields.isEmpty() && boardDrift.isEmpty() ? 1 : 0;
     }
 
     private static int parityClosed(CommandSourceStack source) {
@@ -437,18 +447,160 @@ public final class Te3ProbeCommand {
         }
         final boolean clean = leftovers.isEmpty();
         List<String> boardNow = fingerprint(villager.getOffers());
-        final boolean sameBoard = parityBoard != null && boardNow.equals(parityBoard);
+        final List<String> restoreDrift = parityBoard == null
+                ? List.of("<no snapshot>") : diffBoards(parityBoard, boardNow);
+        final boolean sameBoard = restoreDrift.isEmpty();
         final String remaining = leftovers.size() + (clean ? "" : "  " + leftovers);
         source.sendSuccess(() -> Component.literal(String.join(String.valueOf((char) 10),
                 "[TE3] P0-1 session cleanup",
                 "  synthetic rows remaining     = " + remaining,
-                "  non-synthetic board restored = " + sameBoard,
+                "  non-synthetic board restored = " + sameBoard
+                        + (sameBoard ? "" : "  " + restoreDrift),
                 "  VERDICT: " + (clean && sameBoard
                         ? "CLEAN - TE removed its session-scoped row and left the real board intact."
                         : "NOT CLEAN - a synthetic row or a board change survived the session. Any "
                                 + "Scavenger read of getOffers() outside a session would see it."))),
                 false);
         return clean && sameBoard ? 1 : 0;
+    }
+
+    /**
+     * R1 — <b>ordered, multiplicity-sensitive</b> board comparison.
+     *
+     * <p>The first version did {@code before.removeAll(after)} and reported the remainder. That is
+     * asymmetric and detects only one of four ways a board can change: a <b>removed</b> offer. An
+     * <b>added</b> offer, a <b>reordered</b> pair, and a <b>duplicated</b> offer all left the
+     * remainder empty and were reported as "no drift" — so a parity result could have been produced
+     * against a board that had genuinely changed between the direct quote and the session. Pure and
+     * unit-tested, since a comparison that cannot see a difference is the failure mode here.
+     */
+    static List<String> diffBoards(List<String> before, List<String> after) {
+        List<String> out = new ArrayList<>();
+        if (before.size() != after.size()) {
+            out.add("board size: snapshot=" + before.size() + " session=" + after.size());
+        }
+        for (int index = 0; index < Math.max(before.size(), after.size()); index++) {
+            String was = index < before.size() ? before.get(index) : "<absent>";
+            String now = index < after.size() ? after.get(index) : "<absent>";
+            if (!was.equals(now)) {
+                out.add("board[" + index + "]: snapshot=" + was + " session=" + now);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * A value copy, because the captured offer must not keep tracking the live one.
+     *
+     * <p>TE replaces index 0 wholesale on each reprice rather than mutating in place, so the
+     * captured reference would survive repricing — but {@code uses} and {@code specialPriceDiff} are
+     * mutated in place when a trade actually completes. Capturing the object would then let a later
+     * action rewrite evidence that was supposed to be a snapshot.
+     */
+    private static MerchantOffer copyOf(MerchantOffer offer) {
+        MerchantOffer copy = new MerchantOffer(offer.getItemCostA(), offer.getItemCostB(),
+                offer.getResult().copy(), offer.getUses(), offer.getMaxUses(), offer.getXp(),
+                offer.getPriceMultiplier(), offer.getDemand());
+        copy.setSpecialPriceDiff(offer.getSpecialPriceDiff());
+        return copy;
+    }
+
+    /**
+     * R1 — the armed observer that removes the impossible instruction.
+     *
+     * <h2>The defect</h2>
+     *
+     * The first design told the user to run a chat command <i>while the merchant GUI was open</i>.
+     * They cannot: the GUI owns the keyboard, and closing it fires {@code setTradingPlayer(null)},
+     * which is precisely when TE removes the row we were trying to read. The instruction was not
+     * merely awkward, it was unsatisfiable — the observation window and the ability to observe were
+     * mutually exclusive.
+     *
+     * <h2>What this does instead</h2>
+     *
+     * While armed, each server tick reads the pinned villager's board and captures the <b>first</b>
+     * real priced synthetic quote it sees, then disarms. It <b>only observes</b>: no pricing, no
+     * transaction, no write of any kind to the board. Every field it records was produced by TE.
+     *
+     * <p>Bounded three ways (RET-1a): it captures at most once, it disarms itself after
+     * {@link #ARM_WINDOW_TICKS}, and its entire state is four static fields that are overwritten,
+     * never accumulated.
+     *
+     * <h2>Guards on the capture</h2>
+     *
+     * <ul>
+     *   <li>{@code getTradingPlayer() != null} — a real session must be live, so this cannot capture
+     *       a row left behind by something else.</li>
+     *   <li>not a placeholder — the placeholder is a UI affordance and carries no price.</li>
+     *   <li>{@code costA} item equals the snapshotted input — otherwise it is a quote for a
+     *       different stack and comparing it to our direct quote would be meaningless.</li>
+     * </ul>
+     */
+    private static final int ARM_WINDOW_TICKS = 20 * 180;
+    private static boolean parityArmed;
+    private static int parityArmRemaining;
+    private static MerchantOffer parityCaptured;
+    private static List<String> parityCapturedBoard;
+    private static boolean paritySessionSeen;
+
+    /** Registered once from the mod initializer. */
+    public static void installObserver() {
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK
+                .register(Te3ProbeCommand::observe);
+    }
+
+    private static void observe(net.minecraft.server.MinecraftServer server) {
+        if (!parityArmed || paritySubject == null) {
+            return;
+        }
+        if (--parityArmRemaining <= 0) {
+            parityArmed = false;
+            return;
+        }
+        for (ServerLevel level : server.getAllLevels()) {
+            if (!(level.getEntity(paritySubject)
+                    instanceof net.minecraft.world.entity.npc.Villager villager)) {
+                continue;
+            }
+            MerchantOffers board = villager.getOffers();
+            if (board.isEmpty()) {
+                return;
+            }
+            MerchantOffer first = board.get(0);
+            if (!games.brennan.tradeeverything.trade.SyntheticOfferFactory.isSynthetic(first)) {
+                return;
+            }
+            // Tracked from arming onward. This is the ONLY session evidence this probe owns; see
+            // paritySnapshot for why the pre-arm history cannot be reconstructed from the board.
+            paritySessionSeen = true;
+            if (games.brennan.tradeeverything.trade.SyntheticOfferFactory.isPlaceholder(first)
+                    || villager.getTradingPlayer() == null
+                    || !first.getItemCostA().item().value().equals(parityInput.getItem())) {
+                return;
+            }
+            parityCaptured = copyOf(first);
+            parityCapturedBoard = fingerprint(board);
+            parityArmed = false;
+            return;
+        }
+    }
+
+    private static int parityArm(CommandSourceStack source) {
+        if (paritySubject == null) {
+            source.sendFailure(Component.literal("[TE3] no snapshot - run `parity snapshot` first"));
+            return 0;
+        }
+        parityArmed = true;
+        parityArmRemaining = ARM_WINDOW_TICKS;
+        parityCaptured = null;
+        parityCapturedBoard = null;
+        source.sendSuccess(() -> Component.literal(String.join(String.valueOf((char) 10),
+                "[TE3] observer armed for " + (ARM_WINDOW_TICKS / 20) + "s",
+                "  open the pinned villager and place the snapshotted stack in the trade slot.",
+                "  The capture happens on a server tick while the GUI is open - you do NOT need to",
+                "  type anything with the merchant screen up, which was not possible anyway.",
+                "  Then close the merchant and run: /spmscavenger debug te3 parity live")), false);
+        return 1;
     }
 
     /**

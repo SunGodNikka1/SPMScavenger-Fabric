@@ -132,22 +132,43 @@ identical; P0-1 exists to replace that "ought".
 ```mcfunction
 /function te3:scenario/p01_parity
 # hold the oak_log stack:
-/spmscavenger debug te3 parity snapshot     # DIRECT quote, refuses if any session already happened
-# open the villager, put that exact stack in the trade slot:
-/spmscavenger debug te3 parity live         # field-exact comparison
-# close the merchant:
-/spmscavenger debug te3 parity closed       # TE removed its row, real board intact
+/spmscavenger debug te3 parity snapshot     # DIRECT quote; also ARMS the tick observer
+#   open the villager, stage that exact stack, then CLOSE the screen
+/spmscavenger debug te3 parity live         # field-exact comparison of the captured quote
+/spmscavenger debug te3 parity closed       # TE removed its row, real board restored
+/spmscavenger debug te3 parity arm          # only if the observer window lapsed
 ```
+
+**No command is typed with the merchant screen open.** The first design asked for exactly that, and
+it was unsatisfiable rather than merely awkward: the GUI owns the keyboard, and closing it fires
+`setTradingPlayer(null)`, which is when TE removes the row being read. A bounded server-tick
+observer captures the first real priced synthetic quote instead — armed at snapshot, disarmed on
+capture or after 180s, guarded on `getTradingPlayer() != null`, not-a-placeholder, and `costA` item
+equal to the snapshotted input. It **only reads**; no pricing or transaction is reimplemented, and
+the captured offer is value-copied so a later trade cannot rewrite the evidence.
 
 Compared field by field, not "both say emerald": `ItemCost` A and B (item holder, count, **component
 predicate**), the effective `costA` the modifiers land on, result (item + count + **components**),
-`uses`, `maxUses`, `xp`, `priceMultiplier`, `demand`, `specialPriceDiff`, `rewardExp`. The
-non-synthetic offers are fingerprinted at snapshot and rechecked at compare, so equality cannot come
-from the two paths having priced against different boards.
+`uses`, `maxUses`, `xp`, `priceMultiplier`, `demand`, `specialPriceDiff`, `rewardExp`.
+
+The real board is compared **ordered and multiplicity-sensitively**, at snapshot vs capture and
+again after close. The first version used `before.removeAll(after)`, which detects only a *removed*
+offer — an added, reordered, or duplicated one left the remainder empty and was reported as no
+drift, so parity could have been declared across a board that had genuinely changed.
 
 **Expected divergence, not a failure:** for an input that does not quote, TE substitutes
 `SyntheticOfferFactory.placeholder` while the direct path returns `Optional.empty()`. That is a UI
-affordance rather than a price, so `live` refuses placeholders instead of reporting them.
+affordance rather than a price, so the observer refuses placeholders instead of capturing them.
+
+### "Fresh process" is procedural, and the probe cannot check it
+
+`parity snapshot` refuses when the villager carries a synthetic row **right now** — that proves a
+session is or was open. Its **absence proves nothing**: TE removes the row on
+`setTradingPlayer(null)`, so a completed earlier session leaves a board indistinguishable from a
+virgin one. The check is necessary and not sufficient, and starting from a fresh process remains
+**your** precondition. The only session evidence this probe owns is `paritySessionSeen`, tracked
+from arming onward, and it is reported when a capture fails so "nothing happened" and "a session
+happened but never priced our input" are distinguishable.
 
 **One comparator trap already found:** `ItemCost` is a record whose components include a cached
 `ItemStack`, and `ItemStack` inherits identity equality — so record `equals` calls two structurally

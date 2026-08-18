@@ -123,6 +123,50 @@ class Te3ParityDiffTest {
                 "a different price multiplier is a different offer: " + diff);
     }
 
+    // ------------------------------------------------------- R1 ordered board comparison
+
+    /**
+     * The four ways a board can change. The original {@code before.removeAll(after)} saw only the
+     * first of them; the other three left the remainder empty and were reported as "no drift".
+     *
+     * <p>Each case below fails against {@code removeAll} and passes against ordered comparison,
+     * which is what makes them controls rather than decoration.
+     */
+    private static final List<String> BOARD = List.of("4x emerald -> 1x iron_boots",
+            "5x emerald -> 1x iron_helmet");
+
+    @Test
+    void mustHappen_anUnchangedBoardComparesEqual() {
+        assertEquals(List.of(), Te3ProbeCommand.diffBoards(BOARD, List.of(BOARD.get(0), BOARD.get(1))));
+    }
+
+    @Test
+    void mustNotHappen_anAddedOfferIsMissed() {
+        assertTrue(Te3ProbeCommand.diffBoards(BOARD,
+                        List.of(BOARD.get(0), BOARD.get(1), "1x emerald -> 4x bread")).size() >= 1,
+                "removeAll returns empty here - the added offer is invisible to it");
+    }
+
+    @Test
+    void mustNotHappen_aReorderedBoardIsMissed() {
+        assertTrue(Te3ProbeCommand.diffBoards(BOARD, List.of(BOARD.get(1), BOARD.get(0)))
+                        .size() >= 2,
+                "removeAll returns empty here - both offers are still present, at swapped indexes");
+    }
+
+    @Test
+    void mustNotHappen_aDuplicatedOfferIsMissed() {
+        assertTrue(!Te3ProbeCommand.diffBoards(BOARD,
+                        List.of(BOARD.get(0), BOARD.get(0), BOARD.get(1))).isEmpty(),
+                "removeAll returns empty here - multiplicity is not a set operation");
+    }
+
+    @Test
+    void mustHappen_aRemovedOfferIsStillCaught() {
+        assertTrue(!Te3ProbeCommand.diffBoards(BOARD, List.of(BOARD.get(0))).isEmpty(),
+                "the one case the original check did catch must keep working");
+    }
+
     /** A second cost slot is a different trade, even when costA and the result match exactly. */
     @Test
     void mustNotHappen_anAddedSecondCostIsReportedAsParity() {
