@@ -11,7 +11,7 @@
 | **Mode** | `WORKING_FROM_PLAN` — `SCR-2R5` implemented and statically accepted; runtime confirmation remains separate |
 | **Status** | `RESEARCHING`; `SCR-1 RUNTIME_CONFIRMED`; `SCR-2R4 SUPERSEDED IN PART BY SCR-2R5`; `SCR-2R5 IMPLEMENTED / STATIC ACCEPT / RUNTIME UNVERIFIED`; `SCR-3 DEFERRED` |
 | **User constraint** | The RFC was originally design-only; the user has now separately authorized `SCR-1` and `SCR-2` implementation. Minecraft launches, commits, pushes, and `SCR-3` remain separately gated |
-| **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `progression/TaskLifecycle.java` |
+| **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-FURNACE-SMELTING.md`; `RFC-ACTION-TRANSITIONS.md`; stubs `progression/ProgressGoal.java`, `progression/TaskLifecycle.java` |
 | **Owners** | User (product); architecture TBD |
 | **Last update** | 2026-08-17 (progression route-choice + Opinion read-back architecture — `Agent_ChatGPT`) |
 | **Nearest frontier** | Peer review **D-VP-PR-001…004** (route arbitrator + Opinion read-back); **GTH-1**; **RT-MI-TS1** runtime falsification |

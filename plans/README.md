@@ -9,6 +9,7 @@ Canonical location for **MRFC-1** engineering RFCs (Gate MRFC-1).
 | `plans/RFC-FURNACE-SMELTING.md` | Furnace smelting — charcoal + iron ingots (`test-datapacks/phase2-furnace/`) |
 | `plans/RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` | **SUPERSEDED** — archive only; planning lives in `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md` |
 | `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` | Village/villager economy + illager **raid event** parity & progression (design-only) |
+| `plans/RFC-ACTION-TRANSITIONS.md` | **Humanized action presentation** — post-completion / pre-work micro-behaviors (cross-cutting; not trade-only) |
 | `plans/RFC-*.md` | Other long-lived multi-agent RFCs |
 | `docs/porting/` | Port evidence (`DECISIONS.md`, `TEST_MATRIX.md`, reflection) — not new RFCs |
 

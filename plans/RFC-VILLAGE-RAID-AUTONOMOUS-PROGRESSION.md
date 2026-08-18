@@ -12,7 +12,7 @@
 | **Status** | `RUNTIME VERIFIED` — **VR-T2 PASS**. `A` transaction, `B` evaluation, `C` route admission, `D` SELL→BUY chain, `F` arbitration **CLOSED**; `E` physical executor **CLOSED + runtime exercised**; `G` relationship learning **CLOSED + runtime exercised**; `H` vanilla supply/projection **CLOSED — RUNTIME PASS** |
 | **Nearest frontier** | **V2-TE** — Trade Everything compatibility (`D-VR-068`; type design locked by `D-VR-077`). P0-1/P0-2/P0-3 **CLOSED**; production authority still withheld pending the `D-VR-077` sequence. `V2-I` optional inspector remains available. **Core vanilla trading is closed and runtime-verified.** |
 | **Last update** | 2026-08-16 (**VR-T2 RUNTIME PASS** — V2-A…V2-H closed; proof support removed) |
-| **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
+| **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
 
@@ -846,6 +846,7 @@ both want MOVE/LOOK on the same villager
 | Concurrent greet | `canUse()` false while `FriendlyGreetGoal` running **or** `SocialExecutionBindingRegistry` holds SOCIAL binding |
 | Trade face phase | **`TradeSessionClaimWindow` mandatory** (`D-VR-067`): same villager only, FACE/EXECUTE only, bounded expiry — blocks greet admission symmetric to `SocialGreetClaimWindow` |
 | Credit separation | `onTradeEpisode` ≠ `onSocialEpisode`; trade does not increment `socialEventCount` |
+| Post-commit presentation | Optional villager-facing linger **after** commit is **presentation** (`RFC-ACTION-TRANSITIONS.md` `TRADE_COMPLETE`) — distinct from `TradeSessionClaimWindow` permission guard |
 
 **`TradeChainPlan` gen-1 contract (D-VR-029):**
 
