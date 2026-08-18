@@ -68,8 +68,7 @@ public final class Te3ProbeCommand {
                         .then(Commands.literal("p02").executes(c -> p02(c.getSource())))
                         .then(Commands.literal("mutate")
                                 .then(Commands.literal("arm").executes(c -> {
-                                    mutationArmed = true;
-                                    mutationApplied = false;
+                                    armMutation();
                                     c.getSource().sendSuccess(() -> Component.literal(
                                             "[TE3] market mutation ARMED - it fires on the mob's "
                                                     + "FIRST Trade Everything plan, while it walks"),
@@ -88,7 +87,8 @@ public final class Te3ProbeCommand {
                                     return 1;
                                 }))
                                 .then(Commands.literal("off").executes(c -> {
-                                    mutationArmed = false;
+                                    disarmMutation();
+                                    clearMarketMutation();
                                     TradeRuntimeObserver.setRecording(false);
                                     c.getSource().sendSuccess(() -> Component.literal(
                                             "[TE3] observer stopped"), false);
@@ -147,6 +147,12 @@ public final class Te3ProbeCommand {
                         .then(Commands.literal("reset").executes(c -> {
                             indexed = false;
                             coldIndexNanos = warmIndexNanos = -1L;
+                            // Step 7B-R0: the market must go back to how we found it. Disarming
+                            // alone would leave oak_log revalued for the rest of the session, so
+                            // the next scenario would start from a mutated economy and quote 11
+                            // logs on its first tick - which reads as a different defect entirely.
+                            disarmMutation();
+                            clearMarketMutation();
                             paritySubject = null;
                             parityDirect = null;
                             parityBoard = null;
@@ -159,7 +165,10 @@ public final class Te3ProbeCommand {
                                     "[TE3] probe state reset. NOTE: TE memoizes its index on "
                                             + "(RecipeManager, config) identity and this does not "
                                             + "clear it - only the FIRST `index` after a fresh "
-                                            + "launch is a genuine cold measurement."), false);
+                                            + "launch is a genuine cold measurement. The step-7B "
+                                            + "market mutation is disarmed and its runtime "
+                                            + "override REMOVED, so oak_log returns to ordinary "
+                                            + "config/derived valuation."), false);
                             return 1;
                         })))));
     }
@@ -884,21 +893,74 @@ public final class Te3ProbeCommand {
      * reads it.
      */
     private static final int MUTATED_LOG_VALUE = 2;
+    /**
+     * Removes the runtime override rather than pinning a value.
+     *
+     * <p>{@code ItemValuation.setRuntimeOverride} is {@code if (sixteenths > 0) put else remove}
+     * (`CONFIRMED` from the pinned jar), so <b>0 clears</b>. Resetting with {@code 1} would look
+     * right — a log's derived value is 1 — and would leave a runtime override permanently installed,
+     * silently shadowing the user's config and any datapack-derived valuation for the rest of the
+     * session. The fixture would then have changed the game beyond its own scenario.
+     */
+    private static final int CLEAR_OVERRIDE = 0;
+    private static final String MUTATED_ITEM = "oak_log";
     private static boolean mutationArmed;
     private static boolean mutationApplied;
+
+    static boolean mutationArmed() {
+        return mutationArmed;
+    }
+
+    static boolean mutationApplied() {
+        return mutationApplied;
+    }
+
+    static void armMutation() {
+        mutationArmed = true;
+        mutationApplied = false;
+    }
+
+    /** The flag half, free of any upstream call so it is exercisable without the mod installed. */
+    /** Fired once. Package-private so the applied state is drivable without the mod installed. */
+    static void markMutationApplied() {
+        mutationApplied = true;
+        mutationArmed = false;
+    }
+
+    static void disarmMutation() {
+        mutationArmed = false;
+        mutationApplied = false;
+    }
+
+    /**
+     * The upstream half: take the runtime override back off.
+     *
+     * <p>Separate from {@link #disarmMutation} because a fixture that disarms but leaves the market
+     * mutated would hand the next scenario a changed economy and no indication of it — the second
+     * run would quote 11 logs from the first tick and look like a different bug.
+     */
+    private static void clearMarketMutation() {
+        try {
+            games.brennan.tradeeverything.api.TradeEverythingApi.setItemOverride(
+                    net.minecraft.resources.ResourceLocation.withDefaultNamespace(MUTATED_ITEM),
+                    CLEAR_OVERRIDE);
+        } catch (NoClassDefFoundError absent) {
+            // No Trade Everything, no override to remove. Reset still succeeds.
+        }
+    }
 
     private static int applyMutation(CommandSourceStack source) {
         try {
             games.brennan.tradeeverything.api.TradeEverythingApi.setItemOverride(
-                    net.minecraft.resources.ResourceLocation.withDefaultNamespace("oak_log"),
+                    net.minecraft.resources.ResourceLocation
+                            .withDefaultNamespace(MUTATED_ITEM),
                     MUTATED_LOG_VALUE);
         } catch (NoClassDefFoundError missing) {
             source.sendFailure(Component.literal(
                     "[TE3] Trade Everything is not installed - nothing to mutate"));
             return 0;
         }
-        mutationApplied = true;
-        mutationArmed = false;
+        markMutationApplied();
         TradeRuntimeObserver.note("MUTATION APPLIED  oak_log value -> " + MUTATED_LOG_VALUE
                 + " sixteenths (upstream setItemOverride)");
         source.sendSuccess(() -> Component.literal(

@@ -248,4 +248,80 @@ class TradeRuntimeObserverTest {
                     "the fixture must not " + forbidden);
         }
     }
+
+    // ------------------------------------------------------- 7B-R0 mutation lifecycle
+
+    /**
+     * Arming is a fixture state change, not a market one — the market only moves when the mob has
+     * actually planned a Trade Everything route.
+     */
+    @Test
+    void mustHappen_armingSetsUpTheMutationWithoutFiringIt() {
+        Te3ProbeCommand.disarmMutation();
+        Te3ProbeCommand.armMutation();
+
+        assertTrue(Te3ProbeCommand.mutationArmed());
+        assertFalse(Te3ProbeCommand.mutationApplied(), "nothing has been mutated yet");
+    }
+
+    @Test
+    void mustHappen_resetDisarmsAndClearsTheAppliedMarker() {
+        Te3ProbeCommand.armMutation();
+        // Drive it to APPLIED first. Without this the assertion below passes trivially, because
+        // arming already clears the marker - a negative control that deleted the clear broke
+        // nothing at all.
+        Te3ProbeCommand.markMutationApplied();
+        assertTrue(Te3ProbeCommand.mutationApplied(), "the mutation has fired");
+
+        Te3ProbeCommand.disarmMutation();
+
+        assertFalse(Te3ProbeCommand.mutationArmed(), "a stale arm would fire into the next scenario");
+        assertFalse(Te3ProbeCommand.mutationApplied(),
+                "and a stale applied marker would stop the next one firing at all");
+    }
+
+    /** Two scenarios in one session: the second must begin from an unarmed fixture. */
+    @Test
+    void mustHappen_asecondFixtureBeginsUnarmed() {
+        Te3ProbeCommand.armMutation();
+        Te3ProbeCommand.disarmMutation();
+        Te3ProbeCommand.armMutation();
+
+        assertTrue(Te3ProbeCommand.mutationArmed());
+        assertFalse(Te3ProbeCommand.mutationApplied(),
+                "re-arming after a reset starts a clean cycle, not a resumed one");
+    }
+
+    /**
+     * The half that cannot be executed here.
+     *
+     * <p>Trade Everything is {@code modCompileOnly}, so the JUnit runtime has no
+     * {@code TradeEverythingApi} to call and the removal itself is <b>{@code UNVERIFIED}</b> until a
+     * runtime session. What is checkable is the value passed, and that is the part with a plausible
+     * wrong answer: {@code setItemOverride(oak_log, 1)} restores a log's ordinary value and looks
+     * completely correct, while leaving a runtime override permanently installed that shadows the
+     * user's config for the rest of the session. Upstream removes only on {@code <= 0}.
+     */
+    @Test
+    void mustNotHappen_resetPinsAnOverrideInsteadOfRemovingIt() throws IOException {
+        String probe = Files.readString(Path.of(
+                        "src/main/java/com/noobk/spmscavenger/debug/Te3ProbeCommand.java"))
+                .replaceAll("(?s)/\\*.*?\\*/", "")
+                .replaceAll("(?m)//.*$", "");
+
+        assertTrue(probe.contains("CLEAR_OVERRIDE = 0"),
+                "upstream removes the override only when sixteenths <= 0");
+        assertTrue(probe.contains("CLEAR_OVERRIDE);"),
+                "and the clear path must pass it rather than a plausible-looking 1");
+        assertFalse(probe.contains("MUTATED_ITEM), 1)"),
+                "restoring oak_log to 1 would shadow config/derived valuation for the session");
+        // Scoped to the reset block. Checking the whole file only proved the call exists
+        // SOMEWHERE - `watch off` also clears - so removing it from reset broke nothing.
+        String resetBlock = probe.substring(probe.indexOf("Commands.literal(\"reset\")"),
+                probe.indexOf("probe state reset"));
+        assertTrue(resetBlock.contains("disarmMutation();"), "reset must disarm");
+        assertTrue(resetBlock.contains("clearMarketMutation();"),
+                "and must take the override back off - disarming alone leaves the next scenario "
+                        + "starting from a mutated economy with nothing to indicate it");
+    }
 }
