@@ -165,4 +165,108 @@ class CraftingCapacityLivenessTest {
                         + "check)");
         assertTrue(fixture.getItem(7).isEmpty(), "and that slot is genuinely still free");
     }
+
+    // ------------------------------------------------- R2: prerequisites can change capacity
+
+    /**
+     * The regression the global preflight introduced.
+     *
+     * <p>{@code CraftTorchesGoal} places a carried crafting table before a table-required craft. That
+     * takes the table out of the backpack, and if it was the last one the freed slot is exactly the
+     * room the new tool needs:
+     *
+     * <pre>
+     * full backpack + crafting_table x1 + iron ingots + sticks, stone pickaxe in hand
+     *   before  MAKE_IRON_PICKAXE cannot commit - no free slot
+     *   place   the table leaves the backpack
+     *   after   it commits
+     * </pre>
+     *
+     * <p>Filtering on immediate capacity alone returned {@code NOTHING}, so the goal never reached
+     * placement and a route that used to work stopped working — a repair for one stall creating
+     * another.
+     */
+    @Test
+    void mustHappen_aTableRequiredCraftSurvivesUntilTheTableIsPlaced() {
+        SimpleContainer full = new SimpleContainer(8);
+        full.setItem(0, new ItemStack(Items.CRAFTING_TABLE, 1));
+        full.setItem(1, new ItemStack(Items.IRON_INGOT, 8));
+        full.setItem(2, new ItemStack(Items.STICK, 8));
+        for (int slot = 3; slot < 8; slot++) {
+            full.setItem(slot, new ItemStack(Items.OAK_LOG, 64));
+        }
+
+        assertFalse(ScavengerCrafting.canCommit(full, ScavengerCrafting.Step.MAKE_IRON_PICKAXE),
+                "canCommit keeps its exact meaning: not against THIS backpack, right now");
+        assertEquals(ScavengerCrafting.Step.MAKE_IRON_PICKAXE,
+                ScavengerCrafting.nextStep(full, new ScavengerConfig(),
+                        new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.IRON_AXE)),
+                "but the executor can still make it possible, so selection must not give up");
+    }
+
+    /** And once the table is placed, the craft genuinely commits. */
+    @Test
+    void mustHappen_theCraftCommitsAfterTheTableLeavesTheBackpack() {
+        SimpleContainer placed = new SimpleContainer(8);
+        placed.setItem(1, new ItemStack(Items.IRON_INGOT, 8));
+        placed.setItem(2, new ItemStack(Items.STICK, 8));
+        for (int slot = 3; slot < 8; slot++) {
+            placed.setItem(slot, new ItemStack(Items.OAK_LOG, 64));
+        }
+
+        assertTrue(ScavengerCrafting.canCommit(placed, ScavengerCrafting.Step.MAKE_IRON_PICKAXE),
+                "the slot the table vacated is the room the pickaxe needed");
+    }
+
+    /**
+     * The exemption is for table-required crafts only.
+     *
+     * <p>Carrying a table cannot help {@code MAKE_TORCHES}, which is never crafted at one — so the
+     * run-#1 guarantee must survive a backpack that happens to contain a table.
+     */
+    @Test
+    void mustNotHappen_carryingATableRescuesACraftThatNeedsNoTable() {
+        SimpleContainer full = new SimpleContainer(3);
+        full.setItem(0, new ItemStack(Items.COAL, 8));
+        full.setItem(1, new ItemStack(Items.STICK, 8));
+        full.setItem(2, new ItemStack(Items.CRAFTING_TABLE, 1));
+
+        assertEquals(ScavengerCrafting.Step.NOTHING,
+                ScavengerCrafting.nextStep(full, new ScavengerConfig(),
+                        ItemStack.EMPTY, ItemStack.EMPTY),
+                "torches are not crafted at a table, so placing one frees nothing that matters");
+    }
+
+    /** A second table in the stack frees no slot, and the exemption must not pretend otherwise. */
+    @Test
+    void mustNotHappen_aStackOfTablesIsTreatedAsFreeingASlot() {
+        SimpleContainer full = new SimpleContainer(8);
+        full.setItem(0, new ItemStack(Items.CRAFTING_TABLE, 2));
+        full.setItem(1, new ItemStack(Items.IRON_INGOT, 8));
+        full.setItem(2, new ItemStack(Items.STICK, 8));
+        for (int slot = 3; slot < 8; slot++) {
+            full.setItem(slot, new ItemStack(Items.OAK_LOG, 64));
+        }
+
+        assertEquals(ScavengerCrafting.Step.NOTHING,
+                ScavengerCrafting.nextStep(full, new ScavengerConfig(),
+                        new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.IRON_AXE)),
+                "placing one of two leaves the slot occupied - no capacity is actually gained");
+    }
+
+    /** With no table carried at all, a table-required craft is not kept alive on a hope. */
+    @Test
+    void mustNotHappen_aTableRequiredCraftSurvivesWithNoTableCarried() {
+        SimpleContainer full = new SimpleContainer(8);
+        full.setItem(0, new ItemStack(Items.IRON_INGOT, 8));
+        full.setItem(1, new ItemStack(Items.STICK, 8));
+        for (int slot = 2; slot < 8; slot++) {
+            full.setItem(slot, new ItemStack(Items.OAK_LOG, 64));
+        }
+
+        assertEquals(ScavengerCrafting.Step.NOTHING,
+                ScavengerCrafting.nextStep(full, new ScavengerConfig(),
+                        new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.IRON_AXE)),
+                "nothing the executor can do frees a slot here");
+    }
 }

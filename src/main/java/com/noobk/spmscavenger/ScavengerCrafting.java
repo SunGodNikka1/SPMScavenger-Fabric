@@ -272,7 +272,56 @@ public final class ScavengerCrafting {
         // pack full, LOGS_TO_PLANKS still commits (planks merge into the existing stack) and would
         // burn logs until that stack filled too. NOTHING lets the mob go and do something that
         // actually changes its inventory - trade, deposit, gather - after which crafting resumes.
-        return canCommit(backpack, wanted) ? wanted : Step.NOTHING;
+        if (canCommit(backpack, wanted)) {
+            return wanted;
+        }
+        // R2: a table-required craft may become committable through a prerequisite the EXECUTOR
+        // performs. Placing a carried crafting table takes it out of the backpack, and if that was
+        // its last one the slot it occupied is exactly the room the tool needs.
+        //
+        // Suppressing the step here would break the route that already worked:
+        //   full backpack + carried table + iron ingots + sticks
+        //   -> MAKE_IRON_PICKAXE -> place table -> slot frees -> craft commits
+        // The goal would never reach placement, because selection had already given up.
+        return canCommitAfterPlacingCarriedTable(backpack, wanted) ? wanted : Step.NOTHING;
+    }
+
+    /**
+     * Would this step commit once a carried crafting table has left the backpack?
+     *
+     * <h2>Three different questions, kept apart</h2>
+     *
+     * <pre>
+     * desired recipe                    preferredStep
+     * immediate transaction feasibility canCommit          - exact, and deliberately unchanged
+     * feasibility after a prerequisite  this               - what the executor can still bring about
+     * </pre>
+     *
+     * <p>Weakening {@link #canCommit} to cover this would have destroyed the meaning that makes it
+     * useful: "can this inventory transaction commit against this backpack <i>now</i>". It stays
+     * exact; the third question gets its own name.
+     *
+     * <h2>No world knowledge</h2>
+     *
+     * This learns only that a table currently occupies a slot — inventory, already this class's
+     * business. <b>Whether a table can be placed</b>, where, and whether one already stands nearby
+     * belongs to {@code CraftTorchesGoal}, and nothing here asks. If placement turns out to be
+     * impossible the goal simply does not craft, exactly as before.
+     *
+     * <p>Carrying more than one table gains nothing, and this says so: removing one from a stack of
+     * two leaves the slot occupied, so {@code canCommit} is still false.
+     */
+    private static boolean canCommitAfterPlacingCarriedTable(Container backpack, Step step) {
+        if (backpack == null || step == null || step == Step.NOTHING || !needsTable(step)) {
+            return false;
+        }
+        SimpleContainer withoutTable = copyOf(backpack);
+        // Take one if there is one. No "is a table carried" branch: when there is none the copy is
+        // unchanged, and canCommit on it is already false - we only reach here because canCommit
+        // against the real backpack failed. A guard here would read protective and decide nothing,
+        // which a negative control duly failed to break.
+        takeItem(withoutTable, Items.CRAFTING_TABLE, 1);
+        return canCommit(withoutTable, step);
     }
 
     /**
