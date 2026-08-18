@@ -43,9 +43,15 @@ public final class TradeRuntimeObserver {
     private static volatile boolean recording;
     private static final List<String> EVENTS = Collections.synchronizedList(new ArrayList<>());
     private static int selections;
+    private static int teSelections;
+    private static int revalidations;
     private static int transactions;
     private static int episodes;
     private static int dropped;
+    private static int logsBefore;
+    /** Board size at first sight, per villager. Bounded by the fixture's two merchants. */
+    private static final java.util.Map<java.util.UUID, Integer> BOARD_SIZE =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     private TradeRuntimeObserver() {
     }
@@ -61,7 +67,10 @@ public final class TradeRuntimeObserver {
     public static void reset() {
         EVENTS.clear();
         selections = 0;
+        teSelections = 0;
+        revalidations = 0;
         transactions = 0;
+        BOARD_SIZE.clear();
         episodes = 0;
         dropped = 0;
     }
@@ -71,8 +80,9 @@ public final class TradeRuntimeObserver {
     }
 
     public static String summary() {
-        return "selections=" + selections + "  transactions=" + transactions
-                + "  episodes=" + episodes + (dropped > 0 ? "  dropped=" + dropped : "");
+        return "plans=" + selections + " (TE " + teSelections + ")  revals=" + revalidations
+                + "  trades=" + transactions + "  episodes=" + episodes
+                + (dropped > 0 ? "  dropped=" + dropped : "");
     }
 
     private static void add(String line) {
@@ -85,49 +95,59 @@ public final class TradeRuntimeObserver {
 
     // ------------------------------------------------------------------ hooks
 
-    /** A candidate was accepted for an attempt. Which source produced it is the headline fact. */
+    /**
+     * Compact by design.
+     *
+     * <p>Run #1 printed a full board dump and a {@code Requote[...]} toString on every line, which is
+     * unreadable in Minecraft chat — the readout existed but could not be read. Each event is now one
+     * short line, and the invariants that were being dumped in full are carried as <b>flags</b>:
+     * {@code tp!} appears only if a trading player was present, {@code board!} only if the villager's
+     * real board changed size. Silence is the passing case.
+     */
     public static void selected(Object sourceKey, Villager villager, Object ref, ItemStack costA,
             ItemStack result) {
         if (!recording) {
             return;
         }
         selections++;
-        add("SELECT  source=" + sourceKey + "  villager=" + profession(villager)
-                + "  ref=" + ref + "  quote=" + describe(costA) + " -> " + describe(result));
+        if (isTradeEverything(sourceKey)) {
+            teSelections++;
+        }
+        add("PLAN #" + selections + " " + shortSource(sourceKey) + " " + profession(villager)
+                + "  Q1: " + describe(costA) + " -> " + describe(result));
     }
 
-    /**
-     * The execution boundary re-resolved the planned offer.
-     *
-     * <p>For a re-quoting source this is Q2, and the board fingerprint recorded beside it is what
-     * shows no synthetic row was inserted while the quote was produced.
-     */
     public static void revalidated(Object sourceKey, Villager villager, Object ref,
             Optional<MerchantOffer> resolved) {
         if (!recording) {
             return;
         }
-        add("REQUOTE source=" + sourceKey + "  villager=" + profession(villager)
-                + "  ref=" + ref
-                + "  Q2=" + resolved.map(o -> describe(o.getCostA()) + " -> " + describe(o.assemble()))
-                        .orElse("<none: Q1/Q2 mismatch or gone>")
-                + "  tradingPlayer=" + (villager == null ? "?" : villager.getTradingPlayer())
-                + "  board=" + board(villager));
+        revalidations++;
+        add("REVAL #" + revalidations + resolved
+                .map(o -> "  Q2: " + describe(o.getCostA()) + " -> " + describe(o.assemble()) + "  OK")
+                .orElse("  Q2 MISMATCH/GONE -> REJECTED")
+                + flags(villager));
     }
 
-    /** The transaction outcome, with the backpack either side of it. */
     public static void transacted(Object sourceKey, Villager villager, Object result,
             Container backpack, int emeraldsBefore, int pickaxesBefore) {
         if (!recording) {
             return;
         }
         transactions++;
-        add("TRADE   source=" + sourceKey + "  villager=" + profession(villager)
-                + "  result=" + result
-                + "  emeralds " + emeraldsBefore + " -> " + count(backpack, Items.EMERALD)
-                + "  iron_pickaxe " + pickaxesBefore + " -> " + count(backpack, Items.IRON_PICKAXE)
-                + "  tradingPlayer=" + (villager == null ? "?" : villager.getTradingPlayer())
-                + "  board=" + board(villager));
+        add("TRADE #" + transactions + " " + result
+                + "  logs " + logsBefore + "->" + count(backpack, Items.OAK_LOG)
+                + "  em " + emeraldsBefore + "->" + count(backpack, Items.EMERALD)
+                + "  pick " + pickaxesBefore + "->" + count(backpack, Items.IRON_PICKAXE)
+                + flags(villager));
+    }
+
+    /** Called by the goal just before a transaction, so the log delta is exact rather than sampled. */
+    public static void aboutToTrade(Container backpack) {
+        if (!recording) {
+            return;
+        }
+        logsBefore = count(backpack, Items.OAK_LOG);
     }
 
     public static void episode() {
@@ -135,7 +155,47 @@ public final class TradeRuntimeObserver {
             return;
         }
         episodes++;
-        add("EPISODE recorded");
+        add("EPISODE #" + episodes);
+    }
+
+    /** The fixture's own marker, so mutation timing is visible in the same stream. */
+    public static void note(String line) {
+        if (!recording) {
+            return;
+        }
+        add(line);
+    }
+
+    public static int tradeEverythingSelections() {
+        return teSelections;
+    }
+
+    /**
+     * Only the failures are printed. A clean run says nothing, which is what makes a dirty one
+     * impossible to miss in a wall of chat.
+     */
+    private static String flags(Villager villager) {
+        if (villager == null) {
+            return "";
+        }
+        StringBuilder flags = new StringBuilder();
+        if (villager.getTradingPlayer() != null) {
+            flags.append("  tp!");
+        }
+        int size = villager.getOffers().size();
+        Integer baseline = BOARD_SIZE.putIfAbsent(villager.getUUID(), size);
+        if (baseline != null && baseline != size) {
+            flags.append("  board!").append(baseline).append("->").append(size);
+        }
+        return flags.toString();
+    }
+
+    private static boolean isTradeEverything(Object sourceKey) {
+        return sourceKey != null && "TRADE_EVERYTHING".equals(sourceKey.toString());
+    }
+
+    private static String shortSource(Object sourceKey) {
+        return isTradeEverything(sourceKey) ? "TE" : "VAN";
     }
 
     // ------------------------------------------------------------------ helpers
@@ -155,12 +215,13 @@ public final class TradeRuntimeObserver {
     }
 
     /**
-     * Board size and contents, so an inserted row is visible without naming an upstream type.
+     * Full board text, for the on-demand report only.
      *
      * <p>Deliberately not {@code SyntheticOfferFactory.isSynthetic}: this class stays free of Trade
-     * Everything, and a row appearing at all is what the claim is about.
+     * Everything, and a row appearing at all is what the claim is about — which the per-event
+     * {@code board!} flag already catches by size.
      */
-    private static String board(Villager villager) {
+    public static String board(Villager villager) {
         if (villager == null) {
             return "?";
         }
@@ -181,8 +242,9 @@ public final class TradeRuntimeObserver {
     }
 
     private static String describe(ItemStack stack) {
+        // No "x", no namespace: every character costs readable width in a chat line.
         return stack == null || stack.isEmpty() ? "-"
-                : stack.getCount() + "x " + net.minecraft.core.registries.BuiltInRegistries.ITEM
+                : stack.getCount() + " " + net.minecraft.core.registries.BuiltInRegistries.ITEM
                         .getKey(stack.getItem()).getPath();
     }
 }

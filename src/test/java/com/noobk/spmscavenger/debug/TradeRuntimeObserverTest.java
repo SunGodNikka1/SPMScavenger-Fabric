@@ -81,10 +81,15 @@ class TradeRuntimeObserverTest {
                 new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1));
 
         assertEquals(1, TradeRuntimeObserver.events().size());
-        assertTrue(TradeRuntimeObserver.events().get(0).contains("TRADE_EVERYTHING"),
+        // Compact since 7B: run #1 printed a full board dump and a Requote toString on every line,
+        // which is unreadable in Minecraft chat - a readout that exists but cannot be read.
+        assertTrue(TradeRuntimeObserver.events().get(0).startsWith("PLAN #1 TE"),
                 "which source produced the candidate is the headline fact and cannot be inferred "
-                        + "from outside the goal");
-        assertTrue(TradeRuntimeObserver.events().get(0).contains("Requote[oak_log]"));
+                        + "from outside the goal: " + TradeRuntimeObserver.events().get(0));
+        assertTrue(TradeRuntimeObserver.events().get(0).contains("22 oak_log -> 1 emerald"),
+                "and the quote itself, short enough to read in chat");
+        assertEquals(1, TradeRuntimeObserver.tradeEverythingSelections(),
+                "the TE plan counter is what arms the step-7B mutation, so it must be exact");
     }
 
     /** RET-1: a debug recorder that grows for a whole session is a shape this repo has shipped. */
@@ -166,5 +171,81 @@ class TradeRuntimeObserverTest {
         assertFalse(merchants.contains("Offers:"),
                 "boards come from vanilla generation, narrowed by discarding draws - never written");
         assertTrue(merchants.contains("minecraft:armorer") && merchants.contains("minecraft:toolsmith"));
+    }
+
+    // ------------------------------------------------------------------ step 7B
+
+    /** Chat-readable: one short line per event, or the readout exists but cannot be read. */
+    @Test
+    void mustHappen_everyEventFitsOnOneReadableLine() {
+        TradeRuntimeObserver.setRecording(true);
+
+        TradeRuntimeObserver.selected("TRADE_EVERYTHING", null, "ignored",
+                new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1));
+        TradeRuntimeObserver.revalidated("TRADE_EVERYTHING", null, "ignored", Optional.empty());
+        TradeRuntimeObserver.note("MUTATION APPLIED  oak_log value -> 2 sixteenths");
+        TradeRuntimeObserver.episode();
+
+        for (String line : TradeRuntimeObserver.events()) {
+            assertTrue(line.length() <= 90, "too wide for chat (" + line.length() + "): " + line);
+            assertFalse(line.contains((char) 10 + ""), "one event, one line: " + line);
+        }
+        assertTrue(TradeRuntimeObserver.events().get(1).contains("REJECTED"),
+                "a refused revalidation must say so in the word a reader is scanning for");
+    }
+
+    /**
+     * Width alone cannot police this.
+     *
+     * <p>In a world-free test the villager is {@code null}, so a re-added board dump measures one
+     * character and the length assertion above stays green — a negative control that put the dump
+     * back broke nothing. What actually made run #1 unreadable was a <b>live</b> board printed on
+     * every line, so the per-event hooks are checked for it structurally instead.
+     */
+    @Test
+    void mustNotHappen_perEventLinesEmbedAFullBoardDump() throws IOException {
+        String observer = Files.readString(Path.of(
+                        "src/main/java/com/noobk/spmscavenger/debug/TradeRuntimeObserver.java"))
+                .replaceAll("(?s)/\\*.*?\\*/", "")
+                .replaceAll("(?m)//.*$", "");
+        String hooks = observer.substring(observer.indexOf("public static void selected("),
+                observer.indexOf("public static void note("));
+
+        assertFalse(hooks.contains("board(villager)"),
+                "a live board on every event is what made the run-#1 readout unusable; the "
+                        + "board! size flag carries the same claim in six characters");
+    }
+
+    /**
+     * The counter the step-7B mutation is armed on.
+     *
+     * <p>It fires from the server tick rather than from a hook, so the observer stays inert — the
+     * whole step-7A claim rests on that path being unable to act.
+     */
+    @Test
+    void mustHappen_theTradeEverythingPlanCounterIsExact() {
+        TradeRuntimeObserver.setRecording(true);
+
+        TradeRuntimeObserver.selected("VANILLA", null, "r", new ItemStack(Items.EMERALD, 5),
+                new ItemStack(Items.IRON_INGOT));
+        assertEquals(0, TradeRuntimeObserver.tradeEverythingSelections(),
+                "a vanilla plan must not arm a Trade Everything mutation");
+
+        TradeRuntimeObserver.selected("TRADE_EVERYTHING", null, "r",
+                new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1));
+        assertEquals(1, TradeRuntimeObserver.tradeEverythingSelections());
+    }
+
+    /** The 7B fixture mutates the market and nothing else. */
+    @Test
+    void mustNotHappen_theMutationFixtureTouchesScavenger() throws IOException {
+        String scenario = fixture("scenario/step7b_mutation.mcfunction");
+
+        assertTrue(scenario.contains("mutate arm"), "the mutation is armed, not hand-timed");
+        for (String forbidden : java.util.List.of(
+                "emerald", "iron_pickaxe", "te3 p02", "te3 scan", "tp @e", "data modify")) {
+            assertFalse(scenario.toLowerCase(java.util.Locale.ROOT).contains(forbidden),
+                    "the fixture must not " + forbidden);
+        }
     }
 }

@@ -316,6 +316,7 @@ public class TradeWithVillagerGoal extends Goal {
             reselect(level);
             return;
         }
+        com.noobk.spmscavenger.debug.TradeRuntimeObserver.aboutToTrade(backpack);
         int emeraldsBefore = com.noobk.spmscavenger.debug.TradeRuntimeObserver
                 .count(backpack, net.minecraft.world.item.Items.EMERALD);
         int pickaxesBefore = com.noobk.spmscavenger.debug.TradeRuntimeObserver

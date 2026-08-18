@@ -66,6 +66,18 @@ public final class Te3ProbeCommand {
                 .then(Commands.literal("te3").requires(src -> src.hasPermission(2))
                         .then(Commands.literal("index").executes(c -> index(c.getSource())))
                         .then(Commands.literal("p02").executes(c -> p02(c.getSource())))
+                        .then(Commands.literal("mutate")
+                                .then(Commands.literal("arm").executes(c -> {
+                                    mutationArmed = true;
+                                    mutationApplied = false;
+                                    c.getSource().sendSuccess(() -> Component.literal(
+                                            "[TE3] market mutation ARMED - it fires on the mob's "
+                                                    + "FIRST Trade Everything plan, while it walks"),
+                                            false);
+                                    return 1;
+                                }))
+                                .then(Commands.literal("now")
+                                        .executes(c -> applyMutation(c.getSource()))))
                         .then(Commands.literal("watch")
                                 .then(Commands.literal("on").executes(c -> {
                                     TradeRuntimeObserver.reset();
@@ -76,6 +88,7 @@ public final class Te3ProbeCommand {
                                     return 1;
                                 }))
                                 .then(Commands.literal("off").executes(c -> {
+                                    mutationArmed = false;
                                     TradeRuntimeObserver.setRecording(false);
                                     c.getSource().sendSuccess(() -> Component.literal(
                                             "[TE3] observer stopped"), false);
@@ -811,6 +824,7 @@ public final class Te3ProbeCommand {
     }
 
     private static void observe(net.minecraft.server.MinecraftServer server) {
+        tickMutation(server);
         if (!parityArmed || paritySubject == null) {
             return;
         }
@@ -844,6 +858,62 @@ public final class Te3ProbeCommand {
             parityArmed = false;
             return;
         }
+    }
+
+    // ------------------------------------------------------------- step 7B market mutation
+
+    /**
+     * Step 7B — change the market, not Scavenger.
+     *
+     * <h2>The lever</h2>
+     *
+     * {@code TradeEverythingApi.setItemOverride} is upstream's own public API for an item's value in
+     * sixteenths, read by {@code ItemValuation.overrideValue} on every valuation. Raising oak_log
+     * from its derived value of 1 changes what a log is worth, so the next quote costs a different
+     * number of logs — <b>real pricing state, changed from outside</b>.
+     *
+     * <p>What this deliberately is not: telling Scavenger to reject anything, forcing a replan, or
+     * faking a Q2 mismatch inside our own code. A fixture that did those would prove that a fixture
+     * can make a test pass.
+     *
+     * <h2>Why it fires from the tick loop</h2>
+     *
+     * The mutation has to land <b>between</b> selection and revalidation — while the mob walks. Doing
+     * it from the observer hook would put an action into the path that is supposed to only watch, and
+     * the whole step-7A claim rests on that path being inert. So the observer keeps a count and this
+     * reads it.
+     */
+    private static final int MUTATED_LOG_VALUE = 2;
+    private static boolean mutationArmed;
+    private static boolean mutationApplied;
+
+    private static int applyMutation(CommandSourceStack source) {
+        try {
+            games.brennan.tradeeverything.api.TradeEverythingApi.setItemOverride(
+                    net.minecraft.resources.ResourceLocation.withDefaultNamespace("oak_log"),
+                    MUTATED_LOG_VALUE);
+        } catch (NoClassDefFoundError missing) {
+            source.sendFailure(Component.literal(
+                    "[TE3] Trade Everything is not installed - nothing to mutate"));
+            return 0;
+        }
+        mutationApplied = true;
+        mutationArmed = false;
+        TradeRuntimeObserver.note("MUTATION APPLIED  oak_log value -> " + MUTATED_LOG_VALUE
+                + " sixteenths (upstream setItemOverride)");
+        source.sendSuccess(() -> Component.literal(
+                "[TE3] market mutated: oak_log value -> " + MUTATED_LOG_VALUE
+                        + ". The next TE quote costs a different number of logs."), false);
+        return 1;
+    }
+
+    /** Fires once, as soon as the mob has actually planned a Trade Everything route. */
+    private static void tickMutation(net.minecraft.server.MinecraftServer server) {
+        if (!mutationArmed || mutationApplied
+                || TradeRuntimeObserver.tradeEverythingSelections() == 0) {
+            return;
+        }
+        applyMutation(server.createCommandSourceStack().withSuppressedOutput());
     }
 
     private static int parityArm(CommandSourceStack source) {
