@@ -108,6 +108,52 @@ probe would have produced an oracle that agrees with itself. So `scan` prints `f
 `mustNotHappen_aBFundingResultIsReadAsPhysicallyExecutable` pins the gap: an all-logs backpack is
 worth *more* and classifies identically as `B_FUNDING` while being physically unable to start.
 
+## P0-1 — exact quote parity
+
+Asks one thing: is the offer Scavenger would get from a **direct** call the same offer Trade
+Everything materializes for a **player** during a real merchant session?
+
+```
+DIRECT   RecipeValues.ensureIndexed(server)
+         OfferQuoter.quote(villager, input, villager.getOffers())        <- no synthetic row
+
+TE       AbstractVillagerTradingMixin#onSetTradingPlayer  inserts a PLACEHOLDER at offers[0]
+         MerchantContainerMixin#repriceInner  then does
+             offers.set(0, OfferQuoter.quoteOrPlaceholder(villager, input, offers))
+                                                                          <- WITH the synthetic row
+```
+
+The synthetic row lives at **`villager.getOffers().get(0)`** — it is not a UI-only construct — and it
+is removed when `setTradingPlayer(null)` fires on close. So the two paths hand the pricer lists that
+differ by exactly that element. `DefaultBuyItemSelector.select` and
+`TradePricer.payoutValueSixteenths` both skip synthetic offers, so the pricing inputs *ought* to be
+identical; P0-1 exists to replace that "ought".
+
+```mcfunction
+/function te3:scenario/p01_parity
+# hold the oak_log stack:
+/spmscavenger debug te3 parity snapshot     # DIRECT quote, refuses if any session already happened
+# open the villager, put that exact stack in the trade slot:
+/spmscavenger debug te3 parity live         # field-exact comparison
+# close the merchant:
+/spmscavenger debug te3 parity closed       # TE removed its row, real board intact
+```
+
+Compared field by field, not "both say emerald": `ItemCost` A and B (item holder, count, **component
+predicate**), the effective `costA` the modifiers land on, result (item + count + **components**),
+`uses`, `maxUses`, `xp`, `priceMultiplier`, `demand`, `specialPriceDiff`, `rewardExp`. The
+non-synthetic offers are fingerprinted at snapshot and rechecked at compare, so equality cannot come
+from the two paths having priced against different boards.
+
+**Expected divergence, not a failure:** for an input that does not quote, TE substitutes
+`SyntheticOfferFactory.placeholder` while the direct path returns `Optional.empty()`. That is a UI
+affordance rather than a price, so `live` refuses placeholders instead of reporting them.
+
+**One comparator trap already found:** `ItemCost` is a record whose components include a cached
+`ItemStack`, and `ItemStack` inherits identity equality — so record `equals` calls two structurally
+identical costs different. The first run reported `DIVERGENT` on a pair built by the same
+expression. Now compared field-wise (`Te3ParityDiffTest`).
+
 ## The E case is the one to watch
 
 Scenario `e_torch_chain` exists for it specifically. `WorkDemandPolicy` demands **`CHARCOAL`**;

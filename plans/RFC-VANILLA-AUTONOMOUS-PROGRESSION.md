@@ -13,8 +13,8 @@
 | **User constraint** | The RFC was originally design-only; the user has now separately authorized `SCR-1` and `SCR-2` implementation. Minecraft launches, commits, pushes, and `SCR-3` remain separately gated |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-FURNACE-SMELTING.md`; stubs `progression/ProgressGoal.java`, `progression/TaskLifecycle.java` |
 | **Owners** | User (product); architecture TBD |
-| **Last update** | 2026-08-14 (mining intelligence deferred/partial absorbed from former MI RFC) |
-| **Nearest frontier** | Peer review **GTH-1** (TreeDetector + TreeHarvest); **RT-MI-TS1** runtime falsification; shelter runtime matrix remains separate |
+| **Last update** | 2026-08-17 (progression route-choice + Opinion read-back architecture — `Agent_ChatGPT`) |
+| **Nearest frontier** | Peer review **D-VP-PR-001…004** (route arbitrator + Opinion read-back); **GTH-1**; **RT-MI-TS1** runtime falsification |
 | **Gate** | MRFC-1 |
 
 ### Naming note
@@ -335,6 +335,216 @@ STICKS
 | Fixed `nextStep()` per subsystem (today) | `PROVEN` for torch chain |
 | `WorkDemandPolicy` + finite node catalog | **Preferred gen-1** |
 | Full GOAP/HTN | **Deferred** — cost > benefit for vanilla-only |
+
+### Future extension — cross-strategy route choice (`PROPOSED`, `Agent_ChatGPT`, 2026-08-17)
+
+D-VP-001 is sufficient while a requirement has **one** obvious acquisition path. It is **insufficient**
+once multiple **legal** strategies can satisfy the same `ProgressionNeed` (mine→smelt→craft vs trade
+vs loot vs remembered site). See [Topic: Progression route choice and Opinion read-back](#topic-progression-route-choice-and-opinion-read-back).
+
+---
+
+## Topic: Progression route choice and Opinion read-back
+
+**Status:** `PROPOSED` — architecture pressure-test; **not** implementation authorization  
+**Author:** `Agent_ChatGPT` (brainstorm continuation, 2026-08-17)  
+**Peer gate:** MRFC-1; MAIBS-1 applies before any route arbitrator ships
+
+### Finding — Opinion already learns progression activities (`CONFIRMED`)
+
+Opinion does **not** own progression authority, but the existing pipeline already learns preferences
+for progression-shaped work:
+
+| Layer | Evidence |
+| --- | --- |
+| `ActivityKind` ontology | `OVERLAND_EXPLORATION`, `CAVE_EXPLORATION`, `CONTROLLED_DESCENT`, `TUNNEL_SEARCH`, `RESOURCE_GATHERING`, `REST`, `SOCIALIZING`, `MIMICRY` — `experience/ActivityKind.java` |
+| Mining → kind mapping | `ExperienceEmitters.activityFor(MiningProjectMode)` maps `CONTROLLED_DESCENT` / `TUNNEL_SEARCH` / `CAVE_EXPLORATION` / default → `RESOURCE_GATHERING` — `experience/ExperienceEmitters.java:321-326` |
+| Personality interpretation | `PersonalityModel.positiveSensitivity` — cave ← curiosity+adventurousness+riskTolerance; descent/tunnel ← persistence+materialism; gather ← materialism — `opinion/PersonalityModel.java:59-67` |
+| Discretionary director boundary | `PersonalityModel` javadoc: *"owns no scheduler or action authority"* — same file:11-12 |
+
+**Missing seam (read-back):** learned `ActivityOpinionMemory` preference is consumed today for
+**discretionary** director scoring (`ActivityUtilityScorer`, `DiscretionaryActivityDirector`), not
+when progression must choose among multiple **feasible acquisition routes** for the same consumer.
+
+```text
+Progression activity happens
+        ↓
+Experience / terminal evidence
+        ↓
+Opinion learns: "I like/dislike tunnel search / cave exploration / gathering"
+        ↓
+MISSING (today):
+use those preferences when progression has multiple legitimate strategies
+```
+
+### Gap in D-VP-001 — no general route-choice layer (`INFERRED` from current code shape)
+
+Today's stack:
+
+```text
+ProgressGoal → RequirementResolver → WorkDemandPolicy → executor → TaskLifecycle
+```
+
+works when the resolver exposes essentially **one** leaf executor per missing node. It breaks down at:
+
+| Need | Competing legal routes |
+| --- | --- |
+| Iron pickaxe | mine→smelt→craft; villager trade; container loot; (future modded sources) |
+| Diamonds | cave exploration; controlled descent→tunnel; remembered exposed/deep site |
+
+**Warning sign already shipped:** `TradeDemandRegistrar` is a special-purpose route selector
+(EXISTING_WORK vs TRADE). Its source explicitly forbids comparing `TradeEvaluation#utility()` against
+`WorkDemandPolicy#derivedUtility` — *"73 trade utility against 100 smelt utility is not a comparison"*
+— and TRADE wins only when the existing route is **infeasible**, never when it is merely less
+attractive (`village/trade/TradeDemandRegistrar.java:14-34`, gate 7 at `:108-111`).
+
+If vanilla progression later adds independent `MiningRoutePolicy`, `LootRoutePolicy`,
+`StructureRoutePolicy`, etc., each with its own winner logic, the repo recreates the parallel-AI
+architecture this RFC family has been avoiding.
+
+### Proposed future architecture (`PROPOSED`)
+
+```text
+ProgressGoal
+        ↓
+RequirementResolver
+        ↓
+ProgressionNeed                    ← consumer-owned: "what outcome must happen?"
+        ↓
+Route providers (mine / craft / smelt / trade / loot / explore / …)
+        ↓
+bounded ProgressionRouteCandidates
+        ↓
+objective feasibility + legality filter
+        ↓
+ProgressionRouteArbitrator
+        ├── objective route facts (vector, not one fake number)
+        └── optional Opinion preference (rank only)
+        ↓
+ProgressionIntent                  ← owns bounded attempt until terminal / invalidation
+        ↓
+execution-time admission / revalidation
+        ↓
+existing executor
+        ↓
+TaskLifecycle
+        ↓
+re-resolve requirement
+```
+
+**Authority split (non-negotiable proposal):**
+
+| Layer | Owns |
+| --- | --- |
+| Progression | Necessity, legality, feasible candidate set, `ProgressionIntent` commitment |
+| Opinion | Subjective **ranking among already-feasible** routes — never permission |
+
+> Progression: *"We ARE obtaining an iron pickaxe."*  
+> Opinion: *"Of the legal ways to obtain it, I'd rather trade than tunnel."*  
+> **Not:** *"I hate mining, so we're not getting the pickaxe."*
+
+This extends the existing Opinion rule — *preference affects choice, not permission*
+(`ActivityUtilityScorer` javadoc; `DiscretionaryScoringInput` / `DiscretionaryDirectorState`
+*candidacy, not permission*) rather than inventing a second philosophy.
+
+### Candidate contract — preference cannot suppress progression (`PROPOSED`)
+
+| Case | Expected |
+| --- | --- |
+| Mine feasible + trade feasible | Opinion **may** rank (once a real cross-strategy model exists) |
+| Mine feasible + trade infeasible | Mine regardless of Opinion |
+| Mine infeasible + trade feasible | Trade regardless of Opinion |
+| Only tunnel feasible; mob dislikes tunnels | Tunnel anyway |
+| No feasible routes | `BLOCKED` for objective reason — never "doesn't feel like it" |
+
+Shelter, player command, combat, and mandatory safety authorities still preempt; Opinion cannot
+preserve progression work through those gates (same pattern as `SHELTER_HOLD` / SCR-2R5).
+
+### Route commitment — no per-tick preference steering (`PROPOSED`)
+
+Once `ProgressionIntent` selects a route (e.g. `CAVE_EXPLORATION` for an iron-pick consumer), that
+attempt owns a **bounded commitment** until `SUCCESS` | `FAILURE` | `BLOCKED` | `RETRY` boundary |
+objective invalidation (preferred trade disappears, site flooded, tool broke). A mood tick or +1
+preference change must **not** flip route every 20 ticks.
+
+Matches existing Opinion distinction: *request is not authority; adoption is not continuation*
+(`DiscretionaryDirectorState` stale-preference guards).
+
+### Objective dominance before subjective choice (`PROPOSED`)
+
+Do **not** implement:
+
+```text
+miningScore = 100; tradeScore = 73; opinionBonus = +20  →  pick mining
+```
+
+Safer staged model:
+
+1. **Hard legality** — remove illegal routes  
+2. **Feasibility** — remove objectively infeasible / `UNKNOWN` routes  
+3. **Objective dominance** — eliminate clearly worse routes using defined facts (not blended units)  
+4. **Subjective choice** — Opinion ranks genuine tradeoffs among survivors  
+
+Objective fact vector (examples): travel burden, work burden, hazard band, uncertainty, resource
+consumption, known completion evidence. If route A is no worse than B on every axis and better on
+at least one, B loses before Opinion enters. Short-but-dangerous cave vs long-but-safe tunnel is the
+intended Opinion use case.
+
+### D-VP-MI-014 supersession (`PROPOSED`)
+
+Standalone CAVER / TUNNELER weight presets would create a **second** subjective authority beside
+`ActivityOpinionMemory` and `PersonalityModel`. Example conflict:
+
+```text
+MiningPersonality = CAVER     → prefer caves
+OpinionMemory[TUNNEL_SEARCH]    → loves tunnels
+PersonalityModel              → high persistence + materialism
+MiningDirector                → ???
+```
+
+**Proposal:** mark **D-VP-MI-014** `SUPERSEDED — DO NOT IMPLEMENT AS PARALLEL POLICY`. MiningDirector
+keeps project lifecycle ownership; it may receive **bounded advisory preference** when multiple mining
+routes are objectively legal. Opinion remains the single subjective-learning source.
+
+### Trading needs an `ActivityKind`, not discretionary `PROGRESSION` (`PROPOSED`)
+
+Do **not** add `PROGRESSION` to the discretionary director. Progression stays outside discretionary
+authority; mining already demonstrates the pattern (`CONTROLLED_DESCENT` is progression-owned work with
+an Opinion kind).
+
+Progression villager trading is **work**, not `SOCIALIZING` (V2 lesson — `D-VR-054` locks
+`ActivityClass.VILLAGE_TRADE` for scheduler taxonomy). For learned trade-vs-mine preference, add a
+future subjective identity such as `ActivityKind.VILLAGE_TRADING` or `TRADING` — **learning only**,
+not discretionary director admission. Coordinate with `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md`
+(`onTradeEpisode` / experience emission slice).
+
+### Scenario parity — required before lock (`UNVERIFIED`)
+
+| ID | Scenario | Must happen | Must not happen |
+| --- | --- | --- | --- |
+| VP-PR-S1 | Mine + trade both feasible | Both remain legal; preference may eventually distinguish | Fake utility comparison (100 vs 73) |
+| VP-PR-S2 | Preferred trade disappears mid-walk | Attempt invalidates; re-resolve; mining still available | Oscillate route every tick |
+| VP-PR-S3 | Mob dislikes only feasible mining method | Progression still proceeds | Demand suppressed as "preference" |
+| VP-PR-S4 | Shelter / player order / combat | Higher authority preempts | Opinion preserves progression through preempt |
+| VP-PR-S5 | Repeated controlled-descent success | Cave/descent/tunnel preference strengthens appropriately | Fabricated dislike without causal evidence |
+| VP-PR-S6 | Tunnel interrupted by player command | No fabricated negative learning | — |
+| VP-PR-S7 | Hazard-caused cave failure | Causal failure may affect cave preference per existing rules | Blame unrelated activity |
+| VP-PR-S8 | Opinion disabled / neutral | Routing matches legacy neutral policy | Silent behavior change |
+| VP-PR-S9 | WEALTH wants diamonds; progression needs iron | Separate consumers; wealth cannot hijack iron need | Cross-consumer route theft |
+| VP-PR-S10 | Two mobs, same need | May choose different feasible methods | Different legality per mob |
+
+### Proposed decisions (not locked)
+
+| ID | Proposal | Status |
+| --- | --- | --- |
+| **D-VP-PR-001** | Progression retains necessity/permission; Opinion may only **rank** multiple feasible routes for the same `ProgressionNeed` | `PROPOSED` |
+| **D-VP-PR-002** | One bounded `ProgressionRouteArbitrator`; do not let mine/trade/loot policies each become independent route selectors | `PROPOSED` — needs MiningDirector + V2 lifecycle pressure-test |
+| **D-VP-PR-003** | Supersede standalone D-VP-MI-014 CAVER/TUNNELER presets; use Opinion `ActivityKind` + `PersonalityModel` pipeline | `PROPOSED` |
+| **D-VP-PR-004** | Preserve V2-C `EXISTING_WORK > TRADE` asymmetry until a real cross-strategy route model exists; Opinion cannot bypass it prematurely | `PROPOSED` — aligns with shipped `TradeDemandRegistrar` gate 7 |
+
+**Strongest open objection:** D-VP-PR-002 may be premature before `RequirementResolver` v1 exists;
+route arbitration without a stable `ProgressionNeed` type risks designing around today's
+`MaterialDemand`/`WorkDemand` overlap (see overlap warning in [Autonomous prerequisite planning](#topic-autonomous-prerequisite-planning)).
 
 ---
 
@@ -1538,9 +1748,12 @@ Promising extension; not early wealth rollout.
 Config `greed ∈ [0,1]` ships; SPM disposition→greed map **deferred** — trait API `NOT FOUND` in
 SPM v0.86.0 (three probes). Greed modifies **wealth only**, never blocking progression minimums.
 
-#### Mining personalities (`DEFERRED` — D-VP-MI-014)
+#### Mining personalities (`SUPERSEDED` — D-VP-MI-014 → D-VP-PR-003)
 
-CAVER / TUNNELER / etc. as **weight presets only**, not ML. Distinct from greed trait.
+**Do not implement** standalone CAVER / TUNNELER weight presets. Opinion already learns
+`CAVE_EXPLORATION`, `CONTROLLED_DESCENT`, `TUNNEL_SEARCH`, and `RESOURCE_GATHERING` via
+`ExperienceEmitters` + `PersonalityModel`. A parallel preset system would fight learned preference.
+See [Topic: Progression route choice and Opinion read-back](#topic-progression-route-choice-and-opinion-read-back).
 
 #### MI-6E ranked cave comparator (`DEFERRED`)
 
@@ -1912,7 +2125,8 @@ SPM hook, project resumption, etc.) are documented in
 | Runtime VP-1–VP-5 | **UNVERIFIED** — no approved `runClient` in this mission |
 | **RT-MI-TS1** tunnel→exposure→gather | Spec ready (`phase3-mining-tunnel`); launch not authorized |
 | Branch mining at Y=−59 | **NOT PRACTICAL** gen-1 (MI RFC) — griefing/product |
-| Mining personalities / portfolio / scarcity memory | **DEFERRED** gen-1 (D-MIW-014/022/023) |
+| Mining personalities (CAVER/TUNNELER presets) | **SUPERSEDED** — D-VP-PR-003; use Opinion pipeline |
+| Portfolio / scarcity memory | **DEFERRED** gen-1 (D-VP-MI-022/023) |
 | SPM disposition → greed trait | **DEFERRED** — trait API `NOT FOUND` in SPM v0.86.0 |
 | Modpack ore capability SPI | **DEFERRED** (D-MIW-005) until second mod consumer |
 | `RequirementResolver` v1 full wiring | **PARTIAL** — stubs only; blocks Phase 0a planner claim |
@@ -1929,7 +2143,11 @@ SPM hook, project resumption, etc.) are documented in
 **Status:** `CONSENSUS`  
 **Accepted:** Bounded backward chaining + `WorkDemandPolicy` + existing executors + `TaskLifecycle`.  
 **Rejected:** Monolithic script; full GOAP/HTN in gen-1.  
-**Evidence:** `RFC-TOOL-TIER-UPGRADES` D-TTU-017; `TaskLifecycle.java` stub.
+**Evidence:** `RFC-TOOL-TIER-UPGRADES` D-TTU-017; `TaskLifecycle.java` stub.  
+**Future extension (`PROPOSED`, D-VP-PR-002):** when multiple acquisition routes can satisfy the same
+`ProgressionNeed`, insert `ProgressionRouteArbitrator` between resolver output and executor
+admission — see [route-choice topic](#topic-progression-route-choice-and-opinion-read-back). Does not
+reopen gen-1 consensus; gen-1 may ship with single-route resolution plus V2-C trade asymmetry only.
 
 ### D-VP-002: Integration surface
 
@@ -1969,9 +2187,32 @@ Not dig-to-Y=−1; cave → bounded descent → budgeted tunnel.
 
 No clairvoyant ore targeting; exposure required before gather candidate.
 
-### D-VP-MI-014: Mining personalities (`DEFERRED`)
+### D-VP-MI-014: Mining personalities (`SUPERSEDED` — D-VP-PR-003)
 
-Weight presets only (CAVER, TUNNELER, …); no ML.
+**Was:** CAVER / TUNNELER weight presets.  
+**Now:** Do not implement as a parallel policy. Use existing `ActivityKind` mining identities +
+`OpinionMemory` + `PersonalityModel` for subjective variation; route choice via proposed
+`ProgressionRouteArbitrator` (D-VP-PR-001/002).
+
+### D-VP-PR-001: Progression necessity vs Opinion ranking (`PROPOSED`)
+
+Opinion may rank multiple **feasible** routes for the same `ProgressionNeed`; it may never suppress
+a satisfiable required demand. Preference affects choice, not permission.
+
+### D-VP-PR-002: Single route arbitrator (`PROPOSED`)
+
+One bounded `ProgressionRouteArbitrator` for cross-strategy choice. Reject independent per-subsystem
+route winners (mine policy vs trade registrar vs loot policy each owning "best route").
+
+### D-VP-PR-003: Supersede D-VP-MI-014 presets (`PROPOSED`)
+
+Opinion is the sole subjective-learning source for mining-route style; MiningDirector keeps
+lifecycle ownership.
+
+### D-VP-PR-004: Preserve V2-C trade asymmetry until cross-strategy model (`PROPOSED`)
+
+`TradeDemandRegistrar` EXISTING_WORK > TRADE gate 7 remains until D-VP-PR-002 defines defined units
+for genuine mine-vs-trade preference. Opinion cannot bypass prematurely.
 
 ### D-VP-MI-019: Greed trait (`CONSENSUS` config / `DEFERRED` SPM hook)
 
@@ -1986,8 +2227,9 @@ After NEED/WEALTH split proves useful in runtime.
 ## Contribution
 
 | Agent | Date | Change |
-| Agent_Claude + User | 2026-08-14 | **FS-R1 / FS-R2 — two smelting defects found by watching, not by testing.** User runtime observation (screenshot) during VR-T1. **FS-R1:** `FurnacePolicy` plans `RecipeType.SMELTING`, `FurnaceStations` accepted furnace/blast furnace/smoker interchangeably, and the pre-insert guard was `instanceof AbstractFurnaceBlockEntity` — the common supertype, so it was guaranteed to pass for exactly the machines that fail. A log went into a blast furnace and sat there. Fixed by asking the station itself: an accessor on `quickCheck` (`RecipeManager.CachedCheck`, which captures the station's own recipe type) rather than a three-way class map that would be wrong for every modded furnace; fails closed; revalidated before the input leaves the backpack. **FS-R2:** a wooden pickaxe was chosen as fuel because vanilla marks wooden tools burnable and the ranking prefers the smallest sufficient non-log burn. Added an expendability layer ahead of ranking — **burnable is not expendable**, the same shape as *preference does not create permission* — derived from `isDamageableItem()` rather than a tool list, with a `required:false` tag beside it. **895 tests, 0 failures; 2 negative controls fire**, the second reproducing the screenshot verbatim. Neither defect came from the village work; VR-T1 merely provided the observation. |
 | --- | --- | --- |
+| Agent_ChatGPT | 2026-08-17 | **Progression route-choice + Opinion read-back.** Source-audited: `ActivityKind` mining ontology, `ExperienceEmitters` mode mapping, `PersonalityModel` trait interpretation, `TradeDemandRegistrar` no-blended-units warning. Proposed `ProgressionRouteArbitrator` seam, D-VP-PR-001…004, supersede D-VP-MI-014 presets, future `ActivityKind` for trading (learning only), VP-PR-S1…S10 scenario matrix. **Not locked; no implementation/build/runtime.** |
+| Agent_Claude + User | 2026-08-14 | **FS-R1 / FS-R2 — two smelting defects found by watching, not by testing.** User runtime observation (screenshot) during VR-T1. **FS-R1:** `FurnacePolicy` plans `RecipeType.SMELTING`, `FurnaceStations` accepted furnace/blast furnace/smoker interchangeably, and the pre-insert guard was `instanceof AbstractFurnaceBlockEntity` — the common supertype, so it was guaranteed to pass for exactly the machines that fail. A log went into a blast furnace and sat there. Fixed by asking the station itself: an accessor on `quickCheck` (`RecipeManager.CachedCheck`, which captures the station's own recipe type) rather than a three-way class map that would be wrong for every modded furnace; fails closed; revalidated before the input leaves the backpack. **FS-R2:** a wooden pickaxe was chosen as fuel because vanilla marks wooden tools burnable and the ranking prefers the smallest sufficient non-log burn. Added an expendability layer ahead of ranking — **burnable is not expendable**, the same shape as *preference does not create permission* — derived from `isDamageableItem()` rather than a tool list, with a `required:false` tag beside it. **895 tests, 0 failures; 2 negative controls fire**, the second reproducing the screenshot verbatim. Neither defect came from the village work; VR-T1 merely provided the observation. |
 | Agent_Cursor | 2026-08-14 | **Mining intelligence absorbed into united RFC.** Replaced child-RFC cross-link with substantive topics: layered architecture, **MiningDirector + advanced site selection** (decision tree, cave-first strategy), deferred/partial backlog (`MiningMemory`, portfolio, scarcity, greed SPM hook, personalities, project resumption, RT-MI-TS1), D-VP-MI-* decisions. Tier 2–3 status reconciled. Former `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` superseded for planning. **No implementation authorization.** |
 | Agent_Cursor | 2026-08-13 | **GTH-1 proposed (user design).** Captured bounded natural tree harvest architecture: `TreeDetector` claim + `TreeHarvest` progressive execution; shelter-parallel "recognize object once"; refactor `GatherProtection` to claim-time only; remove horizontal≥3 as top-level per-log reject; bounded BFS not unlimited flood fill; code evidence from `continueFelling`/`MAX_FELL_LOGS`/`isHorizontalLogWall`; MAIBS table; D-VP-004; M1b row. **No implementation authorization.** No Java edit, build, runtime launch, commit, push, or PR |
 | Agent_Codex | 2026-08-12 | Replaced fragile SPM door `Path`-object encounter identity with fixed-size physical identity (mob UUID, door position, initial approach side, wrapping generation), 2.5-block separation reset, and two-attempt bound. Added replan/separation/side/generation tests; 681 tests and clean build pass; artifact `DB403E...7CF`; runtime remains unverified. No Minecraft launch, commit, push, or PR |

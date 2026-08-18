@@ -22,6 +22,7 @@ import net.minecraft.world.entity.npc.AbstractVillager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.MerchantOffer;
+import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
@@ -65,6 +66,13 @@ public final class Te3ProbeCommand {
                         .then(Commands.literal("index").executes(c -> index(c.getSource())))
                         .then(Commands.literal("fixture")
                                 .executes(c -> fixture(c.getSource())))
+                        .then(Commands.literal("parity")
+                                .then(Commands.literal("snapshot")
+                                        .executes(c -> paritySnapshot(c.getSource())))
+                                .then(Commands.literal("live")
+                                        .executes(c -> parityLive(c.getSource())))
+                                .then(Commands.literal("closed")
+                                        .executes(c -> parityClosed(c.getSource()))))
                         .then(Commands.literal("seed")
                                 .then(Commands.argument("scenario",
                                                 com.mojang.brigadier.arguments.StringArgumentType.word())
@@ -81,6 +89,10 @@ public final class Te3ProbeCommand {
                         .then(Commands.literal("reset").executes(c -> {
                             indexed = false;
                             coldIndexNanos = warmIndexNanos = -1L;
+                            paritySubject = null;
+                            parityDirect = null;
+                            parityBoard = null;
+                            parityInput = ItemStack.EMPTY;
                             c.getSource().sendSuccess(() -> Component.literal(
                                     "[TE3] probe state reset. NOTE: TE memoizes its index on "
                                             + "(RecipeManager, config) identity and this does not "
@@ -259,6 +271,300 @@ public final class Te3ProbeCommand {
 
     private static String ms(long nanos) {
         return String.format("%.3f ms", nanos / 1_000_000.0D);
+    }
+
+    // ------------------------------------------------------------------ P0-1 exact quote parity
+
+    /**
+     * P0-1 — does the direct quote Scavenger would call equal the offer Trade Everything itself
+     * materializes during a real merchant session?
+     *
+     * <h2>What the two paths actually are</h2>
+     *
+     * <pre>
+     * DIRECT   RecipeValues.ensureIndexed(server)
+     *          OfferQuoter.quote(villager, input, villager.getOffers())      // no synthetic row
+     *
+     * TE       AbstractVillagerTradingMixin#onSetTradingPlayer inserts a PLACEHOLDER at index 0
+     *          MerchantContainerMixin#repriceInner then does
+     *              offers.set(0, OfferQuoter.quoteOrPlaceholder(villager, input, offers))
+     *                                                                       // WITH the synthetic row
+     * </pre>
+     *
+     * <p>So the boards handed to the pricer are <b>not</b> the same list: TE's carries its own
+     * synthetic row at index 0. {@code DefaultBuyItemSelector.select} and
+     * {@code TradePricer.payoutValueSixteenths} both skip synthetic offers, so the pricing inputs
+     * <i>ought</i> to be identical — and "ought" is exactly what this probe exists to replace. If
+     * the two ever diverge, every Scavenger decision made from a direct quote is a decision about a
+     * trade the player would never be shown.
+     *
+     * <h2>Known, expected divergence</h2>
+     *
+     * For an input that does not quote, TE substitutes {@code SyntheticOfferFactory.placeholder}
+     * while the direct path returns {@code Optional.empty()}. That is a UI affordance, not a price,
+     * so {@code live} refuses placeholders rather than reporting them as a parity failure.
+     *
+     * <h2>State</h2>
+     *
+     * One snapshot slot, overwritten on each {@code snapshot} and cleared by {@code reset}. Bounded
+     * by construction (RET-1a): it cannot grow, and it dies with the probe.
+     */
+    private static java.util.UUID paritySubject;
+    private static ItemStack parityInput = ItemStack.EMPTY;
+    private static MerchantOffer parityDirect;
+    private static List<String> parityBoard;
+
+    private static int paritySnapshot(CommandSourceStack source) {
+        net.minecraft.world.entity.npc.Villager villager = nearestFixtureVillager(source);
+        if (villager == null) {
+            source.sendFailure(Component.literal("[TE3] no te3-tagged Villager in range"));
+            return 0;
+        }
+        net.minecraft.world.entity.player.Player player = source.getPlayer();
+        if (player == null || player.getMainHandItem().isEmpty()) {
+            source.sendFailure(Component.literal(
+                    "[TE3] hold the EXACT stack you will put in the trade slot - the parity claim "
+                            + "is per-input, and a different stack proves nothing"));
+            return 0;
+        }
+        MerchantOffers board = villager.getOffers();
+        // Ordering is the whole proof. A synthetic row already present means a session has happened
+        // in this process, and the "direct" quote would then be measured against a board TE has
+        // already touched. Fresh process, then snapshot, then session - in that order or not at all.
+        for (MerchantOffer existing : board) {
+            if (games.brennan.tradeeverything.trade.SyntheticOfferFactory.isSynthetic(existing)) {
+                source.sendFailure(Component.literal(
+                        "[TE3] refused - this villager already carries a synthetic row, so a "
+                                + "merchant session has already occurred. Restart the process and "
+                                + "snapshot BEFORE opening any merchant."));
+                return 0;
+            }
+        }
+        RecipeValues.ensureIndexed(source.getServer());
+        ItemStack input = player.getMainHandItem().copy();
+        Optional<MerchantOffer> quoted = OfferQuoter.quote(villager, input, board);
+        if (quoted.isEmpty()) {
+            source.sendFailure(Component.literal(
+                    "[TE3] the direct path returned no quote for " + describe(input)
+                            + " - TE would show a placeholder here, which is a UI affordance and "
+                            + "not a price. Pick an input that actually quotes."));
+            return 0;
+        }
+        paritySubject = villager.getUUID();
+        parityInput = input;
+        parityDirect = quoted.get();
+        parityBoard = fingerprint(board);
+        final String subject = id(villager) + " " + paritySubject;
+        source.sendSuccess(() -> Component.literal(String.join(String.valueOf((char) 10),
+                "[TE3] P0-1 direct snapshot taken BEFORE any session",
+                "  subject = " + subject,
+                "  input   = " + describe(parityInput),
+                "  direct  = " + describeOffer(parityDirect),
+                "  board   = " + parityBoard.size() + " non-synthetic offers fingerprinted",
+                "  now open THIS villager as a player, place that exact stack in the trade slot,",
+                "  then run: /spmscavenger debug te3 parity live")), false);
+        return 1;
+    }
+
+    private static int parityLive(CommandSourceStack source) {
+        if (parityDirect == null) {
+            source.sendFailure(Component.literal("[TE3] no snapshot - run `parity snapshot` first"));
+            return 0;
+        }
+        net.minecraft.world.entity.npc.Villager villager = subjectVillager(source);
+        if (villager == null) {
+            source.sendFailure(Component.literal(
+                    "[TE3] the snapshotted villager is not in range - parity is per-villager"));
+            return 0;
+        }
+        MerchantOffers board = villager.getOffers();
+        if (board.isEmpty()
+                || !games.brennan.tradeeverything.trade.SyntheticOfferFactory
+                        .isSynthetic(board.get(0))) {
+            source.sendFailure(Component.literal(
+                    "[TE3] no synthetic row at index 0 - open the merchant and leave it open. TE "
+                            + "installs the row on setTradingPlayer and removes it on close."));
+            return 0;
+        }
+        MerchantOffer live = board.get(0);
+        if (games.brennan.tradeeverything.trade.SyntheticOfferFactory.isPlaceholder(live)) {
+            source.sendFailure(Component.literal(
+                    "[TE3] index 0 is still the PLACEHOLDER, not a priced quote - put the exact "
+                            + "snapshotted stack in the trade slot so repriceInner runs."));
+            return 0;
+        }
+        List<String> boardNow = fingerprint(board);
+        List<String> drift = new ArrayList<>(parityBoard);
+        drift.removeAll(boardNow);
+        List<String> fields = diffOffers(parityDirect, live);
+        StringBuilder out = new StringBuilder("[TE3] P0-1 exact quote parity");
+        out.append((char) 10);
+        out.append("  input   = ").append(describe(parityInput)).append((char) 10);
+        out.append("  direct  = ").append(describeOffer(parityDirect)).append((char) 10);
+        out.append("  TE live = ").append(describeOffer(live)).append((char) 10);
+        if (!drift.isEmpty()) {
+            // The non-synthetic offers must be the same offers, or the two paths priced against
+            // different boards and equality would be a coincidence rather than a result.
+            out.append("  BOARD DRIFT - these non-synthetic offers changed between snapshot and "
+                    + "session: ").append(drift).append((char) 10);
+        }
+        if (fields.isEmpty() && drift.isEmpty()) {
+            out.append("  VERDICT: EXACT PARITY - every compared field identical. The direct path "
+                    + "is what the player would be shown.").append((char) 10);
+        } else {
+            out.append("  VERDICT: DIVERGENT").append((char) 10);
+            for (String field : fields) {
+                out.append("    ").append(field).append((char) 10);
+            }
+        }
+        out.append("  then close the merchant and run: /spmscavenger debug te3 parity closed")
+                .append((char) 10);
+        source.sendSuccess(() -> Component.literal(out.toString()), false);
+        return fields.isEmpty() && drift.isEmpty() ? 1 : 0;
+    }
+
+    private static int parityClosed(CommandSourceStack source) {
+        net.minecraft.world.entity.npc.Villager villager = subjectVillager(source);
+        if (villager == null) {
+            source.sendFailure(Component.literal("[TE3] snapshotted villager not in range"));
+            return 0;
+        }
+        List<String> leftovers = new ArrayList<>();
+        for (MerchantOffer offer : villager.getOffers()) {
+            if (games.brennan.tradeeverything.trade.SyntheticOfferFactory.isSynthetic(offer)) {
+                leftovers.add(describeOffer(offer));
+            }
+        }
+        final boolean clean = leftovers.isEmpty();
+        List<String> boardNow = fingerprint(villager.getOffers());
+        final boolean sameBoard = parityBoard != null && boardNow.equals(parityBoard);
+        final String remaining = leftovers.size() + (clean ? "" : "  " + leftovers);
+        source.sendSuccess(() -> Component.literal(String.join(String.valueOf((char) 10),
+                "[TE3] P0-1 session cleanup",
+                "  synthetic rows remaining     = " + remaining,
+                "  non-synthetic board restored = " + sameBoard,
+                "  VERDICT: " + (clean && sameBoard
+                        ? "CLEAN - TE removed its session-scoped row and left the real board intact."
+                        : "NOT CLEAN - a synthetic row or a board change survived the session. Any "
+                                + "Scavenger read of getOffers() outside a session would see it."))),
+                false);
+        return clean && sameBoard ? 1 : 0;
+    }
+
+    /**
+     * Field-exact offer comparison — the <b>pure</b> seam, so its strength is unit-testable.
+     *
+     * <p>"Both say emerald" is not parity. Count, component predicate, lifetime and the price
+     * modifiers all decide whether a plan built on the direct quote survives contact with the offer
+     * the player is actually shown. {@code getItemCostA} is compared because {@code ItemCost}
+     * carries the {@code DataComponentPredicate}; {@code getCostA} is compared as well because that
+     * is the stack the demand and special-price modifiers actually land on.
+     */
+    static List<String> diffOffers(MerchantOffer direct, MerchantOffer live) {
+        List<String> out = new ArrayList<>();
+        if (!sameCost(direct.getItemCostA(), live.getItemCostA())) {
+            out.add("costA: direct=" + direct.getItemCostA() + " live=" + live.getItemCostA());
+        }
+        if (direct.getItemCostB().isPresent() != live.getItemCostB().isPresent()
+                || (direct.getItemCostB().isPresent()
+                        && !sameCost(direct.getItemCostB().get(), live.getItemCostB().get()))) {
+            out.add("costB: direct=" + direct.getItemCostB() + " live=" + live.getItemCostB());
+        }
+        if (!ItemStack.matches(direct.getCostA(), live.getCostA())) {
+            out.add("effective costA: direct=" + describe(direct.getCostA())
+                    + " live=" + describe(live.getCostA()));
+        }
+        if (!ItemStack.matches(direct.getResult(), live.getResult())) {
+            out.add("result: direct=" + describe(direct.getResult())
+                    + " live=" + describe(live.getResult()));
+        }
+        if (direct.getMaxUses() != live.getMaxUses()) {
+            out.add("maxUses: direct=" + direct.getMaxUses() + " live=" + live.getMaxUses());
+        }
+        if (direct.getUses() != live.getUses()) {
+            out.add("uses: direct=" + direct.getUses() + " live=" + live.getUses());
+        }
+        if (direct.getXp() != live.getXp()) {
+            out.add("xp: direct=" + direct.getXp() + " live=" + live.getXp());
+        }
+        if (Float.compare(direct.getPriceMultiplier(), live.getPriceMultiplier()) != 0) {
+            out.add("priceMultiplier: direct=" + direct.getPriceMultiplier()
+                    + " live=" + live.getPriceMultiplier());
+        }
+        if (direct.getDemand() != live.getDemand()) {
+            out.add("demand: direct=" + direct.getDemand() + " live=" + live.getDemand());
+        }
+        if (direct.getSpecialPriceDiff() != live.getSpecialPriceDiff()) {
+            out.add("specialPriceDiff: direct=" + direct.getSpecialPriceDiff()
+                    + " live=" + live.getSpecialPriceDiff());
+        }
+        if (direct.shouldRewardExp() != live.shouldRewardExp()) {
+            out.add("rewardExp: direct=" + direct.shouldRewardExp()
+                    + " live=" + live.shouldRewardExp());
+        }
+        return out;
+    }
+
+    /**
+     * {@code ItemCost} is a record, and its generated {@code equals} is <b>useless here</b>: one of
+     * its components is a cached {@code ItemStack}, and {@code ItemStack} inherits identity
+     * equality. Two structurally identical costs therefore compare unequal, which made the very
+     * first parity run report {@code DIVERGENT} on a pair built by the same expression.
+     *
+     * <p>It failed in the safe direction — a false divergence, not a false parity — but a
+     * comparator that always says "different" answers no question at all. Compared field-wise
+     * instead: holder, count, and the component predicate.
+     */
+    private static boolean sameCost(net.minecraft.world.item.trading.ItemCost direct,
+            net.minecraft.world.item.trading.ItemCost live) {
+        return direct.item().equals(live.item())
+                && direct.count() == live.count()
+                && direct.components().equals(live.components());
+    }
+
+    /** The non-synthetic board, as stable text. Synthetic rows are excluded by definition. */
+    static List<String> fingerprint(MerchantOffers board) {
+        List<String> out = new ArrayList<>();
+        for (MerchantOffer offer : board) {
+            if (!games.brennan.tradeeverything.trade.SyntheticOfferFactory.isSynthetic(offer)) {
+                out.add(describeOffer(offer));
+            }
+        }
+        return out;
+    }
+
+    static String describeOffer(MerchantOffer offer) {
+        return describe(offer.getCostA())
+                + (offer.getCostB().isEmpty() ? "" : " + " + describe(offer.getCostB()))
+                + " -> " + describe(offer.getResult())
+                + "  [uses " + offer.getUses() + "/" + offer.getMaxUses()
+                + ", xp " + offer.getXp()
+                + ", mult " + offer.getPriceMultiplier()
+                + ", demand " + offer.getDemand()
+                + ", special " + offer.getSpecialPriceDiff() + "]";
+    }
+
+    private static net.minecraft.world.entity.npc.Villager nearestFixtureVillager(
+            CommandSourceStack source) {
+        return source.getLevel().getEntitiesOfClass(
+                        net.minecraft.world.entity.npc.Villager.class,
+                        new AABB(net.minecraft.core.BlockPos.containing(source.getPosition()))
+                                .inflate(RADIUS),
+                        v -> v.getTags().contains("te3"))
+                .stream().findFirst().orElse(null);
+    }
+
+    private static net.minecraft.world.entity.npc.Villager subjectVillager(
+            CommandSourceStack source) {
+        if (paritySubject == null) {
+            return null;
+        }
+        return source.getLevel().getEntitiesOfClass(
+                        net.minecraft.world.entity.npc.Villager.class,
+                        new AABB(net.minecraft.core.BlockPos.containing(source.getPosition()))
+                                .inflate(RADIUS),
+                        v -> v.getUUID().equals(paritySubject))
+                .stream().findFirst().orElse(null);
     }
 
     // --------------------------------------------------------------- R12 fixture conditioning
