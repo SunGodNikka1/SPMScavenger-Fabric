@@ -53,6 +53,19 @@ class OfferRefSeparationTest {
                 new ItemStack(Items.IRON_INGOT, 1), 0, 12);
     }
 
+    private static OfferSnapshot sell(int boardIndex, int rankOrdinal) {
+        return new OfferSnapshot(OfferRef.board(boardIndex), rankOrdinal,
+                new ItemStack(Items.STICK, 32), ItemStack.EMPTY,
+                new ItemStack(Items.EMERALD, 1), 0, 16);
+    }
+
+    private static SellFundingLeg legFor(OfferSnapshot offer) {
+        return new SellFundingLeg(offer,
+                new SellAuthorization(new ItemStack(Items.STICK, 32), 64,
+                        com.noobk.spmscavenger.ScavengerCrafting.IRON_PICKAXE_RECIPE.consumerKey()),
+                1, 4);
+    }
+
     private static WorkDemandPolicy.MaterialDemand ironDemand() {
         return new WorkDemandPolicy.MaterialDemand(
                 BuiltInRegistries.ITEM.getKey(Items.IRON_INGOT), 1,
@@ -72,28 +85,63 @@ class OfferRefSeparationTest {
     }
 
     /**
-     * The latent bug the separation fixes.
+     * <b>The Step 2 regression, in production shape.</b>
      *
-     * <p>{@code SellFundingLeg.covers} asks "is this the attempt I authorized?". It compared board
-     * indexes, so a leg authorized on one merchant matched an attempt on another whenever both sat
-     * at the same board position — which for index 0 is the common case, not the corner case.
+     * <p>The first version of this refactor made {@code covers} compare {@code rankOrdinal}, and the
+     * suite went green because no test reproduced how the two snapshots actually reach that call:
+     *
+     * <pre>
+     * selection    the goal ranks across ALL villagers  -> seller's SELL is rankOrdinal 7
+     * walk
+     * execution    stillAuthorized re-derives from inspectOffers(target), which knows only this
+     *              villager and defaults rankOrdinal to the board index -> 0
+     * </pre>
+     *
+     * Same seller, same board slot, same economics, different ordinal — so {@code covers} returned
+     * false and the mob refused its own funding sale. Every cross-villager SELL-&gt;BUY chain whose
+     * seller did not happen to rank at its own board index would have failed at the boundary, which
+     * is most of them.
+     *
+     * <p>The offers list here is built the way {@code inspectOffers} builds it — ordinal equals
+     * position — because that is the shape the previous test failed to have.
      */
     @Test
-    void mustNotHappen_aLegOnOneMerchantCoversAnAttemptOnAnother() {
-        OfferSnapshot legOffer = new OfferSnapshot(OfferRef.board(0), 0,
-                new ItemStack(Items.STICK, 32), ItemStack.EMPTY,
-                new ItemStack(Items.EMERALD, 1), 0, 16);
-        OfferSnapshot otherMerchantSameSlot = new OfferSnapshot(OfferRef.board(0), 7,
-                new ItemStack(Items.STICK, 32), ItemStack.EMPTY,
-                new ItemStack(Items.EMERALD, 1), 0, 16);
-        SellFundingLeg leg = new SellFundingLeg(legOffer,
-                new SellAuthorization(new ItemStack(Items.STICK, 32), 64,
-                        com.noobk.spmscavenger.ScavengerCrafting.IRON_PICKAXE_RECIPE.consumerKey()),
-                1, 4);
+    void mustHappen_aPlannedSellIsCoveredAfterSingleVillagerReDerivation() {
+        OfferSnapshot plannedAcrossRound = sell(0, 7);
+        OfferSnapshot reDerivedLocally = sell(0, 0);
 
-        assertTrue(leg.covers(legOffer), "the authorized candidate is still covered");
-        assertFalse(leg.covers(otherMerchantSameSlot),
-                "identical offer, identical board slot, DIFFERENT merchant - not the same attempt");
+        assertTrue(legFor(reDerivedLocally).covers(plannedAcrossRound),
+                "same villager, same board ref, same quote - the round ordinal is not identity");
+    }
+
+    /** A different board slot on the same villager is a different offer, ordinal notwithstanding. */
+    @Test
+    void mustNotHappen_aDifferentBoardSlotOnTheSameVillagerIsCovered() {
+        assertFalse(legFor(sell(0, 0)).covers(sell(1, 0)),
+                "BoardIndex is the source-local resolution identity and it differs");
+    }
+
+    /** Same ref, moved price: the quote changed under us and the authorization does not carry. */
+    @Test
+    void mustNotHappen_aRepricedOfferAtTheSameRefIsCovered() {
+        OfferSnapshot repriced = new OfferSnapshot(OfferRef.board(0), 0,
+                new ItemStack(Items.STICK, 48), ItemStack.EMPTY,
+                new ItemStack(Items.EMERALD, 1), 0, 16);
+
+        assertFalse(legFor(sell(0, 0)).covers(repriced),
+                "48 sticks is not the 32-stick sale that was authorized");
+    }
+
+    /**
+     * The rule, structurally: ordering must not leak into the execution boundary.
+     *
+     * <p>Weaker than the behavioural tests above and kept anyway, because the defect was introduced
+     * by a one-line substitution that read perfectly well.
+     */
+    @Test
+    void mustNotHappen_sellFundingLegConsultsTheRoundOrdinal() throws IOException {
+        assertFalse(source("village/trade/SellFundingLeg.java").contains("rankOrdinal"),
+                "rankOrdinal is ordering only; execution correspondence is ref + semantics");
     }
 
     @Test

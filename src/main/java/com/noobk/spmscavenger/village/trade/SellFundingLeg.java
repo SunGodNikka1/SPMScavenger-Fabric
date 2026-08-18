@@ -70,10 +70,18 @@ public record SellFundingLeg(
      */
     public boolean covers(OfferSnapshot attempted) {
         return attempted != null
-                // Round-local candidate identity, NOT a board address. Board indexes are
-                // villager-local, so two villagers both owning index 0 used to compare equal here -
-                // a sell leg on one merchant could match an attempt on another.
-                && attempted.rankOrdinal() == offer.rankOrdinal()
+                // Source-local resolution identity, NEVER the round ordinal. The two sides
+                // reach here by different routes: `plannedOffer` was ranked across every villager
+                // in the selection round, while the leg is re-derived from
+                // `inspectOffers(target)`, which knows only this villager and defaults the ordinal
+                // to the board position. The SAME offer therefore legitimately carries different
+                // ordinals at the two ends, and comparing them refuses every cross-villager
+                // SELL->BUY chain whose seller did not happen to rank at its own board index.
+                //
+                // Merchant identity is not this class's to check and it does not have it: the
+                // production caller (`stillAuthorized`) has already bound both sides to `target`.
+                // First-class source/merchant provenance arrives at the Candidate layer in step 3.
+                && attempted.ref().equals(offer.ref())
                 && net.minecraft.world.item.ItemStack
                         .isSameItemSameComponents(attempted.costA(), offer.costA())
                 && attempted.costA().getCount() == offer.costA().getCount()

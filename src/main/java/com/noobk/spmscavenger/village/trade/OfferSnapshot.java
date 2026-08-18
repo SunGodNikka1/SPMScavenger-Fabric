@@ -25,6 +25,15 @@ import net.minecraft.world.item.trading.MerchantOffer;
  */
 public record OfferSnapshot(
         OfferRef ref,
+        /**
+         * Deterministic ordering within <b>one planning round</b>, and nothing else.
+         *
+         * <p><b>Never compare this for identity.</b> The same offer legitimately carries different
+         * ordinals depending on how it was reached: {@link #of} defaults it to the board index for
+         * a single-villager inspection, while {@code TradeWithVillagerGoal} assigns a flat ordinal
+         * across every villager in the round. Execution-boundary correspondence is {@link #ref}
+         * plus the cost/result semantics.
+         */
         int rankOrdinal,
         ItemStack costA,
         ItemStack costB,
