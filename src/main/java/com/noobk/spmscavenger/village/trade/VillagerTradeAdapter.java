@@ -188,7 +188,9 @@ public final class VillagerTradeAdapter {
             if (cost.isEmpty() || cost.is(net.minecraft.world.item.Items.EMERALD)) {
                 continue;
             }
-            if (com.noobk.spmscavenger.ScavengerCrafting.count(backpack, cost.getItem())
+            // Step 5.5: exact, because the debit that eventually pays this is exact. Counting by
+            // item alone reports a component variant as affordable out of a pile of a different one.
+            if (TradeInventoryFacts.countExact(backpack, cost)
                     < cost.getCount()) {
                 return false;
             }

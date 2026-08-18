@@ -650,9 +650,17 @@ public class TradeWithVillagerGoal extends Goal {
                 // asking either - a quote we may never act on is a quote not worth paying for.
                 continue;
             }
+            // Category-level, matching how the reserve is expressed: the craft chain wants "three
+            // logs", not three of one component variant.
             int held = ScavengerCrafting.count(backpack, stack.getItem());
             int disposable = com.noobk.spmscavenger.village.trade.SellExpendabilityPolicy
                     .disposableUnits(stack, held, reserved.getAsInt(), mainHand, offHand);
+            // Step 5.5 note: no exactness clamp belongs here, and one was briefly added before a
+            // negative control showed it could never fire. Entries come from held slots, so every
+            // kind in the query is held by construction. Where category-versus-exact actually
+            // matters is the FUNDING LEG - `TradeFundingPlanner.legFor` clamps affordable uses by
+            // TradeInventoryFacts.countExact - because that is the first point at which a specific
+            // QUANTITY of a specific variant is committed to.
             if (disposable > 0) {
                 authorized.add(stack);
             }

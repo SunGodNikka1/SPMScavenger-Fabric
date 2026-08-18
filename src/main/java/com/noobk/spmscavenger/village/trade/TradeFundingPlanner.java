@@ -297,10 +297,17 @@ public final class TradeFundingPlanner {
         if (disposable < wanted.getCount()) {
             return null;
         }
+        // Step 5.5 - the reserve is category-level, but payment is exact. `held` above counts every
+        // variant of the item; TradeTransaction will only be able to spend stacks matching the cost
+        // by item AND components. Without this clamp, 63 ordinary logs plus one component-bearing
+        // log authorizes a 22-unit sale of the component variant, and the mob walks to the merchant
+        // to be refused by its own debit.
+        int exactAvailable = TradeInventoryFacts.countExact(backpack, wanted);
         // Uses, not units - and never more uses than the merchant has left. Planning a two-sale
         // sequence against an offer with one use remaining is a deficit that cannot close.
         int affordable = Math.min(
-                SellExpendabilityPolicy.affordableSellUses(disposable, wanted.getCount()),
+                TradeInventoryFacts.affordableExactUses(
+                        disposable, exactAvailable, wanted.getCount()),
                 Math.max(0, offer.maxUses() - offer.uses()));
         if (affordable <= 0) {
             return null;
