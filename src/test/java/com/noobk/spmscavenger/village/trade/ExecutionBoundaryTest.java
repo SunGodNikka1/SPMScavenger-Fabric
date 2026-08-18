@@ -172,7 +172,7 @@ class ExecutionBoundaryTest {
         attempt = attempt.substring(0, attempt.indexOf((char) 10 + "    }"));
 
         int guard = attempt.indexOf("stillAuthorized(");
-        int trade = attempt.indexOf("VillagerTradeAdapter.performTrade(");
+        int trade = attempt.indexOf("VillagerTradeAdapter.performResolvedTrade(");
         assertTrue(guard > 0, "the funding SELL must be re-authorized at the boundary");
         assertTrue(guard < trade, "and before the transaction, not after it");
     }

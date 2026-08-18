@@ -277,39 +277,52 @@ class TradeInterlockAndRoundTest {
         // the file" was never the rule; "no offer list is touched for a villager that was not
         // already selected" is.
         String goal = source(Path.of("goal/TradeWithVillagerGoal.java"));
-        final String CALL = "VillagerTradeAdapter.inspectOffers(";
         String discovery = goal.substring(goal.indexOf("private Optional<AuthorizedAttempt> authorizedCandidate("));
         discovery = discovery.substring(0, discovery.indexOf((char) 10 + "    }"));
 
         int filter = discovery.indexOf("VillagerTradeAdapter.available(villager)");
-        int inspect = discovery.indexOf("VillagerTradeAdapter.inspectOffers");
+        int inspect = discovery.indexOf("source.offers(villager, query)");
         assertTrue(filter > 0 && filter < inspect,
                 "candidates are filtered for availability before any offer list is touched - "
                         + "getOffers() lazily populates trades");
 
-        int from = 0;
+        // D-VR-077 step 5: the same invariant, in the source vocabulary. Offer lists are now reached
+        // through a TradeOpportunitySource rather than the adapter, so the rule is stated about the
+        // seam that exists - "no offer list is touched for a villager that was not already
+        // selected" - instead of about a method the production path no longer calls.
         int sites = 0;
-        while ((from = goal.indexOf(CALL, from)) >= 0) {
-            String argument = goal.substring(from + CALL.length());
-            argument = argument.substring(0, argument.indexOf(')'));
-            assertTrue(argument.equals("villager") || argument.equals("target"),
-                    "offers may only be inspected for an already-selected candidate, not " + argument);
-            sites++;
-            from += CALL.length();
+        for (String call : new String[] {".offers(", ".revalidate("}) {
+            int from = 0;
+            while ((from = goal.indexOf(call, from)) >= 0) {
+                assertTrue(List.of("villager", "target", "context.buyer()")
+                                .contains(firstArgument(goal, from + call.length())),
+                        "offer lists may only be reached for an already-selected candidate, not "
+                                + firstArgument(goal, from + call.length()));
+                sites++;
+                from += call.length();
+            }
         }
-        assertTrue(sites >= 1, "the discovery call site must still exist");
+        assertTrue(sites >= 3,
+                "discovery, execution-boundary re-derivation and the carried BUY each reach one");
+    }
 
-        // R8: the same invariant, applied to the revalidation seam. Re-resolving one recorded offer
-        // is not a sweep - that villager was selected, and is carried as attempt evidence precisely
-        // because the executor chose it. What must stay impossible is reaching an arbitrary villager.
-        final String REVALIDATE = "VillagerTradeAdapter.revalidateOffer(";
-        from = 0;
-        while ((from = goal.indexOf(REVALIDATE, from)) >= 0) {
-            String argument = goal.substring(from + REVALIDATE.length());
-            argument = argument.substring(0, argument.indexOf(','));
-            assertEquals("context.buyer()", argument.trim(),
-                    "only the carried, already-selected buyer may be revalidated");
-            from += REVALIDATE.length();
+    /** Depth-aware, because {@code context.buyer()} contains a closing paren of its own. */
+    private static String firstArgument(String source, int afterOpenParen) {
+        int depth = 0;
+        for (int i = afterOpenParen; i < source.length(); i++) {
+            char ch = source.charAt(i);
+            if (ch == '(') {
+                depth++;
+            } else if (ch == ')') {
+                if (depth == 0) {
+                    return source.substring(afterOpenParen, i).trim();
+                }
+                depth--;
+            } else if (ch == ',' && depth == 0) {
+                return source.substring(afterOpenParen, i).trim();
+            }
         }
+        return source.substring(afterOpenParen).trim();
+
     }
 }

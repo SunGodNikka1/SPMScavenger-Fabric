@@ -83,6 +83,10 @@ public final class VillagerTradeAdapter {
      * <p>Read-only: no {@code setTradingPlayer}, no price update, nothing that would make the act of
      * looking change what is offered.
      */
+    /**
+     * <b>Legacy / non-production since step 5.</b> {@code VanillaTradeSource.offers} is the
+     * production path; this remains for the temporary TE3 probe and existing unit fixtures.
+     */
     public static List<OfferSnapshot> inspectOffers(Villager villager) {
         List<OfferSnapshot> snapshots = new ArrayList<>();
         if (villager == null || !villager.isAlive()) {
@@ -124,6 +128,12 @@ public final class VillagerTradeAdapter {
      *
      * @param recorded the snapshot taken at selection, carrying the <b>villager-local</b> index
      * @return the live snapshot when it still matches exactly, otherwise empty
+     */
+    /**
+     * <b>Legacy / non-production since step 5.</b> Superseded by
+     * {@code source.revalidate(villager, planned)} plus an explicit {@link #available} check at the
+     * caller — this method combined market truth and physical legality, which is exactly the mixture
+     * per-source resolution had to separate.
      */
     public static java.util.Optional<OfferSnapshot> revalidateOffer(
             Villager villager, OfferSnapshot recorded) {
@@ -202,6 +212,11 @@ public final class VillagerTradeAdapter {
      * @param offer a snapshot previously taken from this villager; re-validated here against the
      *     live offer before anything is spent
      */
+    /**
+     * <b>Legacy / non-production since step 5.</b> Interprets an {@link OfferRef} as a board address,
+     * which is now {@code VanillaTradeSource}'s job. Production uses
+     * {@link #performResolvedTrade}; this is retained for existing fixtures and the TE3 probe.
+     */
     public static TradeResult performTrade(Container backpack, Villager villager, OfferSnapshot offer) {
         if (backpack == null || villager == null || !villager.isAlive()) {
             return TradeResult.NO_VILLAGER;
@@ -270,6 +285,42 @@ public final class VillagerTradeAdapter {
                 attribution::spmscavenger$getLastTradedPlayer,
                 attribution::spmscavenger$setLastTradedPlayer,
                 () -> villager.notifyTrade(offer));
+    }
+
+    /**
+     * D-VR-077 step 5 — <b>the production transaction entry point.</b>
+     *
+     * <p>Takes an offer a source has already resolved, applies the physical gates that are identical
+     * for every source, and commits. It exists so that {@link V2-DEF-001} cannot be bypassed: the
+     * notifier is chosen here, not by the caller.
+     *
+     * <pre>
+     * source.revalidate(...)  ->  MerchantOffer live  ->  performResolvedTrade(...)  ->  transaction
+     * </pre>
+     *
+     * <p>{@link #executeResolved} still accepts an arbitrary notifier because the temporary P0-2
+     * probe drives it directly. <b>Production must not</b> — supplying {@code villager::notifyTrade}
+     * there resurrects a defect that is already fixed, with no compile error and no failing vanilla
+     * test, because no vanilla test would exercise that call.
+     *
+     * @param live the object the source produced, passed through by reference. Never rebuild it:
+     *     Trade Everything marks synthetic offers with a mixin-injected instance field that a
+     *     constructor call silently drops.
+     */
+    public static TradeResult performResolvedTrade(
+            Container backpack, Villager villager, MerchantOffer live) {
+        if (backpack == null || villager == null || !villager.isAlive()) {
+            return TradeResult.NO_VILLAGER;
+        }
+        // Race-proof, and deliberately at the transaction boundary rather than only at selection:
+        // a human may have opened this merchant while the mob was walking.
+        if (villager.getTradingPlayer() != null) {
+            return TradeResult.MERCHANT_BUSY;
+        }
+        if (villager.isSleeping()) {
+            return TradeResult.MERCHANT_UNAVAILABLE;
+        }
+        return executeResolved(backpack, live, preservingAttribution(villager));
     }
 
     /**

@@ -245,9 +245,9 @@ class TradeOpportunityContractTest {
                 "revalidate hands back the live object to execute, or nothing");
     }
 
-    /** Step 4 is the contract only; a source implementation arriving here would hide step 5. */
+    /** Step 5 adds exactly one source. Trade Everything is step 6 and must not appear early. */
     @Test
-    void mustHappen_noSourceImplementationExistsYet() throws java.io.IOException {
+    void mustHappen_onlyTheVanillaSourceIsImplemented() throws java.io.IOException {
         try (var paths = java.nio.file.Files.walk(
                 java.nio.file.Path.of("src/main/java/com/noobk/spmscavenger"))) {
             List<String> implementors = paths
@@ -261,10 +261,11 @@ class TradeOpportunityContractTest {
                         }
                     })
                     .map(path -> path.getFileName().toString())
+                    .sorted()
                     .toList();
-            assertEquals(List.of(), implementors,
-                    "VanillaTradeSource is step 5, deliberately separate so a vanilla behaviour "
-                            + "change cannot hide behind a new interface in the same commit");
+            assertEquals(List.of("VanillaTradeSource.java"), implementors,
+                    "a Trade Everything source arriving with the vanilla parity step would let a "
+                            + "vanilla regression hide behind it");
         }
     }
 

@@ -118,8 +118,9 @@ class TradeSourceProvenanceTest {
     void mustHappen_theSelectedSourceSurvivesIntoAttemptState() throws IOException {
         String goal = source("goal/TradeWithVillagerGoal.java");
 
-        assertTrue(goal.contains("TradeSourceKey.VANILLA"),
-                "every production candidate is given explicit provenance at selection");
+        assertTrue(goal.contains("new Candidate(villager, source.key(), ranked,"),
+                "every production candidate is stamped with the provenance of the source that "
+                        + "produced it - since step 5 that comes from source.key(), not a literal");
         assertTrue(goal.contains("attemptSource = candidate.source();"),
                 "and beginAttempt keeps it for the walk");
         assertTrue(goal.contains("buyCandidate.source()"),
@@ -147,8 +148,15 @@ class TradeSourceProvenanceTest {
     void mustHappen_executionStillReachesTheSameAdapter() throws IOException {
         String goal = source("goal/TradeWithVillagerGoal.java");
 
-        assertTrue(goal.contains("VillagerTradeAdapter.performTrade(backpack, target, plannedOffer)"),
-                "no source-specific execution path exists yet - that is step 4/5");
+        assertTrue(goal.contains(
+                        "VillagerTradeAdapter.performResolvedTrade(backpack, target, resolved.get())"),
+                "the source resolves, the adapter transacts - and the adapter never reads the ref");
+        assertFalse(goal.contains("VillagerTradeAdapter.performTrade("),
+                "the board-resolving entry point is no longer a production path");
+        assertFalse(goal.contains("VillagerTradeAdapter.inspectOffers("),
+                "nor is the board-reading one");
+        assertFalse(goal.contains("VillagerTradeAdapter.revalidateOffer("),
+                "nor the one that mixed market truth with physical legality");
         assertTrue(source("village/trade/VillagerTradeAdapter.java")
                         .contains("preservingAttribution(villager)"),
                 "and V2-DEF-001 preservation is untouched");

@@ -218,7 +218,12 @@ class OfferRefSeparationTest {
         String adapter = source("village/trade/VillagerTradeAdapter.java");
         assertTrue(adapter.contains("preservingAttribution(villager)"),
                 "performTrade must still wrap notifyTrade in the V2-DEF-001 binding");
-        assertFalse(adapter.contains("villager::notifyTrade"),
+        // The call shape, not the bare token: performResolvedTrade's javadoc names the forbidden
+        // notifier in prose, and a substring test that cannot tell an example from a call site is a
+        // test that fails for the wrong reason.
+        assertFalse(adapter.contains("villager::notifyTrade)"),
                 "and must never hand the raw notifier to executeResolved");
+        assertTrue(adapter.contains("performResolvedTrade("),
+                "production reaches the transaction through the attribution-owning entry point");
     }
 }

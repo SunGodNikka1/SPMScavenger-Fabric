@@ -294,8 +294,25 @@ public class TradeWithVillagerGoal extends Goal {
             reselect(level);
             return;
         }
+        // Physical legality first, exactly as performTrade ordered it: a dead target ENDS the round,
+        // it does not demote a candidate, and collapsing that into the empty-revalidation branch
+        // below would quietly turn an endRound into a reselect.
+        if (target == null || !target.isAlive()) {
+            endRound(level);
+            return;
+        }
+        // D-VR-077 step 5: the source that owns this offer resolves it; the adapter never reads the
+        // ref. Empty covers exactly what OFFER_GONE, OFFER_CHANGED and OUT_OF_STOCK covered, and all
+        // three already routed to reselect.
+        java.util.Optional<net.minecraft.world.item.trading.MerchantOffer> resolved =
+                com.noobk.spmscavenger.village.trade.TradeSources.of(attemptSource)
+                        .revalidate(target, plannedOffer);
+        if (resolved.isEmpty()) {
+            reselect(level);
+            return;
+        }
         VillagerTradeAdapter.TradeResult result =
-                VillagerTradeAdapter.performTrade(backpack, target, plannedOffer);
+                VillagerTradeAdapter.performResolvedTrade(backpack, target, resolved.get());
 
         switch (result) {
             case TRADED -> continueChain(level);
@@ -390,15 +407,23 @@ public class TradeWithVillagerGoal extends Goal {
         // Inspecting this one villager is not the sweep the round forbids: that rule is about
         // touching offer lists for villagers never selected, and this one is carried precisely
         // because the executor selected it.
-        java.util.Optional<OfferSnapshot> liveBuy =
-                VillagerTradeAdapter.revalidateOffer(context.buyer(), context.buyQuote());
-        if (liveBuy.isEmpty()) {
+        // Physical legality stays with us; the source answers only whether the purchase still
+        // stands. revalidateOffer used to do both, which is precisely the mixture per-source
+        // resolution had to separate.
+        if (!VillagerTradeAdapter.available(context.buyer())) {
+            return false;
+        }
+        if (com.noobk.spmscavenger.village.trade.TradeSources.of(context.buySource())
+                .revalidate(context.buyer(), context.buyQuote()).isEmpty()) {
             return false;
         }
         // And its non-emerald payment must still be in the backpack. `owedToPurchase` protects that
         // material only when it is the same one being sold; a diamond consumed elsewhere during the
         // walk is invisible to a stick sale.
-        if (!VillagerTradeAdapter.canAffordNonEmerald(backpack, liveBuy.get())) {
+        // The recorded quote, not a re-snapshot of the live one: matchesLive compares effective
+        // cost A/B and result exactly, so a purchase that revalidated has identical costs by
+        // construction.
+        if (!VillagerTradeAdapter.canAffordNonEmerald(backpack, context.buyQuote())) {
             return false;
         }
         int deficit = context.emeraldsRequired()
@@ -412,7 +437,8 @@ public class TradeWithVillagerGoal extends Goal {
         ScavengerConfig cfg = ScavengerConfig.get();
         SellFundingLeg leg = TradeFundingPlanner.authorizeFunding(
                 new TradeEvaluationPolicy.EmeraldDeficit(context.consumerKey(), deficit),
-                VillagerTradeAdapter.inspectOffers(target),
+                com.noobk.spmscavenger.village.trade.TradeSources.of(attemptSource)
+                        .offers(target, authorizedSellQuery(backpack)),
                 context.buyQuote(),
                 backpack,
                 mob.getMainHandItem(),
@@ -583,6 +609,59 @@ public class TradeWithVillagerGoal extends Goal {
     }
 
     /**
+     * D-VR-077 step 5 — which stack kinds a market source may be asked to quote.
+     *
+     * <h2>Modelled is not disposable</h2>
+     *
+     * {@code SellReserveModel} answers whether this mod <i>knows</i> what claims a material; an
+     * empty answer is ignorance and must refuse. But knowing the reserve is not permission to spend:
+     * {@code SellExpendabilityPolicy} subtracts that reserve and applies the held-item veto, and only
+     * a positive surplus makes a kind eligible to ask the market about.
+     *
+     * <p>Building the query from {@code modelled()} alone would authorize quoting a material whose
+     * every unit is spoken for — permission by category rather than by quantity.
+     *
+     * <h2>Eligible to ask is not permission to spend</h2>
+     *
+     * This says only "the market may be asked about this kind". The exact quantity, for the exact
+     * quote, for the exact external consumer, is still decided later by
+     * {@code TradeFundingPlanner.authorizeFunding} and carried in {@code SellFundingLeg}. The two
+     * must not be merged: one is a question, the other is a commitment.
+     */
+    private com.noobk.spmscavenger.village.trade.TradeOpportunityQuery authorizedSellQuery(
+            Container backpack) {
+        return authorizedSellQuery(backpack, mob.getMainHandItem(), mob.getOffhandItem(),
+                ScavengerConfig.get());
+    }
+
+    /** Static and hand-explicit so the disposability rule is provable without a mob. */
+    static com.noobk.spmscavenger.village.trade.TradeOpportunityQuery authorizedSellQuery(
+            Container backpack, net.minecraft.world.item.ItemStack mainHand,
+            net.minecraft.world.item.ItemStack offHand, ScavengerConfig cfg) {
+        List<net.minecraft.world.item.ItemStack> authorized = new ArrayList<>();
+        for (int slot = 0; slot < backpack.getContainerSize(); slot++) {
+            net.minecraft.world.item.ItemStack stack = backpack.getItem(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            java.util.OptionalInt reserved = SellReserveModel.reservedUnits(stack, backpack, cfg);
+            if (reserved.isEmpty()) {
+                // Unmodelled. Ignorance does not authorize spending, and it does not authorize
+                // asking either - a quote we may never act on is a quote not worth paying for.
+                continue;
+            }
+            int held = ScavengerCrafting.count(backpack, stack.getItem());
+            int disposable = com.noobk.spmscavenger.village.trade.SellExpendabilityPolicy
+                    .disposableUnits(stack, held, reserved.getAsInt(), mainHand, offHand);
+            if (disposable > 0) {
+                authorized.add(stack);
+            }
+        }
+        // Canonicalizes counts away and de-duplicates by item-and-components.
+        return com.noobk.spmscavenger.village.trade.TradeOpportunityQuery.of(authorized);
+    }
+
+    /**
      * Bounded discovery. Offers are inspected only for villagers already selected as candidates —
      * never in a passive sweep, because {@code getOffers()} lazily populates a villager's trades and
      * a broad scan would initialise them across a whole village.
@@ -629,18 +708,25 @@ public class TradeWithVillagerGoal extends Goal {
         List<OfferSnapshot> offers = new ArrayList<>();
         java.util.Map<Integer, Candidate> owners = new java.util.HashMap<>();
         int slot = 0;
+        com.noobk.spmscavenger.village.trade.TradeOpportunityQuery query =
+                authorizedSellQuery(backpack);
         for (Villager villager : nearby) {
-            for (OfferSnapshot offer : VillagerTradeAdapter.inspectOffers(villager)) {
+            // One source today, so the candidate set and its order are unchanged. Iterating the
+            // registry rather than calling the vanilla source directly is what makes step 6 a
+            // registry entry instead of another edit here.
+            for (com.noobk.spmscavenger.village.trade.TradeOpportunitySource source
+                    : com.noobk.spmscavenger.village.trade.TradeSources.all()) {
+            for (OfferSnapshot offer : source.offers(villager, query)) {
                 // D-VR-077: one snapshot now carries both coordinates - its own board ref
                 // for execution, and this round's flat ordinal for ranking. The old code built a
                 // SECOND snapshot whose index field held the slot, and kept the real one in
                 // `owners`, because a single int could not hold both.
                 OfferSnapshot ranked = offer.withRankOrdinal(slot);
                 offers.add(ranked);
-                owners.put(slot, new Candidate(villager,
-                        com.noobk.spmscavenger.village.trade.TradeSourceKey.VANILLA, ranked,
+                owners.put(slot, new Candidate(villager, source.key(), ranked,
                         demand.get().consumerKey(), demand.get().materialKey()));
                 slot++;
+            }
             }
         }
 

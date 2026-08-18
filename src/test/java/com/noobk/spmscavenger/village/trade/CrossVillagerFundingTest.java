@@ -151,8 +151,13 @@ class CrossVillagerFundingTest {
                 "rebuilding the whole market from the seller is what broke cross-villager funding");
         // R8 strengthened this: liveness alone was never the question. The PURCHASE must still
         // exist, which only re-resolving the recorded offer can establish.
-        assertTrue(body.contains("VillagerTradeAdapter.revalidateOffer(context.buyer()"),
+        assertTrue(body.contains("revalidate(context.buyer(), context.buyQuote())"),
                 "the recorded purchase is re-resolved, not merely the buyer entity checked");
+        assertTrue(body.contains("TradeSources.of(context.buySource())"),
+                "and by the BUY's own source - step 3 carried it precisely so the boundary would "
+                        + "never have to guess which source owns the purchase");
+        assertTrue(body.contains("VillagerTradeAdapter.available(context.buyer())"),
+                "physical legality stays with the executor; the source answers market truth only");
         assertTrue(body.contains("canAffordNonEmerald("),
                 "and its non-emerald payment must still be held - owedToPurchase only covers the "
                         + "material being sold, so a diamond spent elsewhere is invisible to it");
