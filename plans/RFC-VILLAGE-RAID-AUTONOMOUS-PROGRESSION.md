@@ -10,7 +10,7 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + V1.5 CLOSED**; **V2 CLOSED — VR-T2 RUNTIME PASS** (A–H) |
 | **Status** | `RUNTIME VERIFIED` — **VR-T2 PASS**. `A` transaction, `B` evaluation, `C` route admission, `D` SELL→BUY chain, `F` arbitration **CLOSED**; `E` physical executor **CLOSED + runtime exercised**; `G` relationship learning **CLOSED + runtime exercised**; `H` vanilla supply/projection **CLOSED — RUNTIME PASS** |
-| **Nearest frontier** | **V2-TE** — Trade Everything compatibility (`D-VR-068`), separately authorized. `V2-I` optional inspector remains available. **Core vanilla trading is closed and runtime-verified.** |
+| **Nearest frontier** | **V2-TE** — Trade Everything compatibility (`D-VR-068`; type design locked by `D-VR-077`). P0-1/P0-2/P0-3 **CLOSED**; production authority still withheld pending the `D-VR-077` sequence. `V2-I` optional inspector remains available. **Core vanilla trading is closed and runtime-verified.** |
 | **Last update** | 2026-08-16 (**VR-T2 RUNTIME PASS** — V2-A…V2-H closed; proof support removed) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
@@ -5829,3 +5829,163 @@ SPM is **PolyForm Shield 1.0.0**. Trade/defense goals belong in **`spmscavenger`
 | Raid support bundle | V5 | bell + SPM combat + shelter |
 
 Director selects among these via utility; SPM combat/flee still preempt at priorities 0–2.
+
+---
+
+### D-VR-077: V2-TE trade-source architecture — three coordinates, source provenance, caller-authorized quote inputs (`User` + `Agent_Claude`, 2026-08-17)
+
+**Status:** `LOCKED DESIGN / PRODUCTION AUTHORITY STILL WITHHELD`
+**Refines:** `D-VR-068` (unchanged; this fixes the type design under it).
+**Preconditions closed:** `P0-1` (ensureIndexed prerequisite, direct↔TE live quote parity, session
+teardown), `P0-2` (detached execution source trace + runtime witness, TE `afterTrade` fires
+detached, marker preservation, `rewardExp` observed), `P0-3` (economic B reachability). The
+compatibility unknowns are answered experimentally; what remains is preventing today's two-source
+assumption from being baked into the permanent trade model.
+
+#### Accepted — 1. Revalidation strictness is per source, and vanilla must not change
+
+```
+VANILLA   same source object at a stable address
+          board[index] + transaction-equivalent effective cost A/B + result
+TE        two independently generated objects, no shared identity
+          fresh requote + strict planned-Q1 <-> execution-Q2 semantic correspondence
+```
+
+`OfferSnapshot.matchesLive` stays exactly as it is. Widening it to full semantic equality would
+abort vanilla trades that succeed today, because `demand` and `specialPriceDiff` legitimately move
+between selection and execution and the vanilla path executes the live object anyway. Strict
+comparison is a **TE-source operation**, not a stronger `matchesLive`.
+
+#### Accepted — 2. Three coordinates, never fewer
+
+Today `OfferSnapshot.index` carries two meanings, and `TradeWithVillagerGoal` already builds a third
+space by hand (`TradeWithVillagerGoal` ~L610–623: `int slot = 0` flat ranking space, `owners` keyed
+by slot, inner `Candidate` retaining the villager-local index).
+
+| # | Concept | Vanilla | Trade Everything |
+| --- | --- | --- | --- |
+| 1 | source-local resolution key | board index | exact requote input stack |
+| 2 | source provenance | `VanillaTradeSource` | `TradeEverythingTradeSource` |
+| 3 | round-local deterministic ordinal | flat ranking slot within one bounded planning pass | same |
+
+```
+OfferSnapshot { OfferRef ref; costA, costB, result; uses, maxUses, xp,
+                priceMultiplier, demand, specialPriceDiff, rewardExp }
+
+OfferRef      = BoardIndex(int index) | Requote(ItemStack inputKey)      // (1) ONLY
+
+Candidate     { Villager villager; TradeOpportunitySource source;        // (2)
+                OfferSnapshot offer; int rankOrdinal;                    // (3)
+                consumerKey, materialKey }
+```
+
+**Rejected:** `OfferRef.tieBreak()`. A ref cannot supply the global ordinal — two villagers both
+legitimately hold `BoardIndex(0)`, and two TE candidates can quote the same input against different
+villagers. Deriving (3) from (1) re-creates the overload this decision exists to remove.
+
+`TradeEvaluation.offerIndex` becomes `tieBreakOrdinal`. V2-B ranking has no business knowing a
+market address, and naming it `index` is what invited the conflation.
+
+#### Accepted — 3. Provenance is carried, never inferred
+
+`Candidate`/attempt evidence retains its `TradeOpportunitySource` (or a stable source key), so
+execution is `source.revalidate(villager, plannedOffer, …) -> MerchantOffer -> executeResolved(…)`.
+
+**Rejected:** inferring the source from `ref instanceof BoardIndex`. That works for exactly two
+sources and turns `OfferRef` into a disguised source enum.
+
+#### Accepted — 4. Opportunity truth must not become spend permission
+
+```
+TradeOpportunitySource
+    List<OfferSnapshot> offers(Villager villager, TradeOpportunityQuery query)
+    Optional<MerchantOffer> revalidate(Villager villager, OfferSnapshot q1, Container backpack)
+
+TradeOpportunityQuery { authorizedSellInputs : bounded exact stack copies }
+```
+
+**Rejected:** `offers(Villager, Container backpack)`. Handing a market source the whole backpack asks
+it to decide what may be sold. Disposition is V2 policy and stays there:
+
+```
+SellReserveModel / disposition   "you MAY consider selling this"
+TradeEverythingTradeSource       "if you did, the market quote is this"
+```
+
+The source must never derive the first statement from the second. Vanilla ignores the inputs and
+exposes its real board; TE quotes only the supplied stacks. This also bounds the quoting cost
+(0.172 ms measured per quote) to `authorized items x selected villagers` — at most three item
+families today.
+
+#### Accepted — 5. TE demand-immunity is scoped, not global
+
+`OfferQuoter.quote` calls `BuybackPricer.buybackOffer(input, offers)` **first** and returns it when
+present. Resolved by positional intermediary↔Mojmap pairing of `class_1914`:
+
+```
+method_19272 -> getCostA()      live, demand/special-price adjusted   <- BuybackPricer uses THIS
+method_57556 -> getItemCostA()  base                                  <- TradePricer uses this
+method_8250  -> getResult()                                           <- TradePricer uses this
+```
+
+So: **ordinary TE synthetic valuation reads base offer counts and is largely immune to vanilla
+demand/special-price drift; TE's buyback path is explicitly live-price sensitive.** Gen-1 funding
+inputs (logs/planks/sticks) are expected to take the ordinary path because they are not the
+Armorer/Toolsmith outputs being bought, but that is an expectation about *our current inputs*, not a
+property of TE. Strict execution-time requote is what actually handles it.
+
+**Rejected:** the claim "TE quotes cannot move from demand drift" (`Agent_Claude`, corrected by
+`User` and verified against the jar). It was true only for the ordinary path and false as stated.
+
+#### Accepted — 6. `ensureIndexed` contract (gen-1)
+
+```
+prewarm at known lifecycle boundaries (server ready, datapack reload)
++ always ensureIndexed defensively before quote/requote
++ accept that an external TradeEverythingApi.reload() may cause ONE cold rebuild on next use
+```
+
+Measured: cold 11.739 ms, repeated 0.004 ms — memoized on `(RecipeManager, config)` identity.
+`TradeEverythingApi.reload()` is public, so an external config swap can invalidate the memo at any
+time and Scavenger cannot intercept it.
+
+**Rejected:** "never call `ensureIndexed` in a goal tick" (`Agent_Claude`) — too strong, and it would
+require an asynchronous indexing state machine for a rare external event. TE's own merchant-container
+path calls `ensureIndexed` defensively before repricing; matching it is the consistent choice. The
+cold cost is documented, not engineered around.
+
+#### Accepted — 7. The gate is deterministic convergence, not statistical rarity
+
+**Rejected:** "measure whether Q1↔Q2 divergence is rare" (`Agent_Claude`). A one-time board mutation
+produces `plan → walk → reject → replan → execute`, which is convergence, not churn; a churn loop
+(`RET-1c`) needs mutation during *every* bounded attempt, and the candidate round plus chain lifetime
+already bound repeated failure.
+
+The witness instead proves the architecture cannot fossilize on stale TE evidence:
+
+```
+Q1 -> mutate the real board through vanilla behaviour -> Q2
+   -> strict TE revalidation REJECTS
+   -> replan from the changed board -> Q3
+   -> without further mutation, Q3 == execution requote -> execution admissible
+```
+
+Plus one explicit **buyback** case, since upstream source says live-price drift is detectable there.
+
+#### Implementation sequence (authority still withheld)
+
+1. `V2-DEF-001` repair, independently (`docs/porting/KNOWN_DEFECTS.md`).
+2. Pure vanilla refactor: `OfferRef` = source-local resolution identity only; separate round-local
+   `rankOrdinal`; `matchesLive` semantics preserved exactly.
+3. Source provenance added to `Candidate`/attempt evidence.
+4. `TradeOpportunitySource` with caller-authorized quote inputs, not raw backpack authority.
+5. `VanillaTradeSource`; prove behaviour parity.
+6. Optional gated `TradeEverythingTradeSource` (must not class-load when TE is absent — no
+   `static final` field or direct reference on an eagerly-loaded common path; register behind
+   `isModLoaded`).
+7. Deterministic mutation → reject → replan → converge runtime witness.
+
+Steps 2–5 are provable with Trade Everything uninstalled, which is where a regression would hide.
+`VillagerTradeAdapter.executeResolved` remains the sole transaction owner throughout: one staging
+array, one debit pair, one preflight, one commit, one `notifyTrade`. No second offer model, no second
+transaction system, no `TradeEverythingTradeGoal`.
