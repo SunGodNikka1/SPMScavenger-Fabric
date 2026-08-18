@@ -464,3 +464,14 @@ Focused tests, full suite, and clean build: **809 tests, 0 failures/errors/skips
 inspection: pass. Static MAIBS: `PASS — BEHAVIORALLY_PLAUSIBLE`; physical SPM execution remains
 runtime `UNVERIFIED`. SHA-256:
 `DA017011A280DB38F390890B8104E64E59DBB213A33BA1BADBE2175C1430BF5C`.
+
+
+#### V2-DEF-001 — pending human trade reputation (OPEN, not yet repaired)
+
+Recorded from the P0-2 source review; the repair is deliberately **not** in the P0-2 probe commit
+because it changes shipped V2 behaviour. Full defect record and gate:
+`docs/porting/KNOWN_DEFECTS.md`.
+
+| Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Player trade, then PlayerMob trade, then villager level-up | player keeps `ReputationEventType.TRADE` | mob trade nulls `lastTradedPlayer` and drops it | `OPEN` — no seam yet |

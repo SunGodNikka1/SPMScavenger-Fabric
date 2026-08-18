@@ -235,6 +235,38 @@ public final class VillagerTradeAdapter {
         if (!offer.matchesLive(live)) {
             return TradeResult.OFFER_CHANGED;
         }
+        return executeResolved(backpack, live, notify);
+    }
+
+    /**
+     * The committed transaction, once an offer has been <b>resolved to a live object</b>.
+     *
+     * <h2>Why this is split out</h2>
+     *
+     * P0-2 established that board membership is a precondition of <b>resolution</b>, not of
+     * execution: {@code AbstractVillager#notifyTrade} never reads {@code getOffers()}, and neither
+     * does anything below. The vanilla path resolves by board index; a Trade Everything path
+     * resolves by re-quoting. Those are genuinely different questions, and they were sharing a
+     * method with the part that is identical for both.
+     *
+     * <p>So resolution moves out and this stays the <b>sole transaction owner</b>. There is exactly
+     * one staging array, one debit pair, one preflight, one commit and one {@code notifyTrade} in
+     * this mod, and any future offer source reaches them through here or not at all.
+     *
+     * @param live the resolved offer, passed through <b>as the object the source produced</b> —
+     *     never a reconstruction. Trade Everything marks synthetic offers with a mixin-injected
+     *     instance field, so {@code new MerchantOffer(...)} from the same field values silently
+     *     drops the marker and TE's {@code afterTrade} hook then stops recognising the offer.
+     *     {@code MerchantOffer#copy()} is safe — TE patches it to propagate the flag — but there is
+     *     no reason to copy before notifying.
+     * @param notify invoked exactly once, after the commit, with that same live offer
+     */
+    public static TradeResult executeResolved(
+            Container backpack, MerchantOffer live,
+            java.util.function.Consumer<MerchantOffer> notify) {
+        if (backpack == null || live == null) {
+            return TradeResult.NO_VILLAGER;
+        }
         if (live.isOutOfStock()) {
             return TradeResult.OUT_OF_STOCK;
         }

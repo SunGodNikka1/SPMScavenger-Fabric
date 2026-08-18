@@ -2,10 +2,12 @@ package com.noobk.spmscavenger.village.trade;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.ItemCost;
@@ -218,5 +220,55 @@ class TradeAdapterContractTest {
             assertTrue(refusal > 0 && refusal < commit,
                     check + " must be refused before anything is committed");
         }
+    }
+
+    // ------------------------------------------- P0-2 the extracted common executor
+
+    /**
+     * P0-2 split {@code executeAgainst} into <b>resolution</b> (board index + snapshot match) and
+     * {@code executeResolved} (stage, debit, preflight, commit, notify). The vanilla path still runs
+     * the second half through this method, and a Trade Everything path would reach it having
+     * resolved by re-quoting instead.
+     *
+     * <p>Pinned directly so the seam has its own contract rather than being covered only through the
+     * board-index caller: {@code executeResolved} must be the sole transaction owner, and there must
+     * never be a second staging/commit implementation for detached offers.
+     */
+    @Test
+    void mustHappen_theResolvedExecutorCommitsAndNotifiesExactlyOnce() {
+        SimpleContainer backpack = new SimpleContainer(9);
+        backpack.setItem(0, new ItemStack(Items.OAK_LOG, 64));
+        MerchantOffer detached = new MerchantOffer(new ItemCost(Items.OAK_LOG, 22),
+                Optional.empty(), new ItemStack(Items.EMERALD, 1), 0, 999_999, 0, 0f);
+        java.util.List<MerchantOffer> notified = new java.util.ArrayList<>();
+
+        assertEquals(VillagerTradeAdapter.TradeResult.TRADED,
+                VillagerTradeAdapter.executeResolved(backpack, detached, notified::add));
+
+        assertEquals(42, com.noobk.spmscavenger.ScavengerCrafting.count(backpack, Items.OAK_LOG),
+                "exactly the quoted cost is debited, once");
+        assertEquals(1, com.noobk.spmscavenger.ScavengerCrafting.count(backpack, Items.EMERALD),
+                "exactly the quoted result is inserted, once");
+        assertEquals(1, notified.size(), "notifyTrade fires exactly once");
+        assertSame(detached, notified.get(0),
+                "and with the SAME object the source produced - TE marks synthetic offers with a "
+                        + "mixin-injected instance field, so passing a reconstruction would strip "
+                        + "the marker and silence TE's afterTrade hook");
+    }
+
+    /** The mob must keep its payment when the result cannot land. Detached changes nothing here. */
+    @Test
+    void mustNotHappen_theResolvedExecutorDebitsWhenTheResultCannotFit() {
+        SimpleContainer full = new SimpleContainer(1);
+        full.setItem(0, new ItemStack(Items.OAK_LOG, 64));
+        MerchantOffer detached = new MerchantOffer(new ItemCost(Items.OAK_LOG, 22),
+                Optional.empty(), new ItemStack(Items.EMERALD, 1), 0, 999_999, 0, 0f);
+        java.util.List<MerchantOffer> notified = new java.util.ArrayList<>();
+
+        assertEquals(VillagerTradeAdapter.TradeResult.NO_ROOM,
+                VillagerTradeAdapter.executeResolved(full, detached, notified::add));
+        assertEquals(64, com.noobk.spmscavenger.ScavengerCrafting.count(full, Items.OAK_LOG),
+                "the staged debit must not reach the real backpack");
+        assertEquals(0, notified.size(), "and no trade may be notified");
     }
 }

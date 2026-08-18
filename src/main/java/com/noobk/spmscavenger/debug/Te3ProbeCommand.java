@@ -9,6 +9,7 @@ import com.noobk.spmscavenger.village.trade.OfferSnapshot;
 import com.noobk.spmscavenger.village.trade.SellReserveModel;
 import com.noobk.spmscavenger.village.trade.TradeFundingPlanner;
 import com.noobk.spmscavenger.village.trade.TradePurchaseProjection;
+import com.noobk.spmscavenger.village.trade.VillagerTradeAdapter;
 import games.brennan.tradeeverything.trade.OfferQuoter;
 import games.brennan.tradeeverything.trade.RecipeValues;
 import net.minecraft.commands.CommandSourceStack;
@@ -64,6 +65,7 @@ public final class Te3ProbeCommand {
         dispatcher.register(Commands.literal("spmscavenger").then(Commands.literal("debug")
                 .then(Commands.literal("te3").requires(src -> src.hasPermission(2))
                         .then(Commands.literal("index").executes(c -> index(c.getSource())))
+                        .then(Commands.literal("p02").executes(c -> p02(c.getSource())))
                         .then(Commands.literal("fixture")
                                 .executes(c -> fixture(c.getSource())))
                         .then(Commands.literal("parity")
@@ -167,9 +169,14 @@ public final class Te3ProbeCommand {
                 backpack.setItem(2, new ItemStack(Items.WHEAT, 64));
                 backpack.setItem(3, new ItemStack(Items.STICK, 2));
             }
+            case "detached" -> {
+                // P0-2 needs one sellable stack and free slots for the emerald. Nothing else: the
+                // witness is about the call path, not about demand selection.
+                backpack.setItem(0, new ItemStack(Items.OAK_LOG, 64));
+            }
             default -> {
                 source.sendFailure(Component.literal(
-                        "[TE3] unknown scenario - use iron | torch | protected | funding"));
+                        "[TE3] unknown scenario - use iron | torch | protected | funding | detached"));
                 return 0;
             }
         }
@@ -277,6 +284,187 @@ public final class Te3ProbeCommand {
 
     private static String ms(long nanos) {
         return String.format("%.3f ms", nanos / 1_000_000.0D);
+    }
+
+    // ------------------------------------------------------ P0-2 detached synthetic execution
+
+    /**
+     * P0-2 — execute <b>exactly one</b> detached synthetic SELL and prove the whole call path.
+     *
+     * <h2>What "detached" means here</h2>
+     *
+     * The offer is produced by {@code OfferQuoter.quote} and handed straight to
+     * {@code VillagerTradeAdapter.executeResolved}. It is never inserted into
+     * {@code villager.getOffers()}, no {@code MerchantMenu} or {@code MerchantContainer} is
+     * constructed, {@code setTradingPlayer} is never called, and no {@code Player} — real or fake —
+     * exists anywhere in the path.
+     *
+     * <h2>Why runtime and not source</h2>
+     *
+     * The source review said TE's {@code afterTrade} injection asks only whether the offer argument
+     * is synthetic and then resets that offer's uses, without searching the board. That is a reading
+     * of bytecode. Whether the mixin is actually applied, whether the marker survives our call path,
+     * and whether the hook fires for an offer the villager has never heard of are runtime facts. The
+     * decisive one is {@code uses}: {@code notifyTrade} increments it, TE's hook resets it, so
+     * <b>uses == 0 after the trade is the only direct evidence the hook fired detached</b>.
+     *
+     * <p>The quoted object is passed through by reference on purpose. TE marks synthetic offers with
+     * a mixin-injected instance field, so rebuilding it from its own field values would silently
+     * strip the marker — pinned below as an explicit negative control rather than left as advice.
+     */
+    private static int p02(CommandSourceStack source) {
+        ServerLevel level = source.getLevel();
+        net.minecraft.world.entity.npc.Villager villager = nearestFixtureVillager(source);
+        Mob mob = nearestScavenger(source);
+        Container backpack = mob == null ? null : PlayerMobs.backpack(mob);
+        if (villager == null || backpack == null) {
+            source.sendFailure(Component.literal(
+                    "[TE3] need one te3-tagged Villager and one te3 PlayerMob with a backpack - "
+                            + "run /function te3:scenario/p02_detached"));
+            return 0;
+        }
+
+        List<String> checks = new ArrayList<>();
+        MerchantOffers board = villager.getOffers();
+
+        // ---- BEFORE
+        boolean playerBefore = villager.getTradingPlayer() == null;
+        boolean syntheticBefore = noSyntheticRow(board);
+        List<String> boardBefore = fingerprint(board);
+        int professionXpBefore = villager.getVillagerXp();
+
+        RecipeValues.ensureIndexed(source.getServer());
+        ItemStack input = backpack.getItem(0);
+        if (input.isEmpty()) {
+            source.sendFailure(Component.literal("[TE3] backpack slot 0 is empty - seed first"));
+            return 0;
+        }
+        Optional<MerchantOffer> quoted = OfferQuoter.quote(villager, input, board);
+        if (quoted.isEmpty()) {
+            source.sendFailure(Component.literal(
+                    "[TE3] no quote for " + describe(input) + " - is the seller conditioned?"));
+            return 0;
+        }
+        // The object TE produced. Never reconstructed, never copied before notify.
+        MerchantOffer quote = quoted.get();
+        boolean marked = games.brennan.tradeeverything.trade.SyntheticOfferFactory
+                .isSynthetic(quote);
+
+        // ---- DURING (quoting must not have installed anything)
+        boolean playerDuring = villager.getTradingPlayer() == null;
+        boolean syntheticDuring = noSyntheticRow(villager.getOffers());
+
+        int costItemBefore = ScavengerCrafting.count(backpack, quote.getCostA().getItem());
+        int resultItemBefore = ScavengerCrafting.count(backpack, quote.getResult().getItem());
+        int usesBefore = quote.getUses();
+        int orbsBefore = countOrbs(level, villager);
+        boolean rewardExp = quote.shouldRewardExp();
+
+        if (!marked) {
+            source.sendFailure(Component.literal(
+                    "[TE3] REFUSED - the fresh quote is NOT marked synthetic. Executing it would "
+                            + "not exercise TE's afterTrade hook, so the run would prove nothing."));
+            return 0;
+        }
+
+        // ---- THE ONE TRANSACTION
+        int[] notified = new int[1];
+        VillagerTradeAdapter.TradeResult result = VillagerTradeAdapter.executeResolved(
+                backpack, quote, offer -> {
+                    notified[0]++;
+                    villager.notifyTrade(offer);
+                });
+
+        // ---- AFTER
+        int usesAfter = quote.getUses();
+        int costItemAfter = ScavengerCrafting.count(backpack, quote.getCostA().getItem());
+        int resultItemAfter = ScavengerCrafting.count(backpack, quote.getResult().getItem());
+        boolean playerAfter = villager.getTradingPlayer() == null;
+        boolean syntheticAfter = noSyntheticRow(villager.getOffers());
+        List<String> boardDrift = diffBoards(boardBefore, fingerprint(villager.getOffers()));
+        int professionXpAfter = villager.getVillagerXp();
+        int orbsAfter = countOrbs(level, villager);
+
+        // ---- marker hazard, pinned as a control rather than as advice. Run AFTER the transaction
+        // so it cannot influence it.
+        MerchantOffer reconstructed = new MerchantOffer(quote.getItemCostA(), quote.getItemCostB(),
+                quote.getResult().copy(), quote.getUses(), quote.getMaxUses(), quote.getXp(),
+                quote.getPriceMultiplier());
+        boolean reconstructedMarked = games.brennan.tradeeverything.trade.SyntheticOfferFactory
+                .isSynthetic(reconstructed);
+        boolean copiedMarked = games.brennan.tradeeverything.trade.SyntheticOfferFactory
+                .isSynthetic(quote.copy());
+
+        int expectedCost = quote.getCostA().getCount();
+        int expectedResult = quote.getResult().getCount();
+
+        check(checks, "no tradingPlayer BEFORE", playerBefore);
+        check(checks, "no tradingPlayer DURING", playerDuring);
+        check(checks, "no tradingPlayer AFTER", playerAfter);
+        check(checks, "no synthetic row on board BEFORE", syntheticBefore);
+        check(checks, "no synthetic row on board DURING", syntheticDuring);
+        check(checks, "no synthetic row on board AFTER", syntheticAfter);
+        check(checks, "fresh detached quote is marked synthetic", marked);
+        check(checks, "adapter returned TRADED (got " + result + ")",
+                result == VillagerTradeAdapter.TradeResult.TRADED);
+        check(checks, "notifyTrade fired exactly once (" + notified[0] + ")", notified[0] == 1);
+        check(checks, "payment removed exactly once: " + describe(quote.getCostA()) + "  "
+                        + costItemBefore + " -> " + costItemAfter,
+                costItemBefore - costItemAfter == expectedCost);
+        check(checks, "result inserted exactly once: " + describe(quote.getResult()) + "  "
+                        + resultItemBefore + " -> " + resultItemAfter,
+                resultItemAfter - resultItemBefore == expectedResult);
+        check(checks, "uses before = " + usesBefore, usesBefore == 0);
+        check(checks, "uses after  = " + usesAfter
+                        + "  <- TE afterTrade fired DETACHED (notifyTrade increments, TE resets)",
+                usesAfter == 0);
+        check(checks, "villager profession XP unchanged (" + professionXpBefore + " -> "
+                        + professionXpAfter + ", synthetic xp=" + quote.getXp() + ")",
+                professionXpBefore == professionXpAfter);
+        check(checks, "real board unchanged and ordered"
+                        + (boardDrift.isEmpty() ? "" : "  " + boardDrift), boardDrift.isEmpty());
+        check(checks, "NEGATIVE CONTROL new MerchantOffer(...) LOSES the marker",
+                !reconstructedMarked);
+        check(checks, "NEGATIVE CONTROL MerchantOffer.copy() PRESERVES the marker", copiedMarked);
+
+        StringBuilder out = new StringBuilder("[TE3] P0-2 detached synthetic execution witness");
+        out.append((char) 10);
+        out.append("  quote   = ").append(describeOffer(quote)).append((char) 10);
+        for (String line : checks) {
+            out.append("  ").append(line).append((char) 10);
+        }
+        // Reported as observation, not asserted: whether an orb is visible to getEntitiesOfClass on
+        // the same tick it was spawned is a scheduling detail, so a zero delta here is not by itself
+        // proof that no orb was created. shouldRewardExp() is the fact that decides the behaviour.
+        out.append("  OBSERVED shouldRewardExp() = ").append(rewardExp)
+                .append("   XP orbs near villager ").append(orbsBefore).append(" -> ")
+                .append(orbsAfter).append((char) 10);
+        boolean pass = checks.stream().allMatch(line -> line.startsWith("PASS"));
+        out.append("  VERDICT: ").append(pass
+                        ? "P0-2 WITNESS PASS - one detached synthetic trade executed with no board "
+                                + "insertion, no session and no Player."
+                        : "P0-2 WITNESS FAIL - see the FAIL lines above.")
+                .append((char) 10);
+        source.sendSuccess(() -> Component.literal(out.toString()), false);
+        return pass ? 1 : 0;
+    }
+
+    private static void check(List<String> into, String what, boolean ok) {
+        into.add((ok ? "PASS  " : "FAIL  ") + what);
+    }
+
+    private static boolean noSyntheticRow(MerchantOffers board) {
+        for (MerchantOffer offer : board) {
+            if (games.brennan.tradeeverything.trade.SyntheticOfferFactory.isSynthetic(offer)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int countOrbs(ServerLevel level, net.minecraft.world.entity.Entity around) {
+        return level.getEntitiesOfClass(net.minecraft.world.entity.ExperienceOrb.class,
+                new AABB(around.blockPosition()).inflate(8.0D)).size();
     }
 
     // ------------------------------------------------------------------ P0-1 exact quote parity

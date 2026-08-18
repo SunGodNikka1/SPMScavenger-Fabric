@@ -175,6 +175,54 @@ happened but never priced our input" are distinguishable.
 identical costs different. The first run reported `DIVERGENT` on a pair built by the same
 expression. Now compared field-wise (`Te3ParityDiffTest`).
 
+## P0-2 — detached synthetic execution
+
+```mcfunction
+/function te3:scenario/p02_detached
+/spmscavenger debug te3 index
+/spmscavenger debug te3 p02          # exactly one detached synthetic SELL
+```
+
+The quote goes from `OfferQuoter.quote` straight into `VillagerTradeAdapter.executeResolved`. It is
+never inserted into `villager.getOffers()`; no `MerchantMenu`, no `MerchantContainer`, no
+`setTradingPlayer`, no `Player` real or fake.
+
+**The decisive line is `uses after`.** `notifyTrade` increments `uses`; TE's `afterTrade` hook resets
+it for synthetic offers. So `uses before = 0, uses after = 0` is the only *direct* runtime evidence
+that TE's mixin fired for an offer the villager has never carried. Source review said it would —
+that reading is bytecode, not behaviour.
+
+Asserted: no `tradingPlayer` before/during/after · no synthetic row before/during/after · the fresh
+quote is marked synthetic (refuses to execute otherwise) · payment removed exactly once · result
+inserted exactly once · `TRADED` · `notifyTrade` fired exactly once · `uses` 0 → 0 · profession XP
+unchanged · real board unchanged and **ordered**.
+
+Observed rather than asserted: `shouldRewardExp()` and the XP-orb delta. Whether an orb is visible
+to `getEntitiesOfClass` on its spawn tick is a scheduling detail, so a zero delta is not proof no orb
+was created — `shouldRewardExp()` is the fact that decides the behaviour.
+
+### The marker hazard, pinned as a control
+
+TE marks synthetic offers with a **mixin-injected instance field**, not a component and not NBT.
+The probe therefore asserts both halves at runtime:
+
+```
+new MerchantOffer(...) from the quote's own fields   ->  marker LOST
+quote.copy()                                          ->  marker PRESERVED  (TE patches copy())
+```
+
+This cannot be a unit test: `isSynthetic` casts to `SyntheticOffer`, an interface applied by mixin,
+and a plain JUnit run has no mixin agent. Production passes the fresh quote object straight through
+and never copies before `notifyTrade`.
+
+### The adapter seam
+
+`executeAgainst` was split. Resolution (board index + snapshot match) stays where it was;
+`executeResolved(backpack, MerchantOffer, notify)` is now the **sole transaction owner** — one
+staging array, one debit pair, one preflight, one commit, one `notifyTrade`. The vanilla board-index
+path calls it with identical ordering (`OFFER_GONE` → `OFFER_CHANGED` → `OUT_OF_STOCK` → stage), and
+a future Trade Everything source reaches the same method having resolved by re-quoting.
+
 ## The E case is the one to watch
 
 Scenario `e_torch_chain` exists for it specifically. `WorkDemandPolicy` demands **`CHARCOAL`**;
