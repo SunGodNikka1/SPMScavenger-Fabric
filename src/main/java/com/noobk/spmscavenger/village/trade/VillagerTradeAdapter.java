@@ -206,7 +206,8 @@ public final class VillagerTradeAdapter {
         if (villager.isSleeping()) {
             return TradeResult.MERCHANT_UNAVAILABLE;
         }
-        return executeAgainst(backpack, villager.getOffers(), offer, villager::notifyTrade);
+        return executeAgainst(backpack, villager.getOffers(), offer,
+                preservingAttribution(villager));
     }
 
     /**
@@ -236,6 +237,28 @@ public final class VillagerTradeAdapter {
             return TradeResult.OFFER_CHANGED;
         }
         return executeResolved(backpack, live, notify);
+    }
+
+    /**
+     * V2-DEF-001 — {@code notifyTrade}, wrapped so it cannot delete a human's pending trade
+     * attribution.
+     *
+     * <p>We trade with no merchant session, so {@code getTradingPlayer()} is {@code null} and
+     * vanilla {@code rewardTradeXp} writes that null over {@code lastTradedPlayer}. That field is
+     * read once, at level-up, to award {@code ReputationEventType.TRADE} to the player who earned
+     * it. A mob trading in between therefore deletes a human's gossip, silently and with no log
+     * line.
+     *
+     * <p>Save, notify, restore only if we nulled it. {@link TradeAttributionPolicy} owns the
+     * decision so the rule is testable without a game, and it cannot credit the mob because it has
+     * no way to produce a value that was not already there.
+     */
+    static java.util.function.Consumer<MerchantOffer> preservingAttribution(Villager villager) {
+        var attribution = (com.noobk.spmscavenger.mixin.VillagerTradeAttributionAccessor) villager;
+        return offer -> TradeAttributionPolicy.notifyPreserving(
+                attribution::spmscavenger$getLastTradedPlayer,
+                attribution::spmscavenger$setLastTradedPlayer,
+                () -> villager.notifyTrade(offer));
     }
 
     /**

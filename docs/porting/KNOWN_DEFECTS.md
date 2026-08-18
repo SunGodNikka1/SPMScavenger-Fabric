@@ -7,7 +7,7 @@ gate that closes it. A defect leaves this file only when its gate has evidence.
 
 ## V2-DEF-001 — a PlayerMob trade erases pending human-player trade reputation
 
-**Status:** OPEN. **Discovered:** P0-2 source review. **Applies to:** shipped vanilla V2, not only
+**Status:** REPAIRED — unit gate green, **runtime gossip check UNVERIFIED**. **Discovered:** P0-2 source review. **Repaired:** 2026-08-17. **Applies to:** shipped vanilla V2, not only
 V2-TE. **Severity:** low impact, high principle.
 
 ### What happens
@@ -59,3 +59,49 @@ repair needs an accessor or Mixin seam, and the seam itself needs a test.
 | Two PlayerMobs trade in sequence | preservation is idempotent | a saved value is restored onto a villager that has since been traded by a player | seam test |
 
 Runtime proof class (AV-1): a gossip read before/after, not a compile.
+
+### Repair as landed
+
+| Piece | File |
+| --- | --- |
+| read/write seam for the private field | `mixin/VillagerTradeAttributionAccessor` (`@Accessor("lastTradedPlayer")`) |
+| the decision, pure and generic | `village/trade/TradeAttributionPolicy` |
+| save -> notify -> conditional restore | `TradeAttributionPolicy.notifyPreserving` |
+| binding | `VillagerTradeAdapter.preservingAttribution(villager)`, used by `performTrade` |
+
+**Scoped to our own transaction.** A `@Redirect` on vanilla's field write would have fixed it for
+every caller in the game, including other mods' session-less trades — a larger behavioural claim than
+the evidence supports. Gate SPM-0: the more compatible option wins.
+
+**The mob can never be credited by construction.** `TradeAttributionPolicy` has no way to produce a
+value that was not already in the field; it returns `after` when present and `before` otherwise.
+
+| Gate row | Test | Status |
+| --- | --- | --- |
+| pending human attribution survives a mob trade | `mustHappen_aPendingHumanAttributionSurvivesAMobTrade` | GREEN |
+| mob is not credited when nothing was pending | `mustNotHappen_theMobIsCreditedWhenNothingWasPending` | GREEN |
+| a saved value never overwrites a newer one | `mustNotHappen_aSavedValueIsRestoredOverANewerOne` | GREEN |
+| idempotent across successive mob trades | `mustHappen_preservationIsIdempotentAcrossSuccessiveMobTrades` | GREEN |
+| `before` is sampled before, not after, the notify | `mustNotHappen_theSavedValueIsSampledAfterTheNotify` | GREEN |
+
+Negative controls, each run in isolation:
+
+| Control | Broke |
+| --- | --- |
+| restore unconditionally | newer-value row + not-credited row |
+| sample `before` after the notify | survives / idempotent / ordering rows |
+| drop the restore (the original defect) | survives / idempotent / ordering rows |
+
+### Why this is not CLOSED
+
+Two things remain runtime facts, not compile facts:
+
+1. `@Accessor("lastTradedPlayer")` is a **string** target — invisible to the compiler
+   (api-break-detection Shape 4). The field name is `CONFIRMED` from the mapped 1.21.1 jar, and a
+   failed accessor application is load-time loud rather than silent, but "the mixin applied" is
+   proven at startup, not at build.
+2. The gate's own stated proof class is a **gossip read before/after** a real
+   player-trade -> mob-trade -> level-up sequence. Unit tests prove the decision; they cannot prove
+   `ReputationEventType.TRADE` actually reaches the player.
+
+Until both are observed, this defect is repaired, not closed.

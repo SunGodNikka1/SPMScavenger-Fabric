@@ -468,10 +468,11 @@ runtime `UNVERIFIED`. SHA-256:
 
 #### V2-DEF-001 — pending human trade reputation (OPEN, not yet repaired)
 
-Recorded from the P0-2 source review; the repair is deliberately **not** in the P0-2 probe commit
-because it changes shipped V2 behaviour. Full defect record and gate:
+Recorded from the P0-2 source review, repaired separately as its own task (2026-08-17). Full defect record and gate:
 `docs/porting/KNOWN_DEFECTS.md`.
 
 | Scenario | Must happen | Must not happen | Evidence |
 | --- | --- | --- | --- |
-| Player trade, then PlayerMob trade, then villager level-up | player keeps `ReputationEventType.TRADE` | mob trade nulls `lastTradedPlayer` and drops it | `OPEN` — no seam yet |
+| Player trade, then PlayerMob trade, then villager level-up | player keeps `ReputationEventType.TRADE` | mob trade nulls `lastTradedPlayer` and drops it | `TradeAttributionPolicyTest` `CODE_CONFIRMED`; runtime gossip read `UNVERIFIED` |
+| PlayerMob trades a villager no human has traded | field stays `null`, never written | the mob is credited with `TRADE` reputation | `TradeAttributionPolicyTest` `CODE_CONFIRMED` |
+| A newer attribution appears during the notify | the newer value stands | a saved value is restored over it | `TradeAttributionPolicyTest` `CODE_CONFIRMED` |

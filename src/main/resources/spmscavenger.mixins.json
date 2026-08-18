@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "MobGoalSelectorAccessor",
+    "VillagerTradeAttributionAccessor",
     "FurnaceRecipeCheckAccessor",
     "ObjectiveReadoutMixin",
     "PlayerMobDoorGoalBusyMixin",

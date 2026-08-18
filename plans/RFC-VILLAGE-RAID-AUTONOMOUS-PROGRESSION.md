@@ -5985,6 +5985,28 @@ Plus one explicit **buyback** case, since upstream source says live-price drift 
    `isModLoaded`).
 7. Deterministic mutation → reject → replan → converge runtime witness.
 
+#### Implementation invariant (added post-lock by `User`, 2026-08-17 — not a decision change)
+
+`OfferRef.Requote` identity is **item + exact components, never held count**. Canonicalize the stored
+key to `input.copyWithCount(1)`, and apply the same normalization to
+`TradeOpportunityQuery.authorizedSellInputs`: "exact" means exact item variant and components, while
+count is canonicalized away for quotation.
+
+```
+64x oak_log   |
+42x oak_log   |  different inventory quantities, SAME TE quote identity
+```
+
+Quantity belongs to current inventory, `SellReserveModel`, disposable units, affordable uses and the
+transaction-time debit — not to `OfferRef`. The query says which stack *kinds* policy permits the
+market source to quote; it must not accidentally encode how much permission exists.
+
+This follows Trade Everything itself. `MerchantContainerMixin` compares its remembered input with
+`ItemStack.isSameItemSameComponents` and stores it as `input.isEmpty() ? EMPTY : input.copyWithCount(1)`
+(`CONFIRMED` — `method_31577` / `method_46651` resolved by positional intermediary↔Mojmap pairing of
+`class_1799`; `iconst_1` at offset 148 of `tradeeverything$repriceInner`). Without it we would
+recreate the identity/quantity conflation this decision exists to remove, one layer down.
+
 Steps 2–5 are provable with Trade Everything uninstalled, which is where a regression would hide.
 `VillagerTradeAdapter.executeResolved` remains the sole transaction owner throughout: one staging
 array, one debit pair, one preflight, one commit, one `notifyTrade`. No second offer model, no second
