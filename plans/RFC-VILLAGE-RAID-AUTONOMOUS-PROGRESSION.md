@@ -5985,6 +5985,31 @@ Plus one explicit **buyback** case, since upstream source says live-price drift 
    `isModLoaded`).
 7. Deterministic mutation → reject → replan → converge runtime witness.
 
+#### Implementation invariant — attribution binding (added post-lock by `User`, 2026-08-17)
+
+> Every production PlayerMob villager transaction must reach `notifyTrade` through the
+> attribution-preserving villager binding. **No production path may supply raw
+> `villager::notifyTrade` to `executeResolved`.**
+
+`V2-DEF-001` is currently prevented by `performTrade` supplying
+`preservingAttribution(villager)`. `executeResolved(backpack, live, Consumer)` is public and accepts
+an arbitrary notifier, so a future TE source could write
+`executeResolved(backpack, freshTeQuote, villager::notifyTrade)` and resurrect a defect that was
+already fixed — with no compile error and no test failure, because no vanilla test would exercise
+that call.
+
+When the source architecture lands, make it impossible by shape rather than by rule:
+
+```
+source.revalidate(...) -> MerchantOffer live
+        v
+VillagerTradeAdapter.performResolvedTrade(backpack, villager, live)
+        v   availability -> attribution preservation -> executeResolved
+```
+
+`executeResolved(..., Consumer)` then becomes package-private/test-only once the TE probes are
+removed.
+
 #### Implementation invariant (added post-lock by `User`, 2026-08-17 — not a decision change)
 
 `OfferRef.Requote` identity is **item + exact components, never held count**. Canonicalize the stored

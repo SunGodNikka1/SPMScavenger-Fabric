@@ -131,15 +131,22 @@ public final class VillagerTradeAdapter {
             return java.util.Optional.empty();
         }
         MerchantOffers offers = villager.getOffers();
-        int index = recorded.index();
-        if (index < 0 || index >= offers.size()) {
+        // D-VR-077: this class is the only code permitted to read an OfferRef as an address, and
+        // the pattern is exhaustive because OfferRef is sealed. A source that resolves by re-quoting
+        // will not reach here at all.
+        if (!(recorded.ref() instanceof OfferRef.BoardIndex board)) {
+            return java.util.Optional.empty();
+        }
+        int index = board.index();
+        if (index >= offers.size()) {
             return java.util.Optional.empty();
         }
         MerchantOffer live = offers.get(index);
         if (live == null || live.isOutOfStock() || !recorded.matchesLive(live)) {
             return java.util.Optional.empty();
         }
-        return java.util.Optional.of(OfferSnapshot.of(index, live));
+        return java.util.Optional.of(
+                OfferSnapshot.of(index, live).withRankOrdinal(recorded.rankOrdinal()));
     }
 
     /**
@@ -229,7 +236,10 @@ public final class VillagerTradeAdapter {
             return TradeResult.NO_VILLAGER;
         }
 
-        MerchantOffer live = liveOfferAt(offers, offer.index());
+        if (!(offer.ref() instanceof OfferRef.BoardIndex board)) {
+            return TradeResult.OFFER_GONE;
+        }
+        MerchantOffer live = liveOfferAt(offers, board.index());
         if (live == null) {
             return TradeResult.OFFER_GONE;
         }
@@ -316,7 +326,8 @@ public final class VillagerTradeAdapter {
     }
 
     private static MerchantOffer liveOfferAt(MerchantOffers offers, int index) {
-        if (index < 0 || index >= offers.size()) {
+        // BoardIndex rejects negatives at construction, so only the upper bound can fail now.
+        if (index >= offers.size()) {
             return null;
         }
         return offers.get(index);

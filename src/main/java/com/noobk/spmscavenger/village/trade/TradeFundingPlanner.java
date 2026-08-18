@@ -122,11 +122,11 @@ public final class TradeFundingPlanner {
                 continue;
             }
             TradeEvaluation evaluation = result.evaluation().orElseThrow();
-            // Same comparator the registrar applies within TRADE: utility desc, then offer index.
+            // Same comparator the registrar applies within TRADE: utility desc, then round ordinal.
             if (evaluation.utility() > bestUtility
-                    || (evaluation.utility() == bestUtility && offer.index() < bestIndex)) {
+                    || (evaluation.utility() == bestUtility && offer.rankOrdinal() < bestIndex)) {
                 bestUtility = evaluation.utility();
-                bestIndex = offer.index();
+                bestIndex = offer.rankOrdinal();
                 best = offer;
             }
         }
@@ -250,14 +250,14 @@ public final class TradeFundingPlanner {
             if (best == null
                     || (funds && !bestFunds)
                     || (funds == bestFunds && utility > bestUtility)
-                    // R8: the documented index tie-break, made explicit. It previously relied on the
+                    // R8: the documented ordinal tie-break, made explicit. It previously relied on the
                     // caller happening to build the list in ascending index order - true today, and
                     // exactly the kind of accidental invariant that stops being true silently.
-                    || (funds == bestFunds && utility == bestUtility && leg.offer().index() < bestIndex)) {
+                    || (funds == bestFunds && utility == bestUtility && leg.offer().rankOrdinal() < bestIndex)) {
                 best = leg;
                 bestFunds = funds;
                 bestUtility = utility;
-                bestIndex = leg.offer().index();
+                bestIndex = leg.offer().rankOrdinal();
             }
         }
         return best;

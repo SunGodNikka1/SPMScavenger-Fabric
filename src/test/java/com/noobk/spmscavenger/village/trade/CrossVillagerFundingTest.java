@@ -181,7 +181,7 @@ class CrossVillagerFundingTest {
                 null, backpack, ItemStack.EMPTY, ItemStack.EMPTY, s -> reserve(s, backpack));
 
         assertNotNull(leg);
-        assertEquals(1, leg.offer().index(),
+        assertEquals(1, leg.offer().rankOrdinal(),
                 "40 disposable sticks: the 30-stick sale affords one use and cannot fund 2");
         assertTrue(leg.fullyFunds(2), "the chosen leg must be able to finish the job");
     }
@@ -199,7 +199,7 @@ class CrossVillagerFundingTest {
                 new EmeraldDeficit(CONSUMER, 2), List.of(dearer, better),
                 null, backpack, ItemStack.EMPTY, ItemStack.EMPTY, s -> reserve(s, backpack));
 
-        assertEquals(1, leg.offer().index(), "both can fund 2 emeralds; 10 sticks each is cheaper");
+        assertEquals(1, leg.offer().rankOrdinal(), "both can fund 2 emeralds; 10 sticks each is cheaper");
     }
 
     /** A merchant's remaining stock bounds the plan: uses it does not have cannot be sequenced. */

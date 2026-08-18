@@ -1302,9 +1302,9 @@ public final class Te3ProbeCommand {
                         // than re-derived here. B means REACHABLE, not merely quotable.
                         return target != null
                                 && target.actionable()
-                                && target.buyOffer().index() == buyCandidate.index()
+                                && target.buyOffer().rankOrdinal() == buyCandidate.rankOrdinal()
                                 && target.sellLeg() != null
-                                && target.sellLeg().offer().index() == syntheticIndex;
+                                && target.sellLeg().offer().rankOrdinal() == syntheticIndex;
                     }).orElse(false);
                     if (matched) {
                         evidence[0] = describe(buyCandidate.costA()) + " -> "

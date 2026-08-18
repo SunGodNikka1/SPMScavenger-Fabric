@@ -402,10 +402,10 @@ class SellToBuyChainTest {
                     .best()
                     .orElseThrow(() -> new AssertionError("no viable offer for " + wanted));
 
-            assertEquals(bestByV2B.offerIndex(),
+            assertEquals(bestByV2B.tieBreakOrdinal(),
                     TradeFundingPlanner.chooseFundingTarget(demand, offers, backpack,
                 ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE)
-                            .buyOffer().index(),
+                            .buyOffer().rankOrdinal(),
                     "planner and V2-B must agree on WHICH quote is served, for demand " + wanted);
         }
     }
@@ -501,7 +501,7 @@ class SellToBuyChainTest {
                 ironDemand(), List.of(buyWithDiamond(), buyPlain(6), sellOffer()), noDiamonds,
                 ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE);
 
-        assertEquals(1, target.buyOffer().index(),
+        assertEquals(1, target.buyOffer().rankOrdinal(),
                 "the compound quote is unpayable, so it is not the quote being served");
         assertEquals(6, target.emeraldsRequired(), "and the deficit sizes the quote that IS served");
     }
@@ -516,7 +516,7 @@ class SellToBuyChainTest {
                 ironDemand(), List.of(buyWithDiamond(), buyPlain(6), sellOffer()), withDiamond,
                 ItemStack.EMPTY, ItemStack.EMPTY, TEST_RESERVE);
 
-        assertEquals(0, target.buyOffer().index(), "cheaper in emeralds, and now payable");
+        assertEquals(0, target.buyOffer().rankOrdinal(), "cheaper in emeralds, and now payable");
         assertEquals(5, target.emeraldsRequired());
     }
 

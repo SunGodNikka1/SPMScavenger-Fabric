@@ -70,7 +70,10 @@ public record SellFundingLeg(
      */
     public boolean covers(OfferSnapshot attempted) {
         return attempted != null
-                && attempted.index() == offer.index()
+                // Round-local candidate identity, NOT a board address. Board indexes are
+                // villager-local, so two villagers both owning index 0 used to compare equal here -
+                // a sell leg on one merchant could match an attempt on another.
+                && attempted.rankOrdinal() == offer.rankOrdinal()
                 && net.minecraft.world.item.ItemStack
                         .isSameItemSameComponents(attempted.costA(), offer.costA())
                 && attempted.costA().getCount() == offer.costA().getCount()

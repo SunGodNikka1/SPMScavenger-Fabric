@@ -134,8 +134,14 @@ class ExistingRouteWiringTest {
         assertFalse(goal.contains("candidate.result().getItem() == flat.result().getItem()"),
                 "identity was ours to keep; matching it back is ambiguous");
         assertFalse(goal.contains("private Candidate resolve("), "the reverse lookup is gone");
-        assertTrue(goal.contains("new Candidate(villager, offer,"),
-                "the candidate keeps the villager's own offer, real index and all");
+        assertTrue(goal.contains("offer.withRankOrdinal(slot)"),
+                "D-VR-077: the round ordinal is layered ONTO the villager's own snapshot, so its "
+                        + "board ref survives into execution");
+        assertFalse(goal.contains("new OfferSnapshot("),
+                "and no second snapshot is built to carry the flat slot where the board ref "
+                        + "belongs - that conflation is what OfferRef removed");
+        assertTrue(goal.contains("new Candidate(villager, ranked,"),
+                "the candidate keeps the villager's own offer, real board ref and all");
     }
 
     /**

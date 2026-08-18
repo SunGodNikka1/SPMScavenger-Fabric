@@ -163,7 +163,7 @@ class ProductionRoutePathTest {
                 "the SELL leg carries the quote; re-deriving it from the ranking is the drift");
         assertTrue(decision.contains("funding.buyOffer()"),
                 "and the BUY is the funded quote, not whatever ranks highest among all offers");
-        assertTrue(decision.contains("owners.get(planned.index())"),
+        assertTrue(decision.contains("owners.get(planned.rankOrdinal())"),
                 "the candidate is looked up BY that quote");
     }
 

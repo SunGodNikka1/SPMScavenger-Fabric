@@ -157,7 +157,7 @@ class TradeDemandRegistrarTest {
                         offer(2, Items.EMERALD, 5, Items.IRON_INGOT, 2)), true));
 
         assertEquals(3, decision.rankedTradeOffers().size());
-        assertEquals(1, decision.best().orElseThrow().offerIndex(), "cheapest per unit ranks first");
+        assertEquals(1, decision.best().orElseThrow().tieBreakOrdinal(), "cheapest per unit ranks first");
         assertTrue(decision.rankedTradeOffers().get(0).utility()
                 >= decision.rankedTradeOffers().get(1).utility());
         assertTrue(decision.rankedTradeOffers().get(1).utility()
@@ -174,7 +174,7 @@ class TradeDemandRegistrarTest {
 
         for (int i = 0; i < 20; i++) {
             assertEquals(0, TradeDemandRegistrar.decide(ironDemand(3), evidence)
-                    .best().orElseThrow().offerIndex(), "lowest offer index wins a tie, every time");
+                    .best().orElseThrow().tieBreakOrdinal(), "lowest round ordinal wins a tie, every time");
         }
     }
 

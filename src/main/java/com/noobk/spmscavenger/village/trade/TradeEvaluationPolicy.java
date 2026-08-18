@@ -150,7 +150,7 @@ public final class TradeEvaluationPolicy {
                 TradeEvaluation.Direction.BUY,
                 demand.consumerKey(),
                 demand.materialKey(),
-                offer.index(),
+                offer.rankOrdinal(),
                 contribution,
                 offer.costA(),
                 offer.costB(),
@@ -217,7 +217,7 @@ public final class TradeEvaluationPolicy {
                 // material - otherwise the sell step would be attributed to the wrong appetite.
                 deficit.consumerKey(),
                 EMERALD,
-                offer.index(),
+                offer.rankOrdinal(),
                 contribution,
                 offer.costA(),
                 offer.costB(),

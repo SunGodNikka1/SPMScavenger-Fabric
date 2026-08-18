@@ -24,7 +24,8 @@ import net.minecraft.world.item.trading.MerchantOffer;
  * ({@link #matchesLive}), because the villager may have traded, restocked or levelled in between.
  */
 public record OfferSnapshot(
-        int index,
+        OfferRef ref,
+        int rankOrdinal,
         ItemStack costA,
         ItemStack costB,
         ItemStack result,
@@ -37,15 +38,36 @@ public record OfferSnapshot(
         result = result == null ? ItemStack.EMPTY : result.copy();
     }
 
-    /** Capture a live offer. {@code assemble()} and {@code getCostA()} only. */
+    /**
+     * Capture a live offer. {@code assemble()} and {@code getCostA()} only.
+     *
+     * <p>{@code rankOrdinal} defaults to the board index because within a <b>single</b> villager's
+     * board those genuinely are the same ordering, and that is what every direct caller of this
+     * factory passes. A multi-villager round must not rely on the default: two villagers both own
+     * board index {@code 0}, so {@code TradeWithVillagerGoal} assigns its own flat ordinal through
+     * {@link #withRankOrdinal(int)}.
+     */
     public static OfferSnapshot of(int index, MerchantOffer offer) {
         return new OfferSnapshot(
+                OfferRef.board(index),
                 index,
                 offer.getCostA(),
                 offer.getCostB(),
                 offer.assemble(),
                 offer.getUses(),
                 offer.getMaxUses());
+    }
+
+    /**
+     * The same offer, ranked at a round-local position.
+     *
+     * <p>{@code ref} is untouched: where the offer lives on its villager's board has nothing to do
+     * with where it sorts among candidates from several villagers. Replaces the goal's old trick of
+     * constructing a second snapshot whose {@code index} field held the flat slot instead of the
+     * board address.
+     */
+    public OfferSnapshot withRankOrdinal(int ordinal) {
+        return new OfferSnapshot(ref, ordinal, costA, costB, result, uses, maxUses);
     }
 
     public boolean outOfStock() {

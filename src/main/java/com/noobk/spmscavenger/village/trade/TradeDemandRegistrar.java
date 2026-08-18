@@ -138,7 +138,7 @@ public final class TradeDemandRegistrar {
         // Only now, and only within TRADE, does V2-B's number decide anything (gate 6).
         viable.sort(Comparator
                 .comparingDouble(TradeEvaluation::utility).reversed()
-                .thenComparingInt(TradeEvaluation::offerIndex));
+                .thenComparingInt(TradeEvaluation::tieBreakOrdinal));
 
         return new AcquisitionDecision(AcquisitionRoute.TRADE, viable, null);
     }

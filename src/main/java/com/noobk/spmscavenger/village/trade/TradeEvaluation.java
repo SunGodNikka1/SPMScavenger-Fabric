@@ -28,7 +28,12 @@ public record TradeEvaluation(
         Direction direction,
         ResourceLocation consumerKey,
         ResourceLocation materialKey,
-        int offerIndex,
+        /**
+         * D-VR-077: the <b>round-local</b> ranking ordinal, never a board address. Policy has no
+         * business knowing where an offer sits in a villager's list, and calling this
+         * {@code offerIndex} is what invited that confusion.
+         */
+        int tieBreakOrdinal,
         int quantityContribution,
         ItemStack requiredCostA,
         ItemStack requiredCostB,

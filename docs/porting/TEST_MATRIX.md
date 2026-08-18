@@ -466,7 +466,7 @@ runtime `UNVERIFIED`. SHA-256:
 `DA017011A280DB38F390890B8104E64E59DBB213A33BA1BADBE2175C1430BF5C`.
 
 
-#### V2-DEF-001 — pending human trade reputation (OPEN, not yet repaired)
+#### V2-DEF-001 — pending human trade reputation (REPAIRED — runtime UNVERIFIED)
 
 Recorded from the P0-2 source review, repaired separately as its own task (2026-08-17). Full defect record and gate:
 `docs/porting/KNOWN_DEFECTS.md`.

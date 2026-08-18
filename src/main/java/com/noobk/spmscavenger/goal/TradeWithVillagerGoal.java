@@ -607,18 +607,23 @@ public class TradeWithVillagerGoal extends Goal {
             return Optional.empty();
         }
 
-        // Ranking needs one flat index space across villagers; execution needs the villager's own
-        // offer index. Both are kept side by side rather than the real one being re-derived later -
-        // matching an offer back by item identity is ambiguous when a villager sells the same item
+        // Ranking needs one flat ordinal space across villagers; execution needs the villager's
+        // own board ref. Since D-VR-077 a snapshot carries both as SEPARATE fields, so neither has
+        // to be re-derived later - matching an offer back by item identity is ambiguous when a
+        // villager sells the same item
         // pair at two different counts, and the identity was ours to keep in the first place.
         List<OfferSnapshot> offers = new ArrayList<>();
         java.util.Map<Integer, Candidate> owners = new java.util.HashMap<>();
         int slot = 0;
         for (Villager villager : nearby) {
             for (OfferSnapshot offer : VillagerTradeAdapter.inspectOffers(villager)) {
-                offers.add(new OfferSnapshot(slot, offer.costA(), offer.costB(),
-                        offer.result(), offer.uses(), offer.maxUses()));
-                owners.put(slot, new Candidate(villager, offer,      // offer keeps its REAL index
+                // D-VR-077: one snapshot now carries both coordinates - its own board ref
+                // for execution, and this round's flat ordinal for ranking. The old code built a
+                // SECOND snapshot whose index field held the slot, and kept the real one in
+                // `owners`, because a single int could not hold both.
+                OfferSnapshot ranked = offer.withRankOrdinal(slot);
+                offers.add(ranked);
+                owners.put(slot, new Candidate(villager, ranked,
                         demand.get().consumerKey(), demand.get().materialKey()));
                 slot++;
             }
@@ -694,7 +699,7 @@ public class TradeWithVillagerGoal extends Goal {
         // different villagers, and re-deriving the purchase while standing at the seller finds no
         // purchase at all.
         final WorkDemandPolicy.MaterialDemand selected = purchaseDemand;
-        Candidate buyCandidate = owners.get(funding.buyOffer().index());
+        Candidate buyCandidate = owners.get(funding.buyOffer().rankOrdinal());
         TradeAttemptFunding attemptContext =
                 step == TradeChainPlan.Step.SELL_TO_FUND && buyCandidate != null
                         ? new TradeAttemptFunding(
@@ -715,8 +720,8 @@ public class TradeWithVillagerGoal extends Goal {
                                 sellLeg == null ? null : sellLeg.authorization()))
                 // V2-C still owns the route decision; it simply no longer chooses the quote.
                 .filter(decision -> decision.rankedOffers().stream()
-                        .anyMatch(evaluation -> evaluation.offerIndex() == planned.index()))
-                .map(decision -> owners.get(planned.index()))
+                        .anyMatch(evaluation -> evaluation.tieBreakOrdinal() == planned.rankOrdinal()))
+                .map(decision -> owners.get(planned.rankOrdinal()))
                 .filter(java.util.Objects::nonNull)
                 .filter(candidate -> VillagerTradeAdapter.canAfford(backpack, candidate.offer()))
                 .map(candidate -> new AuthorizedAttempt(candidate, attemptContext));
