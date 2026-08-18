@@ -66,6 +66,47 @@ public final class Te3ProbeCommand {
                 .then(Commands.literal("te3").requires(src -> src.hasPermission(2))
                         .then(Commands.literal("index").executes(c -> index(c.getSource())))
                         .then(Commands.literal("p02").executes(c -> p02(c.getSource())))
+                        .then(Commands.literal("watch")
+                                .then(Commands.literal("on").executes(c -> {
+                                    TradeRuntimeObserver.reset();
+                                    TradeRuntimeObserver.setRecording(true);
+                                    c.getSource().sendSuccess(() -> Component.literal(
+                                            "[TE3] observer RECORDING (passive - it reports "
+                                                    + "decisions, it cannot make them)"), false);
+                                    return 1;
+                                }))
+                                .then(Commands.literal("off").executes(c -> {
+                                    TradeRuntimeObserver.setRecording(false);
+                                    c.getSource().sendSuccess(() -> Component.literal(
+                                            "[TE3] observer stopped"), false);
+                                    return 1;
+                                }))
+                                .then(Commands.literal("report").executes(c -> {
+                                    Mob watched = nearestScavenger(c.getSource());
+                                    Container pack = watched == null
+                                            ? null : PlayerMobs.backpack(watched);
+                                    StringBuilder out = new StringBuilder(
+                                            "[TE3] step-7A autonomous readout" + (char) 10);
+                                    out.append("  ").append(TradeRuntimeObserver.summary())
+                                            .append((char) 10);
+                                    for (String line : TradeRuntimeObserver.events()) {
+                                        out.append("  ").append(line).append((char) 10);
+                                    }
+                                    out.append("  NOW: emeralds=")
+                                            .append(TradeRuntimeObserver.count(pack, Items.EMERALD))
+                                            .append("  iron_pickaxe(pack)=")
+                                            .append(TradeRuntimeObserver.count(
+                                                    pack, Items.IRON_PICKAXE))
+                                            .append("  mainHand=")
+                                            .append(watched == null ? "?"
+                                                    : describe(watched.getMainHandItem()))
+                                            .append("  logs=")
+                                            .append(TradeRuntimeObserver.count(pack, Items.OAK_LOG))
+                                            .append((char) 10);
+                                    c.getSource().sendSuccess(
+                                            () -> Component.literal(out.toString()), false);
+                                    return 1;
+                                })))
                         .then(Commands.literal("fixture")
                                 .executes(c -> fixture(c.getSource())))
                         .then(Commands.literal("parity")
@@ -169,6 +210,28 @@ public final class Te3ProbeCommand {
                 backpack.setItem(2, new ItemStack(Items.WHEAT, 64));
                 backpack.setItem(3, new ItemStack(Items.STICK, 2));
             }
+            case "autonomous" -> {
+                // Step 7A. The mob must EARN its emeralds, so none are seeded and no pickaxe is
+                // given. Stone pickaxe + iron axe is the state that naturally raises the
+                // iron_pickaxe_upgrade demand; torches keep the SURVIVAL charcoal demand off, since
+                // it outranks PROGRESSION and would quietly turn this into a torch scenario.
+                //
+                // Six log stacks, torches, and ONE FREE SLOT. The free slot is not spare capacity -
+                // it is where the first TE emerald lands, and without it the opening sale fails
+                // NO_ROOM (the R12 lesson: value is not capacity).
+                if (backpack.getContainerSize() < FUNDING_SLOTS) {
+                    source.sendFailure(Component.literal("[TE3] backpack too small"));
+                    return 0;
+                }
+                mob.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
+                        new ItemStack(Items.STONE_PICKAXE));
+                mob.setItemInHand(net.minecraft.world.InteractionHand.OFF_HAND,
+                        new ItemStack(Items.IRON_AXE));
+                for (int slot = 0; slot < 6; slot++) {
+                    backpack.setItem(slot, new ItemStack(Items.OAK_LOG, 64));
+                }
+                backpack.setItem(6, new ItemStack(Items.TORCH, 16));
+            }
             case "detached" -> {
                 // P0-2 needs one sellable stack and free slots for the emerald. Nothing else: the
                 // witness is about the call path, not about demand selection.
@@ -176,7 +239,7 @@ public final class Te3ProbeCommand {
             }
             default -> {
                 source.sendFailure(Component.literal(
-                        "[TE3] unknown scenario - use iron | torch | protected | funding | detached"));
+                        "[TE3] unknown scenario - use iron | torch | protected | funding | detached | autonomous"));
                 return 0;
             }
         }
@@ -1004,9 +1067,23 @@ public final class Te3ProbeCommand {
                         .selectBuyItem(villager, villager.getOffers()) == Items.EMERALD;
     }
 
+    /**
+     * The purchasing power a step-7A mob can actually reach.
+     *
+     * <p>Six log stacks less the craft reserve is 383 disposable logs; at the census-derived
+     * 22 logs/emerald that is {@code floor(383/22) = 17} emeralds, and the fixture seeds none. A
+     * vanilla iron pickaxe rolls at 8..22, so a roll above this is a market the mob cannot afford —
+     * the route would be correct and simply never complete.
+     *
+     * <p>Narrowing which vanilla roll is accepted, not authoring one: the price is still whatever
+     * vanilla generated, and the accepted board is an unmodified draw.
+     */
+    private static final int MAX_AFFORDABLE_PICKAXE_PRICE = 17;
+
     private static boolean listsIronPickaxe(net.minecraft.world.entity.npc.Villager villager) {
         for (MerchantOffer offer : villager.getOffers()) {
-            if (offer.getResult().is(Items.IRON_PICKAXE)) {
+            if (offer.getResult().is(Items.IRON_PICKAXE)
+                    && offer.getCostA().getCount() <= MAX_AFFORDABLE_PICKAXE_PRICE) {
                 return true;
             }
         }
