@@ -227,10 +227,20 @@ public final class Te3ProbeCommand {
                         new ItemStack(Items.STONE_PICKAXE));
                 mob.setItemInHand(net.minecraft.world.InteractionHand.OFF_HAND,
                         new ItemStack(Items.IRON_AXE));
-                for (int slot = 0; slot < 6; slot++) {
+                // FIVE log stacks, not six. Step-7A run #1 seeded six and the mob converted a
+                // log to planks, filling its last slot - after which the first TE emerald had
+                // nowhere to land. Value is not capacity, and the capacity has to survive the
+                // mob's OWN crafting, not just the trade.
+                for (int slot = 0; slot < 5; slot++) {
                     backpack.setItem(slot, new ItemStack(Items.OAK_LOG, 64));
                 }
-                backpack.setItem(6, new ItemStack(Items.TORCH, 16));
+                backpack.setItem(5, new ItemStack(Items.TORCH, 16));
+                // Three sticks: the iron-pickaxe recipe wants two, so towardConsumerTool finds the
+                // stick requirement already met and returns NOTHING instead of starting a craft
+                // chain the mob has no room to finish. Reserved by SellReserveModel, so they are
+                // never sold - they exist to keep the mob out of the crafting loop entirely.
+                backpack.setItem(6, new ItemStack(Items.STICK, 3));
+                // Slot 7 stays empty. It is where the first TE emerald lands.
             }
             case "detached" -> {
                 // P0-2 needs one sellable stack and free slots for the emerald. Nothing else: the
@@ -1070,15 +1080,15 @@ public final class Te3ProbeCommand {
     /**
      * The purchasing power a step-7A mob can actually reach.
      *
-     * <p>Six log stacks less the craft reserve is 383 disposable logs; at the census-derived
-     * 22 logs/emerald that is {@code floor(383/22) = 17} emeralds, and the fixture seeds none. A
+     * <p>Five log stacks less the craft reserve is 319 disposable logs; at the census-derived
+     * 22 logs/emerald that is {@code floor(319/22) = 14} emeralds, and the fixture seeds none. A
      * vanilla iron pickaxe rolls at 8..22, so a roll above this is a market the mob cannot afford —
      * the route would be correct and simply never complete.
      *
      * <p>Narrowing which vanilla roll is accepted, not authoring one: the price is still whatever
      * vanilla generated, and the accepted board is an unmodified draw.
      */
-    private static final int MAX_AFFORDABLE_PICKAXE_PRICE = 17;
+    private static final int MAX_AFFORDABLE_PICKAXE_PRICE = 14;
 
     private static boolean listsIronPickaxe(net.minecraft.world.entity.npc.Villager villager) {
         for (MerchantOffer offer : villager.getOffers()) {

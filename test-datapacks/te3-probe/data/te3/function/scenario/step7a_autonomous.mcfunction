@@ -12,7 +12,9 @@
 function te3:_base
 function te3:_merchants_autonomous
 summon playermob:player_mob ~ ~ ~ {CustomName:'"TE3Mob"',PersistenceRequired:1b,Tags:["te3","te3_mob"]}
-# Stone pickaxe + iron axe, 6 log stacks, torches, ONE FREE SLOT, and deliberately NO emeralds.
+# Stone pickaxe + iron axe, 5 log stacks, torches, 3 sticks, ONE FREE SLOT, and NO emeralds.
+# Run #1 seeded six log stacks and the mob crafted a log into planks, taking its last slot - the
+# first TE emerald then had nowhere to land. The sticks stop the craft chain before it starts.
 spmscavenger debug te3 seed autonomous
 # Discards vanilla draws until the armorer is all-sell and the toolsmith lists an affordable pickaxe.
 spmscavenger debug te3 fixture

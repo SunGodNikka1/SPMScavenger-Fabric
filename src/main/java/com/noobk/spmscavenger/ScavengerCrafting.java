@@ -258,6 +258,44 @@ public final class ScavengerCrafting {
             ScavengerConfig cfg,
             ItemStack mainHand,
             ItemStack offHand) {
+        Step wanted = preferredStep(backpack, needPickaxe, needAxe, cfg, mainHand, offHand);
+        // A craft that cannot deliver its result is not a craft to choose. `apply` is atomic, so a
+        // blocked step loses nothing - it simply returns false, and the goal re-selects the SAME
+        // step on the next tick, for ever.
+        //
+        // Runtime-reproduced (step 7A): a full backpack with one plank stack selected
+        // PLANKS_TO_STICKS, which had nowhere to put four sticks. The mob stood at "Crafting Sticks"
+        // indefinitely and never reached trade discovery - a liveness defect with no error, no log
+        // line, and no lost items to notice.
+        //
+        // Stopping is the correct answer, not falling through to a lower-priority craft: with the
+        // pack full, LOGS_TO_PLANKS still commits (planks merge into the existing stack) and would
+        // burn logs until that stack filled too. NOTHING lets the mob go and do something that
+        // actually changes its inventory - trade, deposit, gather - after which crafting resumes.
+        return canCommit(backpack, wanted) ? wanted : Step.NOTHING;
+    }
+
+    /**
+     * Would this step commit against the backpack as it stands?
+     *
+     * <p>Runs the <b>real</b> transaction on a copy rather than re-deriving capacity rules, so the
+     * preflight and the commit cannot disagree: both go through {@code applyMutating}. A second
+     * capacity model written for the preflight would be an oracle agreeing with itself.
+     */
+    public static boolean canCommit(Container backpack, Step step) {
+        if (backpack == null || step == null || step == Step.NOTHING) {
+            return false;
+        }
+        return applyMutating(copyOf(backpack), step, new ItemStack[] {ItemStack.EMPTY});
+    }
+
+    private static Step preferredStep(
+            Container backpack,
+            boolean needPickaxe,
+            boolean needAxe,
+            ScavengerConfig cfg,
+            ItemStack mainHand,
+            ItemStack offHand) {
         int fuel = count(backpack, Items.COAL) + count(backpack, Items.CHARCOAL);
         int sticks = count(backpack, Items.STICK);
         int planks = countTag(backpack, true);
