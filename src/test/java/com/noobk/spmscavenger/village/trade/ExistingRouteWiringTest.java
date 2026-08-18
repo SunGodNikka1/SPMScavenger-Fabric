@@ -140,8 +140,9 @@ class ExistingRouteWiringTest {
         assertFalse(goal.contains("new OfferSnapshot("),
                 "and no second snapshot is built to carry the flat slot where the board ref "
                         + "belongs - that conflation is what OfferRef removed");
-        assertTrue(goal.contains("new Candidate(villager, ranked,"),
-                "the candidate keeps the villager's own offer, real board ref and all");
+        assertTrue(goal.contains("TradeSourceKey.VANILLA, ranked,"),
+                "the candidate keeps the villager's own offer, real board ref and all - and since "
+                        + "step 3 carries its source alongside rather than deriving it from the ref");
     }
 
     /**

@@ -12,6 +12,7 @@ import com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence;
 import com.noobk.spmscavenger.village.trade.SellFundingLeg;
 import com.noobk.spmscavenger.village.trade.SellReserveModel;
 import com.noobk.spmscavenger.village.trade.TradeFundingPlanner;
+import com.noobk.spmscavenger.village.trade.TradeAttemptFunding;
 import com.noobk.spmscavenger.village.trade.TradePurchaseProjection;
 import com.noobk.spmscavenger.village.trade.TradeCandidateRound;
 import com.noobk.spmscavenger.village.trade.TradeChainPlan;
@@ -95,6 +96,14 @@ public class TradeWithVillagerGoal extends Goal {
 
     /** R7 — the purchase this attempt funds; null unless a funding SELL is in progress. */
     private TradeAttemptFunding attemptFunding;
+    /**
+     * D-VR-077 step 3 — the source that owns the offer being attempted, held for the whole walk.
+     *
+     * <p>Provenance added at selection and dropped when the candidate becomes attempt state would be
+     * worse than never adding it: step 4 would infer the source at the execution boundary, which is
+     * the inference the decision forbids.
+     */
+    private com.noobk.spmscavenger.village.trade.TradeSourceKey attemptSource;
 
     /**
      * V2-G — the settlement this visit's trade episode belongs to, or {@code null} when this round
@@ -207,6 +216,7 @@ public class TradeWithVillagerGoal extends Goal {
         target = null;
         plannedOffer = null;
         attemptFunding = null;
+        attemptSource = null;
         attemptConsumer = null;
         attemptMaterial = null;
         repathCooldown = 0;
@@ -347,6 +357,7 @@ public class TradeWithVillagerGoal extends Goal {
         round.completeCurrentSuccessfully();
         target = null;
         plannedOffer = null;
+        attemptSource = null;
 
         Optional<AuthorizedAttempt> next = authorizedCandidate(level, carriedBuyer);
         if (next.isPresent()) {
@@ -442,19 +453,13 @@ public class TradeWithVillagerGoal extends Goal {
     private record AuthorizedAttempt(Candidate candidate, TradeAttemptFunding funding) {
     }
 
-    private record TradeAttemptFunding(
-            ResourceLocation consumerKey,
-            Villager buyer,
-            OfferSnapshot buyQuote,
-            int emeraldsRequired) {
-    }
-
     // ------------------------------------------------------------------ candidates
 
     private void beginAttempt(ServerLevel level, AuthorizedAttempt attempt) {
         Candidate candidate = attempt.candidate();
         target = candidate.villager();
         plannedOffer = candidate.offer();
+        attemptSource = candidate.source();
         // Recorded only for a funding SELL: a direct BUY funds nothing and has no purchase behind it.
         attemptFunding = attempt.funding();
         attemptConsumer = candidate.consumerKey();
@@ -472,6 +477,7 @@ public class TradeWithVillagerGoal extends Goal {
         TradeSessionClaimWindow.release(mob.getUUID());
         target = null;
         plannedOffer = null;
+        attemptSource = null;
         mob.getNavigation().stop();
 
         Optional<AuthorizedAttempt> next = authorizedCandidate(level, null);
@@ -490,6 +496,7 @@ public class TradeWithVillagerGoal extends Goal {
         round.endRound(level.getGameTime());
         target = null;
         plannedOffer = null;
+        attemptSource = null;
         mob.getNavigation().stop();
     }
 
@@ -533,6 +540,13 @@ public class TradeWithVillagerGoal extends Goal {
      */
     private record Candidate(
             Villager villager,
+            /**
+             * D-VR-077 step 3 — which market source owns this offer's revalidation. Carried, never
+             * derived: {@code offer.ref()} says how a source re-resolves the offer, not which source
+             * that is. Always {@code VANILLA} today, and stored anyway so step 4 has nothing to
+             * infer.
+             */
+            com.noobk.spmscavenger.village.trade.TradeSourceKey source,
             OfferSnapshot offer,
             ResourceLocation consumerKey,
             ResourceLocation materialKey) {
@@ -623,7 +637,8 @@ public class TradeWithVillagerGoal extends Goal {
                 // `owners`, because a single int could not hold both.
                 OfferSnapshot ranked = offer.withRankOrdinal(slot);
                 offers.add(ranked);
-                owners.put(slot, new Candidate(villager, ranked,
+                owners.put(slot, new Candidate(villager,
+                        com.noobk.spmscavenger.village.trade.TradeSourceKey.VANILLA, ranked,
                         demand.get().consumerKey(), demand.get().materialKey()));
                 slot++;
             }
@@ -705,11 +720,16 @@ public class TradeWithVillagerGoal extends Goal {
                         ? new TradeAttemptFunding(
                                 selected.consumerKey(),
                                 buyCandidate.villager(),
-                                // R8: the villager's OWN offer index. `funding.buyOffer()` carries
-                                // the flattened cross-villager ranking slot, and asking buyer A for
-                                // global index 7 when its real index is 2 revalidates a different
-                                // trade - or none at all. The flat index is a ranking key; only the
-                                // local one addresses a merchant's board.
+                                // D-VR-077 step 3: the BUY's own source, carried independently of
+                                // the seller's. Both are VANILLA today; the first real divergence is
+                                // already known - a Trade Everything synthetic SELL funding a
+                                // vanilla Toolsmith BUY.
+                                buyCandidate.source(),
+                                // Since step 2 one snapshot carries both coordinates, so this is the
+                                // buyer's own board ref AND its round ordinal. The old code had to
+                                // reach past a flattened stand-in to find the real address; asking
+                                // buyer A for global ordinal 7 when its board index is 2 would have
+                                // revalidated a different trade, or none at all.
                                 buyCandidate.offer(),
                                 funding.emeraldsRequired())
                         : null;
