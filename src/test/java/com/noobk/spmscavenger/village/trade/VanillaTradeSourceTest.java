@@ -159,9 +159,14 @@ class VanillaTradeSourceTest {
 
     @Test
     void mustHappen_theRegistryResolvesCarriedProvenance() {
-        assertSame(VanillaTradeSource.INSTANCE, TradeSources.of(TradeSourceKey.VANILLA));
+        TradeSources.clearOptionalSources();
+
+        assertSame(VanillaTradeSource.INSTANCE,
+                TradeSources.of(TradeSourceKey.VANILLA).orElseThrow());
         assertEquals(TradeSourceKey.VANILLA, VanillaTradeSource.INSTANCE.key());
-        assertEquals(1, TradeSources.all().size(), "one source until step 6");
+        assertEquals(1, TradeSources.all().size(), "vanilla only when the optional source is absent");
+        assertTrue(TradeSources.of(TradeSourceKey.TRADE_EVERYTHING).isEmpty(),
+                "an unregistered source fails closed - it must never resolve to vanilla");
     }
 
     /** Market truth must not learn about sleep, player sessions, or liveness policy. */

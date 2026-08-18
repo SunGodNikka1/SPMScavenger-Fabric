@@ -304,9 +304,12 @@ public class TradeWithVillagerGoal extends Goal {
         // D-VR-077 step 5: the source that owns this offer resolves it; the adapter never reads the
         // ref. Empty covers exactly what OFFER_GONE, OFFER_CHANGED and OUT_OF_STOCK covered, and all
         // three already routed to reselect.
+        // Fail closed on an unresolvable source: an offer whose source is not installed is not a
+        // vanilla offer, and handing it to the board resolver would report "gone" and be diagnosed
+        // as a market race rather than a missing registration.
         java.util.Optional<net.minecraft.world.item.trading.MerchantOffer> resolved =
                 com.noobk.spmscavenger.village.trade.TradeSources.of(attemptSource)
-                        .revalidate(target, plannedOffer);
+                        .flatMap(source -> source.revalidate(target, plannedOffer));
         if (resolved.isEmpty()) {
             reselect(level);
             return;
@@ -414,7 +417,8 @@ public class TradeWithVillagerGoal extends Goal {
             return false;
         }
         if (com.noobk.spmscavenger.village.trade.TradeSources.of(context.buySource())
-                .revalidate(context.buyer(), context.buyQuote()).isEmpty()) {
+                .flatMap(source -> source.revalidate(context.buyer(), context.buyQuote()))
+                .isEmpty()) {
             return false;
         }
         // And its non-emerald payment must still be in the backpack. `owedToPurchase` protects that
@@ -438,7 +442,8 @@ public class TradeWithVillagerGoal extends Goal {
         SellFundingLeg leg = TradeFundingPlanner.authorizeFunding(
                 new TradeEvaluationPolicy.EmeraldDeficit(context.consumerKey(), deficit),
                 com.noobk.spmscavenger.village.trade.TradeSources.of(attemptSource)
-                        .offers(target, authorizedSellQuery(backpack)),
+                        .map(source -> source.offers(target, authorizedSellQuery(backpack)))
+                        .orElse(java.util.List.of()),
                 context.buyQuote(),
                 backpack,
                 mob.getMainHandItem(),

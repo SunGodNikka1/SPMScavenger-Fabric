@@ -245,7 +245,7 @@ class TradeOpportunityContractTest {
                 "revalidate hands back the live object to execute, or nothing");
     }
 
-    /** Step 5 adds exactly one source. Trade Everything is step 6 and must not appear early. */
+    /** Exactly the two sources D-VR-077 describes, and no third arriving unnoticed. */
     @Test
     void mustHappen_onlyTheVanillaSourceIsImplemented() throws java.io.IOException {
         try (var paths = java.nio.file.Files.walk(
@@ -263,9 +263,10 @@ class TradeOpportunityContractTest {
                     .map(path -> path.getFileName().toString())
                     .sorted()
                     .toList();
-            assertEquals(List.of("VanillaTradeSource.java"), implementors,
-                    "a Trade Everything source arriving with the vanilla parity step would let a "
-                            + "vanilla regression hide behind it");
+            assertEquals(List.of("TradeEverythingTradeSource.java", "VanillaTradeSource.java"),
+                    implementors,
+                    "vanilla plus the optional source - and the optional one lives under compat/, "
+                            + "not beside the common trade types");
         }
     }
 
@@ -322,9 +323,9 @@ class TradeOpportunityContractTest {
     }
 
     @Test
-    void mustHappen_theSourceKeyStillHasOnlyVanilla() {
-        assertEquals(1, TradeSourceKey.values().length,
-                "TRADE_EVERYTHING arrives in step 6, not with the contract");
-        assertFalse(Arrays.toString(TradeSourceKey.values()).contains("TRADE_EVERYTHING"));
+    void mustHappen_theSourceKeySpaceIsExactlyTheTwoLockedSources() {
+        assertEquals(2, TradeSourceKey.values().length);
+        assertEquals(TradeSourceKey.VANILLA, TradeSourceKey.values()[0],
+                "vanilla first, so installing the optional source cannot reorder anything");
     }
 }

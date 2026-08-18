@@ -100,6 +100,43 @@ public record OfferSnapshot(
                 xp, priceMultiplier, demand, specialPriceDiff, rewardExp);
     }
 
+    /**
+     * D-VR-077 — <b>strict semantic correspondence</b>, for a source that re-quotes.
+     *
+     * <p>Deliberately separate from {@link #matchesLive}, and vanilla must never call it. The two
+     * ask different questions for a principled reason:
+     *
+     * <pre>
+     * matchesLive          the SAME board object, re-read. Is the trade I am about to perform the
+     *                      trade I authorized? demand and specialPriceDiff legitimately move during
+     *                      a walk and the live object executes anyway.
+     * semanticallyMatches  two INDEPENDENTLY generated objects. There is no shared identity to fall
+     *                      back on, so any field difference means the pricing inputs moved and the
+     *                      funding arithmetic computed on Q1 no longer holds.
+     * </pre>
+     *
+     * <p>Tightening {@code matchesLive} into this would abort vanilla trades that succeed today;
+     * loosening this into {@code matchesLive} would execute a re-quote nobody checked.
+     *
+     * <p>{@code rankOrdinal} is excluded: ordering within a planning round is not semantic identity,
+     * and the two ends of a walk legitimately assign different ordinals to the same offer.
+     */
+    public boolean semanticallyMatches(MerchantOffer live) {
+        if (live == null) {
+            return false;
+        }
+        return sameStack(costA, live.getCostA())
+                && sameStack(costB, live.getCostB())
+                && sameStack(result, live.assemble())
+                && uses == live.getUses()
+                && maxUses == live.getMaxUses()
+                && xp == live.getXp()
+                && Float.compare(priceMultiplier, live.getPriceMultiplier()) == 0
+                && demand == live.getDemand()
+                && specialPriceDiff == live.getSpecialPriceDiff()
+                && rewardExp == live.shouldRewardExp();
+    }
+
     public boolean outOfStock() {
         return uses >= maxUses;
     }

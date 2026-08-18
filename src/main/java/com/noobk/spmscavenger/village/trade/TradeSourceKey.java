@@ -34,5 +34,16 @@ package com.noobk.spmscavenger.village.trade;
 public enum TradeSourceKey {
 
     /** The villager's own {@code MerchantOffers}, resolved by board address. */
-    VANILLA
+    VANILLA,
+
+    /**
+     * Trade Everything's synthetic quote, resolved by <b>re-quoting the same input</b>.
+     *
+     * <p>Optional. The key exists unconditionally — it is a name, not a capability — but
+     * {@code TradeSources} only resolves it to a source once the mod is present and its pinned API
+     * has validated. An unresolvable key fails closed rather than falling back to vanilla, because
+     * resolving a re-quoted offer on a board it has no address in would look exactly like "the offer
+     * went away".
+     */
+    TRADE_EVERYTHING
 }
