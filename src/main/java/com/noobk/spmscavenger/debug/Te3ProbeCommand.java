@@ -99,11 +99,27 @@ public final class Te3ProbeCommand {
                                         .executes(c -> applyMutation(c.getSource()))))
                         .then(Commands.literal("watch")
                                 .then(Commands.literal("on").executes(c -> {
+                                    // Bind to the TE3 subject. Without this the recorder has no
+                                    // notion of WHOSE event it is, and in a world with several
+                                    // autonomous mobs it could interleave two mobs' decisions into
+                                    // one causal-looking stream. Refusing when there is no subject
+                                    // fails closed rather than recording everything again.
+                                    Mob watched = nearestScavenger(c.getSource());
+                                    if (watched == null) {
+                                        c.getSource().sendFailure(Component.literal(
+                                                "[TE3] refused - no te3-tagged PlayerMob to bind "
+                                                        + "to; an unattributed stream is not "
+                                                        + "evidence"));
+                                        return 0;
+                                    }
                                     TradeRuntimeObserver.reset();
+                                    TradeRuntimeObserver.watch(watched.getUUID());
                                     TradeRuntimeObserver.setRecording(true);
                                     c.getSource().sendSuccess(() -> Component.literal(
-                                            "[TE3] observer RECORDING (passive - it reports "
-                                                    + "decisions, it cannot make them)"), false);
+                                            "[TE3] observer RECORDING, bound to " + watched.getUUID()
+                                                    + " (passive - it reports decisions, it cannot "
+                                                    + "make them; other mobs' events are dropped)"),
+                                            false);
                                     return 1;
                                 }))
                                 .then(Commands.literal("off").executes(c -> {
@@ -121,6 +137,9 @@ public final class Te3ProbeCommand {
                                     StringBuilder out = new StringBuilder(
                                             "[TE3] step-7A autonomous readout" + (char) 10);
                                     out.append("  ").append(TradeRuntimeObserver.summary())
+                                            .append((char) 10);
+                                    out.append("  subject=")
+                                            .append(TradeRuntimeObserver.subject())
                                             .append((char) 10);
                                     for (String line : TradeRuntimeObserver.events()) {
                                         out.append("  ").append(line).append((char) 10);

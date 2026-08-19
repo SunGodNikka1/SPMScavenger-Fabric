@@ -9,9 +9,9 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + V1.5 CLOSED**; **V2 CLOSED — VR-T2 RUNTIME PASS** (A–H) |
-| **Status** | `RUNTIME VERIFIED` — **VR-T2 PASS**. `A` transaction, `B` evaluation, `C` route admission, `D` SELL→BUY chain, `F` arbitration **CLOSED**; `E` physical executor **CLOSED + runtime exercised**; `G` relationship learning **CLOSED + runtime exercised**; `H` vanilla supply/projection **CLOSED — RUNTIME PASS** |
-| **Nearest frontier** | **V2-TE** — Trade Everything compatibility (`D-VR-068`; type design locked by `D-VR-077`). P0-1/P0-2/P0-3 **CLOSED**; production authority still withheld pending the `D-VR-077` sequence. `V2-I` optional inspector remains available. **Core vanilla trading is closed and runtime-verified.** |
-| **Last update** | 2026-08-16 (**VR-T2 RUNTIME PASS** — V2-A…V2-H closed; proof support removed) |
+| **Status** | `RUNTIME VERIFIED` — **VR-T2 PASS** and **V2-TE positive path PASS (`V2-DEF-003c-R1`)**. `A` transaction, `B` evaluation, `C` route admission, `D` SELL→BUY chain, `F` arbitration **CLOSED**; `E` physical executor **CLOSED + runtime exercised**; `G` relationship learning **CLOSED + runtime exercised**; `H` vanilla supply/projection **CLOSED — RUNTIME PASS**. V2-TE absent/incompatible-source behavior remains `UNVERIFIED`. |
+| **Nearest frontier** | **V2-TE positive autonomous path is runtime-confirmed.** The separate `VR-T2l` absent/incompatible-source negative remains `UNVERIFIED`; `V2-I` optional inspector remains available. **Core vanilla trading is closed and runtime-verified.** |
+| **Last update** | 2026-08-19 (**V2-DEF-003c-R1 RUNTIME PASS** — authoritative Gather→Trade handoff; 12 TE funding sells → vanilla Toolsmith iron pickaxe; route evidence released) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -772,7 +772,7 @@ VR-T2 **PASS** in the vanilla-only instance (`D-VR-068`).
 | **V2-G** *(CLOSED 2026-08-16)* | `SettlementRelationshipService.onTradeEpisode` familiarity bump once per completed visit/chain; no persistent `KnownVillager` or offer-index memory in gen-1. **If any part persists per-mob, it must register in `PerMobSavedData.forgetAll`** or `PerMobRemovalContractTest` fails the build (B-VR-93, Gate RET-1e) |
 | **V2-H** | `test-datapacks/phase-village-raid/` trade presets for VR-T2 / VR-T2b |
 | **V2-I** *(optional, post-VR-T2 static)* | O-panel trade inspector row (`B-VR-79`): active `consumerKey`, anchor, villager id, `TradeBlockedReason` — no new debug command |
-| **V2-TE** *(optional follow-up; does not block core)* | Trade Everything v0.3.0 Fabric compatibility through `TradeOpportunitySource`; no fake player/menu/session; exact quote revalidation; fail closed when absent/incompatible (`D-VR-068`) |
+| **V2-TE** *(positive path RUNTIME CONFIRMED; negative path remains UNVERIFIED)* | Trade Everything v0.3.0 Fabric compatibility through `TradeOpportunitySource`; no fake player/menu/session; exact quote revalidation; fail closed when absent/incompatible (`D-VR-068`). `V2-DEF-003c-R1`: 12 exact TE funding sells autonomously funded one vanilla Toolsmith iron-pickaxe purchase; `VR-T2l` still requires its separate negative run. |
 
 **Implementation dependency order (`LOCKED` sequencing — amended pass 2):**
 
@@ -921,7 +921,7 @@ VR-T2b runtime after launch approval in a **vanilla-only** instance (`D-VR-069` 
 
 **Artifact:** `.superpowers/sdd/task-47-brief.md` (**to be written on authorization**).
 
-### V2 runtime matrix (`PROPOSED`)
+### V2 runtime matrix (`ACTIVE`)
 
 | ID | Must happen | Must not happen | Notes |
 | --- | --- | --- | --- |
@@ -935,8 +935,8 @@ VR-T2b runtime after launch approval in a **vanilla-only** instance (`D-VR-069` 
 | **VR-T2h** | Backpack costs split over slots and result only fits after payment; staged simulation commits exactly once | Reject affordable split stack; void result; partial payment | Gate 4.18-style transaction case |
 | **VR-T2i** | Night window or all reachable villagers sleeping → `TaskLifecycle.BLOCKED` with `TradeBlockedReason` | Busy-spin at bed; trade goal owns MOVE+LOOK all night | `D-VR-059` + `D-VR-066`; extends VR-T2c |
 | **VR-T2j** *(stretch)* | Component-predicate cost (enchanted/custom-data offer) commits once when fixture provides one | Reject affordable enchanted payment; match wrong component only | Optional if `V2-H` fixture includes one; not gen-1 release gate |
-| **VR-T2k** *(Trade Everything optional)* | **Only after VR-T2 PASS** (`D-VR-069`). With `tradeeverything` v0.3.0 installed, an eligible surplus stack produces its exact synthetic quote without opening a menu or setting `tradingPlayer` | Synthetic offer absent merely because no human session exists; fake `ServerPlayer`; saved synthetic offer | V2-TE; separate instance from vanilla baseline |
-| **VR-T2l** *(Trade Everything negative)* | Missing/incompatible Trade Everything disables only that source; vanilla trades continue | Contaminating VR-T2 baseline with `tradeeverything` present; startup/classloading crash; reimplemented approximate pricing | Optional compatibility must fail closed |
+| **VR-T2k** *(Trade Everything optional)* | **Only after VR-T2 PASS** (`D-VR-069`). With `tradeeverything` v0.3.0 installed, an eligible surplus stack produces its exact synthetic quote without opening a menu or setting `tradingPlayer` | Synthetic offer absent merely because no human session exists; fake `ServerPlayer`; saved synthetic offer | **PASS — `V2-DEF-003c-R1`, 2026-08-19.** `plans=13 (TE 12)`, `revals=13`, `trades=13`; 12 TE `22 oak_log -> 1 emerald` sells funded vanilla Toolsmith `12 emerald -> 1 iron_pickaxe`; `routeEvidence tracked=0` |
+| **VR-T2l** *(Trade Everything negative)* | Missing/incompatible Trade Everything disables only that source; vanilla trades continue | Contaminating VR-T2 baseline with `tradeeverything` present; startup/classloading crash; reimplemented approximate pricing | `UNVERIFIED` — the positive Step-7A run does not exercise source absence or incompatibility |
 
 ### Task-46 peer review — User P1 closure (`AUTHORIZED`, 2026-08-14)
 
@@ -2574,6 +2574,24 @@ null so player-specific mutable `specialPriceDiff` cannot leak into a PlayerMob 
 **Prerequisite:** VR-T2 **PASS** in a vanilla-only instance (`D-VR-069`). This section does **not**
 define the first proof.
 
+**Runtime status (`V2-DEF-003c-R1`, `RUNTIME_CONFIRMED`, 2026-08-19):** the Step-7A autonomous
+readout observed the complete shared-authority and economic chain:
+
+```text
+ROUTE UNKNOWN/FEASIBLE -> GATHER PUBLISHED -> GATHER YIELDING
+  -> ROUTE INFEASIBLE -> PLAN #1 TE -> TRADE #1 logs 320->298
+  -> 12 TE funding sells -> 12 emeralds
+  -> vanilla Toolsmith BUY -> 1 iron_pickaxe
+  -> routeEvidence tracked=0
+```
+
+Counters: `plans=13 (TE 12)`, `revals=13`, `trades=13`, `episodes=0`. This confirms the V2-TE
+positive opportunity/revalidation/execution path and its composition with the vanilla purchase
+source. It does **not** confirm `VR-T2l` (Trade Everything absent/incompatible), and `episodes=0` is
+not promoted into a relationship-learning result. The full defect and acceptance record is in
+`docs/porting/KNOWN_DEFECTS.md`; the compact scenario result is in
+`docs/porting/TEST_MATRIX.md`.
+
 **Source-confirmed baseline:** [`bh679/tradeeverything-mc@fe305e6`](https://github.com/bh679/tradeeverything-mc/tree/fe305e663052c637dfeae2c9a8294c7748c611b0), Minecraft 1.21.1, Fabric mod id
 `tradeeverything`. `AbstractVillagerTradingMixin` prepends its synthetic offer only during
 `setTradingPlayer(player)` and removes it on `setTradingPlayer(null)`; the save redirect filters it
@@ -3572,7 +3590,9 @@ changes (`RUNTIME_QUESTION`, must disable compat without crashing); multiple che
 quotes (`PERFORMANCE_RISK`, bounded to admitted demand + eight backpack slots).
 
 **MAIBS verdict:** `BEHAVIORALLY_PLAUSIBLE` as a separate V2-TE follow-up with VR-T2k/l. No movement,
-priority, or GoalSelector change is introduced. Runtime and binary compatibility remain `UNVERIFIED`.
+priority, or GoalSelector change is introduced. **Update 2026-08-19:** the positive autonomous path is
+`RUNTIME_CONFIRMED` by `V2-DEF-003c-R1`; absent/incompatible binary behavior (`VR-T2l`) remains
+`UNVERIFIED`.
 
 ### Brainstorm continuation 10 — User peer review pre-task-47 (`User` + `Agent_Cursor`, 2026-08-15)
 
@@ -5359,7 +5379,8 @@ enum value) first; V2-F cannot complete ahead of E because the classifier target
 
 ### D-VR-068: Trade Everything is an optional post-core `TradeOpportunitySource` (`User` + `Agent_Codex`, 2026-08-15)
 
-**Status:** `LOCKED DESIGN / SEPARATE IMPLEMENTATION AUTHORITY REQUIRED`
+**Status:** `IMPLEMENTED / POSITIVE PATH RUNTIME CONFIRMED`; absent/incompatible-source negative
+remains `UNVERIFIED` (`VR-T2l`).
 **Accepted:** vanilla V2 establishes trade truth first (`D-VR-069`). A separate V2-TE task may add
 `VanillaTradeSource` and optional `TradeEverythingTradeSource`, while `VillagerTradeAdapter` remains
 the sole staged transaction owner. Never create a fake `ServerPlayer`, open `MerchantMenu`, or call
@@ -5567,6 +5588,7 @@ beside `ExplorationActivityGoal` or it fail-closes the entire discretionary dire
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| User + Agent_Codex | 2026-08-19 | **V2-DEF-003c-R1 RUNTIME PASS recorded.** Step-7A directly observed `ROUTE UNKNOWN/FEASIBLE -> GATHER PUBLISHED -> GATHER YIELDING -> ROUTE INFEASIBLE -> PLAN #1 TE -> TRADE #1 320->298`, then completed 12 exact Trade Everything funding sells, accumulated 12 emeralds, bought one iron pickaxe from a vanilla Toolsmith, and ended with `routeEvidence tracked=0`. Counters: `plans=13 (TE 12)`, `revals=13`, `trades=13`, `episodes=0`. Scope is deliberately narrow: V2-TE positive path and the V2-DEF-003c authority handoff are `RUNTIME_CONFIRMED`; `VR-T2l` and relationship learning are not promoted. Documentation only; no `MandatoryHandoffPolicy`, Gather/Trade scheduling, or production Java change. **Frontier before:** V2-DEF-003c runtime unverified / V2-TE positive path pending. **Frontier after:** positive path runtime-confirmed; absent/incompatible-source negative remains. |
 | User + Agent_Claude | 2026-08-15 | **V2-E design LOCKED — targeted seam interlock; SOCIAL sub-mode rejected.** Ten constraints locked. Rejected the SOCIAL sub-mode because FriendlyGreet's integration is SOCIAL-specific end to end, so trade inside it would arrive as *social completion evidence* and make `ActivityClass.VILLAGE_TRADE` fight the architecture. **Four corrections to my prediction, two of them my errors:** (1) the claim must open at **attempt start**, not FACE — a FACE-only claim rests V2-E's correctness on an unproven GoalSelector ordering fact, and the answer to a long walk is bounding the *attempt*, not letting trade greet its own target; (2) the interlock must run **before** `recordObservation` publishes the target into the SOCIAL control plane, or Opinion forms a SOCIAL intent for an executor we deliberately made unavailable (verified: the observation is the mixin's fourth line); (3) *"decision cycle"* is ambiguous — failures live in a bounded candidate-attempt **round**, exhausted → cooldown → fresh round, keeping V2-C stateless while the physical executor holds transient attempt state; (4) the missing `getTradingPlayer()` guard is **`CODE_CONFIRMED`** not `RUNTIME_QUESTION` (the adapter guards `isAlive()` only), and sleeping-merchant legality is V2-E's, not assumed from V2-A. Gate MAIBS-1 → **`PASS — BEHAVIORALLY_PLAUSIBLE`**; runtime `UNVERIFIED`. **No code written.** |
 | Agent_Claude | 2026-08-15 | **V2-E Behavioral Prediction (Gate MAIBS-1) — implementation held.** Result: **`FAIL — ARCHITECTURE_DEFECT` as briefed**, all three resolvable in design. (1) **A P3 goal cannot hold a claim against P1.** `FriendlyGreetGoal` is priority **1** with MOVE+LOOK and its `canUse` takes the *nearest greetable entity* — which is the villager the mob just walked to, so approaching *creates* the preemption. A `TradeSessionClaimWindow` owned by the P3 trade goal protects nothing. The only mechanism that can express it is the admission seam we already own, as a **targeted, expiring, `stop()`-released** suppression of one (mob → villager) pairing — narrow enough not to reintroduce the global veto 44D-R2 removed. (2) **Claim release on `stop()`** is undefined (combat during FACE leaves greeting suppressed for a villager nobody is trading with). (3) **Candidate demotion** is unspecified: best-unreachable must not re-select forever — *"best-ranked offer is unreachable" ≠ "trade is unreachable"*. Also surfaced: nothing refuses a merchant already held by a **human player** (`getTradingPlayer() != null`) — new V2-E requirement on the V2-A adapter. Five weird behaviours classified, adversarial A–O, T0…T+1200 trace, two design options, falsifying VR-T2 experiment. **No code written.** |
 | User + Agent_Claude | 2026-08-16 | **V2-G CLOSED (R3 accepted); V2-H0 implemented under new `D-VR-075`.** R3: `consumeCreditFor(null)` **fails closed** — post-R2 the caller passes the chain that *earned* the episode, so `null` no longer means "terminated" but "pending evidence lost its owner", a state with no legitimate producer; the terminated-chain test is replaced by a lost-owner negative that also asserts refusal does not consume the ledger slot. NC-45 fires. **V2-H stopped before writing the fixture**: a vanilla supply probe showed no villager sells `iron_ingot`, `charcoal` or `coal`, so the whole V2-E path was economically unreachable in vanilla — see `D-VR-075`. `TradePurchaseProjection` added (pure, direct-material-first, same `consumerKey`, deficit 1, no profession hardcoding); feasibility and exhaustion stay on the source demand. 1169 tests; NC-46 (projection before direct), NC-48 (consumer check dropped), NC-49 (ingredient deficit carried) fire. **NC-47 is inexpressible**: feasibility is computed before `purchaseDemand` is declared, so no compiling mutation can feed it the projection — structural protection, recorded rather than claimed as a passing control. **Probe method note:** two earlier instruments were wrong — a `javap` window-heuristic contradicted itself on `IRON_INGOT`, and a runtime probe reached 7 of ~128 items because `ItemsForEmeralds` throws on a null entity. The finding only held once listing result fields were read directly and coverage was reported; `VanillaTradeSupplyProbeTest` now carries a coverage guard so a broken instrument fails loudly instead of looking like a finding. **Next: V2-H fixture on untouched vanilla offers.** |
@@ -5835,13 +5857,16 @@ Director selects among these via utility; SPM combat/flee still preempt at prior
 
 ### D-VR-077: V2-TE trade-source architecture — three coordinates, source provenance, caller-authorized quote inputs (`User` + `Agent_Claude`, 2026-08-17)
 
-**Status:** `LOCKED DESIGN / PRODUCTION AUTHORITY STILL WITHHELD`
+**Status:** `IMPLEMENTED / POSITIVE PATH RUNTIME CONFIRMED` by `V2-DEF-003c-R1`; `VR-T2l` remains
+`UNVERIFIED`.
 **Refines:** `D-VR-068` (unchanged; this fixes the type design under it).
 **Preconditions closed:** `P0-1` (ensureIndexed prerequisite, direct↔TE live quote parity, session
 teardown), `P0-2` (detached execution source trace + runtime witness, TE `afterTrade` fires
 detached, marker preservation, `rewardExp` observed), `P0-3` (economic B reachability). The
-compatibility unknowns are answered experimentally; what remains is preventing today's two-source
-assumption from being baked into the permanent trade model.
+compatibility unknowns were answered experimentally, the permanent multi-source model was
+implemented, and the 2026-08-19 Step-7A run exercised its positive path end to end. The remaining
+runtime frontier is the separate absent/incompatible-source negative, not production authority for
+the positive path.
 
 #### Accepted — 1. Revalidation strictness is per source, and vanilla must not change
 

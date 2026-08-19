@@ -350,8 +350,9 @@ instead of guessing.
 
 ## V2-DEF-003c — publishing a handoff is not performing one
 
-**Status:** REPAIRED — unit gate green, **runtime UNVERIFIED**. **Discovered:** step 7B runtime,
-2026-08-19, immediately after the knowledge handoff started working.
+**Status:** REPAIRED — unit gate green; **`V2-DEF-003c-R1` runtime CONFIRMED** on 2026-08-19.
+**Discovered:** step 7B runtime, 2026-08-19, immediately after the knowledge handoff started
+working.
 
 ### The run
 
@@ -463,3 +464,48 @@ gather route --publishes exhaustion--> HANDOFF AVAILABLE
 Success is not "the fixture reaches the pickaxe". It is that **the same authoritative publication
 that changes route feasibility also controls scheduling ownership**, with neither side reconstructing
 what the other meant.
+
+### V2-DEF-003c-R1 — Step-7A autonomous runtime confirmation
+
+**Evidence:** user-captured `[TE3] step-7A autonomous readout`, 2026-08-19. The observer recorded
+`plans=13 (TE 12)`, `revals=13`, `trades=13`, and `episodes=0`.
+
+The causal handoff was observed in the required order:
+
+```text
+ROUTE iron_ingot UNKNOWN/FEASIBLE -> gather keeps ownership
+  -> GATHER PUBLISHED exhaustion for minecraft:iron_ingot (SEARCH_COMPLETED_EMPTY)
+  -> GATHER YIELDING deliberate-work slot to the published handoff
+  -> ROUTE iron_ingot INFEASIBLE -> trade may displace
+  -> PLAN #1 TE armorer Q1: 22 oak_log -> 1 emerald
+  -> REVAL #1 Q2: 22 oak_log -> 1 emerald OK
+  -> TRADE #1 TRADED logs 320->298 em 0->1 pick 0->0
+```
+
+This is direct runtime evidence for both halves of the repair: trade did **not** displace the gather
+route while its status was `UNKNOWN/FEASIBLE`, and the published exhaustion then caused gather to
+yield the shared deliberate-work slot before the first Trade Everything transaction. The exact
+`320->298` log delta also proves the former `NO_ROOM` sequence did not recur on the first handoff.
+
+The same uninterrupted autonomous chain then completed:
+
+```text
+12 Trade Everything funding sells
+  -> 12 emeralds
+  -> vanilla Toolsmith BUY: 12 emerald -> 1 iron_pickaxe
+  -> backpack iron_pickaxe = 1
+  -> routeEvidence tracked = 0
+```
+
+Final captured inventory was `logs=56`, `emeralds=0`, `iron_pickaxe(pack)=1`; the main hand remained
+`1x iron_axe`. `routeEvidence tracked=0` confirms the scoped route evidence did not remain retained
+after convergence. `episodes=0` is preserved as an observed counter, but this Step-7A scenario does
+not promote any relationship-learning claim.
+
+**Must happen — PASS:** one authoritative empty gather scan publishes the iron-ingot exhaustion,
+gather yields, Trade Everything performs all twelve funding sells, and the vanilla Toolsmith purchase
+satisfies the iron-pickaxe consumer.
+
+**Must not happen — PASS:** trade does not steal ownership while gather is still
+`UNKNOWN/FEASIBLE`; unrelated gather work does not consume the result slot after publication; the
+chain does not stop at funding; route evidence does not survive completion.

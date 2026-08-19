@@ -489,7 +489,7 @@ gate: `docs/porting/KNOWN_DEFECTS.md`.
 | Demand unsatisfiable | discretionary activity resumes | mob frozen guarding an unservable demand | `OPEN` |
 
 
-#### V2-DEF-003 — consumer-accurate gather frontier (REPAIRED — runtime UNVERIFIED)
+#### V2-DEF-003 — consumer-accurate gather frontier (REPAIRED — runtime CONFIRMED)
 
 Full record: `docs/porting/KNOWN_DEFECTS.md`. `ConsumerAcquisitionFrontierTest` (7 rows) plus the
 corrected `GatherIntentPolicyTest` suppression pair.
@@ -498,4 +498,18 @@ corrected `GatherIntentPolicyTest` suppression pair.
 | --- | --- | --- | --- |
 | iron wanted, sticks sufficient | `RAW_IRON` required | `LOGS`/`COBBLESTONE` required | `CODE_CONFIRMED` |
 | already stone, pursuing iron | cobble is wealth only | stock target carries mandatory authority | `CODE_CONFIRMED` |
-| unrelated log nearby | iron search reaches its own conclusion | a log scan stands in for the iron route | `CODE_CONFIRMED`; end-to-end `UNVERIFIED` |
+| unrelated log nearby | iron search reaches its own conclusion | a log scan stands in for the iron route | `RUNTIME_CONFIRMED` by `V2-DEF-003c-R1`: `UNKNOWN/FEASIBLE -> PUBLISHED SEARCH_COMPLETED_EMPTY -> INFEASIBLE` |
+
+#### V2-DEF-003c-R1 — published handoff controls scheduling (RUNTIME CONFIRMED)
+
+Runtime evidence: user-captured `[TE3] step-7A autonomous readout`, 2026-08-19. Full causal record:
+`docs/porting/KNOWN_DEFECTS.md`.
+
+| Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Gather route remains unresolved/feasible | gather keeps the deliberate-work slot | trade displaces a route that has not concluded | `RUNTIME_CONFIRMED`: `ROUTE iron_ingot UNKNOWN/FEASIBLE -> gather keeps ownership` |
+| Empty covered scan publishes the handoff | `GATHER PUBLISHED -> GATHER YIELDING -> ROUTE INFEASIBLE -> PLAN #1 TE` | optional gather work consumes the reserved result slot | `RUNTIME_CONFIRMED`: first trade `22 oak_log -> 1 emerald`, logs `320->298`, emeralds `0->1` |
+| Autonomous funding and purchase chain | 12 TE sells fund the exact vanilla Toolsmith purchase; iron pickaxe enters backpack | stop after funding, hoard emeralds, or leave route evidence retained | `RUNTIME_CONFIRMED`: `plans=13 (TE 12)`, `revals=13`, `trades=13`; emeralds `12->0`, iron pickaxe `0->1`, `routeEvidence tracked=0` |
+
+`episodes=0` was also captured. It is a readout fact, not relationship-learning acceptance evidence
+for this scenario.

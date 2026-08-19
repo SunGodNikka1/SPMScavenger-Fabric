@@ -49,6 +49,17 @@ class TradeRuntimeObserverTest {
         });
     }
 
+    /** The bound subject for these tests; other UUIDs must be dropped. */
+    private static final java.util.UUID SUBJECT = java.util.UUID.randomUUID();
+    private static final java.util.UUID OTHER_MOB = java.util.UUID.randomUUID();
+
+    /** Bind then record - the order the command uses, and the order an unbound observer refuses. */
+    private static void recordFor(java.util.UUID mobId) {
+        TradeRuntimeObserver.reset();
+        TradeRuntimeObserver.watch(mobId);
+        TradeRuntimeObserver.setRecording(true);
+    }
+
     @AfterEach
     void stopRecording() {
         TradeRuntimeObserver.setRecording(false);
@@ -76,11 +87,11 @@ class TradeRuntimeObserverTest {
         TradeRuntimeObserver.setRecording(false);
         TradeRuntimeObserver.reset();
 
-        TradeRuntimeObserver.selected("VANILLA", null, "ref", new ItemStack(Items.EMERALD, 5),
+        TradeRuntimeObserver.selected(SUBJECT, "VANILLA", null, "ref", new ItemStack(Items.EMERALD, 5),
                 new ItemStack(Items.IRON_INGOT));
-        TradeRuntimeObserver.revalidated("VANILLA", null, "ref", Optional.empty());
-        TradeRuntimeObserver.transacted("VANILLA", null, "TRADED", null, 0, 0);
-        TradeRuntimeObserver.episode();
+        TradeRuntimeObserver.revalidated(SUBJECT, "VANILLA", null, "ref", Optional.empty());
+        TradeRuntimeObserver.transacted(SUBJECT, "VANILLA", null, "TRADED", null, 0, 0);
+        TradeRuntimeObserver.episode(SUBJECT);
 
         assertTrue(TradeRuntimeObserver.events().isEmpty(),
                 "an ordinary session pays one volatile read per decision point and nothing else");
@@ -89,9 +100,9 @@ class TradeRuntimeObserverTest {
 
     @Test
     void mustHappen_recordingCapturesTheSourceThatProducedTheCandidate() {
-        TradeRuntimeObserver.setRecording(true);
+        recordFor(SUBJECT);
 
-        TradeRuntimeObserver.selected("TRADE_EVERYTHING", null, "Requote[oak_log]",
+        TradeRuntimeObserver.selected(SUBJECT, "TRADE_EVERYTHING", null, "Requote[oak_log]",
                 new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1));
 
         assertEquals(1, TradeRuntimeObserver.events().size());
@@ -109,10 +120,10 @@ class TradeRuntimeObserverTest {
     /** RET-1: a debug recorder that grows for a whole session is a shape this repo has shipped. */
     @Test
     void mustNotHappen_theEventLogGrowsWithoutBound() {
-        TradeRuntimeObserver.setRecording(true);
+        recordFor(SUBJECT);
 
         for (int i = 0; i < 5_000; i++) {
-            TradeRuntimeObserver.episode();
+            TradeRuntimeObserver.episode(SUBJECT);
         }
 
         assertTrue(TradeRuntimeObserver.events().size() <= 400,
@@ -192,13 +203,13 @@ class TradeRuntimeObserverTest {
     /** Chat-readable: one short line per event, or the readout exists but cannot be read. */
     @Test
     void mustHappen_everyEventFitsOnOneReadableLine() {
-        TradeRuntimeObserver.setRecording(true);
+        recordFor(SUBJECT);
 
-        TradeRuntimeObserver.selected("TRADE_EVERYTHING", null, "ignored",
+        TradeRuntimeObserver.selected(SUBJECT, "TRADE_EVERYTHING", null, "ignored",
                 new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1));
-        TradeRuntimeObserver.revalidated("TRADE_EVERYTHING", null, "ignored", Optional.empty());
+        TradeRuntimeObserver.revalidated(SUBJECT, "TRADE_EVERYTHING", null, "ignored", Optional.empty());
         TradeRuntimeObserver.note("MUTATION APPLIED  oak_log value -> 2 sixteenths");
-        TradeRuntimeObserver.episode();
+        TradeRuntimeObserver.episode(SUBJECT);
 
         for (String line : TradeRuntimeObserver.events()) {
             assertTrue(line.length() <= 90, "too wide for chat (" + line.length() + "): " + line);
@@ -238,14 +249,14 @@ class TradeRuntimeObserverTest {
      */
     @Test
     void mustHappen_theTradeEverythingPlanCounterIsExact() {
-        TradeRuntimeObserver.setRecording(true);
+        recordFor(SUBJECT);
 
-        TradeRuntimeObserver.selected("VANILLA", null, "r", new ItemStack(Items.EMERALD, 5),
+        TradeRuntimeObserver.selected(SUBJECT, "VANILLA", null, "r", new ItemStack(Items.EMERALD, 5),
                 new ItemStack(Items.IRON_INGOT));
         assertEquals(0, TradeRuntimeObserver.tradeEverythingSelections(),
                 "a vanilla plan must not arm a Trade Everything mutation");
 
-        TradeRuntimeObserver.selected("TRADE_EVERYTHING", null, "r",
+        TradeRuntimeObserver.selected(SUBJECT, "TRADE_EVERYTHING", null, "r",
                 new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1));
         assertEquals(1, TradeRuntimeObserver.tradeEverythingSelections());
     }
@@ -352,8 +363,7 @@ class TradeRuntimeObserverTest {
     @Test
     void mustHappen_armingHoldsExplorationUntilTheFirstTradeEverythingPlan() {
         restoreExploringTo(true);
-        TradeRuntimeObserver.setRecording(true);
-        TradeRuntimeObserver.reset();
+        recordFor(SUBJECT);
 
         Te3ProbeCommand.armMutation();
 
@@ -369,11 +379,10 @@ class TradeRuntimeObserverTest {
     @Test
     void mustHappen_theFirstTradeEverythingPlanRestoresExploration() {
         restoreExploringTo(true);
-        TradeRuntimeObserver.setRecording(true);
-        TradeRuntimeObserver.reset();
+        recordFor(SUBJECT);
         Te3ProbeCommand.armMutation();
 
-        TradeRuntimeObserver.selected("TRADE_EVERYTHING", null, "r",
+        TradeRuntimeObserver.selected(SUBJECT, "TRADE_EVERYTHING", null, "r",
                 new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1));
         Te3ProbeCommand.tickFixtureForTesting();
 
@@ -388,11 +397,10 @@ class TradeRuntimeObserverTest {
     @Test
     void mustNotHappen_aVanillaPlanReleasesTheHold() {
         restoreExploringTo(true);
-        TradeRuntimeObserver.setRecording(true);
-        TradeRuntimeObserver.reset();
+        recordFor(SUBJECT);
         Te3ProbeCommand.armMutation();
 
-        TradeRuntimeObserver.selected("VANILLA", null, "r", new ItemStack(Items.EMERALD, 5),
+        TradeRuntimeObserver.selected(SUBJECT, "VANILLA", null, "r", new ItemStack(Items.EMERALD, 5),
                 new ItemStack(Items.IRON_INGOT));
         Te3ProbeCommand.tickFixtureForTesting();
 
@@ -415,10 +423,9 @@ class TradeRuntimeObserverTest {
     @Test
     void mustHappen_resetRestoresExplorationAfterAPlan() {
         restoreExploringTo(true);
-        TradeRuntimeObserver.setRecording(true);
-        TradeRuntimeObserver.reset();
+        recordFor(SUBJECT);
         Te3ProbeCommand.armMutation();
-        TradeRuntimeObserver.selected("TRADE_EVERYTHING", null, "r",
+        TradeRuntimeObserver.selected(SUBJECT, "TRADE_EVERYTHING", null, "r",
                 new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1));
         Te3ProbeCommand.tickFixtureForTesting();
 
@@ -710,5 +717,100 @@ class TradeRuntimeObserverTest {
         assertTrue(probe.contains("if (!terrainArmed()) {"),
                 "arming after a failed terrain build produces a run with no wealth target and a "
                         + "conclusion that looks like policy");
+    }
+
+    // ------------------------------------------------ subject attribution (debug-only)
+
+    /**
+     * Causality must not rest on "probably only one mob was doing this".
+     *
+     * <p>Every hook was global static state with no notion of whose event it was, so a world with
+     * several autonomous PlayerMobs could interleave
+     *
+     * <pre>
+     * mob A: GATHER PUBLISHED   mob A: GATHER YIELDING
+     * mob B: ROUTE INFEASIBLE   mob B: PLAN #1
+     * </pre>
+     *
+     * and present it as one causal stream. The step-7A run was almost certainly single-subject — the
+     * exact 320-&gt;298-&gt;...-&gt;56 ledger says so — but that is an argument about the world, not a
+     * property of the harness.
+     */
+    @Test
+    void mustNotHappen_anotherMobsEventsEnterTheStream() {
+        recordFor(SUBJECT);
+
+        TradeRuntimeObserver.selected(OTHER_MOB, "TRADE_EVERYTHING", null, "r",
+                new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1));
+        TradeRuntimeObserver.revalidated(OTHER_MOB, "TRADE_EVERYTHING", null, "r",
+                Optional.empty());
+        TradeRuntimeObserver.transacted(OTHER_MOB, "TRADE_EVERYTHING", null, "TRADED", null, 0, 0);
+        TradeRuntimeObserver.episode(OTHER_MOB);
+        TradeRuntimeObserver.gatherExhaustionGate(OTHER_MOB, "PUBLISHED exhaustion for iron");
+        TradeRuntimeObserver.routeFeasibility(OTHER_MOB, "minecraft:iron_ingot", true);
+
+        assertTrue(TradeRuntimeObserver.events().isEmpty(),
+                "a second mob's decisions must be dropped, not attributed: "
+                        + TradeRuntimeObserver.events());
+        assertEquals(0, TradeRuntimeObserver.tradeEverythingSelections(),
+                "and must not arm the step-7B mutation either");
+    }
+
+    /** The gather diagnostic had no entity identity at all; it does now. */
+    @Test
+    void mustHappen_theGatherDiagnosticIsSubjectBound() {
+        recordFor(SUBJECT);
+
+        TradeRuntimeObserver.gatherExhaustionGate(OTHER_MOB, "no publish: no live demand");
+        assertTrue(TradeRuntimeObserver.events().isEmpty(),
+                "'no live demand at scan end' was unattributable - we could not even prove those "
+                        + "lines came from the TE3 mob");
+
+        TradeRuntimeObserver.gatherExhaustionGate(SUBJECT, "PUBLISHED exhaustion for iron");
+        assertEquals(1, TradeRuntimeObserver.events().size());
+    }
+
+    /** An unbound observer records nothing, so a forgotten bind fails closed. */
+    @Test
+    void mustNotHappen_anUnboundObserverRecordsEverything() {
+        TradeRuntimeObserver.reset();
+        TradeRuntimeObserver.watch(null);
+        TradeRuntimeObserver.setRecording(true);
+
+        TradeRuntimeObserver.selected(SUBJECT, "TRADE_EVERYTHING", null, "r",
+                new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1));
+        TradeRuntimeObserver.gatherExhaustionGate(SUBJECT, "PUBLISHED");
+
+        assertTrue(TradeRuntimeObserver.events().isEmpty(),
+                "silence is the safe failure - recording everything again would restore the exact "
+                        + "ambiguity the binding removes");
+    }
+
+    /** Stopping unbinds, so a later session cannot inherit the previous subject. */
+    @Test
+    void mustHappen_stoppingClearsTheSubject() {
+        recordFor(SUBJECT);
+        assertEquals(SUBJECT, TradeRuntimeObserver.subject());
+
+        TradeRuntimeObserver.setRecording(false);
+        assertEquals(null, TradeRuntimeObserver.subject(),
+                "a stale subject would silently bind the next run to a mob that no longer exists");
+    }
+
+    /** The command binds before it records, and refuses when there is nobody to bind to. */
+    @Test
+    void mustHappen_watchOnBindsToTheFixtureSubject() throws IOException {
+        String probe = Files.readString(Path.of(
+                        "src/main/java/com/noobk/spmscavenger/debug/Te3ProbeCommand.java"))
+                .replaceAll("(?s)/\\*.*?\\*/", "")
+                .replaceAll("(?m)//.*$", "");
+
+        int bind = probe.indexOf("TradeRuntimeObserver.watch(watched.getUUID())");
+        int record = probe.indexOf("TradeRuntimeObserver.setRecording(true)");
+
+        assertTrue(bind > 0 && record > 0 && bind < record,
+                "bind first, then record - the reverse would leave a window of unattributed events");
+        assertTrue(probe.contains("an unattributed stream is not "),
+                "and refuses outright when there is no te3 mob to bind to");
     }
 }

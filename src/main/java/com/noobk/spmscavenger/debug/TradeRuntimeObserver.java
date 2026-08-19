@@ -41,6 +41,28 @@ public final class TradeRuntimeObserver {
     private static final int MAX_EVENTS = 400;
 
     private static volatile boolean recording;
+    /**
+     * The one mob whose events are recorded.
+     *
+     * <h2>Why attribution cannot be optional</h2>
+     *
+     * Every hook was global static state with no notion of <i>whose</i> event it was, so in a world
+     * with several autonomous PlayerMobs the recorder could interleave
+     *
+     * <pre>
+     * mob A: GATHER PUBLISHED     mob A: GATHER YIELDING
+     * mob B: ROUTE INFEASIBLE     mob B: PLAN #1
+     * </pre>
+     *
+     * and present it as one causal stream. The step-7A run was almost certainly single-subject — the
+     * exact 320→298 ledger says so — but a proof harness whose causality rests on "probably only one
+     * mob was doing this" is not a proof harness. Events from any other mob are now dropped rather
+     * than attributed.
+     *
+     * <p>{@code null} means unbound: nothing records, so a forgotten bind fails closed rather than
+     * silently recording everything again.
+     */
+    private static volatile java.util.UUID subject;
     private static final List<String> EVENTS = Collections.synchronizedList(new ArrayList<>());
     private static int selections;
     private static int teSelections;
@@ -58,8 +80,25 @@ public final class TradeRuntimeObserver {
     private TradeRuntimeObserver() {
     }
 
+    /** Bind first, then record. An unbound observer stays silent. */
+    public static void watch(java.util.UUID mobId) {
+        subject = mobId;
+    }
+
+    public static java.util.UUID subject() {
+        return subject;
+    }
+
     public static void setRecording(boolean on) {
         recording = on;
+        if (!on) {
+            subject = null;
+        }
+    }
+
+    /** The single gate every hook passes through: recording, bound, and the right mob. */
+    private static boolean records(java.util.UUID mobId) {
+        return recording && subject != null && subject.equals(mobId);
     }
 
     public static boolean recording() {
@@ -108,9 +147,9 @@ public final class TradeRuntimeObserver {
      * {@code tp!} appears only if a trading player was present, {@code board!} only if the villager's
      * real board changed size. Silence is the passing case.
      */
-    public static void selected(Object sourceKey, Villager villager, Object ref, ItemStack costA,
-            ItemStack result) {
-        if (!recording) {
+    public static void selected(java.util.UUID mobId, Object sourceKey, Villager villager,
+            Object ref, ItemStack costA, ItemStack result) {
+        if (!records(mobId)) {
             return;
         }
         selections++;
@@ -121,9 +160,9 @@ public final class TradeRuntimeObserver {
                 + "  Q1: " + describe(costA) + " -> " + describe(result));
     }
 
-    public static void revalidated(Object sourceKey, Villager villager, Object ref,
-            Optional<MerchantOffer> resolved) {
-        if (!recording) {
+    public static void revalidated(java.util.UUID mobId, Object sourceKey, Villager villager,
+            Object ref, Optional<MerchantOffer> resolved) {
+        if (!records(mobId)) {
             return;
         }
         revalidations++;
@@ -133,9 +172,9 @@ public final class TradeRuntimeObserver {
                 + flags(villager));
     }
 
-    public static void transacted(Object sourceKey, Villager villager, Object result,
-            Container backpack, int emeraldsBefore, int pickaxesBefore) {
-        if (!recording) {
+    public static void transacted(java.util.UUID mobId, Object sourceKey, Villager villager,
+            Object result, Container backpack, int emeraldsBefore, int pickaxesBefore) {
+        if (!records(mobId)) {
             return;
         }
         transactions++;
@@ -147,15 +186,17 @@ public final class TradeRuntimeObserver {
     }
 
     /** Called by the goal just before a transaction, so the log delta is exact rather than sampled. */
-    public static void aboutToTrade(Container backpack) {
-        if (!recording) {
+    public static void aboutToTrade(java.util.UUID mobId, Container backpack) {
+        // Subject-bound too: a global snapshot taken from another mob's backpack would make the
+        // next TRADE line's log delta describe an inventory nobody traded from.
+        if (!records(mobId)) {
             return;
         }
         logsBefore = count(backpack, Items.OAK_LOG);
     }
 
-    public static void episode() {
-        if (!recording) {
+    public static void episode(java.util.UUID mobId) {
+        if (!records(mobId)) {
             return;
         }
         episodes++;
@@ -175,8 +216,8 @@ public final class TradeRuntimeObserver {
      * <p>Deduplicated: this is evaluated every time gather stops, and an unchanged answer repeated
      * two hundred times would bury everything else.
      */
-    public static void gatherExhaustionGate(String outcome) {
-        if (!recording || outcome.equals(lastGateOutcome)) {
+    public static void gatherExhaustionGate(java.util.UUID mobId, String outcome) {
+        if (!records(mobId) || outcome.equals(lastGateOutcome)) {
             return;
         }
         lastGateOutcome = outcome;
@@ -184,8 +225,9 @@ public final class TradeRuntimeObserver {
     }
 
     /** Step-7B diagnostic — the tri-state trade is actually reading, and when it changes. */
-    public static void routeFeasibility(Object materialKey, boolean mayDisplace) {
-        if (!recording) {
+    public static void routeFeasibility(java.util.UUID mobId, Object materialKey,
+            boolean mayDisplace) {
+        if (!records(mobId)) {
             return;
         }
         String line = "ROUTE   " + shortId(materialKey)
