@@ -13,8 +13,8 @@
 | **User constraint** | The RFC was originally design-only; the user has now separately authorized `SCR-1` and `SCR-2` implementation. Minecraft launches, commits, pushes, and `SCR-3` remain separately gated |
 | **Related** | `RFC-TOOL-TIER-UPGRADES.md`; `RFC-FURNACE-SMELTING.md`; `RFC-ACTION-TRANSITIONS.md`; stubs `progression/ProgressGoal.java`, `progression/TaskLifecycle.java` |
 | **Owners** | User (product); architecture TBD |
-| **Last update** | 2026-08-17 (progression route-choice + Opinion read-back architecture — `Agent_ChatGPT`) |
-| **Nearest frontier** | Peer review **D-VP-PR-001…004** (route arbitrator + Opinion read-back); **GTH-1**; **RT-MI-TS1** runtime falsification |
+| **Last update** | 2026-08-19 (Unified Progression Authority proposal integrated from V2-DEF-002/003 evidence — User + `Agent_Codex`) |
+| **Nearest frontier** | Independent peer review **D-VP-PR-001…009**, especially the single-consumer-truth boundary and `MANDATORY_PENDING` authority seam; then authorize or reject **VP-UPA-0** contract extraction. **GTH-1** and **RT-MI-TS1** remain parallel frontiers |
 | **Gate** | MRFC-1 |
 
 ### Naming note
@@ -29,17 +29,26 @@ Vanilla survival progression is a **recipe- and gate-driven dependency graph**, 
 
 **SPM Scavenger** (`spmscavenger`) is the correct integration surface: a PolyForm-safe compatibility addon that attaches goals on `ENTITY_LOAD` without compiling against SPM (`CONFIRMED` — `SpmScavenger.java`, `PlayerMobs.java`).
 
-**Recommended architecture (D-VP-001, aligns with D-TTU-017):**
+**Recommended generation-one foundation (D-VP-001, aligns with D-TTU-017):**
 
 ```text
 ProgressGoal (user/config target)
   → RequirementResolver (backward chain from live RecipeManager + tool gates)
-  → WorkDemandPolicy (pure, unit-testable “what is missing?”)
-  → Existing executors (Gather / Craft / Smelt / Place / Combat / …)
+  → ProgressionNeed (one consumer interpretation; requirement states + active frontier)
+  → Route providers (Gather / Craft / Smelt / Trade / Loot / …)
+  → ProgressionRouteArbitrator (objective eligibility first; optional Opinion ranking second)
+  → ProgressionIntent + ActivityAuthority
+  → Existing executors
   → TaskLifecycle (RUNNING | SUCCESS | FAILURE | BLOCKED | INTERRUPTED | RETRY)
+  → re-resolve the consumer
 ```
 
 **Do not** ship one giant scripted sequence or a full GOAP/HTN planner in generation one (`CONSENSUS` — `RFC-TOOL-TIER-UPGRADES.md` D-TTU-017). Recursive prerequisite resolution is implemented as **bounded backward chaining** over a finite node catalog, not open-ended search.
+
+The added middle is not an Opinion feature and not an Action-Transitions feature. Progression owns
+requirement truth, objective route eligibility, commitment, and mandatory-pending authority. Opinion
+may rank only already-legal alternatives. Executors own physical feasibility and execution; the
+existing action-transition system remains a consumer of selected intent rather than the source of it.
 
 **Practical endgame ceiling (honest):** autonomous **torch + stone/iron tool loop** is **PARTIAL / achievable** with current RFC children. Autonomous **Nether → Blaze → Eyes → Stronghold → Dragon** is **NOT PRACTICAL** without major new systems (structure discovery, portal construction, boss arenas, 36-slot logistics). Label per-phase feasibility below.
 
@@ -340,15 +349,305 @@ STICKS
 
 D-VP-001 is sufficient while a requirement has **one** obvious acquisition path. It is **insufficient**
 once multiple **legal** strategies can satisfy the same `ProgressionNeed` (mine→smelt→craft vs trade
-vs loot vs remembered site). See [Topic: Progression route choice and Opinion read-back](#topic-progression-route-choice-and-opinion-read-back).
+vs loot vs remembered site). See [Topic: Unified Progression Authority](#topic-unified-progression-authority--shared-requirement-truth-route-arbitration-and-activity-authority).
 
 ---
 
-## Topic: Progression route choice and Opinion read-back
+## Topic: Unified Progression Authority — Shared Requirement Truth, Route Arbitration, and Activity Authority
 
-**Status:** `PROPOSED` — architecture pressure-test; **not** implementation authorization  
-**Author:** `Agent_ChatGPT` (brainstorm continuation, 2026-08-17)  
+**Status:** `PROPOSED` — expanded architecture pressure-test; **not** implementation authorization
+
+**Authors:** `Agent_ChatGPT` (route-choice seed, 2026-08-17); User + `Agent_Codex` (unified authority refinement, 2026-08-19)
+
 **Peer gate:** MRFC-1; MAIBS-1 applies before any route arbitrator ships
+
+### Observable defects that make this a current architecture track (`RUNTIME_CONFIRMED`)
+
+This topic is the missing middle of D-VP-001, not a second planner beside it.
+
+| Defect | What the player observed | Architectural cause | Evidence |
+| --- | --- | --- | --- |
+| **V2-DEF-003** | Mob with the sticks required for an iron pickaxe and no iron kept gathering irrelevant logs; raw-iron exhaustion never published; ten funded trades existed but no trade plan opened | `ScavengerCrafting` and `GatherIntentPolicy` independently interpreted the same consumer and disagreed | `docs/porting/KNOWN_DEFECTS.md`; local shared-frontier repair landed, runtime repair remains `UNVERIFIED` |
+| **V2-DEF-002** | Unresolved iron-pickaxe demand existed, but before any executor admitted, Opinion selected EXPLORE and the mob walked about 150 blocks away from village/trade evidence | Active-goal observation sees mandatory execution but cannot represent **mandatory work pending route resolution** | `docs/porting/KNOWN_DEFECTS.md` step-7B trace, 2026-08-18 |
+
+Current implementation is genuinely a skeleton at this boundary:
+
+- `CODE_CONFIRMED`: `progression/ProgressGoal.java` is an outcome enum and
+  `progression/TaskLifecycle.java` is the terminal/continuation vocabulary.
+- `CODE_CONFIRMED`: `WorkDemandPolicy` currently owns furnace-output arbitration; its
+  `MaterialDemand` is route-specific, not a complete consumer requirement model.
+- `CODE_CONFIRMED`: `TradeDemandRegistrar` is intentionally a two-route compatibility bridge:
+  `EXISTING_WORK` wins while feasible and TRADE wins only after bounded infeasibility evidence.
+- `NOT FOUND` probe 1: no `RequirementResolver` declaration under `src/main/java`.
+- `NOT FOUND` probe 2: no production `ProgressionNeed`, `ProgressionIntent`, or
+  `ProgressionRouteArbitrator` declaration/call under `src/main/java`.
+- `NOT FOUND` probe 3: no universal `ActivityAuthority` or `MANDATORY_PENDING` state under
+  `src/main/java`; `DiscretionaryEligibility` reasons from active `ActivityClass` observations.
+
+### Deduplication and ownership
+
+| Candidate | Classification | Resolution |
+| --- | --- | --- |
+| Shared consumer interpretation | `REFINEMENT` of D-VP-001 and the overlap warning | Promote here; do not create another demand RFC |
+| Cross-strategy route arbitrator | `REFINEMENT` of D-VP-PR-002 | Preserve one arbitrator; broaden beyond mine-vs-trade |
+| Opinion route ranking | `REFINEMENT` of D-VP-PR-001/003 | Keep advisory and post-legality |
+| Activity authority over progression + Opinion | `NEW`, evidenced by V2-DEF-002 | Define semantic tiers here; reuse existing SPM/Scavenger admission seams during implementation |
+| Executor-local recipe/demand interpretation | `CONFLICT` with V2-DEF-003 | Reject as authoritative truth; executors derive only physical execution facts |
+| Action-Transitions ownership | `ALTERNATIVE`, rejected | Transitions may enact selected intent; they do not own consumer truth or route choice |
+
+### Unified architecture (`PROPOSED`)
+
+```text
+WORLD / INVENTORY / CONFIG
+          |
+          v
+     ProgressGoal
+          |
+          v
+ RequirementResolver
+          |
+          v
+   ProgressionNeed                 <- SINGLE CONSUMER TRUTH
+          |
+          v
+ Route providers
+   Gather | Craft | Smelt | Trade | Loot | future adapters
+          |
+          v
+ RouteCandidates
+   objective legality / feasibility / cost / evidence
+          |
+          v
+ ProgressionRouteArbitrator
+   objective dominance first; optional Opinion ranking second
+          |
+          v
+ ProgressionIntent + RouteCommitment
+          |
+          v
+ ActivityAuthority
+   EMERGENCY / PLAYER_AUTHORITY / COMBAT / MANDATORY / DISCRETIONARY
+          |
+          v
+ Existing executor -> TaskLifecycle -> re-resolve consumer
+```
+
+These names are conceptual until contract review. This proposal does **not** authorize a giant new
+goal, per-tick world planner, or replacement of SPM's GoalSelector priorities.
+
+### Single consumer truth — `RequirementResolver` and `ProgressionNeed`
+
+**Hard rule (`D-VP-PR-005`, proposed): a consumer's requirements are interpreted exactly once.**
+
+```text
+ProgressionNeed
+  consumerKey = spmscavenger:iron_pickaxe_upgrade
+  goal        = IRON_PICKAXE
+  requirements
+    STICK x2       held=3 deficit=0 SATISFIED
+    IRON_INGOT x3  held=0 deficit=3 MISSING
+  frontier = IRON_INGOT x3
+  demandClass = PROGRESSION
+  utility = derived objective priority
+```
+
+Gather does not know the iron-pickaxe recipe. Craft, Smelt, and Trade do not independently derive
+the consumer. Each receives the same `consumerKey` and frontier, then answers only its route-local
+question.
+
+V2-H static integration evidence distinguishes three related but non-interchangeable identities:
+
+| Identity | Example | Owner |
+| --- | --- | --- |
+| Consumer objective | acquire iron-pickaxe capability | resolver / consumer |
+| Canonical frontier | iron ingot ×3 | requirement graph |
+| Route representation | buy iron pickaxe ×1 | Trade provider projection |
+
+Trade may project `IRON_INGOT ×3` to `IRON_PICKAXE ×1` while preserving the consumer key. Projection
+does not rewrite source need, feasibility evidence, or completion truth.
+
+Conceptual records:
+
+```text
+ProgressionNeed {
+  ProgressGoal goal
+  ResourceLocation consumerKey
+  List<RequirementState> requirements
+  Requirement frontier
+  DemandClass demandClass
+  int derivedUtility
+}
+
+RequirementState {
+  IngredientKey ingredient
+  int requiredQuantity
+  int heldQuantity
+  int deficit                    // derived per evaluation; never persisted
+  RequirementStatus status
+  RequirementRepresentation representation
+}
+```
+
+`D-FSM-010` remains authoritative: build the recipe output index once per reload, preserve
+tag/ingredient semantics, bound cycles/depth, and derive deficits live.
+
+### Route providers — expertise, not independent brains
+
+For `consumer=iron_pickaxe_upgrade`, `frontier=IRON_INGOT ×3`:
+
+| Provider | Candidate | Example status/evidence |
+| --- | --- | --- |
+| Gather | expose/mine raw iron | `PROBING` until a bounded legitimate scan resolves |
+| Smelt | raw iron → iron ingot | `BLOCKED_TRANSIENT` while input is absent |
+| Craft | iron ingot + sticks → pickaxe | endpoint, not currently executable |
+| Trade | projected iron-pickaxe output | `FEASIBLE` only with bounded live quote + funding evidence |
+| Loot | known container/source | absent until legitimately observed |
+
+Providers accept one need snapshot, emit bounded candidates/provenance, and own no cross-provider
+winner. They revalidate physical facts at admission/commit. Optional mod providers disappear cleanly
+when absent; they must not expose optional/client implementation types through common contracts.
+
+### Explicit route status and knowledge evidence
+
+Boolean feasibility is rejected:
+
+| Status | Meaning | Arbitrator treatment |
+| --- | --- | --- |
+| `FEASIBLE` | bounded evidence supports admission and executor hard blockers | legal candidate |
+| `PROBING` | bounded evidence acquisition is active or was interrupted without conclusion | protect/resume bounded probe; not failure |
+| `BLOCKED_TRANSIENT` | route exists but a transient condition blocks admission | backoff/tolerance |
+| `INFEASIBLE` | named bounded probe or hard rule disproved this route for its current scope | alternative may take ownership |
+| `UNKNOWN` | insufficient evidence and no active probe owns discovery | schedule evidence work or defer honestly |
+
+**Absence of an executor is not route-infeasibility evidence.** Combat-interrupted `PROBING` does
+not become `INFEASIBLE`; “no exposed iron within radius 20 at tick N” does not mean “no iron exists.”
+
+| Context | Discovery | Validity | Owner | Cost | Refresh/invalidation | Persistent? |
+| --- | --- | --- | --- | --- | --- | --- |
+| Gather evidence | bounded loaded/ticking geometry scan | radius, dimension, tick, exposure/path assumptions | Gather provider | scan + path probes | expiry, terrain/chunk change; interruption stays `PROBING` | no gen-1 |
+| Trade evidence | observed live villager offer | villager, offer signature, tick, customer/stock | Trade provider | bounded entity/offer inspection | unload, price/use/customer change | no gen-1 |
+| Recipe graph | reload-built immutable output index | current resource generation | RequirementResolver | reload build + bounded lookup | resource reload | shared immutable |
+| Commitment | consumer + route + start + progress | terminal/invalidation/expiry | arbitrator | O(1) evaluation | explicit release/replace | transient gen-1 |
+
+Any long-lived implementation separately satisfies RET-1: key, bound, production eviction, and
+death/unload/dimension/server-stop behavior.
+
+### Arbitrator, objective dominance, and route commitment
+
+Selection stages:
+
+1. Hard legality: config, griefing, tool, spend, safety, and API gates.
+2. Evidence state: feasible vs probing/transient/infeasible/unknown.
+3. Existing commitment: retain bounded work unless a meaningful release occurs.
+4. Objective dominance: compare defined fact vectors, not unrelated scores.
+5. Optional Opinion: rank only genuine legal trade-offs among survivors.
+
+Do **not** compare `TradeEvaluation.utility=73` with `WorkDemandPolicy.derivedUtility=100`. Candidate
+facts may include travel burden, hazard band, irreversible consumption, uncertainty, work units,
+and completion evidence, but every axis needs defined semantics.
+
+```text
+RouteCommitment {
+  consumerKey
+  routeId
+  startedAtTick
+  progressEvidence
+  boundedTolerance / expiry
+}
+```
+
+Minor score changes cannot steal ownership. Release occurs on `SUCCESS`, scoped `INFEASIBLE`,
+transient block beyond tolerance, consumer invalidation, higher authority, or expiry. `INTERRUPTED`
+preserves semantic intent but discards disposable path and commit-instant transaction state.
+
+Strongest objection: commitment can fossilize a poor route. The answer is explicit invalidation,
+bounded reevaluation checkpoints, and progress evidence—not per-tick route theft. Exact timeouts are
+`UNVERIFIED` product/performance decisions.
+
+### ActivityAuthority — distinguish idle from mandatory pending
+
+This is a semantic layer over existing GoalSelector/admission seams, not necessarily one new global
+class. Exact precedence must reconcile with stock SPM priorities and SCR-2R5 before lock.
+
+```text
+EMERGENCY          environmental escape / immediate safety
+PLAYER_AUTHORITY   explicit player command
+COMBAT             mandatory combat authority
+MANDATORY          active OR pending progression/survival work
+DISCRETIONARY      Opinion-selected explore/rest/social
+```
+
+The required new state is **`MANDATORY_PENDING`**: a valid `ProgressionNeed` exists and route
+resolution, probing, or transient admission is in progress although no executor owns MOVE/LOOK.
+While pending, discretionary displacement is refused. This directly addresses V2-DEF-002.
+
+It must not become a permanent veto. Mandatory authority releases when the consumer is satisfied or
+invalid, all bounded providers currently report infeasible and no evidence task is scheduled, or
+policy explicitly defers/backoffs the need. Higher authority may suspend/cancel it by contract.
+If every route is `UNKNOWN`, the system must own bounded evidence work or defer and permit
+discretionary activity; “unknown forever” cannot freeze the mob.
+
+### Executors become narrower
+
+Executors receive `ProgressionIntent` and answer “can I physically execute this now?” Gather owns
+scan/path/mine and scoped evidence; Trade owns quote/funding/walk/revalidation/atomic transaction;
+Craft/Smelt own physical commits. None independently reinterprets the full consumer or chooses the
+cross-route winner.
+
+### Alternatives and recommendation
+
+| Option | Shape | Advantages | Failure mode / trade-off | Verdict |
+| --- | --- | --- | --- | --- |
+| **A — unified need + providers + arbitrator + authority** | proposed track | one consumer truth; explicit epistemics; general competition; addresses both observed defect classes | highest contract work; premature abstraction risk | **Recommended**, staged narrowly |
+| **B — local pairwise repairs** | retain V2-C asymmetry; add one Opinion blocker; more shared helpers | lowest immediate cost | each route pair creates another winner and interpretation; drift returns | compatibility bridge only |
+| **C — full GOAP/HTN** | generic world-state search | expressive | disproportionate cost/debug/performance; conflicts with D-VP-001 | rejected gen-1 |
+
+Switch from A to B if a contract spike cannot express Gather + Trade without wrappers that merely
+rename today's special cases, or measurement shows disproportionate arbitration cost. Consider a
+richer planner only after multiple progression graphs prove bounded backward chaining insufficient.
+
+### Performance and compatibility budget (`UNVERIFIED` estimates)
+
+- Resolve on inventory/config/world evidence changes or bounded cadence; not every tick per mob.
+- Share immutable recipe indexes per reload; never scan all recipes per mob.
+- Bound provider candidates and probes; evaluate 1/10/50/100 mobs, with several hundred as stress.
+- Preserve existing executors through adapters until equivalent scenario gates pass.
+- Optional providers fail closed; vanilla routes continue when an integration is absent.
+
+### Behavioral Prediction (MAIBS-1, pre-implementation)
+
+| Layer | Result |
+| --- | --- |
+| Intended | one consumer truth; bounded route probing/commitment; interruption recovery; re-resolve after change |
+| Implemented today | separate policies plus active-goal discretionary observation; V2-DEF-003 locally repaired, V2-DEF-002 open |
+| Predicted | no irrelevant log gathering for satisfied sticks and no long discretionary departure during bounded mandatory admission gap; exploration resumes after honest all-route deferral |
+| Confidence | architecture `PROPOSED`; defects `RUNTIME_CONFIRMED`; repair behavior `UNVERIFIED` |
+
+Temporal prediction: `T0` resolves iron frontier and publishes mandatory pending; `T+10` starts a
+bounded Gather probe and/or reads bounded Trade evidence; `T+60` retains the probe despite minor
+Opinion drift; `T+200` switches once only if scoped Gather infeasibility and Trade feasibility are
+established; by `T+1200`, success clears authority or a bounded no-progress tolerance defers it.
+
+| Authority | Can interrupt? | Retained state | Observable result |
+| --- | --- | --- | --- |
+| fire/flee/safety | yes | semantic consumer per contract; discard path | escape, then re-resolve |
+| player command | yes | explicit suspend/cancel | command wins |
+| combat | yes | intent if still valid; fresh path afterward | fight, then bounded resume |
+| selected progression | owns route | bounded commitment | no cross-route tick thrash |
+| Opinion discretionary | not while mandatory active/pending | request may expire | no 150-block admission-gap departure |
+
+Predicted weird behaviors:
+
+1. `ARCHITECTURE_DEFECT`: all providers stay `UNKNOWN` with no evidence owner; mandatory pending
+   freezes the mob. Falsifier: no-route fixture through `T+1200`.
+2. `ARCHITECTURE_DEFECT`: stale quote/terrain fails to invalidate commitment, causing repeated
+   executor refusal. Falsifier: remove the target mid-route and observe one bounded re-resolve.
+3. `RUNTIME_QUESTION`: 50+ mobs synchronize probes and spike scan/path cost. Falsifier:
+   staggered 1/10/50/100-mob cadence and tick-cost trace.
+4. `ACCEPTABLE_STEPPING_STONE`: coarse objective facts retain a slower safe route; bounded progress
+   is preferred over pretending unlike costs are comparable.
+
+MAIBS-1: **`UNVERIFIED — DESIGN PLAUSIBLE; AUTHORITY/RELEASE CONTRACT NEEDS PEER REVIEW`**.
 
 ### Finding — Opinion already learns progression activities (`CONFIRMED`)
 
@@ -532,6 +831,14 @@ not discretionary director admission. Coordinate with `RFC-VILLAGE-RAID-AUTONOMO
 | VP-PR-S8 | Opinion disabled / neutral | Routing matches legacy neutral policy | Silent behavior change |
 | VP-PR-S9 | WEALTH wants diamonds; progression needs iron | Separate consumers; wealth cannot hijack iron need | Cross-consumer route theft |
 | VP-PR-S10 | Two mobs, same need | May choose different feasible methods | Different legality per mob |
+| VP-UPA-S1 | Iron-pick consumer; sticks satisfied; iron absent | One frontier = iron; providers may project route-local representations | Logs/cobble remain mandatory through generic stock rules |
+| VP-UPA-S2 | Need exists; providers are still probing | `MANDATORY_PENDING` blocks a new discretionary expedition | Active-goal gap reads as idle |
+| VP-UPA-S3 | Every bounded route is infeasible or explicitly deferred | Mandatory authority releases/backoffs; discretionary work resumes | Permanent frozen mob |
+| VP-UPA-S4 | Gather probe interrupted by combat | Status remains `PROBING`/interrupted; fresh path after combat | Interruption becomes global infeasibility |
+| VP-UPA-S5 | Trade quote disappears mid-walk | Commitment invalidates once; alternate route re-resolves | Stale retry loop or per-tick flip |
+| VP-UPA-S6 | Inventory satisfies frontier during another activity | Consumer re-resolves and releases authority | Stale demand keeps scheduler ownership |
+| VP-UPA-S7 | Two feasible non-dominated routes; Opinion disabled | Deterministic neutral objective/tie policy | Progression depends on Opinion being enabled |
+| VP-UPA-S8 | Optional route-provider mod absent | Provider is omitted; vanilla routes continue | Common classloading/startup failure |
 
 ### Proposed decisions (not locked)
 
@@ -541,6 +848,20 @@ not discretionary director admission. Coordinate with `RFC-VILLAGE-RAID-AUTONOMO
 | **D-VP-PR-002** | One bounded `ProgressionRouteArbitrator`; do not let mine/trade/loot policies each become independent route selectors | `PROPOSED` — needs MiningDirector + V2 lifecycle pressure-test |
 | **D-VP-PR-003** | Supersede standalone D-VP-MI-014 CAVER/TUNNELER presets; use Opinion `ActivityKind` + `PersonalityModel` pipeline | `PROPOSED` |
 | **D-VP-PR-004** | Preserve V2-C `EXISTING_WORK > TRADE` asymmetry until a real cross-strategy route model exists; Opinion cannot bypass it prematurely | `PROPOSED` — aligns with shipped `TradeDemandRegistrar` gate 7 |
+| **D-VP-PR-005** | `RequirementResolver` is the single authoritative interpreter of a consumer; providers/executors consume `ProgressionNeed` and may not independently reinterpret it | `PROPOSED` — V2-DEF-003 evidence |
+| **D-VP-PR-006** | A selected route owns bounded `RouteCommitment`; minor scores cannot steal it; release requires named terminal/invalidation/tolerance evidence | `PROPOSED` |
+| **D-VP-PR-007** | Feasibility is multi-state; absence of executor admission is not infeasibility evidence | `PROPOSED` — generalizes `RouteExhaustionEvidence` |
+| **D-VP-PR-008** | Activity authority distinguishes `MANDATORY_PENDING` from idle and blocks discretion only while bounded resolution/evidence work remains owned | `PROPOSED` — V2-DEF-002 evidence |
+| **D-VP-PR-009** | Consumer objective, canonical frontier, and route representation remain distinct while carrying one stable `consumerKey` | `PROPOSED` — V2-H projection evidence |
+
+### Proposed implementation tracks (not authorized)
+
+| Task | Objective | Dependencies | Must happen | Must not happen | Status |
+| --- | --- | --- | --- | --- | --- |
+| **VP-UPA-0** | Extract pure need/status/evidence contracts and adapt two real providers (Gather + Trade) without scheduler mutation | independent review; D-VP-PR-005/007/009 | V2-DEF-003 fixture yields one iron frontier and route-local representations | production goal change or second consumer interpreter | `PROPOSED; NOT AUTHORIZED` |
+| **VP-UPA-1** | Pure arbitrator + bounded commitment state machine | VP-UPA-0; D-VP-PR-001/002/006 | retain probe; switch once on scoped infeasibility | unrelated utility blend or per-tick oscillation | `BLOCKED ON VP-UPA-0` |
+| **VP-UPA-2** | Reconcile `MANDATORY_PENDING` with observation/admission and SCR-2R5 authority | VP-UPA-1; D-VP-PR-008 | block displacement during bounded pending work; release on honest deferral | permanent veto, priority rewrite, Opinion permission | `BLOCKED ON PEER REVIEW` |
+| **VP-UPA-3** | Opinion read-back among non-dominated feasible routes | VP-UPA-1 + activity evidence mapping | preference changes choice only among legal survivors | disliked sole route suppressed | `DEFERRED` |
 
 **Strongest open objection:** D-VP-PR-002 may be premature before `RequirementResolver` v1 exists;
 route arbitration without a stable `ProgressionNeed` type risks designing around today's
@@ -1753,7 +2074,7 @@ SPM v0.86.0 (three probes). Greed modifies **wealth only**, never blocking progr
 **Do not implement** standalone CAVER / TUNNELER weight presets. Opinion already learns
 `CAVE_EXPLORATION`, `CONTROLLED_DESCENT`, `TUNNEL_SEARCH`, and `RESOURCE_GATHERING` via
 `ExperienceEmitters` + `PersonalityModel`. A parallel preset system would fight learned preference.
-See [Topic: Progression route choice and Opinion read-back](#topic-progression-route-choice-and-opinion-read-back).
+See [Topic: Unified Progression Authority](#topic-unified-progression-authority--shared-requirement-truth-route-arbitration-and-activity-authority).
 
 #### MI-6E ranked cave comparator (`DEFERRED`)
 
@@ -2146,7 +2467,7 @@ SPM hook, project resumption, etc.) are documented in
 **Evidence:** `RFC-TOOL-TIER-UPGRADES` D-TTU-017; `TaskLifecycle.java` stub.  
 **Future extension (`PROPOSED`, D-VP-PR-002):** when multiple acquisition routes can satisfy the same
 `ProgressionNeed`, insert `ProgressionRouteArbitrator` between resolver output and executor
-admission — see [route-choice topic](#topic-progression-route-choice-and-opinion-read-back). Does not
+admission — see [Unified Progression Authority](#topic-unified-progression-authority--shared-requirement-truth-route-arbitration-and-activity-authority). Does not
 reopen gen-1 consensus; gen-1 may ship with single-route resolution plus V2-C trade asymmetry only.
 
 ### D-VP-002: Integration surface
@@ -2214,6 +2535,34 @@ lifecycle ownership.
 `TradeDemandRegistrar` EXISTING_WORK > TRADE gate 7 remains until D-VP-PR-002 defines defined units
 for genuine mine-vs-trade preference. Opinion cannot bypass prematurely.
 
+### D-VP-PR-005: Single consumer interpretation (`PROPOSED`)
+
+`RequirementResolver` owns canonical consumer requirements and the active frontier. Route providers
+and executors receive that truth and may derive route-local physical facts, but may not independently
+reinterpret the recipe/objective. V2-DEF-003 is the falsifying counterexample.
+
+### D-VP-PR-006: Bounded route commitment (`PROPOSED`)
+
+A selected route retains ownership across minor score/preference changes. Release requires a named
+terminal, invalidation, bounded transient tolerance, higher authority, or expiry condition.
+
+### D-VP-PR-007: Multi-state feasibility and scoped evidence (`PROPOSED`)
+
+Use `FEASIBLE`, `PROBING`, `BLOCKED_TRANSIENT`, `INFEASIBLE`, and `UNKNOWN`. No executor admission
+this tick and interrupted evidence acquisition are not route-infeasibility proof.
+
+### D-VP-PR-008: Mandatory-pending activity authority (`PROPOSED`)
+
+A valid need with bounded route resolution/probing owns `MANDATORY_PENDING` authority even before an
+executor becomes active. It blocks new discretionary displacement but must release on satisfaction,
+invalidation, or honest all-route deferral; it cannot become a permanent idle veto.
+
+### D-VP-PR-009: Preserve objective/frontier/route-representation identity (`PROPOSED`)
+
+The consumer objective, canonical missing frontier, and route-specific representation may differ,
+but retain one stable `consumerKey`. A trade projection does not rewrite source demand or completion
+truth.
+
 ### D-VP-MI-019: Greed trait (`CONSENSUS` config / `DEFERRED` SPM hook)
 
 Wealth params only; SPM disposition map deferred.
@@ -2228,6 +2577,7 @@ After NEED/WEALTH split proves useful in runtime.
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| User + Agent_Codex | 2026-08-19 | **Unified Progression Authority refinement.** Routed the design into this Vanilla RFC rather than Opinion or Action-Transitions. Used V2-DEF-003 (`RUNTIME_CONFIRMED` duplicate consumer interpretation) and V2-DEF-002 (`RUNTIME_CONFIRMED` active-goal admission gap) as the architecture drivers. Expanded the existing route-choice stable topic with single `ProgressionNeed` truth, provider-local representations, five-state feasibility, scoped evidence, objective-first arbitration, bounded commitment, `MANDATORY_PENDING` authority, narrower executors, alternatives, performance/compatibility budget, MAIBS prediction, VP-UPA-S1…S8, D-VP-PR-005…009, and staged tasks VP-UPA-0…3. **Frontier before:** D-VP-PR-001…004 needed review but did not cover consumer truth or pending authority. **Frontier after:** independent review of D-VP-PR-001…009, then authorization decision for VP-UPA-0. No Java edit, build, runtime launch, commit, or push. |
 | Agent_ChatGPT | 2026-08-17 | **Progression route-choice + Opinion read-back.** Source-audited: `ActivityKind` mining ontology, `ExperienceEmitters` mode mapping, `PersonalityModel` trait interpretation, `TradeDemandRegistrar` no-blended-units warning. Proposed `ProgressionRouteArbitrator` seam, D-VP-PR-001…004, supersede D-VP-MI-014 presets, future `ActivityKind` for trading (learning only), VP-PR-S1…S10 scenario matrix. **Not locked; no implementation/build/runtime.** |
 | Agent_Claude + User | 2026-08-14 | **FS-R1 / FS-R2 — two smelting defects found by watching, not by testing.** User runtime observation (screenshot) during VR-T1. **FS-R1:** `FurnacePolicy` plans `RecipeType.SMELTING`, `FurnaceStations` accepted furnace/blast furnace/smoker interchangeably, and the pre-insert guard was `instanceof AbstractFurnaceBlockEntity` — the common supertype, so it was guaranteed to pass for exactly the machines that fail. A log went into a blast furnace and sat there. Fixed by asking the station itself: an accessor on `quickCheck` (`RecipeManager.CachedCheck`, which captures the station's own recipe type) rather than a three-way class map that would be wrong for every modded furnace; fails closed; revalidated before the input leaves the backpack. **FS-R2:** a wooden pickaxe was chosen as fuel because vanilla marks wooden tools burnable and the ranking prefers the smallest sufficient non-log burn. Added an expendability layer ahead of ranking — **burnable is not expendable**, the same shape as *preference does not create permission* — derived from `isDamageableItem()` rather than a tool list, with a `required:false` tag beside it. **895 tests, 0 failures; 2 negative controls fire**, the second reproducing the screenshot verbatim. Neither defect came from the village work; VR-T1 merely provided the observation. |
 | Agent_Cursor | 2026-08-14 | **Mining intelligence absorbed into united RFC.** Replaced child-RFC cross-link with substantive topics: layered architecture, **MiningDirector + advanced site selection** (decision tree, cave-first strategy), deferred/partial backlog (`MiningMemory`, portfolio, scarcity, greed SPM hook, personalities, project resumption, RT-MI-TS1), D-VP-MI-* decisions. Tier 2–3 status reconciled. Former `RFC-MINING-INTELLIGENCE-AND-WEALTH-SYSTEM.md` superseded for planning. **No implementation authorization.** |
