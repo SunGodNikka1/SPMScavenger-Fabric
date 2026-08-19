@@ -77,6 +77,17 @@ public final class Te3ProbeCommand {
                                 })))
                         .then(Commands.literal("mutate")
                                 .then(Commands.literal("arm").executes(c -> {
+                                    // Readiness is conditional on the world being built. A failed
+                                    // terrain step used to leave the scenario printing "ready" and
+                                    // arming anyway - a half-built run that looks like a policy
+                                    // result.
+                                    if (!terrainArmed()) {
+                                        c.getSource().sendFailure(Component.literal(
+                                                "[TE3] refused - terrain is not armed, so there is "
+                                                        + "no unrelated wealth target and the 003c "
+                                                        + "witness cannot occur"));
+                                        return 0;
+                                    }
                                     armMutation();
                                     c.getSource().sendSuccess(() -> Component.literal(
                                             "[TE3] market mutation ARMED - it fires on the mob's "
@@ -983,7 +994,10 @@ public final class Te3ProbeCommand {
     /** Bounded by construction: this fixture places a handful of blocks and restores all of them. */
     private static final List<PlacedBlock> FIXTURE_BLOCKS = new ArrayList<>();
 
-    private static final int WITNESS_LOG_OFFSET = 4;
+    private static final int WITNESS_TREE_OFFSET = 4;
+    /** Gather sweeps dy -4..4 from the mob's block position; outside that it is never visited. */
+    private static final int GATHER_VERTICAL_BAND = 4;
+    private static boolean terrainArmed;
 
     private static int terrain(CommandSourceStack source) {
         ServerLevel level = source.getLevel();
@@ -994,8 +1008,10 @@ public final class Te3ProbeCommand {
             return 0;
         }
         restoreTerrain(level);
+        terrainArmed = false;
 
-        double radius = ScavengerConfig.get().gatherSearchRadius;
+        ScavengerConfig cfg = ScavengerConfig.get();
+        double radius = cfg.gatherSearchRadius;
         List<String> iron = exposedIronWithin(level, mob.blockPosition(), (int) radius);
         if (!iron.isEmpty()) {
             source.sendFailure(Component.literal(String.join(String.valueOf((char) 10),
@@ -1007,29 +1023,85 @@ public final class Te3ProbeCommand {
             return 0;
         }
 
-        net.minecraft.core.BlockPos base = mob.blockPosition()
-                .offset(WITNESS_LOG_OFFSET, 0, WITNESS_LOG_OFFSET);
+        net.minecraft.core.BlockPos anchor = mob.blockPosition()
+                .offset(WITNESS_TREE_OFFSET, 0, WITNESS_TREE_OFFSET);
         int surface = level.getHeight(
                 net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                base.getX(), base.getZ());
-        net.minecraft.core.BlockPos logPos =
-                new net.minecraft.core.BlockPos(base.getX(), surface, base.getZ());
+                anchor.getX(), anchor.getZ());
+        net.minecraft.core.BlockPos base =
+                new net.minecraft.core.BlockPos(anchor.getX(), surface, anchor.getZ());
 
-        if (level.getBlockState(logPos.below()).is(net.minecraft.tags.BlockTags.LOGS)) {
+        // The sweep visits dy -4..4 from the mob's own block position. A tree on a rise or in a dip
+        // is outside the volume that will ever be searched, and the witness would silently never
+        // occur - the same class of miss as the chopped tree.
+        int verticalOffset = base.getY() - mob.blockPosition().getY();
+        if (Math.abs(verticalOffset) > GATHER_VERTICAL_BAND) {
             source.sendFailure(Component.literal(
-                    "[TE3] REFUSED - the witness spot sits on a log, so isInitialTreeLog would "
-                            + "reject it as an internal column member. Move the fixture."));
+                    "[TE3] REFUSED - witness base is " + verticalOffset + " blocks from the mob's "
+                            + "Y, outside Gather's +/-" + GATHER_VERTICAL_BAND + " scan band. It "
+                            + "would never be visited. Move the fixture to flatter ground."));
             return 0;
         }
-        place(level, logPos, net.minecraft.world.level.block.Blocks.OAK_LOG.defaultBlockState());
-        place(level, logPos.above(), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
 
+        buildWitnessTree(level, base);
+
+        // Validated through PRODUCTION's own predicate, not a re-derivation of it. A lone log looked
+        // plausible and would have been refused: protectPlayerBuilds requires a rooted trunk of at
+        // least MIN_TRUNK_HEIGHT with a canopy and no built blocks nearby.
+        if (!com.noobk.spmscavenger.GatherProtection.isGatherableLog(level, base, cfg)) {
+            restoreTerrain(level);
+            source.sendFailure(Component.literal(String.join(String.valueOf((char) 10),
+                    "[TE3] REFUSED - the built tree is not a legal gather target here, so the "
+                            + "witness could never fire.",
+                    "  GatherProtection wants a rooted trunk of " + com.noobk.spmscavenger
+                            .GatherProtection.MIN_TRUNK_HEIGHT + "+ logs on growing ground, a "
+                            + "canopy, and no built block within " + com.noobk.spmscavenger
+                            .GatherProtection.STRUCTURE_RADIUS + ".",
+                    "  Most likely a nearby structure. Terrain restored; move the fixture.")));
+            return 0;
+        }
+
+        terrainArmed = true;
+        final net.minecraft.core.BlockPos witness = base;
         source.sendSuccess(() -> Component.literal(String.join(String.valueOf((char) 10),
-                "[TE3] terrain armed",
-                "  witness log at " + logPos + "  (lone, ground-level, no canopy)",
-                "  no air-exposed iron ore within " + radius + " - the mandatory route will find "
-                        + "nothing, which is what the handoff is made of")), false);
+                "[TE3] TERRAIN ARMED",
+                "  witness tree base " + witness.toShortString()
+                        + "  (isGatherableLog CONFIRMED against production)",
+                "  no air-exposed iron within " + radius
+                        + " - the mandatory route will find nothing",
+                "[TE3] FIXTURE READY. Next: /spmscavenger debug te3 index",
+                "  then: /spmscavenger debug te3 watch on   and WAIT - do not touch the mob",
+                "  V2-DEF-003c gate is the ORDER of these four lines:",
+                "    GATHER PUBLISHED -> GATHER YIELDING -> ROUTE INFEASIBLE -> PLAN TE",
+                "  with logs staying 320 until the first TE transaction.",
+                "  then: /spmscavenger debug te3 watch report")), false);
         return 1;
+    }
+
+    /**
+     * The smallest thing production will accept as a tree.
+     *
+     * <p>Dirt under the base because {@code isGrowingGround} gates the whole check; three logs
+     * because {@code MIN_TRUNK_HEIGHT} is three; a five-leaf cap because {@code hasCanopy} needs one
+     * leaf within two blocks of the trunk top. Persistent leaves so decay cannot quietly dismantle
+     * the fixture between the scenario and the mob's first scan.
+     */
+    private static void buildWitnessTree(ServerLevel level, net.minecraft.core.BlockPos base) {
+        place(level, base.below(), net.minecraft.world.level.block.Blocks.DIRT.defaultBlockState());
+        for (int dy = 0; dy < com.noobk.spmscavenger.GatherProtection.MIN_TRUNK_HEIGHT; dy++) {
+            place(level, base.above(dy),
+                    net.minecraft.world.level.block.Blocks.OAK_LOG.defaultBlockState());
+        }
+        net.minecraft.world.level.block.state.BlockState leaves =
+                net.minecraft.world.level.block.Blocks.OAK_LEAVES.defaultBlockState()
+                        .setValue(net.minecraft.world.level.block.LeavesBlock.PERSISTENT, true);
+        net.minecraft.core.BlockPos crown =
+                base.above(com.noobk.spmscavenger.GatherProtection.MIN_TRUNK_HEIGHT);
+        place(level, crown, leaves);
+        place(level, crown.north(), leaves);
+        place(level, crown.south(), leaves);
+        place(level, crown.east(), leaves);
+        place(level, crown.west(), leaves);
     }
 
     private static void place(ServerLevel level, net.minecraft.core.BlockPos pos,
@@ -1040,6 +1112,7 @@ public final class Te3ProbeCommand {
 
     /** Blocks are fixture state too: a run that consumes them must not silently change the next. */
     static int restoreTerrain(ServerLevel level) {
+        terrainArmed = false;
         int restored = FIXTURE_BLOCKS.size();
         for (int i = FIXTURE_BLOCKS.size() - 1; i >= 0; i--) {
             PlacedBlock placed = FIXTURE_BLOCKS.get(i);
@@ -1226,6 +1299,10 @@ public final class Te3ProbeCommand {
         } catch (NoClassDefFoundError absent) {
             // No Trade Everything, no override to remove. Reset still succeeds.
         }
+    }
+
+    static boolean terrainArmed() {
+        return terrainArmed;
     }
 
     private static int applyMutation(CommandSourceStack source) {

@@ -18,13 +18,9 @@ summon playermob:player_mob ~ ~ ~ {CustomName:'"TE3Mob"',PersistenceRequired:1b,
 spmscavenger debug te3 seed autonomous
 # Discards vanilla draws until the armorer is all-sell and the toolsmith lists an affordable pickaxe.
 spmscavenger debug te3 fixture
-# Deterministic gather terrain: one lone ground-level oak log as the unrelated WEALTH target
-# the 003c witness needs, and a refusal if any air-exposed iron ore sits inside the gather
-# radius - because "the mandatory route found nothing" is the whole claim.
+# Deterministic gather terrain: a MINIMAL VALIDATED TREE as the unrelated WEALTH target
+# the 003c witness needs - production requires a rooted 3+ log trunk with a canopy, so a lone log
+# was never legal. Refuses if iron is exposed in radius, or if the built tree fails isGatherableLog.
 spmscavenger debug te3 terrain
-say [TE3] step 7A ready. The V2-DEF-003c gate is the ORDER of these four lines:
-say [TE3]   GATHER PUBLISHED -> GATHER YIELDING -> ROUTE INFEASIBLE -> PLAN TE
-say [TE3] with logs staying 320 until the first TE transaction.
-say [TE3] Now: /spmscavenger debug te3 index
-say [TE3] then: /spmscavenger debug te3 watch on     and WAIT - do not touch the mob
-say [TE3] then, after it has walked and traded: /spmscavenger debug te3 watch report
+# No "ready" line here. te3 terrain prints readiness on SUCCESS only - a failed terrain step used
+# to be followed by the scenario cheerfully announcing the fixture was ready.

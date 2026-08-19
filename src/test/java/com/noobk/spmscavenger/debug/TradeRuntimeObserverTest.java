@@ -626,12 +626,89 @@ class TradeRuntimeObserverTest {
         // sits-on-a-log guard, so deleting the iron check entirely broke nothing - a control that
         // failed to fail.
         int refusal = terrainBody.indexOf("air-exposed iron ore inside the gather radius");
-        int placement = terrainBody.indexOf("place(level, logPos");
+        int placement = terrainBody.indexOf("buildWitnessTree(level, base)");
 
         assertTrue(refusal > 0,
                 "with iron in radius the mandatory route is servable, no handoff is published, and "
                         + "the witness cannot occur - that is a refusal, not a warning");
         assertTrue(placement > 0 && refusal < placement,
                 "and it refuses BEFORE building anything, so a rejected run leaves no litter");
+    }
+
+    /**
+     * The witness must be a tree production will actually accept.
+     *
+     * <p>A lone log looked plausible and was never legal: with {@code protectPlayerBuilds} on,
+     * {@code isGatherableLog} wants a trunk of {@code MIN_TRUNK_HEIGHT} rooted on growing ground,
+     * with a canopy and no built block within {@code STRUCTURE_RADIUS}. The fixture would have
+     * placed a target the mob could never select, and the missing {@code GATHER YIELDING} would
+     * again have read as a policy failure.
+     */
+    @Test
+    void mustHappen_theWitnessTreeIsValidatedThroughProductionsOwnPredicate() throws IOException {
+        String probe = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/debug/Te3ProbeCommand.java"));
+
+        assertTrue(probe.contains("GatherProtection.isGatherableLog(level, base, cfg)"),
+                "validated by the production predicate, not by a re-derivation of its rules");
+        assertTrue(probe.contains("GatherProtection.MIN_TRUNK_HEIGHT"),
+                "trunk height derived from the constant, so a change there is not silently missed");
+        assertTrue(probe.contains("LeavesBlock.PERSISTENT"),
+                "decaying leaves would dismantle the canopy between setup and the first scan");
+    }
+
+    /** A tree that fails validation must leave no trace behind. */
+    @Test
+    void mustHappen_aFailedValidationRestoresBeforeRefusing() throws IOException {
+        String probe = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/debug/Te3ProbeCommand.java"));
+        String terrainBody = probe.substring(probe.indexOf("private static int terrain("),
+                probe.indexOf("private static void buildWitnessTree("));
+
+        int validation = terrainBody.indexOf("isGatherableLog(level, base, cfg)");
+        int restore = terrainBody.indexOf("restoreTerrain(level);", validation);
+        int refuse = terrainBody.indexOf("sendFailure", validation);
+
+        assertTrue(restore > 0 && refuse > 0 && restore < refuse,
+                "a half-built tree left in the world would change the next run's preconditions - "
+                        + "the exact failure this hardening exists to remove");
+    }
+
+    /** Outside the sweep's vertical band the tree would never be visited at all. */
+    @Test
+    void mustHappen_theWitnessIsInsideTheGatherVerticalBand() throws IOException {
+        String probe = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/debug/Te3ProbeCommand.java"));
+
+        assertTrue(probe.contains("GATHER_VERTICAL_BAND = 4"),
+                "the sweep visits dy -4..4 from the mob's block position");
+        assertTrue(probe.contains("Math.abs(verticalOffset) > GATHER_VERTICAL_BAND"),
+                "a tree on a rise is outside the volume that will ever be searched, and the "
+                        + "witness would silently never occur");
+    }
+
+    /** Readiness is announced by the step that can fail, not by the script that cannot. */
+    @Test
+    void mustNotHappen_theScenarioAnnouncesReadinessItCannotVerify() throws IOException {
+        for (String name : java.util.List.of("scenario/step7a_autonomous.mcfunction",
+                "scenario/step7b_mutation.mcfunction")) {
+            assertFalse(fixture(name).contains("ready. Now:"),
+                    name + " must not print readiness - te3 terrain does that on success only");
+        }
+        assertTrue(Files.readString(Path.of(
+                        "src/main/java/com/noobk/spmscavenger/debug/Te3ProbeCommand.java"))
+                        .contains("[TE3] FIXTURE READY"),
+                "and the command that can refuse is the one that announces it");
+    }
+
+    /** 7B cannot half-arm: no terrain, no mutation. */
+    @Test
+    void mustNotHappen_theMutationArmsWithoutTerrain() throws IOException {
+        String probe = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/debug/Te3ProbeCommand.java"));
+
+        assertTrue(probe.contains("if (!terrainArmed()) {"),
+                "arming after a failed terrain build produces a run with no wealth target and a "
+                        + "conclusion that looks like policy");
     }
 }

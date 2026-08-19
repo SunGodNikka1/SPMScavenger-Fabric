@@ -13,19 +13,14 @@ function te3:_merchants_autonomous
 summon playermob:player_mob ~ ~ ~ {CustomName:'"TE3Mob"',PersistenceRequired:1b,Tags:["te3","te3_mob"]}
 spmscavenger debug te3 seed autonomous
 spmscavenger debug te3 fixture
-# Deterministic gather terrain: one lone ground-level oak log as the unrelated WEALTH target
-# the 003c witness needs, and a refusal if any air-exposed iron ore sits inside the gather
-# radius - because "the mandatory route found nothing" is the whole claim.
+# Deterministic gather terrain: a MINIMAL VALIDATED TREE as the unrelated WEALTH target
+# the 003c witness needs - production requires a rooted 3+ log trunk with a canopy, so a lone log
+# was never legal. Refuses if iron is exposed in radius, or if the built tree fails isGatherableLog.
 spmscavenger debug te3 terrain
 # LAST. Holds discretionary exploration until the mob's first Trade Everything plan exists, then
 # restores the exact previous value. See the honesty note in Te3ProbeCommand: this flag gates more
 # than ExploringGoal.
 spmscavenger debug te3 mutate arm
-say [TE3] step 7B ready. Run BEFORE this scenario next time:
-say [TE3]   /function te3:cleanup
-say [TE3]   /spmscavenger debug te3 reset
-say [TE3]   /spmscavenger debug te3 index
-say [TE3]   /spmscavenger debug te3 watch on
-say [TE3]   /function te3:scenario/step7b_mutation
-say [TE3] Now WAIT - do not touch the mob or either villager.
-say [TE3] Then: /spmscavenger debug te3 watch report
+# No "ready" line here either. te3 terrain prints readiness on success, and `mutate arm` refuses
+# outright when terrain is not armed - so a failed build cannot produce a half-armed 7B run.
+say [TE3] 7B: after the readiness block above, also run /spmscavenger debug te3 watch report
