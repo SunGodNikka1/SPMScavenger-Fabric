@@ -220,8 +220,14 @@ class ProductionRoutePathTest {
         String body = bodyOf(gather, "private void publishRouteExhaustion(");
         assertTrue(body.contains("scanScope != null"),
                 "a cooperative sub-probe is not a completed bounded search");
-        assertTrue(body.contains("NO_CANDIDATES_IN_RADIUS"),
-                "protected candidates mean the material IS there");
+        // V2-DEF-003b: the same property, now asked PER RESOURCE. Families are recorded at pass
+        // one, before protection runs, so an iron candidate that protection rejected still marks
+        // RAW_IRON present and still blocks the publish - the material IS there. What changed is
+        // that a saturated wealth LOG winning target selection no longer answers for iron.
+        assertTrue(body.contains("lastScanFamilies.contains(precursor.get())"),
+                "protected or not, a candidate of THIS resource means the route is not exhausted");
+        assertTrue(body.contains("GatherRoutePrecursor.of(demand.get())"),
+                "and the question is scoped to the demand's own precursor");
         assertTrue(body.contains("GatherRoutePrecursor.scanCovers("),
                 "the scan must have been asked for this demand's precursor");
         assertTrue(body.contains("Reason.SEARCH_COMPLETED_EMPTY"));

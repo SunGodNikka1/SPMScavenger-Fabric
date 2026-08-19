@@ -49,6 +49,8 @@ public final class TradeRuntimeObserver {
     private static int episodes;
     private static int dropped;
     private static int logsBefore;
+    private static String lastGateOutcome = "";
+    private static String lastRouteOutcome = "";
     /** Board size at first sight, per villager. Bounded by the fixture's two merchants. */
     private static final java.util.Map<java.util.UUID, Integer> BOARD_SIZE =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -71,6 +73,8 @@ public final class TradeRuntimeObserver {
         revalidations = 0;
         transactions = 0;
         BOARD_SIZE.clear();
+        lastGateOutcome = "";
+        lastRouteOutcome = "";
         episodes = 0;
         dropped = 0;
     }
@@ -156,6 +160,47 @@ public final class TradeRuntimeObserver {
         }
         episodes++;
         add("EPISODE #" + episodes);
+    }
+
+    /**
+     * Step-7B diagnostic — <b>why the gather route did or did not publish exhaustion.</b>
+     *
+     * <p>The readout could say {@code plans=0 NO_CANDIDATES} and nothing about the reason. For iron,
+     * {@code ExistingRouteFeasibility} deliberately answers UNKNOWN while raw iron is still wanted,
+     * and only {@code RouteExhaustionEvidence} converts that into INFEASIBLE. Gather publishes it
+     * solely when the sweep was full, {@code findTarget} came back null, the failure was
+     * {@code NO_CANDIDATES_IN_RADIUS}, and the scan actually covered RAW_IRON — four conditions, and
+     * a silent no from any one of them looks identical from outside.
+     *
+     * <p>Deduplicated: this is evaluated every time gather stops, and an unchanged answer repeated
+     * two hundred times would bury everything else.
+     */
+    public static void gatherExhaustionGate(String outcome) {
+        if (!recording || outcome.equals(lastGateOutcome)) {
+            return;
+        }
+        lastGateOutcome = outcome;
+        add("GATHER  " + outcome);
+    }
+
+    /** Step-7B diagnostic — the tri-state trade is actually reading, and when it changes. */
+    public static void routeFeasibility(Object materialKey, boolean mayDisplace) {
+        if (!recording) {
+            return;
+        }
+        String line = "ROUTE   " + shortId(materialKey)
+                + (mayDisplace ? "  INFEASIBLE -> trade may displace"
+                        : "  UNKNOWN/FEASIBLE -> gather keeps ownership");
+        if (line.equals(lastRouteOutcome)) {
+            return;
+        }
+        lastRouteOutcome = line;
+        add(line);
+    }
+
+    private static String shortId(Object key) {
+        String text = String.valueOf(key);
+        return text.startsWith("minecraft:") ? text.substring("minecraft:".length()) : text;
     }
 
     /** The fixture's own marker, so mutation timing is visible in the same stream. */

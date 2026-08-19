@@ -1017,9 +1017,14 @@ public class TradeWithVillagerGoal extends Goal {
     /** Trade may displace working progression only on positively proven infeasibility. */
     private boolean existingRouteInfeasible(
             ServerLevel level, WorkDemandPolicy.MaterialDemand demand) {
-        return ExistingRouteFeasibility.tradeMayDisplace(
+        boolean mayDisplace = ExistingRouteFeasibility.tradeMayDisplace(
                 level, mob.getUUID(), demand, PlayerMobs.backpack(mob),
                 mob.getMainHandItem(), mob.getOffhandItem(), ScavengerConfig.get());
+        // TEMPORARY step-7B diagnostic. This is the tri-state trade actually reads; without it a
+        // stalled run cannot distinguish "no merchant" from "gather still owns the route".
+        com.noobk.spmscavenger.debug.TradeRuntimeObserver.routeFeasibility(
+                demand.materialKey(), mayDisplace);
+        return mayDisplace;
     }
 
     private boolean sameAttemptConsumer(WorkDemandPolicy.MaterialDemand demand) {

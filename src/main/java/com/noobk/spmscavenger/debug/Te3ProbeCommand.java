@@ -116,6 +116,18 @@ public final class Te3ProbeCommand {
                                             .append("  logs=")
                                             .append(TradeRuntimeObserver.count(pack, Items.OAK_LOG))
                                             .append((char) 10);
+                                    // Config, so an inventory change can be attributed rather than
+                                    // guessed at. Wealth is off only when BOTH are zero.
+                                    ScavengerConfig live = ScavengerConfig.get();
+                                    out.append("  cfg: greed=").append(live.greed)
+                                            .append("  wealthLevel=").append(live.wealthLevel)
+                                            .append("  gatherRadius=").append(live.gatherSearchRadius)
+                                            .append("  exploring=").append(live.exploring)
+                                            .append((char) 10);
+                                    out.append("  routeEvidence tracked=")
+                                            .append(com.noobk.spmscavenger.village.trade
+                                                    .RouteExhaustionEvidence.trackedCount())
+                                            .append((char) 10);
                                     c.getSource().sendSuccess(
                                             () -> Component.literal(out.toString()), false);
                                     return 1;

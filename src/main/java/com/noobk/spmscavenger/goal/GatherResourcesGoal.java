@@ -116,6 +116,15 @@ public class GatherResourcesGoal extends Goal {
     /** One inventory/config evaluation reused throughout the current bounded target scan. */
     private GatherIntentPolicy.GatherIntent activeIntent;
     /** Last pass-one/pass-two outcome when {@link #findTarget} found nothing — diagnostics (MI-13a). */
+    /**
+     * Families the last completed sweep turned up. Bounded by the enum; cleared each scan.
+     *
+     * <p>{@code lastScanFailure} is a single verdict for the whole scan, which is exactly what made
+     * an optional log able to answer a mandatory question about iron.
+     */
+    private final java.util.EnumSet<GatherIntentPolicy.Resource> lastScanFamilies =
+            java.util.EnumSet.noneOf(GatherIntentPolicy.Resource.class);
+
     private GatherCandidatePolicy.ScanFailureReason lastScanFailure =
             GatherCandidatePolicy.ScanFailureReason.NONE;
     /** Most recent break position for {@link DiscoveryMode#NEWLY_EXPOSED} vein follow (MI-13). */
@@ -500,22 +509,55 @@ public class GatherResourcesGoal extends Goal {
      * </ol>
      */
     private void publishRouteExhaustion(ScavengerConfig cfg, long now) {
-        if (scanScope != null
-                || lastScanFailure
-                        != GatherCandidatePolicy.ScanFailureReason.NO_CANDIDATES_IN_RADIUS) {
+        // TEMPORARY step-7B diagnostic. Reports which of the four conditions said no; a silent
+        // refusal from any of them is indistinguishable from outside. Void and recording-gated, so
+        // it cannot alter the decision it is describing.
+        if (scanScope != null) {
+            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
+                    "no publish: scan was SCOPED (cooperative probe, not the full sweep)");
             return;
         }
         Container backpack = PlayerMobs.backpack(mob);
         if (backpack == null) {
+            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
+                    "no publish: no backpack");
             return;
         }
-        WorkDemandPolicy
+        java.util.Optional<WorkDemandPolicy.MaterialDemand> demand = WorkDemandPolicy
                 .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg)
-                .map(WorkDemandPolicy.WorkDemand::payload)
-                .filter(demand -> GatherRoutePrecursor.scanCovers(demand, currentIntent()))
-                .ifPresent(demand -> RouteExhaustionEvidence.publish(
-                        mob.getUUID(), demand,
-                        RouteExhaustionEvidence.Reason.SEARCH_COMPLETED_EMPTY, now));
+                .map(WorkDemandPolicy.WorkDemand::payload);
+        if (demand.isEmpty()) {
+            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
+                    "no publish: no live demand at scan end");
+            return;
+        }
+        if (!GatherRoutePrecursor.scanCovers(demand.get(), currentIntent())) {
+            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
+                    "no publish: scan did NOT cover " + demand.get().materialKey()
+                            + " - a sweep for something else proves nothing about this route");
+            return;
+        }
+        // V2-DEF-003b: THIS resource's own result, not the scan's overall verdict. A saturated
+        // wealth log winning target selection used to make the whole scan "successful" and silence
+        // an iron route that had genuinely found nothing.
+        java.util.Optional<GatherIntentPolicy.Resource> precursor =
+                GatherRoutePrecursor.of(demand.get());
+        if (precursor.isEmpty()) {
+            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
+                    "no publish: no modelled gather route for " + demand.get().materialKey());
+            return;
+        }
+        if (lastScanFamilies.contains(precursor.get())) {
+            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
+                    "no publish: " + precursor.get() + " WAS found in radius - the route is not "
+                            + "exhausted, whatever else the scan did or did not select");
+            return;
+        }
+        com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
+                "PUBLISHED exhaustion for " + demand.get().materialKey()
+                        + " (SEARCH_COMPLETED_EMPTY)");
+        RouteExhaustionEvidence.publish(mob.getUUID(), demand.get(),
+                RouteExhaustionEvidence.Reason.SEARCH_COMPLETED_EMPTY, now);
     }
 
     /**
@@ -593,6 +635,9 @@ public class GatherResourcesGoal extends Goal {
         int found = 0;
 
         lastScanFailure = GatherCandidatePolicy.ScanFailureReason.NONE;
+        // V2-DEF-003b: which resource families this sweep actually turned up, so a mandatory route
+        // can reach its own conclusion even when an optional wealth candidate won target selection.
+        lastScanFamilies.clear();
 
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
@@ -631,6 +676,9 @@ public class GatherResourcesGoal extends Goal {
                     }
                     dists[at] = dist;
                     nearest[at] = pos.immutable();
+                    // Recorded AFTER every pass-one filter, so a canopy log the tree-base rule
+                    // rejected does not count as log presence.
+                    GatherCandidatePolicy.familyOf(state).ifPresent(lastScanFamilies::add);
                 }
             }
         }

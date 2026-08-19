@@ -180,7 +180,9 @@ that makes this non-trivial — a naive blocker converts a wandering mob into a 
 
 ## V2-DEF-003 — required gather resources were not consumer-accurate
 
-**Status:** REPAIRED — unit gate green, **runtime UNVERIFIED**. **Discovered:** step 7B runtime,
+**Status:** REPAIRED — **runtime CONFIRMED** for the ownership half (after the repair the runtime
+showed `latestDispositionCause=NONE`, no `GatherResourcesGoal` owning mandatory authority). The
+end-to-end convergence gate remained failing, which led to `V2-DEF-003b` below. **Discovered:** step 7B runtime,
 2026-08-19. **Applies to:** shipped gather/progression policy, not Trade Everything.
 
 ### The stall
@@ -253,3 +255,88 @@ runs.
 One pre-existing test, `craftReadySuppressesAnotherGatherTrip`, was asserting `hasDemand() == true`
 for a mob holding every ingredient. It was encoding the defect and has been corrected; the
 suppression property it existed for is now proved separately with a demand that genuinely exists.
+
+---
+
+## V2-DEF-003b — optional wealth masked a mandatory route's conclusion
+
+**Status:** REPAIRED — unit gate green, **runtime UNVERIFIED**. **Discovered:** step 7B runtime,
+2026-08-19, after V2-DEF-003 cleared the ownership half.
+
+### Why the stall survived the first repair
+
+`ResourceWealthPolicy.LOGS` saturates at 32 but keeps `wealthFactor = 0.05`, so with the runtime's
+`greed = 0.1, wealthLevel = 0.1` a saturated log still carries positive utility.
+`GatherIntent.hasDemand()` correctly refuses to start a scan for that alone — but once a mandatory
+RAW_IRON demand had started one, `GatherCandidatePolicy` admitted any candidate with
+`intent.wants(resource, cost) > 0`:
+
+```
+RAW_IRON mandatory, none in radius
+saturated LOG wealth candidate in radius
+  -> findTarget returns the LOG
+  -> scan is not NO_CANDIDATES_IN_RADIUS
+  -> RAW_IRON exhaustion never published
+  -> ExistingRouteFeasibility stays UNKNOWN, trade can never displace
+```
+
+Two lossy collapses in the same direction: `isPassOneCandidate` merged need and wealth into one
+boolean, and the bounded sweep merged the whole scan into `target != null`.
+
+### The invariant
+
+> Optional opportunity may affect **target selection**, but may not prevent a mandatory consumer
+> route from reaching its **own** factual conclusion.
+
+Wealth keeps noticing and acquiring logs. It stops being able to answer a question asked about iron.
+
+### Repair — observational, one scan
+
+| Piece | Meaning |
+| --- | --- |
+| `GatherCandidatePolicy.familyOf(BlockState)` | which resource family a block is, **independent of intent**; takes no intent parameter, which is the structural form of the guarantee |
+| `GatherResourcesGoal.lastScanFamilies` | families the single sweep turned up, recorded at **pass one** and cleared per scan |
+| `publishRouteExhaustion` | asks about the demand's own precursor via `GatherRoutePrecursor.of`, not the scan's overall verdict |
+
+No rescans. **Gather remains the only publisher** — trade neither publishes nor infers exhaustion.
+
+Recording at pass one preserves the old `CANDIDATES_ALL_REJECTED_PROTECTION` behaviour: an iron
+candidate that protection rejected still marks RAW_IRON present, so the route is not called
+exhausted.
+
+### Gate
+
+| Scenario | Conclusion |
+| --- | --- |
+| RAW_IRON required, no iron, wealth log nearby | RAW_IRON EMPTY -> exhaustion may publish |
+| RAW_IRON required, iron nearby, wealth log nearby | RAW_IRON FOUND -> no exhaustion |
+| RAW_IRON required, iron present but protection-rejected | not EMPTY -> no exhaustion |
+| wealth-only saturated logs | activation unchanged |
+| wealth-only unsaturated logs | normal wealth gather still works |
+| mandatory iron + optional log | the log cannot stand in as success for iron |
+
+Negative controls: restoring the whole-scan verdict breaks two tests; removing the family record
+breaks the scoping test; adding an intent parameter to `familyOf` fails to compile.
+
+### Why it is not CLOSED
+
+Three things are not provable in a unit run and are stated rather than implied:
+
+1. **`BlockTags.LOGS` is empty** under `Bootstrap.bootStrap()`, so `familyOf(OAK_LOG)` reads empty
+   here. Ore and stone families are identity-based and are asserted; the log family is not.
+2. **"Saturated wealth alone must not activate a scan" is not constructible** — wealth contexts are
+   built for every resource, and coal/iron/cobblestone are unsaturated at zero held, so
+   `hasDemand()` is true regardless of the logs. What is asserted instead is that this repair did
+   not touch activation at all.
+3. The end-to-end claim — RAW_IRON exhaustion published, `ExistingRouteFeasibility` flipping to
+   INFEASIBLE, trade receiving the handoff — is **runtime**.
+
+### Diagnostics added alongside
+
+Passive, void, recording-gated, deduplicated: `TradeRuntimeObserver.gatherExhaustionGate` reports
+which of the publish preconditions said no, and `routeFeasibility` reports the tri-state trade
+actually reads. The `+16 logs` observation is **not** attributed to wealth: `te3:cleanup` only killed
+`te3`-tagged entities, so dropped items from a previous run could be picked up by a later fixture
+mob. Cleanup now removes loose item and XP entities, and `watch report` prints `greed`,
+`wealthLevel`, `gatherSearchRadius` and `exploring` so the next run can distinguish the two causes
+instead of guessing.
