@@ -105,16 +105,11 @@ public class SpmScavenger implements ModInitializer {
 
         ServerTickEvents.END_SERVER_TICK.register(
                 server -> VillagePerceptionScheduler.forServer(server).onServerTick(server));
-        // TEMPORARY V2-TE P0-3 PROBE SUPPORT - remove with com.noobk.spmscavenger.debug.
         // Optional market source. Guarded and reflective: nothing on the common trade path names a
         // Trade Everything class, so common classes load normally when the mod is absent.
         com.noobk.spmscavenger.compat.tradeeverything.TradeEverythingCompat.install();
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(
                 com.noobk.spmscavenger.compat.tradeeverything.TradeEverythingCompat::prewarm);
-        com.noobk.spmscavenger.debug.Te3ProbeCommand.installObserver();
-        net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
-                (dispatcher, registryAccess, environment) ->
-                        com.noobk.spmscavenger.debug.Te3ProbeCommand.register(dispatcher));
         ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
                 OpinionExperienceRegistry.resumeOnLoad(mob);

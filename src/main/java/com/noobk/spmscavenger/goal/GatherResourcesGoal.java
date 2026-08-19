@@ -243,9 +243,6 @@ public class GatherResourcesGoal extends Goal {
                         yieldWindow, now);
         if (yielding.isPresent()) {
             yieldWindow = yielding.get();
-            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(mob.getUUID(),
-                    "YIELDING deliberate-work slot to the published handoff for "
-                            + yieldWindow.material());
             scanClock.resetAfter(now);
             return false;
         }
@@ -553,32 +550,20 @@ public class GatherResourcesGoal extends Goal {
      */
     private java.util.Optional<MandatoryHandoffPolicy.HandoffPublication> publishRouteExhaustion(
             ScavengerConfig cfg, long now) {
-        // TEMPORARY step-7B diagnostic. Reports which of the four conditions said no; a silent
-        // refusal from any of them is indistinguishable from outside. Void and recording-gated, so
-        // it cannot alter the decision it is describing.
         if (scanScope != null) {
-            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(mob.getUUID(),
-                    "no publish: scan was SCOPED (cooperative probe, not the full sweep)");
             return java.util.Optional.empty();
         }
         Container backpack = PlayerMobs.backpack(mob);
         if (backpack == null) {
-            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(mob.getUUID(),
-                    "no publish: no backpack");
             return java.util.Optional.empty();
         }
         java.util.Optional<WorkDemandPolicy.MaterialDemand> demand = WorkDemandPolicy
                 .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg)
                 .map(WorkDemandPolicy.WorkDemand::payload);
         if (demand.isEmpty()) {
-            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(mob.getUUID(),
-                    "no publish: no live demand at scan end");
             return java.util.Optional.empty();
         }
         if (!GatherRoutePrecursor.scanCovers(demand.get(), currentIntent())) {
-            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(mob.getUUID(),
-                    "no publish: scan did NOT cover " + demand.get().materialKey()
-                            + " - a sweep for something else proves nothing about this route");
             return java.util.Optional.empty();
         }
         // V2-DEF-003b: THIS resource's own result, not the scan's overall verdict. A saturated
@@ -587,19 +572,11 @@ public class GatherResourcesGoal extends Goal {
         java.util.Optional<GatherIntentPolicy.Resource> precursor =
                 GatherRoutePrecursor.of(demand.get());
         if (precursor.isEmpty()) {
-            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(mob.getUUID(),
-                    "no publish: no modelled gather route for " + demand.get().materialKey());
             return java.util.Optional.empty();
         }
         if (lastScanFamilies.contains(precursor.get())) {
-            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(mob.getUUID(),
-                    "no publish: " + precursor.get() + " WAS found in radius - the route is not "
-                            + "exhausted, whatever else the scan did or did not select");
             return java.util.Optional.empty();
         }
-        com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(mob.getUUID(),
-                "PUBLISHED exhaustion for " + demand.get().materialKey()
-                        + " (SEARCH_COMPLETED_EMPTY)");
         RouteExhaustionEvidence.publish(mob.getUUID(), demand.get(),
                 RouteExhaustionEvidence.Reason.SEARCH_COMPLETED_EMPTY, now);
         return java.util.Optional.of(new MandatoryHandoffPolicy.HandoffPublication(

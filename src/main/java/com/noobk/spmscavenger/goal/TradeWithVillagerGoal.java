@@ -310,21 +310,12 @@ public class TradeWithVillagerGoal extends Goal {
         java.util.Optional<net.minecraft.world.item.trading.MerchantOffer> resolved =
                 com.noobk.spmscavenger.village.trade.TradeSources.of(attemptSource)
                         .flatMap(source -> source.revalidate(target, plannedOffer));
-        com.noobk.spmscavenger.debug.TradeRuntimeObserver.revalidated(mob.getUUID(),
-                attemptSource, target, plannedOffer.ref(), resolved);
         if (resolved.isEmpty()) {
             reselect(level);
             return;
         }
-        com.noobk.spmscavenger.debug.TradeRuntimeObserver.aboutToTrade(mob.getUUID(), backpack);
-        int emeraldsBefore = com.noobk.spmscavenger.debug.TradeRuntimeObserver
-                .count(backpack, net.minecraft.world.item.Items.EMERALD);
-        int pickaxesBefore = com.noobk.spmscavenger.debug.TradeRuntimeObserver
-                .count(backpack, net.minecraft.world.item.Items.IRON_PICKAXE);
         VillagerTradeAdapter.TradeResult result =
                 VillagerTradeAdapter.performResolvedTrade(backpack, target, resolved.get());
-        com.noobk.spmscavenger.debug.TradeRuntimeObserver.transacted(mob.getUUID(),
-                attemptSource, target, result, backpack, emeraldsBefore, pickaxesBefore);
 
         switch (result) {
             case TRADED -> continueChain(level);
@@ -500,11 +491,6 @@ public class TradeWithVillagerGoal extends Goal {
         target = candidate.villager();
         plannedOffer = candidate.offer();
         attemptSource = candidate.source();
-        // TEMPORARY step-7A readout. Void, disabled by default, reads nothing production writes -
-        // it cannot influence which candidate was chosen, only report that it was.
-        com.noobk.spmscavenger.debug.TradeRuntimeObserver.selected(mob.getUUID(),
-                candidate.source(), candidate.villager(), candidate.offer().ref(),
-                candidate.offer().costA(), candidate.offer().result());
         // Recorded only for a funding SELL: a direct BUY funds nothing and has no purchase behind it.
         attemptFunding = attempt.funding();
         attemptConsumer = candidate.consumerKey();
@@ -562,10 +548,6 @@ public class TradeWithVillagerGoal extends Goal {
         if (anchor == null) {
             return;
         }
-        // TEMPORARY step-7A readout, placed AFTER the guard: this method is called on every
-        // teardown, and counting the calls rather than the emissions would report an episode for
-        // every round that never traded.
-        com.noobk.spmscavenger.debug.TradeRuntimeObserver.episode(mob.getUUID());
         // R1: the anchor bounds credit within one visit; the ledger bounds it across the chain's
         // lifetime, which outlives this teardown by design.
         //
@@ -1020,10 +1002,6 @@ public class TradeWithVillagerGoal extends Goal {
         boolean mayDisplace = ExistingRouteFeasibility.tradeMayDisplace(
                 level, mob.getUUID(), demand, PlayerMobs.backpack(mob),
                 mob.getMainHandItem(), mob.getOffhandItem(), ScavengerConfig.get());
-        // TEMPORARY step-7B diagnostic. This is the tri-state trade actually reads; without it a
-        // stalled run cannot distinguish "no merchant" from "gather still owns the route".
-        com.noobk.spmscavenger.debug.TradeRuntimeObserver.routeFeasibility(mob.getUUID(),
-                demand.materialKey(), mayDisplace);
         return mayDisplace;
     }
 

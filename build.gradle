@@ -13,12 +13,6 @@ repositories {
     mavenCentral()
     maven { url = 'https://maven.shedaniel.me/' }
     maven { url = 'https://maven.terraformersmc.com/releases/' }
-    // TEMPORARY V2-TE P0-3 PROBE SUPPORT - remove with the probe. Modrinth maven, used only to
-    // resolve the pinned Trade Everything artifact for a dev/test reachability probe.
-    exclusiveContent {
-        forRepository { maven { url = 'https://api.modrinth.com/maven' } }
-        filter { includeGroup 'maven.modrinth' }
-    }
 }
 
 dependencies {
@@ -34,12 +28,6 @@ dependencies {
     modImplementation "com.terraformersmc:modmenu:${modmenu_version}"
 
     // Social Player Mobs is deliberately NOT a dependency — see PlayerMobs.java.
-
-    // TEMPORARY V2-TE P0-3 PROBE SUPPORT - dev/test only, never shipped. `modCompileOnly` keeps it
-    // off the production runtime classpath and out of the jar; the probe needs the REAL classes
-    // because reimplementing Trade Everything's pricing would make the oracle share the assumptions
-    // of the thing it is measuring.
-    modCompileOnly "maven.modrinth:${te_slug}:${te_version}"
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
