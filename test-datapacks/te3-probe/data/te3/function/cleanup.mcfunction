@@ -1,3 +1,7 @@
+# Blocks are fixture state too. Entities were always cleaned; the witness log was not, so a run
+# that chopped it silently changed the next run's preconditions - which is exactly how the 003c
+# witness went missing.
+spmscavenger debug te3 terrain restore
 kill @e[tag=te3]
 # Dropped items too. Cleanup only removed te3-TAGGED entities, so ordinary item entities left by a
 # previous run survived and could be picked up by the next fixture mob - which is one candidate

@@ -13,6 +13,10 @@ function te3:_merchants_autonomous
 summon playermob:player_mob ~ ~ ~ {CustomName:'"TE3Mob"',PersistenceRequired:1b,Tags:["te3","te3_mob"]}
 spmscavenger debug te3 seed autonomous
 spmscavenger debug te3 fixture
+# Deterministic gather terrain: one lone ground-level oak log as the unrelated WEALTH target
+# the 003c witness needs, and a refusal if any air-exposed iron ore sits inside the gather
+# radius - because "the mandatory route found nothing" is the whole claim.
+spmscavenger debug te3 terrain
 # LAST. Holds discretionary exploration until the mob's first Trade Everything plan exists, then
 # restores the exact previous value. See the honesty note in Te3ProbeCommand: this flag gates more
 # than ExploringGoal.

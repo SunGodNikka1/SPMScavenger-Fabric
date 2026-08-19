@@ -544,4 +544,94 @@ class TradeRuntimeObserverTest {
         assertTrue(probe.contains("MiningDirector gather path"),
                 "the honesty note must survive future edits to the hold");
     }
+
+    // ------------------------------------- 003c witness: deterministic gather terrain
+
+    /**
+     * The witness needs a world, not just a market.
+     *
+     * <p>{@code GATHER YIELDING} only fires when gather <b>selects an unrelated target</b> while a
+     * handoff is published. Step 7A leaned on ambient terrain for that, and the previous failed run
+     * had already chopped the one nearby tree — {@code cleanup} kills entities and restores no
+     * blocks. The second run therefore had nothing to select, the event could not occur, and the run
+     * looked like a policy failure rather than a missing precondition.
+     */
+    @Test
+    void mustHappen_bothScenariosArmDeterministicGatherTerrain() throws IOException {
+        for (String name : java.util.List.of("scenario/step7a_autonomous.mcfunction",
+                "scenario/step7b_mutation.mcfunction")) {
+            String scenario = fixture(name);
+            int summon = scenario.indexOf("summon playermob:player_mob");
+            int terrain = scenario.indexOf("te3 terrain");
+
+            assertTrue(terrain > 0, name + " must place the unrelated wealth target itself");
+            assertTrue(summon < terrain,
+                    name + ": terrain is placed relative to the mob, so the mob must exist first");
+        }
+    }
+
+    /** And arming still comes last in 7B, after the terrain step. */
+    @Test
+    void mustHappen_terrainIsArmedBeforeTheMarketMutation() throws IOException {
+        String scenario = fixture("scenario/step7b_mutation.mcfunction");
+
+        assertTrue(scenario.indexOf("te3 terrain") < scenario.indexOf("mutate arm"),
+                "the hold begins last, once the world is fully built");
+    }
+
+    /** Blocks are fixture state: a run that consumes them must not change the next run's world. */
+    @Test
+    void mustHappen_cleanupRestoresFixtureBlocks() throws IOException {
+        String cleanup = fixture("cleanup.mcfunction");
+
+        assertTrue(cleanup.contains("te3 terrain restore"),
+                "entities were always cleaned; the witness log was not, which is how the 003c "
+                        + "witness silently went missing between runs");
+        assertTrue(cleanup.indexOf("te3 terrain restore") < cleanup.indexOf("kill @e[tag=te3]"),
+                "restore before the entity sweep, while the world is still addressable");
+    }
+
+    /**
+     * The iron check must sweep the same volume the gather scan does.
+     *
+     * <p>A narrower box would pass while the real sweep still found ore — the precondition would be
+     * verified against a volume nobody searches, and the run would produce a false negative for the
+     * handoff.
+     */
+    @Test
+    void mustHappen_theIronPreconditionUsesTheGatherSweepVolume() throws IOException {
+        String probe = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/debug/Te3ProbeCommand.java"));
+        String gather = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/goal/GatherResourcesGoal.java"));
+
+        assertTrue(gather.contains("for (int dy = -4; dy <= 4; dy++)"),
+                "the gather sweep's vertical band, read from production");
+        assertTrue(probe.contains("for (int dy = -4; dy <= 4"),
+                "the precondition check must use the same band, or it verifies a volume nobody "
+                        + "searches");
+        assertTrue(probe.contains("GatherProtection.isExposedToAir"),
+                "and the same exposure rule - buried ore is not a candidate for either");
+    }
+
+    /** Refusing is the point: a run with iron in radius proves nothing and must not start. */
+    @Test
+    void mustHappen_thePreconditionRefusesRatherThanWarns() throws IOException {
+        String probe = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/debug/Te3ProbeCommand.java"));
+        String terrainBody = probe.substring(probe.indexOf("private static int terrain("),
+                probe.indexOf("private static void place("));
+
+        // The IRON refusal specifically. A bare "contains sendFailure" matched the unrelated
+        // sits-on-a-log guard, so deleting the iron check entirely broke nothing - a control that
+        // failed to fail.
+        int refusal = terrainBody.indexOf("air-exposed iron ore inside the gather radius");
+        int placement = terrainBody.indexOf("place(level, logPos");
+
+        assertTrue(refusal > 0,
+                "with iron in radius the mandatory route is servable, no handoff is published, and "
+                        + "the witness cannot occur - that is a refusal, not a warning");
+        assertTrue(placement > 0 && refusal < placement,
+                "and it refuses BEFORE building anything, so a rejected run leaves no litter");
+    }
 }

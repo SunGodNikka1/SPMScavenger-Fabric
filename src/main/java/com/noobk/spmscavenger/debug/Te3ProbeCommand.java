@@ -66,6 +66,15 @@ public final class Te3ProbeCommand {
                 .then(Commands.literal("te3").requires(src -> src.hasPermission(2))
                         .then(Commands.literal("index").executes(c -> index(c.getSource())))
                         .then(Commands.literal("p02").executes(c -> p02(c.getSource())))
+                        .then(Commands.literal("terrain")
+                                .executes(c -> terrain(c.getSource()))
+                                .then(Commands.literal("restore").executes(c -> {
+                                    int restored = restoreTerrain(c.getSource().getLevel());
+                                    c.getSource().sendSuccess(() -> Component.literal(
+                                            "[TE3] restored " + restored + " fixture block(s)"),
+                                            false);
+                                    return 1;
+                                })))
                         .then(Commands.literal("mutate")
                                 .then(Commands.literal("arm").executes(c -> {
                                     armMutation();
@@ -165,6 +174,7 @@ public final class Te3ProbeCommand {
                             // logs on its first tick - which reads as a different defect entirely.
                             disarmMutation();
                             clearMarketMutation();
+                            restoreTerrain(c.getSource().getLevel());
                             paritySubject = null;
                             parityDirect = null;
                             parityBoard = null;
@@ -931,6 +941,139 @@ public final class Te3ProbeCommand {
         mutationArmed = true;
         mutationApplied = false;
         holdExploration();
+    }
+
+    // ------------------------------------------------- 7A/7B deterministic gather terrain
+
+    /**
+     * The V2-DEF-003c witness needs a world, not just a market.
+     *
+     * <h2>Why the last run could not produce it</h2>
+     *
+     * {@code GATHER YIELDING} only happens when gather <b>selects an unrelated target</b> while a
+     * handoff is published. Step 7A leaned on ambient terrain for that target — and the previous
+     * failed run had already chopped the one nearby tree. {@code te3:cleanup} kills entities; it
+     * restores no blocks. So the second run had no log to select, took no wealth target, and the
+     * event under test could not occur. A green-looking run that never exercised the thing.
+     *
+     * <h2>What this places, and why exactly this shape</h2>
+     *
+     * One oak log on the ground a few blocks from the mob:
+     *
+     * <ul>
+     *   <li><b>on solid ground with air above</b> — reachable, so pass two's path check can accept
+     *       it;</li>
+     *   <li><b>nothing log-like below it</b> — {@code GatherApproachPolicy.isInitialTreeLog} admits
+     *       only tree bases, and a log stacked on a log is an internal column member;</li>
+     *   <li><b>no canopy</b> — a lone log has no leaves for build protection to defend.</li>
+     * </ul>
+     *
+     * <h2>Absence of iron is verified, not assumed</h2>
+     *
+     * The whole witness is "the mandatory route found nothing". If an air-exposed iron ore happens
+     * to sit in a cave inside the gather radius, gather serves the mandatory route, no handoff is
+     * published, and the run proves nothing — while looking like a fixture problem rather than a
+     * precondition failure. So this <b>scans the same box the gather sweep uses</b> and refuses to
+     * arm the scenario if it finds any, naming the coordinates.
+     */
+    private record PlacedBlock(net.minecraft.core.BlockPos pos,
+            net.minecraft.world.level.block.state.BlockState previous) {
+    }
+
+    /** Bounded by construction: this fixture places a handful of blocks and restores all of them. */
+    private static final List<PlacedBlock> FIXTURE_BLOCKS = new ArrayList<>();
+
+    private static final int WITNESS_LOG_OFFSET = 4;
+
+    private static int terrain(CommandSourceStack source) {
+        ServerLevel level = source.getLevel();
+        Mob mob = nearestScavenger(source);
+        if (mob == null) {
+            source.sendFailure(Component.literal(
+                    "[TE3] no te3 PlayerMob - run the scenario's summon first"));
+            return 0;
+        }
+        restoreTerrain(level);
+
+        double radius = ScavengerConfig.get().gatherSearchRadius;
+        List<String> iron = exposedIronWithin(level, mob.blockPosition(), (int) radius);
+        if (!iron.isEmpty()) {
+            source.sendFailure(Component.literal(String.join(String.valueOf((char) 10),
+                    "[TE3] REFUSED - air-exposed iron ore inside the gather radius (" + radius
+                            + "): " + iron,
+                    "  The 003c witness requires the mandatory RAW_IRON route to find NOTHING.",
+                    "  With iron here gather serves it, publishes no handoff, and the run proves",
+                    "  nothing while looking like a fixture fault. Move the fixture and retry.")));
+            return 0;
+        }
+
+        net.minecraft.core.BlockPos base = mob.blockPosition()
+                .offset(WITNESS_LOG_OFFSET, 0, WITNESS_LOG_OFFSET);
+        int surface = level.getHeight(
+                net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                base.getX(), base.getZ());
+        net.minecraft.core.BlockPos logPos =
+                new net.minecraft.core.BlockPos(base.getX(), surface, base.getZ());
+
+        if (level.getBlockState(logPos.below()).is(net.minecraft.tags.BlockTags.LOGS)) {
+            source.sendFailure(Component.literal(
+                    "[TE3] REFUSED - the witness spot sits on a log, so isInitialTreeLog would "
+                            + "reject it as an internal column member. Move the fixture."));
+            return 0;
+        }
+        place(level, logPos, net.minecraft.world.level.block.Blocks.OAK_LOG.defaultBlockState());
+        place(level, logPos.above(), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+
+        source.sendSuccess(() -> Component.literal(String.join(String.valueOf((char) 10),
+                "[TE3] terrain armed",
+                "  witness log at " + logPos + "  (lone, ground-level, no canopy)",
+                "  no air-exposed iron ore within " + radius + " - the mandatory route will find "
+                        + "nothing, which is what the handoff is made of")), false);
+        return 1;
+    }
+
+    private static void place(ServerLevel level, net.minecraft.core.BlockPos pos,
+            net.minecraft.world.level.block.state.BlockState state) {
+        FIXTURE_BLOCKS.add(new PlacedBlock(pos.immutable(), level.getBlockState(pos)));
+        level.setBlockAndUpdate(pos, state);
+    }
+
+    /** Blocks are fixture state too: a run that consumes them must not silently change the next. */
+    static int restoreTerrain(ServerLevel level) {
+        int restored = FIXTURE_BLOCKS.size();
+        for (int i = FIXTURE_BLOCKS.size() - 1; i >= 0; i--) {
+            PlacedBlock placed = FIXTURE_BLOCKS.get(i);
+            level.setBlockAndUpdate(placed.pos(), placed.previous());
+        }
+        FIXTURE_BLOCKS.clear();
+        return restored;
+    }
+
+    /**
+     * The same volume {@code GatherResourcesGoal.findTarget} sweeps, and the same exposure rule.
+     *
+     * <p>Re-deriving a narrower or wider box would let the check pass while the sweep still finds
+     * ore, which is the failure this exists to prevent.
+     */
+    private static List<String> exposedIronWithin(
+            ServerLevel level, net.minecraft.core.BlockPos origin, int radius) {
+        List<String> found = new ArrayList<>();
+        for (int dx = -radius; dx <= radius && found.size() < 4; dx++) {
+            for (int dz = -radius; dz <= radius && found.size() < 4; dz++) {
+                for (int dy = -4; dy <= 4 && found.size() < 4; dy++) {
+                    net.minecraft.core.BlockPos pos = origin.offset(dx, dy, dz);
+                    net.minecraft.world.level.block.state.BlockState state =
+                            level.getBlockState(pos);
+                    if ((state.is(net.minecraft.world.level.block.Blocks.IRON_ORE)
+                                    || state.is(net.minecraft.world.level.block.Blocks
+                                            .DEEPSLATE_IRON_ORE))
+                            && com.noobk.spmscavenger.GatherProtection.isExposedToAir(level, pos)) {
+                        found.add(pos.toShortString());
+                    }
+                }
+            }
+        }
+        return found;
     }
 
     // ------------------------------------------------- 7B-R1 exploration hold (fixture only)
