@@ -487,3 +487,15 @@ gate: `docs/porting/KNOWN_DEFECTS.md`.
 | --- | --- | --- | --- |
 | Unresolved progression demand, route owner not yet executable | EXPLORE refused admission | ~150-block expedition leaves the trade radius | `OPEN` |
 | Demand unsatisfiable | discretionary activity resumes | mob frozen guarding an unservable demand | `OPEN` |
+
+
+#### V2-DEF-003 — consumer-accurate gather frontier (REPAIRED — runtime UNVERIFIED)
+
+Full record: `docs/porting/KNOWN_DEFECTS.md`. `ConsumerAcquisitionFrontierTest` (7 rows) plus the
+corrected `GatherIntentPolicyTest` suppression pair.
+
+| Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| iron wanted, sticks sufficient | `RAW_IRON` required | `LOGS`/`COBBLESTONE` required | `CODE_CONFIRMED` |
+| already stone, pursuing iron | cobble is wealth only | stock target carries mandatory authority | `CODE_CONFIRMED` |
+| unrelated log nearby | iron search reaches its own conclusion | a log scan stands in for the iron route | `CODE_CONFIRMED`; end-to-end `UNVERIFIED` |

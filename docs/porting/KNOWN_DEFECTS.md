@@ -175,3 +175,81 @@ policy, or V2-C.
 
 Runtime proof class (AV-1): an observed objective trace, not a compile. The second row is the one
 that makes this non-trivial — a naive blocker converts a wandering mob into a frozen one.
+
+---
+
+## V2-DEF-003 — required gather resources were not consumer-accurate
+
+**Status:** REPAIRED — unit gate green, **runtime UNVERIFIED**. **Discovered:** step 7B runtime,
+2026-08-19. **Applies to:** shipped gather/progression policy, not Trade Everything.
+
+### The stall
+
+```
+demand     iron_ingot x3      projection  iron_pickaxe
+B_FUNDING  10                 free slots  1               plans 0
+Opinion    MANDATORY_AUTHORITY, discretionaryBlocker = GatherResourcesGoal -> SCAVENGE_WORK
+```
+
+A mob carrying 3 sticks for a 2-stick iron pickaxe, 320 logs and no iron kept **LOGS** in its
+required set, because `GatherIntentPolicy` made logs mandatory whenever
+`wantsPickUpgrade || wantsAxeUpgrade`. `ToolTierPolicy.cobbleBelowTarget` was broad in the same way:
+any wanted upgrade plus a target tier of stone-or-better kept **COBBLESTONE** mandatory against a
+generic stock target, regardless of whether the active consumer had already passed the stone step.
+
+### Why it could not clear itself
+
+`GatherRoutePrecursor` correctly refuses to read *"scan wanted iron, found log"* as iron exhaustion.
+So an irrelevant log in the required set let the scan keep succeeding at something no consumer
+wanted, **RAW_IRON exhaustion evidence was never published**, and V2-C could never legally hand
+route ownership to trade. Ten funded trades were available and the mob never planned one.
+
+### The contradiction
+
+`ScavengerCrafting.towardConsumerTool` already asked the right question — planks and logs matter
+only while the recipe's **stick requirement** is short. `GatherIntentPolicy` asked a broader one.
+Two independent readings of the same recipe, disagreeing.
+
+### Repair
+
+One shared consumer acquisition frontier, living beside the `toward*` methods so it reuses their
+constants, specs and tier dispatch:
+
+| Piece | Meaning |
+| --- | --- |
+| `ScavengerCrafting.toolUpgradeNeedsLogs` | logs are an acquisition only when the craft chain cannot make the missing sticks from held planks or logs |
+| `ScavengerCrafting.toolUpgradeNeedsCobble` | cobble is required only while the **stone step itself** is active |
+| `ScavengerCrafting.sticksNeedLogs` | the pure rule, count-explicit |
+
+`RAW_IRON` and `DIAMOND` were left untouched — those already came from consumer-derived deficits and
+were never the broad ones. `ToolTierPolicy.cobbleBelowTarget` is no longer consulted by gather.
+
+**NEED/WEALTH preserved:** a stock target beyond the consumer's need stays an appetite and never
+enters `requiredResources`.
+
+### Gate
+
+| Scenario | Required | Not required | Test |
+| --- | --- | --- | --- |
+| iron wanted, sticks sufficient, iron short | `RAW_IRON` | `LOGS`, `COBBLESTONE` | `mustHappen_theIronFrontierAsksForRawIronAndNothingElse` |
+| sticks short, planks or logs held | — | `LOGS` | `mustNotHappen_logsAreRequiredWhileTheCraftChainCanStillMakeSticks` |
+| sticks short, nothing to make them from | `LOGS` | — | `mustHappen_logsAreRequiredWhenNothingCanMakeSticks` |
+| stone step active, cobble short | `COBBLESTONE` | — | `mustHappen_cobbleIsRequiredWhileTheStoneStepIsActive` |
+| already stone, pursuing iron | — | `COBBLESTONE` | `mustNotHappen_aStockTargetKeepsCobbleMandatoryPastTheStoneStep` |
+| all inputs held, craft blocked by capacity | nothing | everything | `mustNotHappen_aFullBackpackInventsAGatherRequirement` |
+| unrelated log nearby | `RAW_IRON` | `LOGS` | `mustNotHappen_anIrrelevantLogKeepsTheIronRouteAlive` |
+
+Negative controls: restoring `wantsPickUpgrade -> LOGS` breaks four tests; restoring
+`cobbleBelowTarget` breaks four; making `sticksNeedLogs` ignore the craft chain breaks the pure rule.
+
+### Why it is not CLOSED
+
+Item **tags** are not populated by `Bootstrap.bootStrap()`, so plank/log counts read as zero in unit
+tests and the "crafting owns the precursor" branch is unreachable through a container fixture. It is
+proved on the pure helper instead. The end-to-end claim — that the mob now publishes RAW_IRON
+exhaustion and hands the route to trade — is a **runtime** fact and remains unproved until step 7B
+runs.
+
+One pre-existing test, `craftReadySuppressesAnotherGatherTrip`, was asserting `hasDemand() == true`
+for a mob holding every ingredient. It was encoding the defect and has been corrected; the
+suppression property it existed for is now proved separately with a demand that genuinely exists.

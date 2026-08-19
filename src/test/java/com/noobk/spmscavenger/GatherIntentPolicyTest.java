@@ -74,8 +74,37 @@ class GatherIntentPolicyTest {
         GatherIntentPolicy.GatherIntent intent =
                 GatherIntentPolicy.evaluate(pack, ItemStack.EMPTY, cfg, 64);
 
-        assertTrue(intent.hasDemand());
+        // V2-DEF-003: this used to assert hasDemand() == true, which was only true because
+        // `wantsPickUpgrade -> LOGS` made logs mandatory even with every ingredient already held.
+        // The test was encoding the defect. With the consumer frontier there is nothing to acquire,
+        // which is a stronger form of the property this test exists for.
+        assertFalse(intent.hasDemand(),
+                "3 iron and 2 sticks IS the iron pickaxe - nothing remains to be acquired");
         assertFalse(intent.shouldGather());
+    }
+
+    /**
+     * The suppression property itself, with a demand that is genuinely present.
+     *
+     * <p>The case above no longer exercises it — no demand means no trip regardless — so the
+     * ready-craft suppression is proved separately rather than left implied.
+     */
+    @Test
+    void craftReadyStillSuppressesAGatherTripWhenSomethingIsActuallyWanted() {
+        ScavengerConfig cfg = new ScavengerConfig();
+        cfg.maxPickTier = ToolTier.NONE;
+        cfg.maxAxeTier = ToolTier.NONE;
+        cfg.torchStockTarget = 8;
+        SimpleContainer pack = new SimpleContainer(8);
+        pack.setItem(0, new ItemStack(Items.COAL, 4));
+        pack.setItem(1, new ItemStack(Items.STICK, 4));
+
+        GatherIntentPolicy.GatherIntent intent =
+                GatherIntentPolicy.evaluate(pack, ItemStack.EMPTY, cfg, 64);
+
+        assertTrue(intent.hasDemand(), "torches are below target, so the torch chain wants input");
+        assertFalse(intent.shouldGather(),
+                "but MAKE_TORCHES is ready, and crafting what we hold comes before another trip");
     }
 
     @Test

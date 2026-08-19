@@ -481,6 +481,115 @@ public final class ScavengerCrafting {
         return Step.NOTHING;
     }
 
+    // ------------------------------------------------ V2-DEF-003 consumer acquisition frontier
+
+    /**
+     * <b>What the active tool-upgrade route is physically missing</b> — not what might generically
+     * be useful while some upgrade remains.
+     *
+     * <h2>The defect</h2>
+     *
+     * {@code GatherIntentPolicy} made LOGS required whenever {@code wantsPickUpgrade ||
+     * wantsAxeUpgrade}, and COBBLESTONE required whenever any upgrade was wanted and the target tier
+     * reached stone. {@link #towardConsumerTool} already asked the right question — planks and logs
+     * matter only while the recipe's <i>stick requirement</i> is short — so the two disagreed.
+     *
+     * <p>Runtime consequence (step 7B): a mob carrying 3 sticks for a 2-stick iron pickaxe, holding
+     * 320 logs and no iron, kept LOGS in its required set. {@code GatherResourcesGoal} therefore
+     * retained mandatory ownership on a resource the consumer did not need, and — because
+     * {@code GatherRoutePrecursor} correctly refuses to read "wanted iron, found log" as iron
+     * exhaustion — RAW_IRON exhaustion evidence could never be published, so V2-C could never hand
+     * ownership to trade. Observed: {@code B_FUNDING=10, plans=0}, stalled indefinitely.
+     *
+     * <h2>One interpretation, not two</h2>
+     *
+     * These live beside {@code towardTool}/{@code towardStoneTool}/{@code towardConsumerTool} and
+     * reuse their constants, specs and tier dispatch. Gather asks the same object the same question
+     * crafting does; a second recipe reading is exactly what produced the contradiction.
+     *
+     * <p>{@code RAW_IRON} and {@code DIAMOND} are deliberately untouched — those already came from
+     * consumer-derived deficits and were never the broad ones.
+     */
+    public static boolean toolUpgradeNeedsLogs(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
+        if (!cfg.craftTools) {
+            return false;
+        }
+        int planks = countTag(backpack, true);
+        int sticks = count(backpack, Items.STICK);
+        int logs = countTag(backpack, false);
+        return tierNeedsLogs(ToolTierPolicy.needsPickUpgrade(backpack, mainHand, offHand, cfg),
+                        ToolTierPolicy.tierOfPick(backpack, mainHand, offHand),
+                        ToolTierPolicy.targetPickTier(cfg),
+                        IRON_PICKAXE_RECIPE, DIAMOND_PICKAXE_RECIPE, planks, sticks, logs)
+                || tierNeedsLogs(ToolTierPolicy.needsAxeUpgrade(backpack, mainHand, offHand, cfg),
+                        ToolTierPolicy.tierOfAxe(backpack, mainHand, offHand),
+                        ToolTierPolicy.targetAxeTier(cfg),
+                        IRON_AXE_RECIPE, DIAMOND_AXE_RECIPE, planks, sticks, logs);
+    }
+
+    /**
+     * Cobble is required only while the <b>stone step itself</b> is the active one.
+     *
+     * <p>A mob that already holds stone and is pursuing iron has passed that prerequisite; keeping a
+     * generic {@code cobbleStockTarget} in the mandatory set would hand progression authority to a
+     * resource no current consumer consumes. Stock-building beyond the consumer's need is a WEALTH
+     * question, and wealth must never become mandatory permission.
+     */
+    public static boolean toolUpgradeNeedsCobble(
+            Container backpack, ItemStack mainHand, ItemStack offHand, ScavengerConfig cfg) {
+        if (!cfg.craftTools || count(backpack, Items.COBBLESTONE) >= COBBLE_PER_TOOL) {
+            return false;
+        }
+        return atStoneStep(ToolTierPolicy.needsPickUpgrade(backpack, mainHand, offHand, cfg),
+                        ToolTierPolicy.tierOfPick(backpack, mainHand, offHand),
+                        ToolTierPolicy.targetPickTier(cfg))
+                || atStoneStep(ToolTierPolicy.needsAxeUpgrade(backpack, mainHand, offHand, cfg),
+                        ToolTierPolicy.tierOfAxe(backpack, mainHand, offHand),
+                        ToolTierPolicy.targetAxeTier(cfg));
+    }
+
+    private static boolean atStoneStep(boolean wanted, ToolTier owned, ToolTier target) {
+        return wanted && owned.compareTo(ToolTier.STONE) < 0
+                && target.compareTo(ToolTier.STONE) >= 0
+                && owned.compareTo(ToolTier.WOOD) >= 0;
+    }
+
+    private static boolean tierNeedsLogs(boolean wanted, ToolTier owned, ToolTier target,
+            ConsumerRecipeSpec ironSpec, ConsumerRecipeSpec diamondSpec,
+            int planks, int sticks, int logs) {
+        if (!wanted || owned.compareTo(target) >= 0) {
+            return false;
+        }
+        if (owned.compareTo(ToolTier.WOOD) < 0 && target.compareTo(ToolTier.WOOD) >= 0) {
+            // The wooden step consumes planks directly as well as sticks.
+            return sticksNeedLogs(STICKS_PER_TOOL, sticks, planks, logs)
+                    || (planks < PLANKS_PER_TOOL && logs <= 0);
+        }
+        if (owned.compareTo(ToolTier.STONE) < 0 && target.compareTo(ToolTier.STONE) >= 0) {
+            return sticksNeedLogs(STICKS_PER_TOOL, sticks, planks, logs);
+        }
+        if (owned.compareTo(ToolTier.IRON) < 0 && target.compareTo(ToolTier.IRON) >= 0) {
+            return sticksNeedLogs(ironSpec.requiredCount(Items.STICK), sticks, planks, logs);
+        }
+        return sticksNeedLogs(diamondSpec.requiredCount(Items.STICK), sticks, planks, logs);
+    }
+
+    /**
+     * Logs are an <b>acquisition</b> only when crafting cannot produce the missing sticks from what
+     * is already held.
+     *
+     * <p>Package-private and count-explicit because plank and log counts come from item <b>tags</b>,
+     * which {@code Bootstrap.bootStrap()} does not populate — an integration fixture holding 16
+     * planks reads as zero, so the "crafting owns the precursor" branch is unreachable from a
+     * container-based test and would otherwise have shipped unproved. Holding planks, or holding logs, means the craft chain owns the precursor —
+     * the same condition {@code towardConsumerTool} uses to choose PLANKS_TO_STICKS or
+     * LOGS_TO_PLANKS instead of standing still.
+     */
+    static boolean sticksNeedLogs(int required, int sticks, int planks, int logs) {
+        return sticks < required && planks < PLANKS_PER_STICK_CRAFT && logs <= 0;
+    }
+
     private static Step towardStoneTool(int sticks, int planks, int logs, int cobble, Step tool) {
         if (cobble >= COBBLE_PER_TOOL && sticks >= STICKS_PER_TOOL) {
             return tool;

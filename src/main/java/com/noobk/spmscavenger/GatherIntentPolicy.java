@@ -124,13 +124,23 @@ public final class GatherIntentPolicy {
         boolean wantsAxeUpgrade =
                 cfg.craftTools && ToolTierPolicy.needsAxeUpgrade(backpack, mainHand, offHand, cfg);
 
-        if (wantsTorches || wantsPickUpgrade || wantsAxeUpgrade) {
+        // V2-DEF-003. `wantsPickUpgrade || wantsAxeUpgrade -> LOGS` was required-resource truth of
+        // the wrong shape: "what might generically be useful while some upgrade remains" rather than
+        // "what is the active consumer route actually missing". A mob with 3 sticks for a 2-stick
+        // iron pickaxe kept LOGS mandatory, GatherResourcesGoal kept ownership on a resource nothing
+        // consumed, and RAW_IRON exhaustion could never be published - so trade could never be
+        // handed the route. The consumer frontier now comes from the same object crafting asks.
+        if (wantsTorches
+                || ScavengerCrafting.toolUpgradeNeedsLogs(backpack, mainHand, offHand, cfg)) {
             resources.add(Resource.LOGS);
         }
         if (wantsTorches) {
             resources.add(Resource.COAL);
         }
-        if (cfg.craftTools && ToolTierPolicy.cobbleBelowTarget(backpack, mainHand, offHand, cfg)) {
+        // Only while the STONE step itself is active. A mob already holding stone and pursuing iron
+        // has passed that prerequisite, and a generic stock target must not carry mandatory
+        // progression authority - that is a WEALTH appetite, not a consumer need.
+        if (ScavengerCrafting.toolUpgradeNeedsCobble(backpack, mainHand, offHand, cfg)) {
             resources.add(Resource.COBBLESTONE);
         }
         if (cfg.craftTools && WorkDemandPolicy.rawIronDeficit(backpack, mainHand, offHand, cfg) > 0) {
