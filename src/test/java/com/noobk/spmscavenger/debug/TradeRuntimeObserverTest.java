@@ -459,4 +459,89 @@ class TradeRuntimeObserverTest {
         assertFalse(probe.contains(".save(") || probe.contains("writeConfig"),
                 "the temporary setting must not outlive the session, let alone the fixture");
     }
+
+    // --------------------------------------------- 7B-R1b arming must follow ENTITY_LOAD
+
+    /**
+     * Ordering is load-bearing, and getting it wrong is invisible.
+     *
+     * <p>{@code SpmScavengerInstallPolicy} reads {@code cfg.exploring} at ENTITY_LOAD to decide
+     * {@code replacesHostStroll} and {@code installsOverlandExploration}. A later config change does
+     * not re-wire an already-loaded entity, so arming before the summon permanently gives the
+     * fixture mob a different goal stack — no {@code ExploringGoal}, no
+     * {@code TrackedLocalWanderGoal}, host stroll retained — and restoring the flag afterwards
+     * cannot put those goals back.
+     *
+     * <p>The mob would then behave plausibly and wrongly for the whole run, with nothing in the
+     * readout to say why.
+     */
+    @Test
+    void mustHappen_theMobIsSummonedBeforeTheMutationIsArmed() throws IOException {
+        String scenario = fixture("scenario/step7b_mutation.mcfunction");
+
+        int summon = scenario.indexOf("summon playermob:player_mob");
+        int seed = scenario.indexOf("seed autonomous");
+        int arm = scenario.indexOf("mutate arm");
+
+        assertTrue(summon > 0 && seed > 0 && arm > 0, "all three setup steps must be present");
+        assertTrue(summon < arm,
+                "arming before ENTITY_LOAD strips goals that restoring the flag cannot reinstate");
+        assertTrue(seed < arm, "and the mob must be fully seeded before the hold begins");
+    }
+
+    /** Arming is the last setup command, so nothing runs between it and the mob's first AI tick. */
+    @Test
+    void mustHappen_armingIsTheFinalSetupCommand() throws IOException {
+        String scenario = fixture("scenario/step7b_mutation.mcfunction");
+        // From the END of the arm line, so the arm command itself is not re-examined.
+        String afterArm = scenario.substring(
+                scenario.indexOf((char) 10, scenario.indexOf("mutate arm")) + 1);
+
+        for (String line : afterArm.split(String.valueOf((char) 10))) {
+            String trimmed = line.trim();
+            assertTrue(trimmed.isEmpty() || trimmed.startsWith("say "),
+                    "only chat output may follow the arm: " + trimmed);
+        }
+    }
+
+    /**
+     * What the hold actually suppresses, pinned so the claim cannot drift.
+     *
+     * <p>R1 documentation said "only ordinary discretionary exploration". That was wrong —
+     * {@code exploring} also gates {@code MiningDirector}'s gather path, so the hold does bias route
+     * choice while in effect. The partition below is the honest statement, and it is asserted rather
+     * than described because a comment cannot go red.
+     */
+    @Test
+    void mustHappen_theHoldLeavesCraftSmeltTradeAndExhaustionUntouched() throws IOException {
+        for (String untouched : java.util.List.of(
+                "goal/CraftTorchesGoal.java",
+                "goal/SmeltAtFurnaceGoal.java",
+                "goal/TradeWithVillagerGoal.java",
+                "village/trade/RouteExhaustionEvidence.java",
+                "village/trade/TradeFundingPlanner.java")) {
+            String body = Files.readString(
+                            Path.of("src/main/java/com/noobk/spmscavenger").resolve(untouched))
+                    .replaceAll("(?s)/\\*.*?\\*/", "")
+                    .replaceAll("(?m)//.*$", "");
+            assertFalse(body.contains(".exploring"),
+                    untouched + " must not read cfg.exploring, or the hold would change the very "
+                            + "behaviour step 7B is measuring");
+        }
+    }
+
+    /** And the surfaces it does suppress, named — so "only exploration" cannot be claimed again. */
+    @Test
+    void mustHappen_theSuppressedSurfacesAreAcknowledged() throws IOException {
+        String mining = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/mining/MiningDirector.java"));
+        assertTrue(mining.contains("cfg.exploring"),
+                "MiningDirector's gather path IS gated by exploring - the hold suppresses it, and "
+                        + "the fixture documentation must keep saying so");
+
+        String probe = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/debug/Te3ProbeCommand.java"));
+        assertTrue(probe.contains("MiningDirector gather path"),
+                "the honesty note must survive future edits to the hold");
+    }
 }

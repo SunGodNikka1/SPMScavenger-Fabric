@@ -934,13 +934,36 @@ public final class Te3ProbeCommand {
      * director, EXPLORE wins, and the subject walks out of its own market before the Q1/Q2 mutation
      * this scenario exists to exercise is even reachable. Observed: {@code plans=0 objective=Exploring}.
      *
-     * <h2>Deliberately narrow</h2>
+     * <h2>What it actually suppresses — corrected</h2>
      *
-     * Only ordinary discretionary exploration is held, only while the fixture is waiting for its
-     * <b>first</b> TE plan, and only in memory. Gather, craft, smelt and trade policy keep running
-     * untouched — the mob still decides for itself what to do, it simply cannot take a 150-block
-     * holiday first. From {@code PLAN #1} onward the walk, mutation, revalidation, rejection,
-     * replan and transaction all run under ordinary production behaviour.
+     * R1 claimed "only ordinary discretionary exploration". That was <b>wrong</b>. {@code exploring}
+     * is read by several surfaces:
+     *
+     * <pre>
+     * SUPPRESSED   ExploringGoal
+     *              SpmScavengerInstallPolicy.replacesHostStroll / installsOverlandExploration
+     *              MiningDirector gather path   (enabled && gatherResources && exploring)
+     *              two ExplorationActivityGoal surfaces
+     *
+     * UNTOUCHED    CraftTorchesGoal, SmeltAtFurnaceGoal, TradeWithVillagerGoal,
+     *              RouteExhaustionEvidence
+     * </pre>
+     *
+     * So the hold does bias route choice while it is in effect: with the mining gather path down,
+     * trade is the remaining route to iron. That is a real limitation of this fixture and is stated
+     * rather than glossed.
+     *
+     * <p>What bounds it: the hold ends at {@code PLAN #1}, which is before any trade executes.
+     * <b>Everything step 7B is testing — Q1/Q2 correspondence, rejection, replan, convergence —
+     * happens after the release, under ordinary production behaviour.</b> The hold can change how
+     * quickly the mob reaches its first plan; it cannot change what the mutation does to it.
+     *
+     * <h2>Ordering</h2>
+     *
+     * Arming must happen <b>after ENTITY_LOAD</b>. {@code SpmScavengerInstallPolicy} reads
+     * {@code exploring} when a mob loads, and a later config change does not re-wire an existing
+     * entity — arming first would permanently strip this fixture mob's ExploringGoal and
+     * TrackedLocalWanderGoal, which restoring the flag could never put back.
      *
      * <p>What this is not: authorizing a trade, selecting a candidate, forcing a replan, touching
      * the Q1/Q2 comparison, or manufacturing {@code RouteExhaustionEvidence} — whose contract says
