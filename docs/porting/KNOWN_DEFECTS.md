@@ -410,3 +410,56 @@ breaks the freeze test; removing the counter reset breaks the semantics test.
 ### Not fixed by giving the fixture another slot
 
 Deliberately. A second free slot would have made the runtime pass while hiding what the run found.
+
+### R1 — the first repair reconstructed the authority
+
+The initial `MandatoryHandoffPolicy` claimed to answer *"a handoff was published; should gather
+yield?"* while independently **re-deriving** whether one ought to exist, from precursor + sweep
+result + selection. It omitted `GatherRoutePrecursor.scanCovers`, which `publishRouteExhaustion`
+enforces, so:
+
+```
+demand IRON_INGOT, and this scan did NOT cover RAW_IRON
+  publishRouteExhaustion  -> refuses -> NO evidence
+  reconstructed inference -> YIELD
+
+  Gather: "I am yielding to trade."
+  Trade:  reads RouteExhaustionEvidence, finds none, declines.
+```
+
+A deterministic self-stall in which both halves are individually correct — the duplicated-authority
+pattern this workstream keeps removing, reintroduced by the repair for it.
+
+**Publication is now the single authority.** `publishRouteExhaustion` returns
+`Optional<HandoffPublication>`, present only where `RouteExhaustionEvidence.publish` actually ran,
+and the scheduler consumes that value. Every publisher precondition is inherited because there is no
+second path to a yield.
+
+Two further problems in that first attempt:
+
+- **A naked `int handoffYields`** was not attached to a consumer or material, so one handoff could
+  inherit another's part-spent budget. Replaced by `YieldWindow(consumer, material, openedAt)`; a
+  new episode opens a new window by construction rather than by remembering to reset a counter.
+- **`MAX_CONSECUTIVE_YIELDS = 3`** at a 60-tick scan interval was ~180 ticks, while
+  `TradeCandidateRound.EXHAUSTED_ROUND_COOLDOWN_TICKS` is 200 — gather's concession could expire
+  *before trade was legally allowed to retry*. Now derived as `EXHAUSTED_ROUND_COOLDOWN_TICKS * 2`,
+  with a test asserting the **relationship** rather than the number, so re-tuning either constant is
+  caught here instead of in a runtime session.
+
+### The bound is implementation policy, not the architecture
+
+The real event is *"another route claimed or refused this handoff"*, which gather cannot observe
+without coupling to trade's internals. The timer stands in for it and is documented as such. The
+protocol being locked is:
+
+```
+gather route --publishes exhaustion--> HANDOFF AVAILABLE
+                                         |
+                   trade claims it ------+------ trade cannot serve it
+                           |                            |
+                mandatory progression          optional work may resume
+```
+
+Success is not "the fixture reaches the pickaxe". It is that **the same authoritative publication
+that changes route feasibility also controls scheduling ownership**, with neither side reconstructing
+what the other meant.

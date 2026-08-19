@@ -127,35 +127,14 @@ public class GatherResourcesGoal extends Goal {
     private final java.util.EnumSet<GatherIntentPolicy.Resource> lastScanFamilies =
             java.util.EnumSet.noneOf(GatherIntentPolicy.Resource.class);
 
-    /** Consecutive scans yielded to a pending mandatory handoff. Bounded; reset on any non-yield. */
-    private int handoffYields;
-
     /**
-     * Is this selection unrelated work standing in the way of a handoff we just published?
+     * The concession window, carried between scans and bound to the handoff it belongs to.
      *
-     * <p>Reads only facts this goal already owns: the live demand, its modelled precursor, whether
-     * the completed sweep turned that precursor up, and what the chosen target actually is.
-     * {@code MandatoryHandoffPolicy} owns the decision so the combinations are unit-testable.
+     * <p>A naked {@code int} let one handoff inherit another's budget. Identity lives in the window
+     * itself, so a new consumer/material episode opens a new one by construction.
      */
-    private boolean yieldsToPendingHandoff(ScavengerConfig cfg, GatherTarget selected) {
-        if (scanScope != null) {
-            // A cooperative sub-probe is not holding the deliberate-work slot for itself.
-            return false;
-        }
-        Container backpack = PlayerMobs.backpack(mob);
-        if (backpack == null) {
-            return false;
-        }
-        java.util.Optional<GatherIntentPolicy.Resource> precursor = WorkDemandPolicy
-                .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg)
-                .map(WorkDemandPolicy.WorkDemand::payload)
-                .flatMap(GatherRoutePrecursor::of);
-        boolean foundInSweep = precursor.map(lastScanFamilies::contains).orElse(false);
-        java.util.Optional<GatherIntentPolicy.Resource> selectedFamily =
-                GatherCandidatePolicy.familyOf(mob.level().getBlockState(selected.blockPos()));
-        return MandatoryHandoffPolicy.yieldsToHandoff(
-                precursor, foundInSweep, selectedFamily, handoffYields);
-    }
+    private MandatoryHandoffPolicy.YieldWindow yieldWindow =
+            MandatoryHandoffPolicy.YieldWindow.NONE;
 
     private GatherCandidatePolicy.ScanFailureReason lastScanFailure =
             GatherCandidatePolicy.ScanFailureReason.NONE;
@@ -246,9 +225,10 @@ public class GatherResourcesGoal extends Goal {
         //
         // Safe because the publish is now scoped to the demand's own precursor: it says "iron is not
         // here", which stays true whether or not the mob is about to go and chop a log.
-        publishRouteExhaustion(cfg, now);
+        java.util.Optional<MandatoryHandoffPolicy.HandoffPublication> handoff =
+                publishRouteExhaustion(cfg, now);
         if (selected == null) {
-            handoffYields = 0;
+            yieldWindow = MandatoryHandoffPolicy.YieldWindow.NONE;
             scanClock.resetAfter(now);
             return false;
         }
@@ -256,16 +236,20 @@ public class GatherResourcesGoal extends Goal {
         // 3, so claiming the deliberate-work slot for an unrelated wealth target after declaring the
         // mandatory route exhausted means trade cannot preempt - and the wealth haul then filled the
         // very slot the incoming trade result needed (logs 320 -> 324, then NO_ROOM).
-        if (yieldsToPendingHandoff(cfg, selected)) {
-            handoffYields++;
+        java.util.Optional<MandatoryHandoffPolicy.YieldWindow> yielding =
+                MandatoryHandoffPolicy.yieldsToHandoff(handoff,
+                        GatherCandidatePolicy.familyOf(
+                                mob.level().getBlockState(selected.blockPos())),
+                        yieldWindow, now);
+        if (yielding.isPresent()) {
+            yieldWindow = yielding.get();
             com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
-                    "YIELDING deliberate-work slot to a pending mandatory handoff ("
-                            + handoffYields + "/" + MandatoryHandoffPolicy.MAX_CONSECUTIVE_YIELDS
-                            + ")");
+                    "YIELDING deliberate-work slot to the published handoff for "
+                            + yieldWindow.material());
             scanClock.resetAfter(now);
             return false;
         }
-        handoffYields = 0;
+        yieldWindow = MandatoryHandoffPolicy.YieldWindow.NONE;
         target = selected.blockPos();
         approachPos = selected.approachPos();
         approachPath = selected.path();
@@ -562,20 +546,26 @@ public class GatherResourcesGoal extends Goal {
      *       rather than authorizing trade to displace working progression.
      * </ol>
      */
-    private void publishRouteExhaustion(ScavengerConfig cfg, long now) {
+    /**
+     * @return the publication when evidence was actually written — the single authority for a
+     *     handoff. Every early return below is a reason no handoff exists, and the scheduler now
+     *     inherits all of them instead of re-deriving a subset.
+     */
+    private java.util.Optional<MandatoryHandoffPolicy.HandoffPublication> publishRouteExhaustion(
+            ScavengerConfig cfg, long now) {
         // TEMPORARY step-7B diagnostic. Reports which of the four conditions said no; a silent
         // refusal from any of them is indistinguishable from outside. Void and recording-gated, so
         // it cannot alter the decision it is describing.
         if (scanScope != null) {
             com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
                     "no publish: scan was SCOPED (cooperative probe, not the full sweep)");
-            return;
+            return java.util.Optional.empty();
         }
         Container backpack = PlayerMobs.backpack(mob);
         if (backpack == null) {
             com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
                     "no publish: no backpack");
-            return;
+            return java.util.Optional.empty();
         }
         java.util.Optional<WorkDemandPolicy.MaterialDemand> demand = WorkDemandPolicy
                 .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg)
@@ -583,13 +573,13 @@ public class GatherResourcesGoal extends Goal {
         if (demand.isEmpty()) {
             com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
                     "no publish: no live demand at scan end");
-            return;
+            return java.util.Optional.empty();
         }
         if (!GatherRoutePrecursor.scanCovers(demand.get(), currentIntent())) {
             com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
                     "no publish: scan did NOT cover " + demand.get().materialKey()
                             + " - a sweep for something else proves nothing about this route");
-            return;
+            return java.util.Optional.empty();
         }
         // V2-DEF-003b: THIS resource's own result, not the scan's overall verdict. A saturated
         // wealth log winning target selection used to make the whole scan "successful" and silence
@@ -599,19 +589,21 @@ public class GatherResourcesGoal extends Goal {
         if (precursor.isEmpty()) {
             com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
                     "no publish: no modelled gather route for " + demand.get().materialKey());
-            return;
+            return java.util.Optional.empty();
         }
         if (lastScanFamilies.contains(precursor.get())) {
             com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
                     "no publish: " + precursor.get() + " WAS found in radius - the route is not "
                             + "exhausted, whatever else the scan did or did not select");
-            return;
+            return java.util.Optional.empty();
         }
         com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
                 "PUBLISHED exhaustion for " + demand.get().materialKey()
                         + " (SEARCH_COMPLETED_EMPTY)");
         RouteExhaustionEvidence.publish(mob.getUUID(), demand.get(),
                 RouteExhaustionEvidence.Reason.SEARCH_COMPLETED_EMPTY, now);
+        return java.util.Optional.of(new MandatoryHandoffPolicy.HandoffPublication(
+                demand.get().consumerKey(), demand.get().materialKey(), precursor.get()));
     }
 
     /**

@@ -217,7 +217,13 @@ class ProductionRoutePathTest {
                         .contains("publishRouteExhaustion"),
                 "never from stop() - an interruption has not finished looking");
 
-        String body = bodyOf(gather, "private void publishRouteExhaustion(");
+        // The publisher now RETURNS its result - it is the single authority for a handoff, and the
+        // scheduler consumes that rather than re-deriving one (V2-DEF-003c-R1).
+        String body = bodyOf(gather,
+                "private java.util.Optional<MandatoryHandoffPolicy.HandoffPublication> "
+                        + "publishRouteExhaustion(");
+        assertTrue(body.contains("return java.util.Optional.of(new MandatoryHandoffPolicy"),
+                "a handoff exists only where evidence was actually written");
         assertTrue(body.contains("scanScope != null"),
                 "a cooperative sub-probe is not a completed bounded search");
         // V2-DEF-003b: the same property, now asked PER RESOURCE. Families are recorded at pass
