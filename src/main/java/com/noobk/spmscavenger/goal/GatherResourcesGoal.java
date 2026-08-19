@@ -5,6 +5,7 @@ import com.noobk.spmscavenger.DiscoveryMode;
 import com.noobk.spmscavenger.DiscoveryPolicy;
 import com.noobk.spmscavenger.FurnacePolicy;
 import com.noobk.spmscavenger.GatherCandidatePolicy;
+import com.noobk.spmscavenger.GatherScanSweep;
 import com.noobk.spmscavenger.GatherIntentPolicy;
 import com.noobk.spmscavenger.GatherProtection;
 import com.noobk.spmscavenger.GatherTargetPolicy;
@@ -207,8 +208,15 @@ public class GatherResourcesGoal extends Goal {
             return false;
         }
         GatherTarget selected = findTarget(cfg);
+        // V2-DEF-003b blocker 1: after EVERY completed sweep, not only when nothing was selected.
+        // The defect scenario is precisely the one where something WAS selected - a wealth log -
+        // while the mandatory RAW_IRON route found nothing. Publishing only on a null target meant
+        // the resource-specific logic below was never reached in the case it exists for.
+        //
+        // Safe because the publish is now scoped to the demand's own precursor: it says "iron is not
+        // here", which stays true whether or not the mob is about to go and chop a log.
+        publishRouteExhaustion(cfg, now);
         if (selected == null) {
-            publishRouteExhaustion(cfg, now);
             scanClock.resetAfter(now);
             return false;
         }
@@ -630,14 +638,14 @@ public class GatherResourcesGoal extends Goal {
         BlockPos origin = mob.blockPosition();
         int r = (int) cfg.gatherSearchRadius;
 
-        BlockPos[] nearest = new BlockPos[MAX_CANDIDATES];
-        double[] dists = new double[MAX_CANDIDATES];
-        int found = 0;
+        // V2-DEF-003b blocker 2: observation and selection are separate data. The sweep records
+        // every eligible family it meets; the nearest-N buffer decides only what pass two will pay
+        // for. Recording used to sit AFTER the buffer prune, so an iron ore farther than the 24th
+        // nearest wealth candidate was seen, discarded, and then reported as "iron not found" -
+        // which would authorize trade on FALSE exhaustion evidence.
+        GatherScanSweep sweep = new GatherScanSweep(MAX_CANDIDATES);
 
         lastScanFailure = GatherCandidatePolicy.ScanFailureReason.NONE;
-        // V2-DEF-003b: which resource families this sweep actually turned up, so a mandatory route
-        // can reach its own conclusion even when an optional wealth candidate won target selection.
-        lastScanFamilies.clear();
 
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
@@ -664,23 +672,26 @@ public class GatherResourcesGoal extends Goal {
                                     true, level.getBlockState(pos.below()).is(BlockTags.LOGS))) {
                         continue;
                     }
-                    if (found == MAX_CANDIDATES && dist >= dists[found - 1]) {
-                        continue;
-                    }
-                    // Sorted insert into a fixed buffer — no allocation, no full sort.
-                    int at = (found == MAX_CANDIDATES) ? found - 1 : found++;
-                    while (at > 0 && dists[at - 1] > dist) {
-                        dists[at] = dists[at - 1];
-                        nearest[at] = nearest[at - 1];
-                        at--;
-                    }
-                    dists[at] = dist;
-                    nearest[at] = pos.immutable();
-                    // Recorded AFTER every pass-one filter, so a canopy log the tree-base rule
-                    // rejected does not count as log presence.
-                    GatherCandidatePolicy.familyOf(state).ifPresent(lastScanFamilies::add);
+                    // Every eligibility rule has run; the family is recorded unconditionally and
+                    // the buffer decides selection. Ordering is enforced by GatherScanSweep.offer,
+                    // not by the order of two statements here.
+                    sweep.offer(pos, dist, GatherCandidatePolicy.familyOf(state));
                 }
             }
+        }
+
+        lastScanFamilies.clear();
+        for (GatherIntentPolicy.Resource resource : GatherIntentPolicy.Resource.values()) {
+            if (sweep.saw(resource)) {
+                lastScanFamilies.add(resource);
+            }
+        }
+        BlockPos[] nearest = new BlockPos[MAX_CANDIDATES];
+        double[] dists = new double[MAX_CANDIDATES];
+        int found = sweep.candidateCount();
+        for (int i = 0; i < found; i++) {
+            nearest[i] = sweep.candidate(i);
+            dists[i] = sweep.distanceSquared(i);
         }
 
         if (found == 0) {

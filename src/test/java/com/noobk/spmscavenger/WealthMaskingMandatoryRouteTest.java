@@ -183,6 +183,32 @@ class WealthMaskingMandatoryRouteTest {
      * precursor rather than to the scan's overall verdict, and that the family record is taken at
      * pass one so a protection-rejected candidate still counts as present.
      */
+    /**
+     * Blocker 1 — the publish must be <b>reached</b> when another resource won selection.
+     *
+     * <p>{@code canUse} only called {@code publishRouteExhaustion} when {@code selected == null}.
+     * The defect scenario is exactly the one where something WAS selected — a wealth log — while
+     * the mandatory route found nothing, so the resource-specific logic was never reached in the
+     * case it exists for. A structural test for "the file contains the scoped check" was true
+     * throughout and proved nothing about that.
+     */
+    @Test
+    void mustHappen_exhaustionIsEvaluatedAfterEverySweepNotOnlyEmptyOnes() throws java.io.IOException {
+        String gather = java.nio.file.Files.readString(java.nio.file.Path.of(
+                        "src/main/java/com/noobk/spmscavenger/goal/GatherResourcesGoal.java"))
+                .replaceAll("(?s)/\\*.*?\\*/", "")
+                .replaceAll("(?m)//.*$", "");
+
+        int scan = gather.indexOf("GatherTarget selected = findTarget(cfg);");
+        int publish = gather.indexOf("publishRouteExhaustion(cfg, now);", scan);
+        int nullBranch = gather.indexOf("if (selected == null) {", scan);
+
+        assertTrue(scan > 0 && publish > 0 && nullBranch > 0);
+        assertTrue(publish < nullBranch,
+                "the publish must run before - and therefore regardless of - the null-target "
+                        + "branch, or a wealth log winning selection silences the mandatory route");
+    }
+
     @Test
     void mustHappen_thePublishDecisionIsScopedToItsOwnResource() throws java.io.IOException {
         String gather = java.nio.file.Files.readString(java.nio.file.Path.of(
@@ -194,14 +220,11 @@ class WealthMaskingMandatoryRouteTest {
                         "lastScanFailure != GatherCandidatePolicy.ScanFailureReason"
                                 + ".NO_CANDIDATES_IN_RADIUS"),
                 "the whole-scan verdict is exactly what let a wealth log answer for iron");
-        assertTrue(gather.contains("familyOf(state).ifPresent(lastScanFamilies::add)"),
-                "recorded during the single sweep - no rescan per resource");
-
-        int record = gather.indexOf("familyOf(state).ifPresent");
-        int passTwo = gather.indexOf("private GatherTarget firstUnprotected");
-        assertTrue(record > 0 && (passTwo < 0 || record < passTwo),
-                "families are recorded at pass one, so a protection-rejected iron candidate still "
-                        + "marks the route as not exhausted");
+        assertTrue(gather.contains("sweep.offer(pos, dist, GatherCandidatePolicy.familyOf(state))"),
+                "observed during the single sweep - no rescan per resource");
+        assertFalse(gather.contains("lastScanFamilies::add"),
+                "recording must not sit beside the buffer prune again; GatherScanSweep.offer owns "
+                        + "the ordering now, and GatherScanSweepTest proves the behaviour");
     }
 
     /** Trade must not have acquired the ability to conclude this for itself. */
