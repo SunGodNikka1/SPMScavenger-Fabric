@@ -21,7 +21,13 @@ function te3:_merchants_autonomous
 summon playermob:player_mob ~ ~ ~ {CustomName:'"TE3Mob"',PersistenceRequired:1b,Tags:["te3","te3_mob"]}
 spmscavenger debug te3 seed autonomous
 spmscavenger debug te3 fixture
-say [TE3] step 7B fixture ready. Now: /spmscavenger debug te3 index
-say [TE3] then: /spmscavenger debug te3 watch on
-say [TE3] then: /spmscavenger debug te3 mutate arm     and WAIT - do not touch the mob
-say [TE3] then, after it has traded: /spmscavenger debug te3 watch report
+say [TE3] step 7B fixture ready.
+say [TE3] SAFE ORDER (run these BEFORE re-running this scenario next time):
+say [TE3]   /function te3:cleanup
+say [TE3]   /spmscavenger debug te3 reset
+say [TE3]   /spmscavenger debug te3 index
+say [TE3]   /spmscavenger debug te3 watch on
+say [TE3]   /spmscavenger debug te3 mutate arm
+say [TE3]   /function te3:scenario/step7b_mutation
+say [TE3] Arming holds discretionary EXPLORATION until the first TE plan exists, then restores it.
+say [TE3] After it has traded: /spmscavenger debug te3 watch report

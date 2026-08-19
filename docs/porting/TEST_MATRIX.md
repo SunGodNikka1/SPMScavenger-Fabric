@@ -476,3 +476,14 @@ Recorded from the P0-2 source review, repaired separately as its own task (2026-
 | Player trade, then PlayerMob trade, then villager level-up | player keeps `ReputationEventType.TRADE` | mob trade nulls `lastTradedPlayer` and drops it | `TradeAttributionPolicyTest` `CODE_CONFIRMED`; runtime gossip read `UNVERIFIED` |
 | PlayerMob trades a villager no human has traded | field stays `null`, never written | the mob is credited with `TRADE` reputation | `TradeAttributionPolicyTest` `CODE_CONFIRMED` |
 | A newer attribution appears during the notify | the newer value stands | a saved value is restored over it | `TradeAttributionPolicyTest` `CODE_CONFIRMED` |
+
+
+#### V2-DEF-002 — discretionary displacement of pending progression (OPEN)
+
+Runtime-observed during step 7B; deliberately **not** repaired inside that scenario. Full record and
+gate: `docs/porting/KNOWN_DEFECTS.md`.
+
+| Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Unresolved progression demand, route owner not yet executable | EXPLORE refused admission | ~150-block expedition leaves the trade radius | `OPEN` |
+| Demand unsatisfiable | discretionary activity resumes | mob frozen guarding an unservable demand | `OPEN` |

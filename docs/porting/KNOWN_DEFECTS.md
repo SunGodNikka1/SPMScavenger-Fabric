@@ -105,3 +105,73 @@ Two things remain runtime facts, not compile facts:
    `ReputationEventType.TRADE` actually reaches the player.
 
 Until both are observed, this defect is repaired, not closed.
+
+---
+
+## V2-DEF-002 — discretionary activity can displace *pending* mandatory progression
+
+**Status:** OPEN, architecture finding. **Discovered:** step 7B runtime, 2026-08-18. **Applies to:**
+Opinion / discretionary director, not Trade Everything. **Severity:** low frequency, high surprise.
+
+### What was observed
+
+A PlayerMob with an unresolved iron-pickaxe progression demand walked out of its own village:
+
+```
+plans=0 (TE 0)  revals=0  trades=0     logs=320  emeralds=0     objective=Exploring
+```
+
+### The sequence
+
+```
+iron-pickaxe progression demand exists
+    trade not admitted yet (no candidate produced)
+    gather has published no exhaustion evidence yet
+        v
+scheduler sees no ACTIVE deliberate work
+        v
+DiscretionaryActivityDirector: EXPLORE is available -> EXPLORE wins
+        v
+ExploringGoal (P8) starts; may travel ~150 blocks
+        v
+mob leaves the 16-block trade-discovery radius
+        v
+TradeWithVillagerGoal (P3) can never admit a candidate, so it can never preempt
+```
+
+`TradeWithVillagerGoal` outranks `ExploringGoal` by priority, but priority only helps once admission
+has produced a candidate. **Between "a demand exists" and "a route owner became executable" the mob
+looks idle to the discretionary layer**, and that window is long enough for a 150-block expedition.
+
+### The gap
+
+The director arbitrates among `EXPLORE`, `REST` and `SOCIAL`. It has no notion of:
+
+> mandatory progression work exists, but its route owner has not yet become executable
+
+The standing rule is *preference affects choice; preference does not create permission*. This is the
+adjacent one that was never stated: **discretionary activity must not displace pending mandatory
+progression**, not merely active progression.
+
+### Deliberately not fixed here
+
+A progression-pending admission blocker for discretionary activities is a real change to the
+Opinion/discretionary layer, and step 7B is testing Q1/Q2 mutation semantics. Repairing it inside
+that scenario would mix a behaviour change into an unrelated proof — the same reason V2-DEF-001 was
+not repaired inside the P0-2 probe.
+
+The step-7B fixture instead suppresses ordinary discretionary exploration **only until its first
+Trade Everything plan exists**, saving and restoring the exact previous `cfg.exploring` value in
+memory. That makes the scenario deterministic without changing production trade radius, exploration
+policy, or V2-C.
+
+### Repair gate — V2-DEF-002
+
+| Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Progression demand exists, route owner not yet executable | discretionary EXPLORE is refused admission | a ~150-block expedition starts while the mob has unresolved mandatory work | `OPEN` |
+| Progression demand genuinely unsatisfiable (no route at all) | discretionary activity resumes normally | the mob stands idle for ever guarding a demand it cannot serve | `OPEN` |
+| No progression demand | today's behaviour unchanged | discretionary activity is suppressed by a blocker that never clears | `OPEN` |
+
+Runtime proof class (AV-1): an observed objective trace, not a compile. The second row is the one
+that makes this non-trivial — a naive blocker converts a wandering mob into a frozen one.

@@ -918,6 +918,106 @@ public final class Te3ProbeCommand {
     static void armMutation() {
         mutationArmed = true;
         mutationApplied = false;
+        holdExploration();
+    }
+
+    // ------------------------------------------------- 7B-R1 exploration hold (fixture only)
+
+    /**
+     * Keep the subject in the market until the condition under test can exist.
+     *
+     * <h2>What escaped</h2>
+     *
+     * {@code ExploringGoal} is P8 and may travel ~150 blocks; {@code TradeWithVillagerGoal} is P3
+     * but cannot preempt until trade admission has produced a candidate, and discovery reaches only
+     * 16 blocks. With the progression route still undecided the mob looks idle to the discretionary
+     * director, EXPLORE wins, and the subject walks out of its own market before the Q1/Q2 mutation
+     * this scenario exists to exercise is even reachable. Observed: {@code plans=0 objective=Exploring}.
+     *
+     * <h2>Deliberately narrow</h2>
+     *
+     * Only ordinary discretionary exploration is held, only while the fixture is waiting for its
+     * <b>first</b> TE plan, and only in memory. Gather, craft, smelt and trade policy keep running
+     * untouched — the mob still decides for itself what to do, it simply cannot take a 150-block
+     * holiday first. From {@code PLAN #1} onward the walk, mutation, revalidation, rejection,
+     * replan and transaction all run under ordinary production behaviour.
+     *
+     * <p>What this is not: authorizing a trade, selecting a candidate, forcing a replan, touching
+     * the Q1/Q2 comparison, or manufacturing {@code RouteExhaustionEvidence} — whose contract says
+     * only the existing-work owner may publish it.
+     *
+     * <p>The previous value is <b>saved and restored exactly</b> rather than assumed true, and never
+     * written to the user's config file.
+     */
+    private static Boolean exploringBeforeHold;
+
+    /**
+     * The one setting this fixture touches, behind an accessor.
+     *
+     * <p>{@code ScavengerConfig.get()} lazily loads from disk and is unavailable in a unit run, so
+     * without this the save/restore lifecycle would have shipped with no test at all — and
+     * "restores the exact previous value" is precisely the claim that is easy to get wrong and
+     * invisible when wrong.
+     */
+    interface ExplorationSetting {
+        boolean get();
+
+        void set(boolean value);
+    }
+
+    private static ExplorationSetting explorationSetting = new ExplorationSetting() {
+        @Override
+        public boolean get() {
+            return ScavengerConfig.get().exploring;
+        }
+
+        @Override
+        public void set(boolean value) {
+            // In memory only. A debug fixture must never rewrite the user's config file.
+            ScavengerConfig.get().exploring = value;
+        }
+    };
+
+    static void explorationSettingForTesting(ExplorationSetting setting) {
+        explorationSetting = setting;
+    }
+
+    private static void holdExploration() {
+        if (exploringBeforeHold != null) {
+            return;
+        }
+        exploringBeforeHold = explorationSetting.get();
+        explorationSetting.set(false);
+        TradeRuntimeObserver.note("EXPLORATION HELD (fixture, in memory) - was "
+                + exploringBeforeHold);
+    }
+
+    /** Idempotent, and safe to call from every exit path including an aborted run. */
+    static void releaseExploration() {
+        if (exploringBeforeHold == null) {
+            return;
+        }
+        // The saved value, never a convenient default: a user who turned exploration off must not
+        // find it switched on because a debug scenario ran.
+        explorationSetting.set(exploringBeforeHold);
+        TradeRuntimeObserver.note("EXPLORATION RESTORED -> " + exploringBeforeHold);
+        exploringBeforeHold = null;
+    }
+
+    static boolean explorationHeld() {
+        return exploringBeforeHold != null;
+    }
+
+    /** The moment the condition under test exists, the mob goes back to ordinary behaviour. */
+    /** Test seam: drive one fixture tick without a server. */
+    static void tickFixtureForTesting() {
+        tickExplorationHold();
+    }
+
+    private static void tickExplorationHold() {
+        if (exploringBeforeHold != null && TradeRuntimeObserver.tradeEverythingSelections() > 0) {
+            releaseExploration();
+        }
     }
 
     /** The flag half, free of any upstream call so it is exercisable without the mod installed. */
@@ -930,6 +1030,7 @@ public final class Te3ProbeCommand {
     static void disarmMutation() {
         mutationArmed = false;
         mutationApplied = false;
+        releaseExploration();
     }
 
     /**
@@ -971,6 +1072,7 @@ public final class Te3ProbeCommand {
 
     /** Fires once, as soon as the mob has actually planned a Trade Everything route. */
     private static void tickMutation(net.minecraft.server.MinecraftServer server) {
+        tickExplorationHold();
         if (!mutationArmed || mutationApplied
                 || TradeRuntimeObserver.tradeEverythingSelections() == 0) {
             return;

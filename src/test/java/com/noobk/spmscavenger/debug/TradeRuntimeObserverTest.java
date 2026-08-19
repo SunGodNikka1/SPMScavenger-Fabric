@@ -33,6 +33,20 @@ class TradeRuntimeObserverTest {
     static void bootstrapMinecraft() {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        // AFTER bootstrap. A static initializer here loaded Te3ProbeCommand first, which pulled
+        // Minecraft classes in ahead of Bootstrap and left ItemStack permanently un-initializable
+        // for every test in the JVM - four unrelated suites went red.
+        Te3ProbeCommand.explorationSettingForTesting(new Te3ProbeCommand.ExplorationSetting() {
+            @Override
+            public boolean get() {
+                return EXPLORING[0];
+            }
+
+            @Override
+            public void set(boolean value) {
+                EXPLORING[0] = value;
+            }
+        });
     }
 
     @AfterEach
@@ -323,5 +337,126 @@ class TradeRuntimeObserverTest {
         assertTrue(resetBlock.contains("clearMarketMutation();"),
                 "and must take the override back off - disarming alone leaves the next scenario "
                         + "starting from a mutated economy with nothing to indicate it");
+    }
+
+    // ------------------------------------------- 7B-R1 exploration hold (fixture only)
+
+    /** Stands in for the config, which lazily loads from disk and is absent in a unit run. */
+    private static final boolean[] EXPLORING = {true};
+
+    private static void restoreExploringTo(boolean value) {
+        Te3ProbeCommand.releaseExploration();
+        EXPLORING[0] = value;
+    }
+
+    @Test
+    void mustHappen_armingHoldsExplorationUntilTheFirstTradeEverythingPlan() {
+        restoreExploringTo(true);
+        TradeRuntimeObserver.setRecording(true);
+        TradeRuntimeObserver.reset();
+
+        Te3ProbeCommand.armMutation();
+
+        assertTrue(Te3ProbeCommand.explorationHeld(),
+                "with no TE plan yet the subject must stay in its own market");
+        assertFalse(EXPLORING[0],
+                "ordinary discretionary exploration is the only thing held");
+
+        restoreExploringTo(true);
+    }
+
+    /** From PLAN #1 the mob is back under ordinary production behaviour, immediately. */
+    @Test
+    void mustHappen_theFirstTradeEverythingPlanRestoresExploration() {
+        restoreExploringTo(true);
+        TradeRuntimeObserver.setRecording(true);
+        TradeRuntimeObserver.reset();
+        Te3ProbeCommand.armMutation();
+
+        TradeRuntimeObserver.selected("TRADE_EVERYTHING", null, "r",
+                new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1));
+        Te3ProbeCommand.tickFixtureForTesting();
+
+        assertFalse(Te3ProbeCommand.explorationHeld());
+        assertTrue(EXPLORING[0],
+                "the walk, mutation, rejection and replan all run unheld");
+
+        restoreExploringTo(true);
+    }
+
+    /** A vanilla plan is not the condition under test, so the hold stays. */
+    @Test
+    void mustNotHappen_aVanillaPlanReleasesTheHold() {
+        restoreExploringTo(true);
+        TradeRuntimeObserver.setRecording(true);
+        TradeRuntimeObserver.reset();
+        Te3ProbeCommand.armMutation();
+
+        TradeRuntimeObserver.selected("VANILLA", null, "r", new ItemStack(Items.EMERALD, 5),
+                new ItemStack(Items.IRON_INGOT));
+        Te3ProbeCommand.tickFixtureForTesting();
+
+        assertTrue(Te3ProbeCommand.explorationHeld());
+
+        restoreExploringTo(true);
+    }
+
+    @Test
+    void mustHappen_resetRestoresExplorationBeforeAnyPlan() {
+        restoreExploringTo(true);
+        Te3ProbeCommand.armMutation();
+
+        Te3ProbeCommand.disarmMutation();
+
+        assertFalse(Te3ProbeCommand.explorationHeld());
+        assertTrue(EXPLORING[0], "an aborted run must not leave the mob homebound");
+    }
+
+    @Test
+    void mustHappen_resetRestoresExplorationAfterAPlan() {
+        restoreExploringTo(true);
+        TradeRuntimeObserver.setRecording(true);
+        TradeRuntimeObserver.reset();
+        Te3ProbeCommand.armMutation();
+        TradeRuntimeObserver.selected("TRADE_EVERYTHING", null, "r",
+                new ItemStack(Items.OAK_LOG, 22), new ItemStack(Items.EMERALD, 1));
+        Te3ProbeCommand.tickFixtureForTesting();
+
+        Te3ProbeCommand.disarmMutation();
+
+        assertFalse(Te3ProbeCommand.explorationHeld());
+        assertTrue(EXPLORING[0]);
+    }
+
+    /**
+     * The setting is <b>saved</b>, not assumed.
+     *
+     * <p>A fixture that restored a hardcoded {@code true} would silently switch exploration on for a
+     * user who had deliberately turned it off — changing the game beyond its own scenario, the same
+     * failure shape as pinning a value override instead of removing it.
+     */
+    @Test
+    void mustNotHappen_aUserWhoDisabledExplorationHasItTurnedBackOn() {
+        restoreExploringTo(false);
+
+        Te3ProbeCommand.armMutation();
+        assertFalse(EXPLORING[0], "already off; the hold changes nothing");
+
+        Te3ProbeCommand.disarmMutation();
+        assertFalse(EXPLORING[0],
+                "and cleanup restores the value that was there, not a convenient default");
+
+        restoreExploringTo(true);
+    }
+
+    /** The hold is in memory only; a debug fixture must never rewrite the user's config file. */
+    @Test
+    void mustNotHappen_theHoldIsPersistedToDisk() throws IOException {
+        String probe = Files.readString(Path.of(
+                        "src/main/java/com/noobk/spmscavenger/debug/Te3ProbeCommand.java"))
+                .replaceAll("(?m)//.*$", "");
+
+        assertFalse(probe.contains(".save(") || probe.contains("writeConfig"),
+                "the temporary setting must not outlive the session, let alone the fixture");
     }
 }
