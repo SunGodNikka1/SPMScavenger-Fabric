@@ -6,6 +6,7 @@ import com.noobk.spmscavenger.DiscoveryPolicy;
 import com.noobk.spmscavenger.FurnacePolicy;
 import com.noobk.spmscavenger.GatherCandidatePolicy;
 import com.noobk.spmscavenger.GatherScanSweep;
+import com.noobk.spmscavenger.MandatoryHandoffPolicy;
 import com.noobk.spmscavenger.GatherIntentPolicy;
 import com.noobk.spmscavenger.GatherProtection;
 import com.noobk.spmscavenger.GatherTargetPolicy;
@@ -126,6 +127,36 @@ public class GatherResourcesGoal extends Goal {
     private final java.util.EnumSet<GatherIntentPolicy.Resource> lastScanFamilies =
             java.util.EnumSet.noneOf(GatherIntentPolicy.Resource.class);
 
+    /** Consecutive scans yielded to a pending mandatory handoff. Bounded; reset on any non-yield. */
+    private int handoffYields;
+
+    /**
+     * Is this selection unrelated work standing in the way of a handoff we just published?
+     *
+     * <p>Reads only facts this goal already owns: the live demand, its modelled precursor, whether
+     * the completed sweep turned that precursor up, and what the chosen target actually is.
+     * {@code MandatoryHandoffPolicy} owns the decision so the combinations are unit-testable.
+     */
+    private boolean yieldsToPendingHandoff(ScavengerConfig cfg, GatherTarget selected) {
+        if (scanScope != null) {
+            // A cooperative sub-probe is not holding the deliberate-work slot for itself.
+            return false;
+        }
+        Container backpack = PlayerMobs.backpack(mob);
+        if (backpack == null) {
+            return false;
+        }
+        java.util.Optional<GatherIntentPolicy.Resource> precursor = WorkDemandPolicy
+                .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg)
+                .map(WorkDemandPolicy.WorkDemand::payload)
+                .flatMap(GatherRoutePrecursor::of);
+        boolean foundInSweep = precursor.map(lastScanFamilies::contains).orElse(false);
+        java.util.Optional<GatherIntentPolicy.Resource> selectedFamily =
+                GatherCandidatePolicy.familyOf(mob.level().getBlockState(selected.blockPos()));
+        return MandatoryHandoffPolicy.yieldsToHandoff(
+                precursor, foundInSweep, selectedFamily, handoffYields);
+    }
+
     private GatherCandidatePolicy.ScanFailureReason lastScanFailure =
             GatherCandidatePolicy.ScanFailureReason.NONE;
     /** Most recent break position for {@link DiscoveryMode#NEWLY_EXPOSED} vein follow (MI-13). */
@@ -217,9 +248,24 @@ public class GatherResourcesGoal extends Goal {
         // here", which stays true whether or not the mob is about to go and chop a log.
         publishRouteExhaustion(cfg, now);
         if (selected == null) {
+            handoffYields = 0;
             scanClock.resetAfter(now);
             return false;
         }
+        // V2-DEF-003c: publishing a handoff is not performing one. Gather and trade share priority
+        // 3, so claiming the deliberate-work slot for an unrelated wealth target after declaring the
+        // mandatory route exhausted means trade cannot preempt - and the wealth haul then filled the
+        // very slot the incoming trade result needed (logs 320 -> 324, then NO_ROOM).
+        if (yieldsToPendingHandoff(cfg, selected)) {
+            handoffYields++;
+            com.noobk.spmscavenger.debug.TradeRuntimeObserver.gatherExhaustionGate(
+                    "YIELDING deliberate-work slot to a pending mandatory handoff ("
+                            + handoffYields + "/" + MandatoryHandoffPolicy.MAX_CONSECUTIVE_YIELDS
+                            + ")");
+            scanClock.resetAfter(now);
+            return false;
+        }
+        handoffYields = 0;
         target = selected.blockPos();
         approachPos = selected.approachPos();
         approachPath = selected.path();

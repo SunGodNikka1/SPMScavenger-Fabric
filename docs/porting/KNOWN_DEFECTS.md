@@ -260,7 +260,12 @@ suppression property it existed for is now proved separately with a demand that 
 
 ## V2-DEF-003b — optional wealth masked a mandatory route's conclusion
 
-**Status:** REPAIRED — unit gate green, **runtime UNVERIFIED**. **Discovered:** step 7B runtime,
+**Status:** REPAIRED — **runtime CONFIRMED**. The step-7B run showed the full knowledge chain:
+`GATHER PUBLISHED exhaustion for minecraft:iron_ingot` → `ROUTE iron_ingot INFEASIBLE -> trade may
+displace` → `PLAN #1 TE armorer` → `REVAL #1 OK`. Two further control-flow blockers were found and
+fixed before that (publish was unreachable when another resource won selection; observation was
+pruned by the nearest-N selection buffer). The transaction then failed `NO_ROOM`, which is
+`V2-DEF-003c`. **Discovered:** step 7B runtime,
 2026-08-19, after V2-DEF-003 cleared the ownership half.
 
 ### Why the stall survived the first repair
@@ -340,3 +345,68 @@ actually reads. The `+16 logs` observation is **not** attributed to wealth: `te3
 mob. Cleanup now removes loose item and XP entities, and `watch report` prints `greed`,
 `wealthLevel`, `gatherSearchRadius` and `exploring` so the next run can distinguish the two causes
 instead of guessing.
+
+---
+
+## V2-DEF-003c — publishing a handoff is not performing one
+
+**Status:** REPAIRED — unit gate green, **runtime UNVERIFIED**. **Discovered:** step 7B runtime,
+2026-08-19, immediately after the knowledge handoff started working.
+
+### The run
+
+```
+GATHER PUBLISHED exhaustion for minecraft:iron_ingot (SEARCH_COMPLETED_EMPTY)
+ROUTE  iron_ingot INFEASIBLE -> trade may displace
+PLAN   #1 TE armorer  Q1: 22 oak_log -> 1 emerald
+REVAL  #1 Q2: 22 oak_log -> 1 emerald  OK
+TRADE  #1 NO_ROOM   logs 324->324   em 0->0   pick 0->0
+```
+
+The fixture seeds 320 logs and exactly one free slot for the first emerald. The mob arrived at the
+trade holding **324**.
+
+### What actually happened
+
+`canUse` published exhaustion and then, in the same pass, returned `true` for an unrelated wealth
+log. Gather and trade are both installed at **priority 3** in the deliberate-work band, so once
+gather owned the slot trade could not preempt it. The mob chopped a tree, the four logs took the one
+reserved slot, and the emerald had nowhere to land.
+
+> Knowledge handoff succeeded. **Scheduling handoff did not.**
+
+Spending 22 logs from a 64-stack does not empty a slot, so the capacity failure is a symptom. The
+defect is that optional work outranked a handoff that had already been declared.
+
+### Repair
+
+`MandatoryHandoffPolicy.yieldsToHandoff(mandatoryPrecursor, mandatoryFoundInSweep, selectedFamily,
+consecutiveYields)` — pure, so the combinations are unit tests. Gather declines the deliberate-work
+slot when a mandatory route was declared exhausted this sweep and the chosen target does not serve
+it.
+
+**Bounded at 3 consecutive scans.** An unbounded yield would trade one stall for a quieter one — no
+merchant in range, no affordable quote, and a mob standing beside a tree it is not allowed to chop.
+That is the assign→refuse→assign churn shape (RET-1c), so the cap exists rather than being assumed
+unnecessary. The counter resets on any non-yield, making it a window rather than a lifetime budget.
+
+Wealth gathering is untouched when there is no mandatory demand, when the mandatory resource was
+found in radius, or when the selection serves the mandatory route itself.
+
+### Gate
+
+| Scenario | Yields? | Test |
+| --- | --- | --- |
+| iron route exhausted, wealth log selected | yes | `mustHappen_unrelatedWealthYieldsToAPendingHandoff` |
+| iron found in sweep | no | `mustNotHappen_gatherYieldsWhileItsOwnRouteIsAlive` |
+| selection serves the mandatory route | no | `mustNotHappen_gatherYieldsWorkThatServesTheMandatoryRoute` |
+| no mandatory demand at all | no | `mustNotHappen_pureWealthWorkYieldsToNothing` |
+| nobody takes the handoff | no, after 3 scans | `mustNotHappen_anUntakenHandoffFreezesGatherForever` |
+| counter semantics | consecutive, not cumulative | `mustHappen_theYieldCounterIsConsecutiveNotCumulative` |
+
+Controls: never yielding breaks two; yielding while the route is alive breaks one; removing the cap
+breaks the freeze test; removing the counter reset breaks the semantics test.
+
+### Not fixed by giving the fixture another slot
+
+Deliberately. A second free slot would have made the runtime pass while hiding what the run found.
