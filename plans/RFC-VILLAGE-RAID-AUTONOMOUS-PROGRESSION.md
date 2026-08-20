@@ -265,7 +265,7 @@ KnownVillager
 | --- | --- |
 | Hero discount / player-session special prices (V6) | **V2 core trade** (`MerchantOffer` + `notifyTrade`) |
 | Raid trigger eligibility (Bad Omen) | Bell ring |
-| Raid reward/credit (`heroesOfTheVillage`) | Crop harvest/replant |
+| Raid reward/credit (`heroesOfTheVillage`) | ~~Crop harvest/replant~~ **`SUPERSEDED` by D-VR-079-A1** — *performing* harvest+replant needs no mixin, but *preventing* the destructive host `HarvestCropsGoal` inside the managed crop domain does (continuous veto, `*ShelterHoldMixin` shape) |
 | Zombie-villager conversion attribution | Door walk |
 | Advancement/stat parity (optional) | Village memory, inventory, social greet |
 
@@ -4503,7 +4503,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social | **IMPLEMENTED + RUNTIME CLOSED** — task-46 / 1.11.0 (A–D) | VR-T1.5a–c **CLOSED** (2026-08-15) |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | `KnownVillager` held until V4+ consumer; other work moved to V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains**, relationship credit, finished-output projection, optional Trade Everything source | **IMPLEMENTED + CLOSED** — VR-T2 vanilla path and V2-TE positive path runtime-confirmed to recorded scope | **VR-T2 PASS**; **VR-T2k PASS (`V2-DEF-003c-R1`)**. VR-T2l, V2-I, and profiling are **DEFERRED / NON-BLOCKING** |
-| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | **DESIGN SYNCHRONIZED / HOLD — not implementation-authorized, not yet LOCKED** | VR-T3a–k below; every included capability has a closure row |
+| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | **ARCHITECTURE LOCKED + AMENDED / HOLD — not implementation-authorized.** `D-VR-078/080/081/083` stand; `D-VR-079-A1`, `D-VR-082-A1`, `D-VR-084` amend. V3-A blocked on the shared `MandatoryOwnership` authority (subsumes `V2-DEF-002`) | VR-T3a–m below; every included capability has a closure row |
 | **V4** | Factual site utility + **Place opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**), known traders, utility-driven home promotion and return preference beyond shipped V1.5 return | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
 | **V6** | Player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup, **zombie-villager curing** | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup; curing scenarios to be defined in V6 |
@@ -4554,17 +4554,19 @@ familiarity, an active loot goal, or absence of a V3 work candidate.
 
 | Task | Dependencies | Objective | Must happen | Must not happen | Scenarios | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| **V3-A — authority/profile contract** | V1.5 relationship; D-VR-080/082 | Cross-dimension `VillageScenarioProfile` policy store + `VillageWorkAdmission` (`NO LIVE MANDATORY OWNER`) + optional `VillageWorkSelector` among V3 intents | Profile explicit, inspectable, cross-dimension consistent; mandatory owners block admission | Profile in dimension-local village memory; HOME/HIGH → ally; `MaterialDemand` alone defines mandatory | VR-T3j | **LOCK-CLEAN** — authorize task-52 |
+| **V3-A — authority/profile contract** | V1.5 relationship; D-VR-080/**082-A1**/**084**; **V2-DEF-002 repair** | Cross-dimension `VillageScenarioProfile` policy store + `VillageWorkAdmission` that **consumes** the shared discretionary-permission seam + optional `VillageWorkSelector` among V3 intents | Profile explicit, inspectable, cross-dimension consistent; admission refuses through the **same** authority `DiscretionaryActivityDirector` consumes | Profile in dimension-local village memory; HOME/HIGH → ally; `MaterialDemand` alone defines mandatory; **a village-local reconstruction of "mandatory work exists"** | VR-T3j | **AMENDED — NOT implementation-ready**; task-52 **not authorized** (D-VR-082-A1, D-VR-084) |
 | **V3-B — minimum StorageOwnership + host guard** | V3-A; D-VR-012/017/081 | `GlobalPos`-keyed permission registry + classifier; continuous `RaidContainersGoal` guard | Ally uses only mob-owned/shared storage; permissions survive unload/restart | Evict grants on chunk unload/dimension change; naked `BlockPos`; ambiguous double-chest halves | VR-T3g–i | **LOCK-CLEAN** — after V3-A |
-| **V3-C — committed crop episode** | V3-A; pinned host `HarvestCropsGoal` mechanics | Replace loose harvest/replant ownership with one target-bound committed episode | Managed mature crop ends replanted or in mandatory bounded repair after a post-mutation failure | Successful managed harvest routinely leaves farmland barren after preemption | VR-T3a–c/k | **PROPOSED** |
+| **V3-C — committed crop episode** | V3-A; pinned host `HarvestCropsGoal` mechanics; **D-VR-079-A1** | One target-bound committed episode over the **managed crop domain**, plus a continuous host-harvest veto inside that domain and direct banking of the episode's own replant-capable drops | Managed mature crop ends replanted or in mandatory bounded repair; episode banks its own replant drops; host destructive harvest cannot bypass the contract inside the domain | Successful managed harvest routinely leaves farmland barren after preemption; **planting supply depends on floor-item pickup**; **veto fires when the domain cannot be positively established** | VR-T3a–c/k, **VR-T3l/m** | **AMENDED — PROPOSED** |
 | **V3-D — workstation awareness** | V3-A; existing `VillagePerception` scheduler/budget | Add bounded loaded job-site/restock facts without another scanner | Facts invalidate when POI/villager state changes and never load chunks | Workstation facts authorize trade, placement, claiming, or mandatory displacement | VR-T3f | **PROPOSED** |
-| **V3-E — population food support** | V3-A; disposable-resource policy; existing gift/drop seam | Offer bounded food surplus when population evidence requests support | Revalidate population, target, inventory reserve, and path at handoff | Consume personal/progression reserve; command breeding; loop gifts with no deficit | VR-T3e/j | **PROPOSED** |
+| **V3-E — population food support** | V3-A; **V3-D** (villager count + HOME capacity facts); disposable-resource policy; existing gift/drop seam | Offer bounded food surplus when population evidence requests support | Revalidate population, target, inventory reserve, and path at handoff | Consume personal/progression reserve; command breeding; loop gifts with no deficit | VR-T3e/j | **PROPOSED** |
 | **V3-F — composting** | V3-A; V3-C reserve ownership; bounded workstation/container fact | Convert only disposable compostable surplus at a loaded known composter | Replant/population/progression reserves survive; interaction terminates on full/invalid composter | Scan/operate every tick; consume reserved seeds; create ownerless bone-meal appetite | VR-T3d/j | **PROPOSED** |
 | **V3-G — integration and closure** | V3-A…F | Static/build gates plus temporary `spm_vr` V3 presets and approved runtime matrix | Every VR-T3 row records must/must-not evidence and semantic-drift review | Replant + one chest row close the whole phase; compile is called behavior proof | VR-T3a–k | **BLOCKED on A/B and separate runtime approval** |
 
 No V3 task is implementation-authorized by this synchronization pass.
 
-**Dependency sequence:** `V3-A → V3-B` (ally safety first); `V3-A → V3-C/D/E`; `V3-C + V3-D →
+**Dependency sequence (amended):** `V2-DEF-002 repair / D-VR-084 → V3-A`; `V3-A → V3-B` (ally
+safety first); `V3-A → V3-C/D`; **`V3-D → V3-E`** (the locked population predicate has no fact
+source without it — D-VR-083 correction); `V3-C + V3-D →
 V3-F`; `V3-A…F → V3-G`. Independent implementation may reorder C/D/E only after V3-A is locked,
 but V3-B must land before any behavior is described as ally-safe.
 
@@ -4584,12 +4586,18 @@ but V3-B must land before any behavior is described as ally-safe.
 | **VR-T3j** | Live/pending mandatory progression while village work is available | Mandatory work retains authority; village work waits and later re-resolves | Idle observation or Opinion preference displaces pending mandatory work | `UNVERIFIED` — V3-A/E/F |
 | **VR-T3k** | Two mobs select one crop; first changes it | First commits; second detects invalidation and reacquires/abandons without mutation | Double break/replant, stale target loop, or persistent global crop reservation | `UNVERIFIED` — V3-C |
 
-**Phase closure:** V3 requires V3-A…G plus all applicable VR-T3a–k rows. No subset consisting only
+| **VR-T3l** | Managed-domain crop, mob hungry (`wantsFood()`), V3 admission refused | Host `HarvestCropsGoal` is vetoed at that position; the field stays planted; the mob's own food behaviour (`HuntForFoodGoal`, foraging) is unaffected | Host destructive harvest runs inside the managed domain; or the veto extends to wilderness crops and suppresses stock SPM food behaviour | `UNVERIFIED` — V3-C (D-VR-079-A1) |
+| **VR-T3m** | Repeated managed harvest episodes over many cycles | Replant stock is sustained by the episode's **own** banked drops; a crop whose pinned drops cannot guarantee a planting item pauses managed harvest instead of draining the reserve | Planting supply is recovered via floor-item pickup; a field is harvested down to a barren state because the reserve ran out mid-episode | `UNVERIFIED` — V3-C (F8) |
+
+**Phase closure:** V3 requires V3-A…G plus all applicable VR-T3a–m rows. No subset consisting only
 of replant + storage may close the phase.
 
-#### Pre-lock decisions — `LOCKED` (`D-VR-080…083`, User peer review 2026-08-19)
+#### Pre-lock decisions — `LOCKED` (`D-VR-080…083`, User peer review 2026-08-19), amended 2026-08-19
 
 The four architecture blockers are resolved. See [Topic: Decisions](#topic-decisions) for full text.
+**Two of the four were amended the same day** by a code-evidenced review pass (`Agent_Claude` +
+User): `D-VR-082` → `D-VR-082-A1`, `D-VR-079` → `D-VR-079-A1`, plus new `D-VR-084`
+(`MandatoryOwnership`). D-VR-080 and D-VR-081 stand unchanged.
 
 | ID | Summary |
 | --- | --- |
@@ -4598,7 +4606,16 @@ The four architecture blockers are resolved. See [Topic: Decisions](#topic-decis
 | **D-VR-082** | V3 executor goals at **priority 4**. `VillageWorkAdmission` blocks when **any live mandatory owner** exists (not merely `MaterialDemand`). Optional `VillageWorkSelector` chooses among V3 intents — **not** a parallel `VillageWorkDirector`; subordinate to village orchestration (`VillageInteractionDirector` when shipped). |
 | **D-VR-083** | **Budget contract `LOCKED`**; numeric constants **`PROVISIONAL` / `UNVERIFIED`** until profiling. Population food support when `freePopulationCapacity = max(0, eligibleBeds − villagerCount) > 0` (and `villagerCount ≥ 2`), not `villagers − beds > 0`. |
 
-**Phase architecture lock:** V3 mechanism design is **LOCKED** through D-VR-078/079/080…083. **Implementation** of V3-A…G remains separately authorized (next: **task-52 / V3-A**).
+| **D-VR-084** | **NEW.** `MandatoryOwnership` — one shared discretionary-permission authority with two inputs (running-activity truth + **published** pending claims) and two consumers (`DiscretionaryActivityDirector`, `VillageWorkAdmission`). Demand never creates authority; a claim does, and **a claim may never be refreshed by the continued existence of the same demand**. |
+| **D-VR-082-A1** | **AMENDS D-VR-082.** Admission **consumes** `DiscretionaryEligibility` rather than re-deriving mandatory truth from a five-source list. `VILLAGE_TRADE` joins `blocksDiscretionaryChoice`. New `ActivityClass.VILLAGE_WORK` blocks a fresh discretionary selection while running. Priority 4 is **shared with `PlaceTorchGoal`**, and the `MAINTENANCE`/`VILLAGE_WORK` blocking asymmetry is deliberate. |
+| **D-VR-079-A1** | **AMENDS D-VR-079.** Defines the **managed crop domain** without `SettlementRelationship`; requires a continuous host-`HarvestCropsGoal` veto inside it that **fails toward stock** when the domain cannot be positively established; requires the episode to bank its own replant-capable drops (F8), with crop-specific reserve accounting. |
+
+**Phase architecture lock:** V3 mechanism design is **LOCKED** through D-VR-078/080/081/083 and
+**amended** through D-VR-079-A1 / D-VR-082-A1 / D-VR-084. **`V3-A` is not implementation-ready and
+`task-52` is not authorized**: its admission seam now depends on the shared `MandatoryOwnership`
+authority (D-VR-084), which subsumes the previously deferred **`V2-DEF-002`** defect. That defect is
+hereby **promoted from deferred debt to a V3-A prerequisite** — this does not reopen V2 as a phase;
+it records that V3 made a deferred shared-authority defect load-bearing.
 
 ### Legacy phase map (superseded)
 
@@ -4669,7 +4686,7 @@ runtime evidence.
 | --- | --- |
 | Intended behavior | An ally performs bounded village work without displacing urgent/mandatory activity, degrading managed fields, stealing uncertain storage, or inventing permission from Opinion/attachment |
 | Current mechanism | Host can harvest food crops but cannot replant; village perception/relationship and V2 mandatory trade exist; V3 profile/storage/work executors do not |
-| Planned mechanism | V3-A shared admission; V3-B continuous safety guard; V3-C committed harvest→replant episode; V3-D bounded read-only facts; V3-E/F disposable-surplus work |
+| Planned mechanism | V3-A admission **consuming shared `MandatoryOwnership`** (`D-VR-084`); V3-B continuous safety guard; V3-C committed harvest→replant episode **+ managed-domain host veto + own-drop banking** (`D-VR-079-A1`); V3-D bounded read-only facts **incl. villager count / HOME capacity**; V3-E/F disposable-surplus work |
 | Predicted player-visible behavior | During genuine idle windows the mob performs one legible village job, finishes or safely invalidates it, then re-resolves; combat/commands/mandatory progression remain visibly dominant |
 | Failure boundary | Any post-harvest bare managed farmland, UNKNOWN-container opening, mandatory-work displacement, stale workstation path, or surplus loop fails the design |
 | Confidence | Architecture direction `DOCUMENTATION_CONFIRMED`; behavior/performance `UNVERIFIED` |
@@ -4701,11 +4718,12 @@ another actor has already restored/changed the position.
 | Activity | Current/proposed band | Flags | Can interrupt V3 work? | Retained state | Expected observable result |
 | --- | ---: | --- | --- | --- | --- |
 | Command/emergency/combat | Existing higher authority (combat P0–2 where registered) | commonly MOVE/LOOK | Yes before interaction; same server-tick commit is not split between Java statements | Crop candidate/path discarded; post-mutation repair only if exceptional failure occurred | Mob stops village travel and responds immediately; later re-resolves world truth |
-| Mandatory Gather/Smelt/Craft/Trade | Deliberate-work band **priority 3** | MOVE/LOOK as applicable | Yes; `VillageWorkAdmission` refuses while **any live mandatory owner** exists (`D-VR-082`) | Mandatory consumer survives; V3 candidate disposable | Mob continues progression instead of village work |
-| V3 discretionary village work | **Priority 4** (`D-VR-082`); semantically below mandatory work | MOVE/LOOK executor-specific | Peer discretionary work cannot steal a committed interaction | Candidate/path disposable before mutation; crop episode owns exceptional repair | One visible bounded job, then re-resolve |
+| Mandatory Gather/Smelt/Craft/Trade | Deliberate-work band **priority 3** | MOVE/LOOK as applicable | Yes; `VillageWorkAdmission` refuses while **any live mandatory owner** exists — running **or** claimed-pending, read from shared `MandatoryOwnership` (`D-VR-082-A1`, `D-VR-084`) | Mandatory consumer survives; V3 candidate disposable | Mob continues progression instead of village work |
+| V3 discretionary village work | **Priority 4**, **shared with `PlaceTorchGoal`** (`D-VR-082-A1`); semantically below mandatory work | MOVE/LOOK executor-specific; classifies `VILLAGE_WORK` | Peer discretionary work cannot steal a committed interaction (equal priority supplies this); running `VILLAGE_WORK` blocks a *fresh* discretionary selection | Candidate/path disposable before mutation; crop episode owns exceptional repair | One visible bounded job, then re-resolve |
+| Host `HarvestCropsGoal` (stock SPM) | **Priority 6**, `wantsFood()`-gated | MOVE/LOOK | Yes — and *would* destroy a managed crop precisely while V3 is refused for hunger | none | Vetoed inside the managed crop domain only; unchanged in the wilderness (`D-VR-079-A1`) |
 | Storage guard | Continuous policy (`D-VR-081`), not a competing goal | none | Vetoes host loot admission/continuation regardless of activity | Permission survives unload/restart until revoked or container gone | Ally never opens/continues denied container |
 
-Semantic ordering is **locked** (`D-VR-082`): urgent > mandatory pending/running > committed cleanup >
+Semantic ordering is **locked** (`D-VR-082`, amended `D-VR-082-A1`): urgent > mandatory pending/running > committed cleanup >
 discretionary village work. V3 goals at priority **4** sit below gather/craft/smelt/trade at **3**
 (`SpmScavenger.java` deliberate-work band) and above explore/wander at **8**.
 
@@ -4748,10 +4766,19 @@ observable and revalidated.
 creates ally/storage permission; UNKNOWN permits loot; village work suppresses pending mandatory
 progression; awareness scans load chunks or run unbounded every tick.
 
-**MAIBS-1 result:** `UNVERIFIED — PRE-IMPLEMENTATION HOLD`. The committed crop direction is
-behaviorally plausible, but V3 cannot reach `LOCKED` until profile acquisition, positive storage
-classification, numeric admission placement, and scan/backoff budgets are pinned. VR-T3a–k are the
-falsifying runtime family; no runtime launch is authorized by this RFC pass.
+**MAIBS-1 result (revised 2026-08-19):** `UNVERIFIED — PRE-IMPLEMENTATION HOLD`. The four original
+hold items — profile acquisition, positive storage classification, numeric admission placement, and
+scan/backoff budgets — are now pinned by `D-VR-080…083`. The hold **persists for different reasons**,
+surfaced by a code-evidenced review (`Agent_Claude` + User):
+
+1. admission must consume shared `MandatoryOwnership` (`D-VR-084`), which subsumes the still-`OPEN`
+   `V2-DEF-002` pending-owner defect — now a V3-A prerequisite;
+2. every V3 executor needs an `ActivityClass` pin or it reads `UNKNOWN_ACTIVE` and silently
+   suppresses all Opinion discretionary work (`D-VR-082-A1`);
+3. the managed crop domain needs a host-goal veto that the mixin-scope table said was unnecessary,
+   and the replant loop does not close without own-drop banking (`D-VR-079-A1`, F8).
+
+VR-T3a–m are the falsifying runtime family; no runtime launch is authorized by this RFC pass.
 
 ### V5 — raid interrupt + resume
 
@@ -6556,6 +6583,328 @@ food support eligible  iff villagerCount >= 2 AND freePopulationCapacity > 0
 **Rejected:** locking specific constants (e.g. crop cap 8, radius 24, backoff 40) as architecture;
 population predicate `villagerCount - bedCount > 0` (reversed — rewards villages that already lack beds).
 
+**Task-dependency correction (2026-08-19, `Agent_Claude` + User; decision text otherwise unchanged).**
+The locked predicate currently has **no fact source**. `CODE_CONFIRMED`: `KnownVillage` exposes only an
+aggregate `poiCount()` — no per-POI-type breakdown, no villager count, no bed count. `VillagePerception`
+does query `PoiManager` for `#acquirable_job_site + home + meeting`, so the *scan* exists and no second
+scanner is needed; the **retained facts** do not. Therefore:
+
+- the sequence gains the edge **`V3-D → V3-E`** (it read `V3-A → V3-C/D/E` as siblings);
+- V3-D widens the bounded village-work facts to carry job-site/restock facts, **villager count**, and
+  **free/eligible HOME capacity**;
+- **`eligibleBedCount` is defined from the relevant HOME POI availability/occupancy truth — not from
+  "a bed block was observed". A bed with no free ticket is not free population capacity.
+
+No second scanner, and no change to the locked predicate itself.
+
+### D-VR-084: `MandatoryOwnership` — one claim-based discretionary-permission authority (`Agent_Claude` + `User`, 2026-08-19)
+
+**Status:** `LOCKED` (architecture). Supersedes the admission-source list in `D-VR-082`.
+**Prerequisite of:** V3-A / task-52. **Subsumes:** `V2-DEF-002` (promoted from deferred debt).
+
+#### The evidence this comes from
+
+`CODE_CONFIRMED`: `ActivityObservationService.observe` iterates `selector.getAvailableGoals()` and
+records a class **only when `wrapped.isRunning()`**. `DiscretionaryEligibility.isDiscretionaryEligible`
+is therefore an *occupancy* answer, and it already has exactly one production consumer
+(`DiscretionaryActivityDirector`). Its `blocksDiscretionaryChoice` set already covers
+`PROJECT_EXECUTION`, `SCAVENGE_WORK`, `SCAVENGE_LOOT`, `MANDATORY_*`, `SHELTER_HOLD` and `FARMING`,
+and fails closed on `UNKNOWN_ACTIVE`.
+
+`CODE_CONFIRMED`: `KNOWN_DEFECTS.md` `V2-DEF-002` is `OPEN` and documents the *other* half — a mob
+with an unresolved iron-pickaxe demand walked out of its own village because no deliberate executor
+was **running** yet. The same document rejects the naive repair: a blocker keyed on demand existence
+converts a wandering mob into a frozen one when the demand is genuinely unservable.
+
+#### Accepted
+
+**One authority, two inputs, two consumers.**
+
+```text
+ActivityObservationService ──── running activity truth ────┐
+                                                           ▼
+                                              MandatoryOwnership
+                                          (shared permission truth)
+                                                           ▲
+published pending claims ──────────────────────────────────┘
+
+DiscretionaryActivityDirector ─┐
+                               ├── consume the SAME permission
+VillageWorkAdmission ──────────┘
+```
+
+**Rejected outright:** Opinion holding mandatory model A, Village Work model B, Explore special case
+C and Trade workaround D. That is the duplicated-authority shape that produced `V2-DEF-003c-R1`
+(`MandatoryHandoffPolicy` reconstructing a publication instead of consuming it), `V2-DEF-003`
+(`GatherIntentPolicy` and `ScavengerCrafting` reading one recipe two ways) and the Step-2
+`rankOrdinal` regression. It is also `SPM-0` level 7 — an enumeration where a derivation is available.
+
+#### The four states
+
+```text
+mandatory executor RUNNING                    -> block discretionary
+route PENDING under a live published claim    -> block discretionary
+demand exists, no live claim (or it expired)  -> DO NOT block
+nothing mandatory                             -> discretionary allowed
+```
+
+**Demand does not create authority. An owner accepting bounded responsibility does.** The third
+state therefore needs no viability judgement by anybody: an unservable demand either produces no
+claim or produces one that expires, and discretionary work resumes structurally rather than by a
+heuristic that would itself become a second mandatory model.
+
+#### The anti-self-renewal invariant (`User`, and the reason a TTL alone is insufficient)
+
+A claim that may be reissued because the demand still exists is a timer wrapped around
+`demand exists -> block`, and reproduces the freeze exactly:
+
+```text
+unservable iron demand exists
+  -> owner publishes a 200-tick claim
+  -> nothing becomes actionable
+  -> tick 199: "demand still exists" -> republish
+  -> forever
+```
+
+**Binding rule.** A *new* claim requires a *new* justification — meaningful progress, fresh
+actionable evidence, or an actual ownership transition. **The continued existence of the same demand
+must never refresh its claim.** `generation` exists to make that auditable: a republish carrying the
+previous generation with no intervening justification is the defect, and it is detectable in a
+log-frequency sample (Gate RET-1d).
+
+#### Shape
+
+```text
+MandatoryOwnershipClaim
+  |- mobId
+  |- consumerKey                one canonical pending owner per selected work episode
+  |- owner / route identity
+  |- generation, openedAt
+  '- expiresAt
+```
+
+`consumerKey` is deliberately singular: Gather, Trade, Mining and future V3 cleanup do **not** each
+pile an independent claim into another arbitration system. One canonical pending owner per episode,
+or the claim layer becomes the very thing it replaced.
+
+Precedent, and why this is a generalization rather than an invention:
+`MandatoryHandoffPolicy.HandoffPublication` + `YieldWindow` is already exactly this pattern — a
+publication that is identity-bound, expires instead of inferring authority forever, and is
+*consumed* rather than reconstructed. It is runtime-confirmed by **VR-T2k**. D-VR-084 lifts it from
+one boundary to all of them.
+
+#### Lifetime (Gate RET-1 / RET-1e)
+
+**Runtime-only. Never persisted.**
+
+```text
+ordinary entity unload / dimension transfer -> release
+death / discard                             -> release
+server stop                                 -> clear
+restart                                     -> no resurrection; world truth reacquires ownership
+```
+
+A claim surviving a restart would resurrect a frozen mob with no live owner able to clear it. Being
+runtime-only, the store is exempt from the `PerMobSavedData.forgetAll()` contract and **must not** be
+registered there — RET-1e exempts runtime-only state, and registering it would imply a persistence
+this decision forbids.
+
+#### The tradeoff, stated rather than discovered later
+
+The two halves fail in **opposite** directions, deliberately:
+
+| Half | Failure mode | Direction |
+| --- | --- | --- |
+| running (`ActivityObservationService`) | a goal nobody classified reads `UNKNOWN_ACTIVE` | **closed** — blocks |
+| pending (claims) | an owner that forgets to publish does not block during its pending window | **open** — allows |
+
+This is accepted knowingly. The open direction lands on the safe side of the `V2-DEF-002` dilemma —
+a mob that wanders when it should have waited, rather than a mob frozen forever guarding work nobody
+can serve. Anyone tempted to "fix" the asymmetry must first answer the second row of the
+`V2-DEF-002` repair gate.
+
+**Must happen:** an unservable mandatory demand eventually returns discretionary permission without
+any component judging viability.
+**Must not happen:** a second mandatory-work model; a claim refreshed by demand alone; a persisted
+claim outliving the session that created it.
+
+### D-VR-082-A1: amendment — consume the shared seam; taxonomy; P4 co-tenancy (`Agent_Claude` + `User`, 2026-08-19)
+
+**Status:** `LOCKED`. Amends `D-VR-082`; everything not restated below stands.
+
+**(1) Admission consumes, it does not reconstruct.** The D-VR-082 instruction that
+`VillageWorkAdmission` "must consult at least" five named sources is **superseded**.
+`VillageWorkAdmission` consumes `MandatoryOwnership` (D-VR-084). Anything the shared authority is
+missing is added **there, once**, for both consumers. Priority **4** and the
+`NO LIVE MANDATORY OWNER` invariant are unchanged.
+
+**(2) `VILLAGE_TRADE` joins `blocksDiscretionaryChoice`.** `CODE_CONFIRMED`: `TradeWithVillagerGoal`
+is deliberate-band mandatory work at priority 3 and classifies to `ActivityClass.VILLAGE_TRADE`,
+which is **absent** from the blocking set. Physically this is not currently catastrophic — a running
+P3 trade already holds MOVE/LOOK, so a P4 V3 goal cannot take those flags — but the shared authority
+is *semantically lying*: `TradeWithVillagerGoal RUNNING` currently reads "discretionary eligible".
+Since D-VR-084 makes that authority load-bearing for a second consumer, the lie must be fixed.
+V2 behaviour is re-checked as part of the change.
+
+**(3) New `ActivityClass.VILLAGE_WORK`; every V3 executor is taxonomy-pinned.**
+`CODE_CONFIRMED`: `MoveHolderClassifier.activityClass` falls through to `UNKNOWN_ACTIVE`, which sets
+`Observation.unknownActive()` and fails discretionary eligibility closed. An unclassified V3 goal
+therefore compiles, runs correctly, and **silently suppresses all Opinion discretionary work**
+whenever it holds MOVE. V3-C/E/F executors classify as `VILLAGE_WORK`, which **blocks a fresh
+discretionary selection while running**:
+
+```text
+no work running        -> eligible -> choose Farm
+Farm running           -> VILLAGE_WORK observed -> no second discretionary choice
+Farm ends              -> eligibility returns
+```
+
+A discretionary action blocking the *start of another* discretionary action is the correct and
+intended shape; it is not a contradiction with V3 work being discretionary by admission. (An earlier
+review framing to that effect was withdrawn.) Precedent for the pin itself: `D-VR-054` / `D-VR-073`.
+
+**(4) Priority 4 is shared, and the `MAINTENANCE` asymmetry is deliberate.**
+`CODE_CONFIRMED`: `SpmScavenger.java` registers `PlaceTorchGoal` at **4** with `MOVE|LOOK`; it
+classifies as `ActivityClass.MAINTENANCE`, and `MAINTENANCE` is **not** in
+`blocksDiscretionaryChoice`. The RFC must stop describing 4 as a free band. The band reads:
+
+```text
+P3  mandatory deliberate work      Gather / Craft / Smelt / Trade
+P4  bounded non-mandatory work     PlaceTorch (MAINTENANCE) + Village Work (VILLAGE_WORK)
+P8  exploration
+```
+
+Equal-priority MOVE/LOOK jobs cannot steal each other's active interaction, which *supplies*
+D-VR-082's "peer discretionary work cannot steal a committed interaction" for free. The interference
+is intentional and reciprocal: **a running bounded V3 job may defer torch placement, and running
+torch maintenance may defer V3 work; neither preempts the other.**
+
+The two co-tenants keep **different** observation semantics, on purpose:
+
+| Running | Blocks new discretionary selection? | Why |
+| --- | --- | --- |
+| `PlaceTorchGoal` -> `MAINTENANCE` | **no** | a short flagged action; physical P4 flag ownership already delays the selected work, and the torch finishes quickly |
+| V3 executor -> `VILLAGE_WORK` | **yes** | a bounded work *commitment* whose whole point is to finish before another intent is chosen |
+
+**Do not** later "fix" `MAINTENANCE` to match `VILLAGE_WORK` for symmetry's sake. The asymmetry is
+the decision.
+
+**Rejected:** moving V3 off priority 4 to obtain an empty band; a village-local mandatory-work
+oracle; leaving `VILLAGE_TRADE` out of the blocking set because the flags happen to save us today.
+
+### D-VR-079-A1: amendment — managed crop domain, host veto, and the replant loop (`Agent_Claude` + `User`, 2026-08-19)
+
+**Status:** `LOCKED`. Amends `D-VR-079`; the committed-episode architecture itself is unchanged.
+
+#### (1) The mixin-scope table was wrong for crops
+
+`CODE_CONFIRMED` against pinned SPM v0.86.0: `PlayerMobEntity` registers `HarvestCropsGoal` at
+priority **6** with `MOVE|LOOK`; `canUse` is gated on `mob.wantsFood()`; the harvest banks edible
+drops, calls `mob.dropAtLocation(drop)` for everything else, and then
+`serverLevel.destroyBlock(targetPos, /* dropBlock */ false, mob)`. **It never replants.**
+
+A V3-C goal at priority 4 preempts it *only while V3 admission passes*. Admission refuses whenever a
+mandatory owner is live, and the host goal's own gate is hunger:
+
+```text
+PlayerMob becomes hungry -> MANDATORY_SURVIVAL active -> V3 farming refused
+                         -> host HarvestCropsGoal runs -> crop broken -> no replant
+```
+
+The RFC's `Mixin scope (minimal)` row **"Crop harvest/replant | does not need mixin"** is therefore
+`SUPERSEDED`. It is true for *performing* harvest+replant and false for *preventing* the destructive
+host path, which is what VR-T3a's must-not-happen row actually requires. The implementation shape is
+the shipped `*ShelterHoldMixin` family (`DoorOperationShelterHoldMixin`,
+`FriendlyGreetShelterHoldMixin`, `WeaponAttackShelterHoldMixin`) — a continuous veto on a host goal's
+admission/continuation, not goal removal, and not an SPM fork. **SPM stays stock.**
+
+#### (2) The managed crop domain — derived, and free of `SettlementRelationship`
+
+A first draft defined *managed* as "positions the episode has already claimed". **Rejected:** it
+creates a loophole in which an unclaimed crop is grabbed by the host first, leaves bare farmland, and
+is "technically unmanaged" — an acceptance test that passes by definition while the village is
+damaged.
+
+```text
+managedCrop(mob, pos) ==
+      profile(mob) == VILLAGE_ALLY               (D-VR-080; explicit assignment only)
+  AND a positive factual village resolution exists
+  AND pos is within that resolved settlement's bounds
+  AND block truth says crop-on-farmland
+```
+
+The domain exists **before** any episode selects anything, so a host grab cannot beat us to it.
+
+**No HOME / HIGH / familiarity / `SettlementRelationship` term.** An earlier draft carried "this mob
+has an ally relationship with that village"; that would reintroduce through a side door precisely
+what `D-VR-017`, `D-VR-052` and `D-VR-080` spent several reviews removing — attachment manufacturing
+permission. `VILLAGE_ALLY` is the locked policy authority; village resolution supplies only
+*geography*.
+
+#### (3) Fail direction: toward stock — and why it is opposite to storage
+
+```text
+cannot positively establish the managed domain -> DO NOT veto host HarvestCropsGoal
+```
+
+This veto **removes existing SPM functionality**, so uncertainty must leave the host alone.
+A perception gap must never silently disable stock food behaviour mod-wide. That is the **opposite**
+direction from `D-VR-081`, where `UNKNOWN` storage **denies** access — and the asymmetry is
+deliberate, because the two policies protect different parties:
+
+| Policy | On uncertainty | Protects |
+| --- | --- | --- |
+| `D-VR-081` storage | **deny** | somebody else's container |
+| `D-VR-079-A1` crop veto | **allow (stock)** | the host mod's own shipped behaviour |
+
+Gen-1 keeps the veto narrow. If hungry allies should later eat from managed fields, that harvest goes
+through the same committed harvest->replant executor — **not** by restoring the destructive host path.
+
+*Behavioural note (`MAIBS`):* the veto does not starve an ally. `ForagePolicy.wantsFood` returns true
+whenever the mob carries no food, and `HuntForFoodGoal` shares that gate and is untouched by a crop
+veto. The ally forages animals instead of stripping the village's fields, which is better ally
+behaviour, not a regression.
+
+#### (4) The replant loop must close inside the episode (**F8**)
+
+`CODE_CONFIRMED`: the host harvest spills seeds with `mob.dropAtLocation(drop)`. If V3-C mirrors that,
+every episode consumes one held seed and throws its replacement on the floor; the reserve drains
+monotonically and the phase stops admitting — a demand with no reachable supply, the first north-star
+invariant. The only existing recovery path is host `CollectFloorItemsGoal` (priority **3**, radius 8,
+classifies `SCAVENGE_LOOT`), i.e. a *higher-priority* goal that must interrupt the episode to restock
+it. That is an assumption about another goal's scheduling dressed as a supply.
+
+```text
+HARVEST COMMITMENT
+      -> mutate mature crop
+      -> capture resulting drops DIRECTLY
+      -> separate: food/output  |  replant material
+      -> replant committed farmland
+      -> return excess to inventory
+```
+
+**Binding invariant.** *V3-C directly banks every replant-capable drop produced by its own committed
+harvest. It must never depend on floor-item pickup to recover its own planting supply. Replant
+reserve accounting is crop-specific; no crop may be assumed to reproduce a planting item unless its
+pinned drop semantics guarantee that.*
+
+The crop-specific clause matters, and **"this makes the reserve self-sustaining" is deliberately not
+locked for every crop**: mature wheat yields 1-4 seeds and carrots/potatoes 1-4 plantable items, but
+mature beetroot can yield **0-3** seeds. So for beetroot:
+
+```text
+spare beetroot seed held -> may harvest -> replant one immediately -> bank whatever dropped
+zero spare seeds after the episode -> stop further managed beetroot harvest; field stays planted
+```
+
+**Do not manufacture a replacement seed to make the loop mathematically infinite.** The safety
+invariant is not "farming never pauses"; it is:
+
+> Farming may pause from lack of planting stock. It may not leave a successfully managed field barren.
+
+New closure rows **VR-T3l** (hungry mob, admission refused, veto holds) and **VR-T3m** (multi-cycle
+reserve sustainability) carry this.
+
 ### Contribution — User + Agent_Codex (minimum RFC synchronization pass, 2026-08-19)
 
 Agent: `Agent_Codex` acting on explicit User scope/disposition requirements
@@ -6591,3 +6940,49 @@ only on revoke/destruction/permanent mob removal; double-chest canonicalization 
 
 **Frontier after:** V3 architecture **LOCKED** through D-VR-078/079/080…083. **Authorize task-52 / V3-A**
 is the next step; implementation not authorized by this contribution.
+
+*(Superseded the same day — see the amendment pass below. Task-52 was **not** authorized: a
+code-evidenced review found V3-A's admission seam depends on a shared authority that does not exist
+yet.)*
+
+### Contribution — Agent_Claude + User (V3 amendment pass, 2026-08-19)
+
+Agent: `Agent_Claude`, invoked as `Work the RFC V3 Village` (`RFC_DESIGN_WORK_READ_ONLY`), then
+authorized by the User for an explicit amendment pass.
+Contribution type: `DESIGN REVIEW / ARCHITECTURE AMENDMENT` — RFC + `KNOWN_DEFECTS.md` only.
+
+**Frontier before:** `D-VR-080…083` `LOCKED`; recorded next step *"authorize task-52 / V3-A"*.
+
+**Action:** pressure-tested V3-A/B/C against production and pinned-host source rather than the RFC's
+description of them. Eight findings, seven confirmed against code; three were blockers:
+
+| # | Finding | Outcome |
+| --- | --- | --- |
+| F1 | priority 4 already holds `PlaceTorchGoal` (`MAINTENANCE`) | co-tenancy **locked as intentional**, asymmetry recorded (`D-VR-082-A1`) |
+| F2 | `VillageWorkAdmission`'s five-source list reconstructs truth `DiscretionaryEligibility` already owns | admission now **consumes** (`D-VR-082-A1`) |
+| F3 | `VILLAGE_TRADE` absent from `blocksDiscretionaryChoice` — the shared authority lies | joins the blocking set |
+| F4 | pending-vs-running gap **is** `V2-DEF-002`, still `OPEN`; V3-A would fork it | `D-VR-084`; defect **promoted to V3-A prerequisite** |
+| F5 | unclassified V3 goal → `UNKNOWN_ACTIVE` → suppresses all Opinion discretionary work | taxonomy pin + new `ActivityClass.VILLAGE_WORK`. *Reviewer's "discretionary cannot block discretionary" framing **withdrawn** — a running discretionary action blocking a fresh selection is correct* |
+| F6 | *"Crop harvest/replant does not need mixin"* falsified by host P6 `wantsFood()` harvest | row `SUPERSEDED`; managed-domain veto (`D-VR-079-A1`) |
+| F7 | `KnownVillage` exposes only `poiCount()`; `D-VR-083`'s population predicate has no fact source | edge **V3-D → V3-E** added |
+| F8 | replant loop does not close — host spills seeds; only recovery is a P3 pickup goal | episode banks its own drops; crop-specific reserve accounting |
+
+**User corrections folded in (both changed locked invariants):** a claim TTL alone reproduces the
+freeze, so **demand may never refresh a claim** — a new claim needs new justification
+(`generation`); and the managed-crop predicate **drops the ally-relationship term**, which would have
+smuggled `SettlementRelationship` back into permission through a side door.
+
+**Reviewer position corrected on evidence:** a queued MAIBS objection (a foodless ally forbidden to
+eat from a vetoed field) was **withdrawn** — `ForagePolicy.wantsFood` gates `HuntForFoodGoal`
+identically and is untouched by a crop veto, so the ally forages animals instead of stripping the
+village's fields.
+
+**Rejected:** restarting V3 design; a village-local mandatory-work oracle; *managed* = "positions the
+episode already claimed" (passes VR-T3a by definition while the village is damaged); manufacturing a
+replacement seed so the replant loop is mathematically infinite; "fixing" `MAINTENANCE` to match
+`VILLAGE_WORK`.
+
+**Frontier after:** `V3-A` is **not implementation-ready** and **task-52 is not authorized**. The
+nearest frontier is the shared `MandatoryOwnership` authority (`D-VR-084`) — which is also
+`V2-DEF-002`'s repair, and is not itself dependency-blocked. No Java, test, mixin, Gradle, config,
+datapack, runtime, commit, or push action belongs to this contribution.

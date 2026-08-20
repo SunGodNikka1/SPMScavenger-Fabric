@@ -110,8 +110,17 @@ Until both are observed, this defect is repaired, not closed.
 
 ## V2-DEF-002 — discretionary activity can displace *pending* mandatory progression
 
-**Status:** OPEN, architecture finding. **Discovered:** step 7B runtime, 2026-08-18. **Applies to:**
-Opinion / discretionary director, not Trade Everything. **Severity:** low frequency, high surprise.
+**Status:** OPEN, architecture finding — **PROMOTED 2026-08-19 from deferred debt to a V3-A
+prerequisite.** **Discovered:** step 7B runtime, 2026-08-18. **Applies to:** Opinion / discretionary
+director, not Trade Everything. **Severity:** low frequency, high surprise.
+
+**Promotion note.** The V3 Village amendment pass found that `VillageWorkAdmission` needs exactly the
+missing state this defect names: `ActivityObservationService` only observes `WrappedGoal.isRunning()`,
+so "mandatory work exists but no executor is running yet" is invisible to every consumer. Building a
+village-local answer would have forked the model. The repair is now specified as the shared
+claim-based `MandatoryOwnership` authority in **`D-VR-084`**
+(`plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md`), whose four states and anti-self-renewal
+invariant subsume the repair gate below. This does not reopen V2 as a phase.
 
 ### What was observed
 
