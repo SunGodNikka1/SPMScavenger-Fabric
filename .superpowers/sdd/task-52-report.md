@@ -89,13 +89,16 @@ The brief names scenarios 3, 5, 11 for RED-before-GREEN. The honest record:
 | NC-5 / P2 (mint per scan) | `mandatoryEpisodeGeneration++` added in `canUse` | `generationIsMintedOnlyAtExecutorStart` + `generationCounterAppearsOnlyOncePlusTheStartIncrement` | `CONFIRMED` |
 | NC-8 / P6-P7 (termination mints) | `mandatoryEpisodeGeneration++` added at the ABANDONED release | `generationIsMintedOnlyAtExecutorStart` + `generationCounterAppearsOnlyOncePlusTheStartIncrement` (producer-side; the registry-level abandon test alone cannot catch a producer-side increment — this is why the wiring controls exist) | `CONFIRMED` |
 
-Eight controls were required; seven were exercised by actual mutation runs. **NC-4 (advance
-generation on TTL expiry) is covered by the same mechanism as NC-5/NC-8** — the producer counter has
-exactly one mint site (`generationCounterAppearsOnlyOncePlusTheStartIncrement` asserts exactly one
-increment in the whole goal), so any path that advances generation — TTL, scan, abandon, handoff —
-fails the same two wiring tests. This is stated rather than run as a separate mutation because the
-counter-mint-site assertion makes TTL-advance structurally indistinguishable from the tested scan
-and abandon variants.
+Eight controls were required. Seven were exercised by actual mutation runs; **NC-4 is WAIVED as
+STRUCTURALLY SUBSUMED, not mutation-confirmed.** The producer generation counter has exactly one
+mint site, asserted structurally by `generationCounterAppearsOnlyOncePlusTheStartIncrement` (exactly
+one `mandatoryEpisodeGeneration++` in the whole goal) and `generationIsMintedOnlyAtExecutorStart`
+(the increment is inside `start()`, guarded by a live claim). A TTL-specific generation mint is the
+same forbidden shape already proven by the scan and abandon mutations (NC-5/P2 and NC-8/P6-P7): any
+path that advances generation — TTL, scan, abandon, or handoff — fails the same two wiring tests.
+Because the structural contract cannot distinguish one forbidden mint path from another, NC-4 is
+covered by the same mechanism and is not separately mutation-run; it is waived on that basis rather
+than claimed as mutation-confirmed.
 
 ## Twelve scenarios + two simulations — all green
 
@@ -168,17 +171,18 @@ refused (scenario 6c).
 6. **Runtime witness deferred by decision** (no dedicated session): pending claim active → no
    expedition; abandoned/expired → discretionary movement resumes. Folded into the batched V3
    campaign per the brief; do not schedule a standalone session.
-7. **Multi-publisher release/start identity binding — prerequisite of the first multi-publisher
-   expansion, NOT solved here.** `release(UUID, ReleaseReason)` does not identify which claim/owner
-   is being released, and `Gather.start()` treats any live claim for the mob as the claim it is
-   taking over. That is valid with exactly one publisher (Gather). The moment Trade, Mining, or V3
-   cleanup becomes a second publisher, the shape is unsafe: Trade publishes a claim, an unrelated
-   Gather start sees "some live claim", releases Trade's claim, and increments Gather's generation.
+7. **Identity-bound release/start — prerequisite of the first future task that adds a SECOND
+   `MandatoryOwnershipClaim` publisher, NOT solved here.** `release(UUID, ReleaseReason)` does not
+   identify which claim/owner is being released, and `Gather.start()` treats any live claim for the
+   mob as the claim it is taking over. That is valid with exactly one publisher (Gather). When a
+   future task wires a second claim publisher — Trade, Mining, or V3 cleanup, whichever proves to be
+   first — the shape becomes unsafe: that publisher publishes a claim, an unrelated Gather start
+   sees "some live claim", releases the other publisher's claim, and increments Gather's generation.
    Before the second publisher is wired, release/start ownership must carry identity-bound
    authorization (the releasing owner must prove it owns the claim it releases; the starting
-   executor must prove the claim belongs to its route). Do not solve in task-52 R1 — record it as
-   the explicit prerequisite of the first multi-publisher task (task-53 wiring a second publisher is
-   the first such task).
+   executor must prove the claim belongs to its route). This is a prerequisite of whichever task
+   first adds a second publisher; it is deliberately NOT a prerequisite of task-53 (V3-A), which
+   adds only a second **consumer** of `MandatoryOwnership`, not a second publisher.
 8. **`publish` is not identity-parameterized for the owner** — the claim's `consumerKey`/route
    identity names the *work*, not the *publisher*. Same consequence as concern 7; folded into it.
 
