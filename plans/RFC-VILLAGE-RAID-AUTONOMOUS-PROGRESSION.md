@@ -8,10 +8,10 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + V1.5 CLOSED**; **V2 CLOSED — VR-T2 RUNTIME PASS** (A–H) |
-| **Status** | `RUNTIME VERIFIED` — **VR-T2 PASS** and **V2-TE positive path PASS (`V2-DEF-003c-R1`)**. `A` transaction, `B` evaluation, `C` route admission, `D` SELL→BUY chain, `F` arbitration **CLOSED**; `E` physical executor **CLOSED + runtime exercised**; `G` relationship learning **CLOSED + runtime exercised**; `H` vanilla supply/projection **CLOSED — RUNTIME PASS**. V2-TE absent/incompatible-source behavior remains `UNVERIFIED`. |
-| **Nearest frontier** | **V2-TE positive autonomous path is runtime-confirmed.** The separate `VR-T2l` absent/incompatible-source negative remains `UNVERIFIED`; `V2-I` optional inspector remains available. **Core vanilla trading is closed and runtime-verified.** |
-| **Last update** | 2026-08-19 (**V2-DEF-003c-R1 RUNTIME PASS** — authoritative Gather→Trade handoff; 12 TE funding sells → vanilla Toolsmith iron pickaxe; route evidence released) |
+| **Mode** | `PLANNING` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE positive path CLOSED**; V3 synchronization only, no implementation authorization |
+| **Status** | `V3 DESIGN HOLD` — **VR-T2 PASS** and **V2-TE positive path PASS (`V2-DEF-003c-R1`)**. V2 transaction, evaluation, route admission, SELL→BUY chain, executor, arbitration, relationship learning, vanilla supply/projection, and positive Trade Everything compatibility are **CLOSED / runtime-confirmed to their recorded scope**. Residual V2 verification, tooling, and profiling are **DEFERRED / NON-BLOCKING**. V3 has one canonical Village Work scope but remains short of `LOCKED` pending the four pre-lock decisions named below. |
+| **Nearest frontier** | **V3 pre-lock decisions:** define production `VillageScenarioProfile` acquisition/default/migration; pin positive storage-permission evidence; place V3 in the existing numeric/admission authority; and set target-evidenced scan/backoff/deficit/surplus budgets. V2-W is a separate deferred wealth-track continuation, not a prerequisite for V3. |
+| **Last update** | 2026-08-19 (**minimum RFC synchronization pass** — canonical V3 Village Work phase, V2 closure sync, ally-storage authority, V3 tasks/scenarios, MAIBS pre-implementation prediction; RFC only) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -34,7 +34,8 @@
 Social Player Mobs (`CONFIRMED` — source audit v0.86.0):
 
 - **Can** fight illagers when engaged; use bows, shields, TNT, crystals; flee; eat; loot containers; greet villagers; sleep in beds; open doors; use commanded fake-player item use.
-- **Cannot** autonomously trade with villagers, manage reputation/gossip, operate `MerchantMenu`, acquire `Bad Omen`, trigger or lead raid defense as a first-class citizen, ring bells tactically, cure zombie villagers, assign workstations, or interpret village POI graphs.
+- **Can now** perceive and remember bounded loaded village POIs and autonomously execute demand-owned vanilla/Trade Everything trade chains through the shipped V1/V2 systems (`RUNTIME_CONFIRMED` only for the recorded VR-T1/VR-T2/V2-TE scenarios).
+- **Still cannot** autonomously consume reputation/discounts, operate `MerchantMenu`, acquire `Bad Omen`, trigger or lead raid defense as a first-class citizen, ring bells tactically, cure zombie villagers, assign workstations, or perform V3 village work.
 - **Actively conflicts** with “good villager citizen” play: `RaidContainersGoal` loots village chests at priority 3 (`CONFIRMED` — `PlayerMobEntity#registerGoals`).
 
 **Mineflayer comparison:** Mineflayer achieves **scripted** parity for trading, pathing, and combat via plugins (`mineflayer-villager`, `mineflayer-pathfinder`). SPM achieves **reactive** combat and **scavenging** without a planner. Neither equals a human’s full menu/GUI literacy out of the box.
@@ -54,7 +55,7 @@ Comparison under **equivalent scenarios** (behaviour, not feature names).
 | Behaviour | Human | Mineflayer | SPM today | Feasibility to extend |
 | --- | --- | --- | --- | --- |
 | Path into village | Yes | `pathfinder` goals | `WaterAvoidingRandomStrollGoal` / Scavenger `ExploringGoal` | **FULL** |
-| Recognize village without `/locate` | Visual + structures | Chunk scan / POI plugin | No POI model | **PARTIAL** (cluster beds/workstations) |
+| Recognize village without `/locate` | Visual + structures | Chunk scan / POI plugin | Bounded loaded-POI perception + persistent `KnownVillage` | **IMPLEMENTED / VR-T1A PASS** |
 | Avoid trampling crops | Sometimes | Configurable | `HarvestCropsGoal` breaks crops | **FULL** (disable harvest near village) |
 
 ### Scenario B — Trade with librarian for enchanted book
@@ -62,7 +63,7 @@ Comparison under **equivalent scenarios** (behaviour, not feature names).
 | Behaviour | Human | Mineflayer | SPM today | Feasibility |
 | --- | --- | --- | --- | --- |
 | Right-click villager | Opens `MerchantMenu` | `villager.trade()` plugin | `FriendlyGreetGoal` only (crouch/gift) | **PARTIAL** — `VillagerTradeAdapter` server-side (`D-VR-005`, `053`; no fake GUI) |
-| Evaluate trade offer | GUI + knowledge | Scripted offer index | None | **PARTIAL** (offer scoring policy) |
+| Evaluate trade offer | GUI + knowledge | Scripted offer index | `TradeEvaluationPolicy` + demand-owned selection | **IMPLEMENTED / VR-T2 PASS** for scoped routes |
 | Pay emeralds + items | Click slots | Plugin | 8-slot backpack | **PARTIAL** (inventory limit) |
 | Refresh trades | Break/replace workstation | Plugin | None | **REQUIRES API** (workstation access) |
 
@@ -633,7 +634,8 @@ V1.5 Settlement attachment & return (NEXT)
 ├─ village-aware FriendlyGreet / discretionary SOCIAL weighting
 └─ (V1.5-E / VR-T1.5d **DEFERRED** → V3 `StorageOwnership`)
 V2   Trading (VillagerTradeAdapter, TradeEvaluationPolicy, TradeWithVillagerGoal)
-V3+  Work, reputation, raid, site utility (unchanged ordering after V2)
+V3   Village Work
+V4+  Reputation-aware site utility / raid / player-parity bridges
 ```
 
 **Strongest objection:** V1.5 scope creep absorbs V3 manners + V4 return + part of V5 ally logic.
@@ -675,14 +677,16 @@ visible "my village" play.
 | **D-VR-049** | Option A relationship `rekey` on anchor supersede + merge on `remember()` + evict sync | **`LOCKED`** |
 | **D-VR-050** | Social credit requires `settlementAnchorAtStart` on greet binding at admission | **`LOCKED`** |
 | **D-VR-051** | No permanent village debug commands; temporary `designate-home` removed post VR-T1.5 | **`LOCKED`** |
-| **D-VR-052** | V1.5-E ally loot gate — **REJECT for V1.5**; defer to V3 `StorageOwnership` + VR-T3 | **`LOCKED`** — User 2026-08-14 |
+| **D-VR-052** | V1.5-E ally loot gate — **REJECT for V1.5**; defer to V3 `StorageOwnership` + VR-T3 | **`LOCKED`** — User 2026-08-14; HOME/HIGH proof predicate explicitly **SUPERSEDED** by D-VR-017 on 2026-08-19 |
 
 **Authorized:** task-46 / V1.5 slices A–D + temporary F → **1.11.0**. **Not authorized:** V1.5-E,
 Minecraft launch.
 
-**Next frontier:** **V2 Trading** design closure → **task-47** brief (V1.5 runtime **CLOSED** 2026-08-15).
+**Historical frontier (SUPERSEDED):** this section originally pointed to V2 Trading / task-47.
+V2 is now **CLOSED — VR-T2 RUNTIME PASS**; the canonical current frontier is the V3 pre-lock work
+in `Topic: Phased implementation plan`.
 
-### V2 implementation contract (`LOCKED` — **not implementation-authorized**)
+### V2 implementation contract (`IMPLEMENTED + CLOSED` — historical contract retained)
 
 **Evidence baseline (`CODE_CONFIRMED`, pinned 1.21.1 jar):**
 
@@ -770,9 +774,9 @@ VR-T2 **PASS** in the vanilla-only instance (`D-VR-068`).
 | **V2-E** *(CLOSED 2026-08-16 — STATIC ACCEPT after R1–R8; integrated execution path **runtime-covered by VR-T2**)* | Introduces **`TradeWithVillagerGoal`** @ priority **3** (MOVE+LOOK) with one selected `TradeDemandGate` owner, the bounded `TradeCandidateRound`, the greet interlock, and the full executor: exact-quote binding, execute-time SELL reauthorization, cross-villager `TradeAttemptFunding`, and post-SELL chain continuation. The `ActivityClass.VILLAGE_TRADE` **enum value and its classifier pin belong to V2-F** (`D-VR-073`: the goal type must exist before anything classifies it) |
 | **V2-F** *(CLOSED 2026-08-16)* | Introduces **`ActivityClass.VILLAGE_TRADE`**, the `MoveHolderClassifier.staticActivityClass` pin `TradeWithVillagerGoal` → `VILLAGE_TRADE`, and the `classify()` mapping → **`ORDINARY_HOST_WORK`** (`D-VR-074`). **Co-lands with V2-E or immediately follows in the same task batch** (`D-VR-073`); the classifier cannot precede the goal type it classifies |
 | **V2-G** *(CLOSED 2026-08-16)* | `SettlementRelationshipService.onTradeEpisode` familiarity bump once per completed visit/chain; no persistent `KnownVillager` or offer-index memory in gen-1. **If any part persists per-mob, it must register in `PerMobSavedData.forgetAll`** or `PerMobRemovalContractTest` fails the build (B-VR-93, Gate RET-1e) |
-| **V2-H** | `test-datapacks/phase-village-raid/` trade presets for VR-T2 / VR-T2b |
-| **V2-I** *(optional, post-VR-T2 static)* | O-panel trade inspector row (`B-VR-79`): active `consumerKey`, anchor, villager id, `TradeBlockedReason` — no new debug command |
-| **V2-TE** *(positive path RUNTIME CONFIRMED; negative path remains UNVERIFIED)* | Trade Everything v0.3.0 Fabric compatibility through `TradeOpportunitySource`; no fake player/menu/session; exact quote revalidation; fail closed when absent/incompatible (`D-VR-068`). `V2-DEF-003c-R1`: 12 exact TE funding sells autonomously funded one vanilla Toolsmith iron-pickaxe purchase; `VR-T2l` still requires its separate negative run. |
+| **V2-H** *(CLOSED)* | VR-T2 fixture/proof support completed its runtime purpose and was removed after evidence capture; permanent route-contract tests remain |
+| **V2-I** *(DEFERRED / NON-BLOCKING)* | Optional O-panel trade inspector row (`B-VR-79`): active `consumerKey`, anchor, villager id, `TradeBlockedReason` — no new debug command; not a V2 or V3 gate |
+| **V2-TE** *(positive path RUNTIME CONFIRMED; phase CLOSED)* | Trade Everything v0.3.0 Fabric compatibility through `TradeOpportunitySource`; no fake player/menu/session; exact quote revalidation; fail closed when absent/incompatible (`D-VR-068`). `V2-DEF-003c-R1`: 12 exact TE funding sells autonomously funded one vanilla Toolsmith iron-pickaxe purchase. The separate absent/incompatible `VR-T2l` run is **DEFERRED / NON-BLOCKING**, not an open V2 phase gate. |
 
 **Implementation dependency order (`LOCKED` sequencing — amended pass 2):**
 
@@ -785,11 +789,16 @@ V2-F (VILLAGE_TRADE enum + MoveHolderClassifier pin + ORDINARY_HOST_WORK mapping
         — same task batch as V2-E or next commit; never before E (D-VR-073)
         ↓
 V2-G (onTradeEpisode) → V2-H (datapack fixture)
-V2-I (inspector) — optional after VR-T2 static green; not a release gate
-V2-TE (Trade Everything compat) — separate task after V2-A/B static green; not part of task-47 core acceptance
+V2-I (inspector) — DEFERRED / NON-BLOCKING; not a release or V3 gate
+V2-TE (Trade Everything compat) — CLOSED positive path; VR-T2l negative remains deferred
 ```
 
-**Scope (out):** client `MerchantMenu` / fake GUI (`D-VR-005`); hero discount mixin (V6); restock / workstation place / door-clear loops (V3); discretionary trade browse without demand (V2+ backlog); `RaidContainersGoal` ally-storage gate (V3, `D-VR-052`); full `VillageInteractionDirector` (V5); persistent `KnownVillager` / offer memory; wandering-trader TTL merchant (B-VR-16 deferred); reputation **read** accessor consumer (V4).
+**Scope (out):** client `MerchantMenu` / fake GUI (`D-VR-005`); hero discount mixin (V6);
+read-only restock/workstation awareness (V3); workstation placement/claim and door-clear construction
+(deferred advanced work); discretionary trade browse without demand (V2+ backlog);
+`RaidContainersGoal` ally-storage gate (V3, `D-VR-052`); full `VillageInteractionDirector` (V5);
+persistent `KnownVillager` / offer memory; wandering-trader TTL merchant (B-VR-16 deferred);
+reputation **read** accessor consumer (V4).
 
 **Admission (`LOCKED` — amended peer review 2026-08-15):**
 
@@ -919,9 +928,10 @@ hook rather than raising trade above command/shelter or prematurely shipping ful
 VR-T2b runtime after launch approval in a **vanilla-only** instance (`D-VR-069` — no
 `tradeeverything`); God/Bob taiga fixture or `V2-H` datapack preset.
 
-**Artifact:** `.superpowers/sdd/task-47-brief.md` (**to be written on authorization**).
+**Artifacts:** `.superpowers/sdd/task-47-brief.md` + `task-47-report.md` (implemented history; V2 is
+closed, so this is no longer an authorization frontier).
 
-### V2 runtime matrix (`ACTIVE`)
+### V2 runtime matrix (`CLOSED`; residual rows explicitly deferred)
 
 | ID | Must happen | Must not happen | Notes |
 | --- | --- | --- | --- |
@@ -936,7 +946,7 @@ VR-T2b runtime after launch approval in a **vanilla-only** instance (`D-VR-069` 
 | **VR-T2i** | Night window or all reachable villagers sleeping → `TaskLifecycle.BLOCKED` with `TradeBlockedReason` | Busy-spin at bed; trade goal owns MOVE+LOOK all night | `D-VR-059` + `D-VR-066`; extends VR-T2c |
 | **VR-T2j** *(stretch)* | Component-predicate cost (enchanted/custom-data offer) commits once when fixture provides one | Reject affordable enchanted payment; match wrong component only | Optional if `V2-H` fixture includes one; not gen-1 release gate |
 | **VR-T2k** *(Trade Everything optional)* | **Only after VR-T2 PASS** (`D-VR-069`). With `tradeeverything` v0.3.0 installed, an eligible surplus stack produces its exact synthetic quote without opening a menu or setting `tradingPlayer` | Synthetic offer absent merely because no human session exists; fake `ServerPlayer`; saved synthetic offer | **PASS — `V2-DEF-003c-R1`, 2026-08-19.** `plans=13 (TE 12)`, `revals=13`, `trades=13`; 12 TE `22 oak_log -> 1 emerald` sells funded vanilla Toolsmith `12 emerald -> 1 iron_pickaxe`; `routeEvidence tracked=0` |
-| **VR-T2l** *(Trade Everything negative)* | Missing/incompatible Trade Everything disables only that source; vanilla trades continue | Contaminating VR-T2 baseline with `tradeeverything` present; startup/classloading crash; reimplemented approximate pricing | `UNVERIFIED` — the positive Step-7A run does not exercise source absence or incompatibility |
+| **VR-T2l** *(Trade Everything negative; DEFERRED / NON-BLOCKING)* | Missing/incompatible Trade Everything disables only that source; vanilla trades continue | Contaminating VR-T2 baseline with `tradeeverything` present; startup/classloading crash; reimplemented approximate pricing | `UNVERIFIED` — positive Step-7A does not exercise absence/incompatibility; this does not reopen V2 or block V3 |
 
 ### Task-46 peer review — User P1 closure (`AUTHORIZED`, 2026-08-14)
 
@@ -1068,9 +1078,21 @@ Attachment answers “this settlement matters”; it does not classify container
 | VR-T1.5d | **DEFER → VR-T3** — prove manners with container classification, not blanket cancel |
 | V1.5 ships | A + B + C + D + temporary F only |
 
-**V3 proof contract (when implemented):** HOME/HIGH-attached village **+** container classified
-`VILLAGE_PUBLIC` → `RaidContainersGoal` cannot loot it. Tests actual village manners, not attachment
-as a substitute for ownership.
+**V3 proof contract — SUPERSEDED predicate, evidence preserved.** The original
+`HOME/HIGH + VILLAGE_PUBLIC` wording conflicts with locked `D-VR-012` and repeats the exact category
+error this review rejected: attachment says a settlement matters; it does not grant ally authority.
+The canonical V3 predicate is now `D-VR-017`:
+
+```text
+VillageScenarioProfile == VILLAGE_ALLY
+AND StorageOwnership does NOT carry explicit mob loot permission
+→ RaidContainersGoal admission and continuation are refused
+```
+
+`VILLAGE_PUBLIC`, `FOREIGN`, and `UNKNOWN` all lack explicit mob loot permission in V3 and therefore
+fail closed for an ally. Only `MOB_OWNED` or `EXPLICITLY_SHARED_WITH_MOB` may permit the existing host
+loot executor. HOME/HIGH remains relationship evidence only and can never substitute for the profile
+or ownership fact. VR-T3g/h/i own this proof.
 
 **Rejected alternatives:** coarse HOME/HIGH blanket (throws away container information); narrow
 `VILLAGE_PUBLIC` tag in V1.5 (starts `StorageOwnership` incompletely, migration debt for V3).
@@ -1152,8 +1174,8 @@ mining/cave handoff idle; `cfg.exploring` true (`D-VR-046`); no mandatory combat
 
 **Ally storage / VR-T1.5d (`DEFERRED` — `D-VR-052`):** V1.5 does **not** mixin `RaidContainersGoal`.
 `FriendlyGreetShelterHoldMixin` gates shelter only — loot suppression belongs in V3 when
-`StorageOwnership` can classify containers (`VILLAGE_PUBLIC` vs legitimately scavengable). VR-T3
-proves: HOME/HIGH attachment **+** `VILLAGE_PUBLIC` classification → no loot.
+`StorageOwnership` can classify containers (`VILLAGE_PUBLIC` vs explicitly permitted). VR-T3g/h/i
+prove the canonical `D-VR-017` predicate; HOME/HIGH attachment alone grants no storage authority.
 
 **Must happen (static):** relationship persists across save/reload; evict sync; return policy unit tests; commute does not call `VillagePerception.observe` from debug paths; Option A rekey contract test (`D-VR-049`).
 
@@ -1391,8 +1413,10 @@ re-checking `StorageOwnership` + ally profile.
 `PlayerMobEntity#registerGoals` adds `RaidContainersGoal` at priority **3** (`CONFIRMED` —
 `PlayerMobEntity.java` L835). Scavenger already mixin-blocks it during shelter hold
 (`FriendlyGreetShelterHoldMixin` L20–22). **Gen-1 ally play** still needs a **predicate** on the goal
-or a scavenger-side admission: `VILLAGE_ALLY` + container tagged `VILLAGE_PUBLIC` / unknown ownership
-→ refuse. Full storage RFC remains deferred; **minimum predicate is V3 blocker**.
+or a scavenger-side admission. Canonical V3 rule: `VILLAGE_ALLY` + anything other than explicit
+`MOB_OWNED` / `EXPLICITLY_SHARED_WITH_MOB` permission → refuse in both admission and continuation.
+`UNKNOWN` is denial, never permission. Full storage RFC remains deferred; the minimum classifier,
+profile source, and continuous gate are V3-A/B.
 
 ### Raider hostility side effect (`CONFIRMED`)
 
@@ -1679,10 +1703,12 @@ expose**.
 
 This also reclassifies VR-4. The *write* path needs nothing at all. The *read* path,
 `Villager#getPlayerReputation(Player)`, is a `Player`-typed convenience wrapper over the UUID-keyed
-`GossipContainer` — so what V3/V4 needs is a **`gossips` field accessor**, not a "reputation bridge".
+`GossipContainer` — so what V4/V6 consumer work needs is a **`gossips` field accessor**, not a
+"reputation bridge". Village Work V3 does not consume reputation.
 Accessor mixins are the cheapest and most update-stable class of mixin available.
 
-**Open question (evidence needed before V3).** Does anything *consume* that reputation for a
+**Open question (evidence needed before V4 reputation-aware selection or V6 discounts, not V3).**
+Does anything *consume* that reputation for a
 non-player? Golem aggression and trade discount are the two consumers, and both are expected to be
 player-typed. If both are, the mob accrues a real reputation the world never acts on — accurate
 bookkeeping with no gameplay consequence until our own systems read it. That is still worth having
@@ -2739,6 +2765,10 @@ exposed villagers + active raid + known bell
 
 ### Population support — **FULL** practical parity
 
+**Canonical disposition:** **IN V3** as bounded food support only. V3 does not command breeding,
+claim beds, or manipulate villager Brain state. Admission is discretionary, requires population
+need plus disposable food after survival/progression reserves, and revalidates both facts at handoff.
+
 **Not** calling villager `wantsToStartBreeding()` directly. **Player parity:**
 
 ```text
@@ -2766,7 +2796,10 @@ SPM today (`CONFIRMED`): harvest ripe crops when mob wants food; **no replant** 
 | Villager support | Same |
 | Hoarding / seed reserve | Same |
 
-**`ReplantCropGoal`** or atomic harvest→replant:
+**Canonical ownership (`D-VR-079`): committed atomic harvest→replant episode.** The former loose
+alternative — a separate independently admitted `ReplantCropGoal` — is rejected for managed village
+fields because interruption between two goals can turn a successful harvest into routine barren
+farmland. The episode owns target, crop/seed representation, and completion together:
 
 ```text
 harvest mature crop → retain seed → replant → keep surplus
@@ -2774,7 +2807,15 @@ harvest mature crop → retain seed → replant → keep surplus
 
 Personality: responsible always replants; greedy leaves; chaotic half-farm; village-ally replants.
 
-**Composting** (low-priority side activity): excess seeds → composter → bone meal → crops/trees/flowers.
+**Composting — IN V3** as a low-priority side activity: excess compostables → known loaded composter
+→ bone meal. It may consume only explicitly disposable surplus after survival, progression,
+replant, and population-food reserves; it creates no independent appetite for seeds.
+
+**Workstation awareness — IN V3, read-only only.** Extend existing bounded village perception facts
+with loaded/perceivable job-site availability and villager reach/restock relevance. V3 does not
+place, claim, break, or reassign workstations and does not add a second world scanner. Restock facts
+may inform whether an already-authorized trade route is transiently blocked; they do not authorize
+trade or displace mandatory progression.
 
 ### Golem relationship
 
@@ -2789,6 +2830,11 @@ SPM `PathfinderMob` (not `Enemy`) — iron golems don't auto-attack PlayerMobs (
 | Hang near golem (high village affinity) | **FULL** (social) |
 
 ### Zombie-villager curing
+
+**Canonical disposition: DEFERRED TO V6.** Curing needs a weakness/apple interaction executor and
+player-credit/relationship decisions that are outside Village Work. Earlier `P5 Cure → V3` and
+Appendix-D `CureVillagerGoal | V3` rows are explicitly superseded by `D-VR-078`; V3 has no curing
+task or closure scenario.
 
 `ZombieVillagerEntity` stores converter UUID (`INFERRED` — verify field at implementation). **`CureVillagerGoal`:**
 
@@ -2808,10 +2854,12 @@ Before village residency (`Agent_ChatGPT`):
 
 ```text
 StorageOwnership:
-  OWNED | SHARED | VILLAGE_PUBLIC? | FOREIGN | UNKNOWN
+  MOB_OWNED | EXPLICITLY_SHARED_WITH_MOB | VILLAGE_PUBLIC | FOREIGN | UNKNOWN
 ```
 
-SPM `RaidContainersGoal` treats all chests alike — **dangerous** in villages. Gate looting by ownership + `VILLAGE_ALLY` profile. Full storage RFC deferred; **P0 blocker** for ally play.
+SPM `RaidContainersGoal` treats all chests alike — **dangerous** in villages. V3-A/B implement the
+minimum `D-VR-017` profile + explicit-permission predicate. `UNKNOWN` fails closed for
+`VILLAGE_ALLY`; non-allies retain host behavior. Full personal/village storage remains deferred.
 
 ---
 
@@ -2964,9 +3012,15 @@ Lifecycle
 
 ## Topic: Vanilla village/raid progression dependency graph
 
+**Status: CONCEPTUAL / LEGACY / SUPERSEDED AS A PHASE MAP.** This graph describes gameplay
+prerequisite tiers only. Its old `V0…V5` labels were renamed `L0…L5` on 2026-08-19 because they
+collided with the canonical implementation phases. It grants no task order or implementation
+authorization. In particular, legacy `Tier V3 — Reputation & discounts` is **not** implementation
+phase V3; canonical **V3 always means Village Work** in `Topic: Phased implementation plan`.
+
 Progression for **village ecosystem participation**, not item-name guessing.
 
-### Tier V0 — World entry
+### Legacy conceptual tier L0 — World entry
 
 ```text
 Spawn
@@ -2974,7 +3028,7 @@ Spawn
   → safe shelter (bed) — SPM SeekShelterGoal partial
 ```
 
-### Tier V1 — Passive coexistence
+### Legacy conceptual tier L1 — Passive coexistence
 
 ```text
 Coexistence
@@ -2983,7 +3037,7 @@ Coexistence
   conflict: RaidContainersGoal may steal from village chests (ANTAGONISTIC)
 ```
 
-### Tier V2 — Economic entry
+### Legacy conceptual tier L2 — Economic entry
 
 ```text
 Emeralds
@@ -2997,7 +3051,7 @@ Workstation graph
   … (all 1.21.1 professions via POI)
 ```
 
-### Tier V3 — Reputation & discounts
+### Legacy conceptual tier L3 — Reputation & discounts (`SUPERSEDED` phase label)
 
 ```text
 Reputation (per villager + gossip)
@@ -3007,7 +3061,7 @@ Zombie villager cure
   requires: weakness (witch/splash) + golden apple + villager safe spot
 ```
 
-### Tier V4 — Raid participation (defender)
+### Legacy conceptual tier L4 — Raid participation (defender)
 
 ```text
 Raid active (vanilla Raid instance)
@@ -3019,7 +3073,7 @@ Raid active (vanilla Raid instance)
   success: Hero of the Village on nearby Players — NOT PlayerMob today
 ```
 
-### Tier V5 — Raid initiation (aggressor)
+### Legacy conceptual tier L5 — Raid initiation (aggressor)
 
 ```text
 Bad Omen
@@ -3031,25 +3085,28 @@ Enter village
 Endgame loop: farm totems/emeralds/raid loot
 ```
 
-**PlayerMob gap (`CONFIRMED` / `INFERRED`):** Tier V4 victory rewards and Tier V5 initiation assume **`Player`** participation in vanilla raid code. `PlayerMobEntity extends PathfinderMob` — **not** a `Player` (`CONFIRMED` — `RaiderTargetsPlayerMobMixin` javadoc). Hero/Bad Omen parity likely needs **server-side effect bridging** (`REQUIRES MIXIN`).
+**PlayerMob gap (`CONFIRMED` / `INFERRED`):** conceptual L4/L5 include player-typed boundaries.
+`PlayerMobEntity extends PathfinderMob` — **not** a `Player` (`CONFIRMED` —
+`RaiderTargetsPlayerMobMixin` javadoc). Exact hero/omen dispositions live in canonical V6, not in
+this legacy graph.
 
 ### Consolidated graph
 
 ```mermaid
 flowchart TD
-  subgraph V0["V0 Discovery"]
+  subgraph L0["L0 Discovery"]
     EXPLORE[Explore / stumble on village]
     SHELTER[Bed shelter]
     EXPLORE --> SHELTER
   end
 
-  subgraph V1["V1 Coexist"]
+  subgraph L1["L1 Coexist"]
     GREET[Greet / ignore villagers]
     NOLOOT[Respect village chests - policy]
     GREET --> NOLOOT
   end
 
-  subgraph V2["V2 Economy"]
+  subgraph L2["L2 Economy"]
     WS[Find workstation]
     PROF[Profession locked]
     TRADE[MerchantMenu trade]
@@ -3057,7 +3114,7 @@ flowchart TD
     WS --> PROF --> TRADE --> EMER
   end
 
-  subgraph V3["V3 Reputation"]
+  subgraph L3["L3 Reputation"]
     REP[Gossip + reputation]
     CURE[Zombie villager cure]
     DISC[Trade discounts]
@@ -3065,7 +3122,7 @@ flowchart TD
     CURE --> REP
   end
 
-  subgraph V4["V4 Defense"]
+  subgraph L4["L4 Defense"]
     RAID_ACTIVE[Raid instance active]
     FIGHT[Fight raiders]
     BELL[Ring bell optional]
@@ -3075,7 +3132,7 @@ flowchart TD
     FIGHT --> HERO
   end
 
-  subgraph V5["V5 Aggression"]
+  subgraph L5["L5 Aggression"]
     CAPTAIN[Kill patrol captain]
     OMEN[Bad Omen effect]
     TRIGGER[Enter village → start raid]
@@ -3083,9 +3140,9 @@ flowchart TD
     CAPTAIN --> OMEN --> TRIGGER --> WAVES
   end
 
-  V0 --> V1 --> V2 --> V3
-  V3 --> V4
-  V3 --> V5
+  L0 --> L1 --> L2 --> L3
+  L3 --> L4
+  L3 --> L5
 ```
 
 ---
@@ -3121,14 +3178,15 @@ Cross-link **vanilla survival** prerequisites (wood → stone → iron) when tra
 
 ### Scenario profiles (not one script)
 
-Director admission uses **`VillageScenarioProfile`** (`PROPOSED` — B-VR-24) — same pattern as Opinion
-`ActivityAdmission`: profile must be active before utility assigns village/raid executors.
+Director admission uses **`VillageScenarioProfile`** (`D-VR-017` semantics **LOCKED**, production
+source/default still absent and assigned to V3-A) — same pattern as Opinion `ActivityAdmission`:
+profile must be active before utility assigns village/raid executors.
 
 | Profile | Primary goals | SPM conflict to resolve |
 | --- | --- | --- |
 | `VILLAGE_ALLY` | Defend, trade fairly, no chest theft | Disable/suppress `RaidContainersGoal` near village |
 | `VILLAGE_RAIDER` | Loot chests, flee golems | Default SPM behaviour |
-| `TRADER` | Emerald farming via arbitrage | Needs trade executor |
+| `TRADER` | Demand-owned trade now; discretionary Wealth branch later | Executor exists; V2-W motive is DEFERRED / NON-BLOCKING |
 | `RAID_HUNTER` | Bad Omen + wave clear | Needs Player effect bridge |
 | `COWARD` | Hide during raid | `SeekShelterGoal` + flee |
 
@@ -3159,11 +3217,13 @@ Director admission uses **`VillageScenarioProfile`** (`PROPOSED` — B-VR-24) �
 | --- | --- |
 | Torches / shelter | Village lighting at night |
 | Gather/craft/smithing | Tools for combat; **not** villager workstations |
-| Exploration | Find villages |
+| Village perception + memory | Bounded loaded POI discovery, persistent KnownVillage, relationship/return |
+| Demand-owned trading | Vanilla + optional Trade Everything opportunity sources through one executor |
+| Exploration | Find and return to villages |
 
 ### Explicit non-capabilities (`CONFIRMED` NOT FOUND)
 
-- `MerchantMenu`, `MerchantOffer`, reputation, gossip
+- Client `MerchantMenu`; autonomous reputation/discount consumer; V3 work/profile/storage authority
 - `BadOmen`, `HeroOfTheVillage` on PlayerMob
 - `Raid` wave coordination goals
 - Bell activation goal
@@ -3175,9 +3235,9 @@ Director admission uses **`VillageScenarioProfile`** (`PROPOSED` — B-VR-24) �
 
 | ID | Behaviour | Feasibility | Integration method | Notes |
 | --- | --- | --- | --- | --- |
-| VR-1 | Village POI discovery | **PARTIAL** | `PoiManager` query on `PoiTypeTags.VILLAGE` + `IS_OCCUPIED` — vanilla's own village predicate, bounded to loaded chunks | `Agent_Claude` F3; no `/locate`; **must not** read unloaded POI sections |
-| VR-2 | Trade execution | **PARTIAL** (mixin-free core) | `VillagerTradeAdapter` + `TradeWithVillagerGoal` (no fake GUI; `D-VR-053`) | `notifyTrade`. **`#take` SUPERSEDED by `D-VR-061`/`D-VR-071`** — payment ownership moved to the staged multi-slot allocator; V2-A never calls `take` (task-47, shipped). `#satisfiedBy` retains its validation role |
-| VR-3 | Offer scoring | **PARTIAL** | Pure policy on `MerchantOffer` cost/result | Unit-testable |
+| VR-1 | Village POI discovery | **IMPLEMENTED / VR-T1A PASS** | `PoiManager` query on `PoiTypeTags.VILLAGE` + `IS_OCCUPIED`, bounded to loaded chunks | No `/locate`; unloaded records excluded from perception |
+| VR-2 | Trade execution | **IMPLEMENTED / VR-T2 PASS** for scoped demand-owned routes | `VillagerTradeAdapter` + `TradeWithVillagerGoal` (no fake GUI; `D-VR-053`) | Exact staged transaction, one `notifyTrade`; V2-TE positive source path also runtime-confirmed |
+| VR-3 | Offer scoring | **IMPLEMENTED** | Pure `TradeEvaluationPolicy` on snapshots; execution revalidates live quote | Runtime-confirmed only inside recorded VR-T2 routes |
 | VR-4 | Reputation awareness | **ALREADY NATIVE (write)** / accessor (read) | Gossip write path is entity-agnostic and running today; read needs a `Villager.gossips` accessor, not a bridge | `Agent_Claude` F2 — `onReputationEventFrom(…, Entity)` has no `Player` check |
 | VR-5 | Raid state detection | **PARTIAL** | `level.getRaidAt(pos)` poll | No planner needed |
 | VR-6 | Raid defense goal | **PARTIAL** | Addon goal priority 2; target `Raider` only | Reuse combat |
@@ -3364,7 +3424,7 @@ Deduplicated against every row above, the rejected list, the deferred table, and
 | B-VR-33 | **Bound every POI query to loaded chunks** | `NEW` (safety) | **PROMOTE — must-not-happen test** | `PoiManager` reads persisted sections for unloaded chunks; naive use is omniscience |
 | B-VR-34 | **Hero discount arithmetic lives in `VillagerTradeAdapter`** | `NEW` (dependency) | **DEFERRED V6** | `updateSpecialPrices(Player)` player-typed; not V2 MVP (`D-VR-060`) |
 | B-VR-35 | **Phase order is inverted at the raid end** | `NEW` (planning) | **PRODUCT DECISION** | Winning credit is nearly free; *starting* a raid is the hardest item in the RFC. Consider pulling hero credit forward, pushing initiation out of V6 |
-| B-VR-36 | **Reputation without a consumer is bookkeeping, not memory** | `NEW` (honesty) | **DEFERRED — probe before V3** | Golem anger + trade discount are both expected player-typed; do not describe as “villagers remember you” until a consumer exists |
+| B-VR-36 | **Reputation without a consumer is bookkeeping, not memory** | `NEW` (honesty) | **DEFERRED — probe before V4/V6 consumer work; not a V3 gate** | Golem anger + trade discount are both expected player-typed; do not describe as “villagers remember you” until a consumer exists |
 | B-VR-37 | **Village facts vs Opinion preference split** | User architecture | **→ Topic** | Director ranks legal candidates; Opinion soft-bias only. D-VR-025 |
 | B-VR-38 | **KnownVillage → Place opinion at anchor chunk** | User architecture | **→ D-VR-026 (HELD)** | Place@**current** anchor geography; no settlement-ID chunk key |
 | B-VR-39 | **SETTLEMENT Opinion subject** | User investigation | **DEFERRED** | Reopen when Place@current-anchor cannot express settlement-persistent pref across anchor moves |
@@ -3592,7 +3652,7 @@ quotes (`PERFORMANCE_RISK`, bounded to admitted demand + eight backpack slots).
 **MAIBS verdict:** `BEHAVIORALLY_PLAUSIBLE` as a separate V2-TE follow-up with VR-T2k/l. No movement,
 priority, or GoalSelector change is introduced. **Update 2026-08-19:** the positive autonomous path is
 `RUNTIME_CONFIRMED` by `V2-DEF-003c-R1`; absent/incompatible binary behavior (`VR-T2l`) remains
-`UNVERIFIED`.
+`UNVERIFIED`, **DEFERRED / NON-BLOCKING**, and does not reopen V2.
 
 ### Brainstorm continuation 10 — User peer review pre-task-47 (`User` + `Agent_Cursor`, 2026-08-15)
 
@@ -4441,12 +4501,105 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | **V1-D** | Bounded production perception driver (D-VR-033) | **IMPLEMENTED** (1.10.0) | VR-T1A **PASS**; VR-T1b **DEFERRED** |
 | **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social | **IMPLEMENTED + RUNTIME CLOSED** — task-46 / 1.11.0 (A–D) | VR-T1.5a–c **CLOSED** (2026-08-15) |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | `KnownVillager` held until V4+ consumer; other work moved to V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
-| **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains** | **PARTIAL** — mixin-free core; design **LOCKED / READY FOR TASK-47 AUTHORIZATION** (`D-VR-053`, `061`–`065`) | VR-T2: exact staged trade; VR-T2b: external-demand sell→buy; VR-T2e–h arbitration/transaction gates |
-| **V3** | Village work: replant, compost, population food, workstation awareness, `StorageOwnership` gate | **PARTIAL** | VR-T3: replant field; no steal from `VILLAGE_PUBLIC` chest (**VR-T1.5d deferred here**, `D-VR-052`) |
-| **V4** | Factual site utility + **Place opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**), known traders, home designation, return visits | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
+| **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains**, relationship credit, finished-output projection, optional Trade Everything source | **IMPLEMENTED + CLOSED** — VR-T2 vanilla path and V2-TE positive path runtime-confirmed to recorded scope | **VR-T2 PASS**; **VR-T2k PASS (`V2-DEF-003c-R1`)**. VR-T2l, V2-I, and profiling are **DEFERRED / NON-BLOCKING** |
+| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | **DESIGN SYNCHRONIZED / HOLD — not implementation-authorized, not yet LOCKED** | VR-T3a–k below; every included capability has a closure row |
+| **V4** | Factual site utility + **Place opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**), known traders, utility-driven home promotion and return preference beyond shipped V1.5 return | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
-| **V6** | Raid player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup |
+| **V6** | Player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup, **zombie-villager curing** | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup; curing scenarios to be defined in V6 |
 | **V7** | Advanced community: rescue, repair, transport, settlement projects, group coop, founding through world truth + ordinary perception, repair/build golem | **NOT PRACTICAL** gen-1 | Deferred |
+
+### Canonical V3 implementation contract (`PROPOSED`; RFC synchronization only)
+
+**Status:** scope, ownership direction, task boundaries, and scenario surface are synchronized.
+Implementation remains unauthorized. V3 is not yet `LOCKED` because profile acquisition/default,
+positive storage-classification evidence, numeric authority placement, and bounded-work budgets are
+unresolved product/architecture decisions.
+
+#### Exact scope and disposition
+
+| Capability | V3 disposition | Canonical boundary | Closure owner |
+| --- | --- | --- | --- |
+| Crop harvesting/replanting | **IN** | One committed harvest→replant episode (`D-VR-079`); no loosely related second goal | V3-C; VR-T3a–c/k |
+| Composting | **IN** | Disposable surplus only; no independent seed appetite; loaded known composter | V3-F; VR-T3d |
+| Population food | **IN** | Support by offering disposable food; no breeding command, bed claim, or Brain mutation | V3-E; VR-T3e |
+| Workstation awareness | **IN, READ-ONLY** | Reuse bounded VillagePerception facts; no place/break/claim/reassign and no second scanner | V3-D; VR-T3f |
+| Ally/public storage interaction | **IN, SAFETY GATE** | `D-VR-017`; continuous admission + continuation guard; explicit permission only | V3-A/B; VR-T3g–i |
+| Zombie-villager curing | **DEFERRED TO V6** | Weakness/apple execution and player-credit/relationship bridge are not Village Work | V6; not a VR-T3 closure item |
+
+#### Shared authority and lifecycle
+
+V3 does not create another activity brain. Existing urgent authority and live mandatory progression
+remain above discretionary village work. The planned V3-A admission seam must consume the same
+authoritative pending/running work truth used by progression; observing that no executor is active is
+not evidence that mandatory work is idle.
+
+```text
+URGENT / command / combat / shelter authority
+        ↓
+live or pending mandatory progression?
+    YES → village work not admitted
+    NO  → bounded V3 village-work candidate may be selected
+        ↓
+harvest mutates managed crop?
+    NO  → ordinary discretionary interruption/reacquisition
+    YES → same-tick replant commit; failed post-mutation repair remains mandatory cleanup
+```
+
+Storage safety is different from discretionary work: its `D-VR-017` predicate is checked
+continuously regardless of which activity owns movement. It cannot be bypassed by Opinion utility,
+familiarity, an active loot goal, or absence of a V3 work candidate.
+
+#### V3 tasks
+
+| Task | Dependencies | Objective | Must happen | Must not happen | Scenarios | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| **V3-A — authority/profile contract** | V1.5 relationship; current activity/progression seams | Implement `VillageScenarioProfile` production ownership and a village-work admission facade that defers to urgent + mandatory authority | Selected profile is explicit, inspectable, and revalidated; pending mandatory work blocks new village work | HOME/HIGH or Opinion silently manufactures `VILLAGE_ALLY`; active-goal absence is treated as idle | VR-T3j | **BLOCKED** — profile source/default/migration decision |
+| **V3-B — minimum StorageOwnership + host guard** | V3-A; D-VR-012/017 | Produce explicit mob permission vs `VILLAGE_PUBLIC` / `FOREIGN` / `UNKNOWN`; guard host loot admission and continuation | Ally may use only explicitly mob-owned/shared storage; revocation closes active container cleanly | UNKNOWN permits loot; global removal of `RaidContainersGoal`; non-ally behavior changes | VR-T3g–i | **BLOCKED** — positive classification evidence source |
+| **V3-C — committed crop episode** | V3-A; pinned host `HarvestCropsGoal` mechanics | Replace loose harvest/replant ownership with one target-bound committed episode | Managed mature crop ends replanted or in mandatory bounded repair after a post-mutation failure | Successful managed harvest routinely leaves farmland barren after preemption | VR-T3a–c/k | **PROPOSED** |
+| **V3-D — workstation awareness** | V3-A; existing `VillagePerception` scheduler/budget | Add bounded loaded job-site/restock facts without another scanner | Facts invalidate when POI/villager state changes and never load chunks | Workstation facts authorize trade, placement, claiming, or mandatory displacement | VR-T3f | **PROPOSED** |
+| **V3-E — population food support** | V3-A; disposable-resource policy; existing gift/drop seam | Offer bounded food surplus when population evidence requests support | Revalidate population, target, inventory reserve, and path at handoff | Consume personal/progression reserve; command breeding; loop gifts with no deficit | VR-T3e/j | **PROPOSED** |
+| **V3-F — composting** | V3-A; V3-C reserve ownership; bounded workstation/container fact | Convert only disposable compostable surplus at a loaded known composter | Replant/population/progression reserves survive; interaction terminates on full/invalid composter | Scan/operate every tick; consume reserved seeds; create ownerless bone-meal appetite | VR-T3d/j | **PROPOSED** |
+| **V3-G — integration and closure** | V3-A…F | Static/build gates plus temporary `spm_vr` V3 presets and approved runtime matrix | Every VR-T3 row records must/must-not evidence and semantic-drift review | Replant + one chest row close the whole phase; compile is called behavior proof | VR-T3a–k | **BLOCKED on A/B and separate runtime approval** |
+
+No V3 task is implementation-authorized by this synchronization pass.
+
+**Dependency sequence:** `V3-A → V3-B` (ally safety first); `V3-A → V3-C/D/E`; `V3-C + V3-D →
+V3-F`; `V3-A…F → V3-G`. Independent implementation may reorder C/D/E only after V3-A is locked,
+but V3-B must land before any behavior is described as ally-safe.
+
+#### V3 scenario parity and closure matrix
+
+| ID | Scenario | Must happen | Must not happen | Evidence/status |
+| --- | --- | --- | --- | --- |
+| **VR-T3a** | Managed mature crop, seed available, reachable farmland | Mob paths, harvests, and leaves the same managed position replanted in one committed episode | A visible successful harvest ends as bare farmland | `UNVERIFIED` — V3-C |
+| **VR-T3b** | Combat/command/shelter interruption before interaction | No world mutation occurs; retained candidate is discarded/revalidated after interruption | Old path/target resumes blindly; crop removed before authority permits commit | `UNVERIFIED` — V3-C |
+| **VR-T3c** | Seed/support/crop changes before commit or replant write fails | Preflight aborts without harvest; if failure follows mutation, mandatory bounded repair/reacquisition owns cleanup | Discretionary explore/trade starts while managed farmland remains an owned repair gap | `UNVERIFIED` — V3-C |
+| **VR-T3d** | Surplus compostables and loaded known composter | Bounded interaction consumes only disposable surplus and terminates/revalidates | Replant/population/progression reserve is composted; unknown/unloaded composter is used | `UNVERIFIED` — V3-F |
+| **VR-T3e** | Population food deficit and eligible villager | Disposable food is delivered once, then deficit/target/inventory are re-resolved | Direct breeding command, bed claim, reserve violation, or endless gifting | `UNVERIFIED` — V3-E |
+| **VR-T3f** | Workstation claimed/unclaimed, villager sleeps/restocks, POI unloads | Read-only fact updates through bounded perception and invalidates stale availability | Chunk load, second scanner, workstation mutation, or awareness becoming trade permission | `UNVERIFIED` — V3-D |
+| **VR-T3g** | `VILLAGE_ALLY` + `VILLAGE_PUBLIC` container | Host `RaidContainersGoal` cannot admit or continue looting it | HOME/HIGH alone is used as permission; container opens/continues looting | `UNVERIFIED` — V3-A/B; supersedes old VR-T1.5d wording |
+| **VR-T3h** | `VILLAGE_ALLY` + `UNKNOWN` ownership | Fail closed and leave container untouched | Missing evidence is interpreted as public access or permission | `UNVERIFIED` — V3-B |
+| **VR-T3i** | Explicit mob-owned/shared storage and non-ally control | Explicitly permitted ally access may proceed; non-ally host behavior remains unchanged | Blanket goal strip or ally denial despite positive permission | `UNVERIFIED` — V3-B |
+| **VR-T3j** | Live/pending mandatory progression while village work is available | Mandatory work retains authority; village work waits and later re-resolves | Idle observation or Opinion preference displaces pending mandatory work | `UNVERIFIED` — V3-A/E/F |
+| **VR-T3k** | Two mobs select one crop; first changes it | First commits; second detects invalidation and reacquires/abandons without mutation | Double break/replant, stale target loop, or persistent global crop reservation | `UNVERIFIED` — V3-C |
+
+**Phase closure:** V3 requires V3-A…G plus all applicable VR-T3a–k rows. No subset consisting only
+of replant + storage may close the phase.
+
+#### Remaining questions that prevent V3 `LOCKED`
+
+1. **Profile acquisition/default/migration:** what production fact or user/config choice assigns
+   `VillageScenarioProfile`, and what do existing mobs load as? HOME/HIGH may inform a later explicit
+   transition but cannot silently equal `VILLAGE_ALLY`.
+2. **Positive storage evidence:** what pinned, persistent or data-driven fact proves
+   `MOB_OWNED` / `EXPLICITLY_SHARED_WITH_MOB`, including double containers and moved/destroyed block
+   entities? Absence of that fact is already locked to `UNKNOWN → deny`.
+3. **Numeric activity placement:** which existing registration priority/admission seam implements the
+   locked urgent > mandatory > cleanup > discretionary order without duplicating authority?
+4. **Budgets and tuning:** bounded crop/workstation/composter scans, empty-result backoff,
+   population-deficit threshold, and disposable-surplus thresholds need target-specific values or
+   policies plus 1/10/50/100-mob cost estimates before architecture lock. No generic host constant is
+   accepted merely because it already exists.
 
 ### Legacy phase map (superseded)
 
@@ -4455,11 +4608,13 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | P0 ally + raid detect | V1 + `StorageOwnership` in V3 |
 | P1 RaidDefense | V5 composed defense |
 | P2 Trade | V2 |
-| P3 Reputation | V4 + V6 |
+| P3 Reputation | V4 reputation-aware factual use + V6 player-typed discounts |
 | P4 Bad Omen | V6 |
-| P5 Cure | V3 |
+| P5 Cure | **V6** (`D-VR-078`; prior V3 ownership superseded) |
 
-**Proposed datapack:** `test-datapacks/phase-village-raid/` (`spm_vr`) — flat village, spawn raid, trade villager presets (`PLANNED`).
+**Proposed temporary datapack:** `test-datapacks/phase-village-raid/` (`spm_vr`) — V3-A…G may add
+presets only when implementation/runtime work is separately authorized. The removed V2-H proof
+datapack is not evidence that a V3 fixture currently exists.
 
 **Cross-RFC:** V2+ trades chain to `MaterialDemandPolicy` / `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md` and `RFC-TOOL-TIER-UPGRADES.md` D-TTU-017.
 
@@ -4467,7 +4622,8 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 
 ## Topic: MAIBS — behavioural prediction (pre-implementation)
 
-**Gate:** MAIBS-1 — required before V1/V5 implementation authorization.
+**Gate:** MAIBS-1 — required before each movement/world-interaction phase, including V3 and V5,
+receives implementation authorization.
 
 ### V1 — village perception + site selection
 
@@ -4479,8 +4635,9 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | 8–12 | Second village seen; prefers higher `VillageSiteScore` when trading | Always picks nearest chunk |
 | 12–15 | `HOME_VILLAGE` set; commute back after explore | Treats all clusters as equal |
 
-**Must not happen:** `RaidContainersGoal` loots village chest while `HOME_VILLAGE` ally profile active
-(shelter hold alone is insufficient — need VR-20 predicate).
+**Must not happen:** `RaidContainersGoal` loots denied storage while the explicit
+`VillageScenarioProfile.VILLAGE_ALLY` + `D-VR-017` predicate is active. HOME/HIGH alone is not an
+ally profile (shelter hold alone is also insufficient).
 
 ### V1-D — production perception driver (`IMPLEMENTED` — 1.10.0; VR-T1A **PASS**)
 
@@ -4499,6 +4656,103 @@ level lane receives the global query slot;
 `T+200` stationary heartbeat can correct changed facts; `T+1200` prolonged presence should show
 stable memory rather than repeated new identities. Runtime query counts and anchor sequences are
 required evidence; code/static tests cannot confirm this timeline.
+
+### V3 — Village Work behavioral prediction (`D-VR-078/079`; pre-implementation)
+
+**Evidence baseline.** `CODE_CONFIRMED`: pinned SPM `HarvestCropsGoal` is priority 6, MOVE+LOOK,
+admits only while `wantsFood()`, removes the ripe crop, banks edible drops, and spills non-food drops
+such as seeds. `CODE_CONFIRMED`: addon/host production currently has no `VillageScenarioProfile` or
+`StorageOwnership` authority (three negative probes recorded in `D-VR-017`). Therefore every V3
+mechanism below is `PROPOSED`; physical behavior is `UNVERIFIED` until implementation plus approved
+runtime evidence.
+
+| Layer | Result |
+| --- | --- |
+| Intended behavior | An ally performs bounded village work without displacing urgent/mandatory activity, degrading managed fields, stealing uncertain storage, or inventing permission from Opinion/attachment |
+| Current mechanism | Host can harvest food crops but cannot replant; village perception/relationship and V2 mandatory trade exist; V3 profile/storage/work executors do not |
+| Planned mechanism | V3-A shared admission; V3-B continuous safety guard; V3-C committed harvest→replant episode; V3-D bounded read-only facts; V3-E/F disposable-surplus work |
+| Predicted player-visible behavior | During genuine idle windows the mob performs one legible village job, finishes or safely invalidates it, then re-resolves; combat/commands/mandatory progression remain visibly dominant |
+| Failure boundary | Any post-harvest bare managed farmland, UNKNOWN-container opening, mandatory-work displacement, stale workstation path, or surplus loop fails the design |
+| Confidence | Architecture direction `DOCUMENTATION_CONFIRMED`; behavior/performance `UNVERIFIED` |
+
+#### Harvest→replant ownership and geometry
+
+Normal scenario: crop block `(10,64,10)` stands on valid farmland `(10,63,10)`; mob starts at
+`(14,64,10)`. V3-C may select the crop only from loaded/perceivable space and after proving a crop
+representation, a reserved seed already held, valid support, mobGriefing/interaction legality,
+inventory/drop handling, and a vanilla navigation path that reaches the existing host interaction
+distance. Arrival revalidates those facts. The server-thread commit performs harvest and age-0
+replacement in one interaction tick; success is recorded only after the replacement exists.
+
+Adversarial scenario: another mob breaks/tramples the crop/support while the first walks. The first
+mob observes mismatch and abandons/reacquires without world mutation. If an exceptional failure
+occurs after harvest mutation, the episode becomes mandatory bounded repair for that exact position;
+discretionary work cannot hide the gap. Repair invalidates when farmland/support no longer exists or
+another actor has already restored/changed the position.
+
+**Alternatives considered:**
+
+| Option | Benefit | Failure | Disposition |
+| --- | --- | --- | --- |
+| Separate `ReplantCropGoal` | Small local goal; independent retries | GoalSelector interruption creates an ordinary interval where harvest is “successful” and replant has no owner; seeds may be dropped/consumed and another activity may win | **REJECTED for managed V3 harvest** |
+| One committed harvest→replant episode | Consumer, target, seed reserve, mutation, invalidation, and completion have one owner; no normal inter-goal gap | Needs explicit preflight and bounded exceptional repair; cannot claim full atomic rollback of arbitrary world changes | **SELECTED (`D-VR-079`)** |
+
+#### Authority and GoalSelector interaction
+
+| Activity | Current/proposed band | Flags | Can interrupt V3 work? | Retained state | Expected observable result |
+| --- | ---: | --- | --- | --- | --- |
+| Command/emergency/combat | Existing higher authority (combat P0–2 where registered) | commonly MOVE/LOOK | Yes before interaction; same server-tick commit is not split between Java statements | Crop candidate/path discarded; post-mutation repair only if exceptional failure occurred | Mob stops village travel and responds immediately; later re-resolves world truth |
+| Mandatory Gather/Smelt/Craft/Trade | Existing deliberate-work authority (P3 paths) plus pending demand truth | MOVE/LOOK as applicable | Yes; V3-A must refuse admission while pending or active | Mandatory consumer survives under its existing lifecycle; V3 candidate is disposable | Mob continues progression instead of wandering to farm/composter/villager |
+| V3 discretionary village work | Numeric priority **OPEN in V3-A**, semantically below mandatory work | MOVE/LOOK executor-specific | Peer work cannot steal a committed interaction | Candidate/path disposable before mutation; crop episode owns exceptional repair | One visible bounded job, then re-resolve rather than oscillate |
+| Storage guard | Continuous policy, not a competing goal | none | It vetoes host loot admission/continuation regardless of activity | No long-lived entity/world reference required for minimum policy | Ally never opens/continues a denied container; teardown closes an already-open container |
+
+The numeric V3 goal priority remains a pre-lock question; semantic ordering is locked: urgent >
+mandatory pending/running > committed cleanup > discretionary village work. Choosing “6” merely
+because host harvest uses 6 would be cargo-culting until V3-A traces every competing registered goal.
+
+#### Time and feedback simulation
+
+| Time | Expected physical loop | Re-evaluation / invalidation |
+| --- | --- | --- |
+| `T0` | No urgent/mandatory owner; bounded facts expose one crop/workstation/food/composter candidate | Profile, permission, reserves, loaded target, path preconditions checked |
+| `T+10` | Mob begins path; player sees one intelligible job target | Combat/command/mandatory demand cancels path with no world mutation |
+| `T+60` | At reach, crop episode revalidates and commits harvest→replant, or support/food/compost action revalidates once | Moved villager, changed crop, lost reserve, stale POI, full/invalid composter aborts cleanly |
+| `T+200` | Job terminates; authority and needs are re-resolved before another village action | No remembered Path, stale entity, or “work because work happened” appetite survives |
+| `T+1200` | Repeated work remains bounded by real deficits/surplus and perception cadence | Empty/blocked scans back off; multiple mobs lose stale candidates rather than duplicate mutation |
+
+#### Workstation/population/compost contention
+
+- Workstation awareness is factual evidence only. It may report a transient restock block; it never
+  grants trade permission, assigns a profession, or owns movement.
+- Population support revalidates population need, chosen villager, path, and disposable food at
+  handoff. Another mob satisfying the deficit invalidates the candidate.
+- Composting is last in reserve authority: progression, survival, committed replant, and population
+  allocations all win. UNKNOWN disposability refuses rather than consuming.
+- All three are blocked while mandatory progression is pending, even when no mandatory executor is
+  currently running.
+
+#### Predicted weird behaviors and falsifiers
+
+| Weird behavior | Classification | Required falsifying/confirming probe |
+| --- | --- | --- |
+| Two mobs path to one crop; second arrives after first replants and tries to harvest age 0 | `RUNTIME_QUESTION`, bounded by arrival revalidation | VR-T3k: observe second abandon/reacquire without breaking replacement |
+| Repeated population changes cause approach→abort cycles near villagers | `RUNTIME_QUESTION` | VR-T3e multi-mob run: measure retries and require bounded backoff/no food loss |
+| Composter/workstation perception dominates scans at 50+ mobs | `RUNTIME_QUESTION` | Profile query counts/tick cost at 1/10/50/100 mobs before any performance claim |
+| Managed crop is harvested, combat fires, field remains bare while mob fights/explores | `ARCHITECTURE_DEFECT` | VR-T3b/c must make this impossible in the normal path and retain bounded repair after exceptional failure |
+| Ally opens UNKNOWN container because classifier returned no row | `ARCHITECTURE_DEFECT` | VR-T3h must prove UNKNOWN denial in admission and continuation |
+
+**Must happen:** one managed harvest visibly ends with an age-0 crop at the same position; pending
+mandatory progression prevents new village work; explicit storage permission and denial are both
+observable and revalidated.
+
+**Must not happen:** a successful harvest routinely leaves bare farmland; HOME/HIGH or Opinion
+creates ally/storage permission; UNKNOWN permits loot; village work suppresses pending mandatory
+progression; awareness scans load chunks or run unbounded every tick.
+
+**MAIBS-1 result:** `UNVERIFIED — PRE-IMPLEMENTATION HOLD`. The committed crop direction is
+behaviorally plausible, but V3 cannot reach `LOCKED` until profile acquisition, positive storage
+classification, numeric admission placement, and scan/backoff budgets are pinned. VR-T3a–k are the
+falsifying runtime family; no runtime launch is authorized by this RFC pass.
 
 ### V5 — raid interrupt + resume
 
@@ -4550,13 +4804,19 @@ required evidence; code/static tests cannot confirm this timeline.
 | Iron golem army directing | **NOT PRACTICAL** |
 | `Raid.addHero(Entity)` full reward path | **CODE_CONFIRMED** — `Raid#tick` awards to any `LivingEntity` via `level.getEntity(uuid)`; runtime still `UNVERIFIED` (`Agent_Claude` F1) |
 | Hero **discount** for a non-player | **BLOCKED** in vanilla — `updateSpecialPrices(Player)`; must be applied by `VillagerTradeAdapter` (B-VR-34) |
-| A non-player **consumer** of villager reputation | **UNVERIFIED** — probe before V3 (B-VR-36) |
+| A non-player **consumer** of villager reputation | **UNVERIFIED** — probe before V4 reputation-aware selection or V6 discounts; explicitly **not a Village Work V3 gate** (B-VR-36) |
 | `PoiManager` unloaded-chunk leakage | **V1-R4 `ACCEPTED`** — dual pipeline; coverage independent of `getInRange` unloaded records; query cost `UNVERIFIED` (B-VR-58) |
 | V1-R4 `PerceptionCoverage` | **`ACCEPTED`** — shipped 1.9.5; runtime VR-T1 partial **CONFIRMED** |
 | V1 perception **driver** | **RUNTIME CONFIRMED** (Bob, 2026-08-14) — debounce `Long.MIN_VALUE` overflow fixed; `ensureVillagePerceptionObserver` on reload |
 | `MaterialDemandPolicy` class name | **NOT FOUND** — ship trade via `WorkDemandPolicy` facade (B-VR-20) |
 | Storage RFC (full personal/village chest system) | **Deferred** — `StorageOwnership` minimum in V3 |
 | Runtime VR-T* tests | VR-T1A **PASS** (2026-08-14). VR-T1b 10/50/100-mob profiling **DEFERRED** (performance backlog). Temporary `village-probe` / `village-driver` / `village-memory` commands **REMOVED** post-VR-T1A |
+| V2-TE absent/incompatible runtime (`VR-T2l`) | **DEFERRED / NON-BLOCKING** — positive compatibility path is closed; negative run does not reopen V2 or block V3 |
+| V2-I trade inspector | **DEFERRED / NON-BLOCKING OPTIONAL TOOLING** — no new debug command and no phase dependency |
+| V2 market performance profiling | **DEFERRED / NON-BLOCKING** — code now rejects viable existing routes before market discovery, carries one Q1 attempt into `start`, and throttles empty scans by demand key; actual tick/allocation gains and dense-villager scaling remain `UNVERIFIED` without a predefined profiler scenario |
+| V2 dense-villager merchant window | **DEFERRED** — spatial radius is bounded but merchant count is not; implement only if profiling shows meaningful spikes, not as a hidden V3 gate |
+| V2 runtime-registry proactive expiry sweep | **DEFERRED LOW SEVERITY** — normal lifecycle cleanup is wired; lazy expiration is not an independently scheduled physical prune |
+| V2-W Wealth trading | **DEFERRED / NON-BLOCKING branch** — `D-VR-076` sequence is local to Wealth (`V2-TE → V2-W → portfolio evolution`), never a prerequisite for Village Work V3 |
 | 48-block village identity radius | **UNVERIFIED** — our judgement, no vanilla constant exists. Upgrade path (POI-set overlap) designed and deferred pending runtime evidence (D-VR-022) |
 | Mobs removed without **any** lifecycle event, or in a dimension absent from `getAllLevels()` | **BOUNDED, not eliminated** — held by `MAX_TRACKED_MOBS` (256/dimension), which warns when it fires (D-VR-023) |
 | Monotone anchor following over a long observation sequence | **DOCUMENTED LIMITATION** — replacement tracks the newest equally-good view; separating "rebuilt" from "looks rebuilt" needs POI-set-overlap identity (D-VR-022). VR-T1 must report whether real sequences produce this shape |
@@ -4678,12 +4938,16 @@ than papered over. The hysteresis risk stays open as a runtime watch item, not a
 
 ### D-VR-012: Ally chest gate on `RaidContainersGoal` predicate
 
-**Status:** `LOCKED` (`Agent_Cursor` proposed; **independent peer review `Agent_Claude` 2026-08-14**)
+**Status:** `LOCKED`, amended by `D-VR-017` (original lock: `Agent_Cursor`; independent peer review
+`Agent_Claude` 2026-08-14; authority conflict resolved by User synchronization directive 2026-08-19)
 **Review:** a profile-gated predicate rather than a global goal strip is the right width, and it matches the
 shipped `FriendlyGreetShelterHoldMixin` precedent. **GVC-5 applies**: the gate must be evaluated
 continuously, not once on village entry — SPM mobs pick up and re-evaluate constantly, so a one-shot
 check is a filter, not a guard.
-**Accepted:** `VILLAGE_ALLY` + `StorageOwnership` minimum predicate before V3 ally play.
+**Accepted:** the one canonical predicate is `D-VR-017`: `VILLAGE_ALLY` may use the host loot goal
+only when `StorageOwnership` carries explicit permission for that mob. `VILLAGE_PUBLIC`, `FOREIGN`,
+and `UNKNOWN` deny. Evaluate in both `canUse` and `canContinueToUse`; revoked permission stops and
+closes the host container through ordinary goal teardown.
 **Rejected:** Disabling SPM loot goal globally; silent mixin strip without profile.
 
 ### D-VR-013: Mojmap bell API name (`CONFIRMED`)
@@ -4725,11 +4989,38 @@ registering TRADE before feasibility exists; a dedicated P3 trade goal that igno
 **Accepted:** `ShelterThreatPolicy.NEARBY_HOSTILE` (Raider as `Enemy`) ejects coward EVACUATE — no parallel raid threat system gen-1.
 **Rejected:** Disabling shelter override during raids globally (would trap mobs in beds while pillagers kill villagers).
 
-### D-VR-017: `VillageScenarioProfile` gates ally behaviour (`PROPOSED`)
+### D-VR-017: `VillageScenarioProfile` gates ally behaviour (`LOCKED`, implementation absent)
 
-**Status:** `PROPOSED` (`Agent_Cursor`)
-**Accepted:** `VILLAGE_ALLY` profile is minimum predicate for VR-20 chest suppression, trade fairness, and raid DEFEND priority.
-**Rejected:** Per-mob hardcoded village UUID allowlists without profile enum.
+**Status:** `LOCKED` for authority semantics (User synchronization directive, 2026-08-19);
+production profile acquisition and storage classification remain V3 pre-lock dependencies.
+
+**Accepted:** `VILLAGE_ALLY` is the sole ally-policy authority for VR-20 storage suppression, trade
+fairness, and later raid DEFEND priority. Settlement attachment (`HOME` / HIGH familiarity) is factual
+relationship input and **never** permission by itself. Storage permission is independently factual:
+
+```text
+profile != VILLAGE_ALLY
+    → D-VR-017 adds no restriction; existing host policy remains authoritative
+
+profile == VILLAGE_ALLY
+AND ownership in {MOB_OWNED, EXPLICITLY_SHARED_WITH_MOB}
+    → storage policy may permit the existing executor, subject to all other host gates
+
+profile == VILLAGE_ALLY
+AND ownership in {VILLAGE_PUBLIC, FOREIGN, UNKNOWN}
+    → refuse admission / continuation (fail closed)
+```
+
+**Production truth (`CODE_CONFIRMED` by three negative probes, 2026-08-19):** no
+`VillageScenarioProfile`, `VILLAGE_ALLY`, `StorageOwnership`, or `VILLAGE_PUBLIC` production authority
+exists in addon `src/main`, pinned SPM `src/main`, or the production mixin configuration. The RFC is
+defining V3-A/B work, not claiming shipped capability.
+
+**Still open before V3 `LOCKED`:** the production source/default/migration for a mob's profile, and
+the evidence mechanism that positively classifies `MOB_OWNED` or `EXPLICITLY_SHARED_WITH_MOB`.
+
+**Rejected:** per-mob hardcoded village UUID allowlists; HOME/HIGH as ally permission; treating
+missing ownership evidence as public or permitted; globally stripping `RaidContainersGoal`.
 
 ### D-VR-018: Day/night director arbitration (`PROPOSED`)
 
@@ -4931,7 +5222,8 @@ this decision loses most of its value and must be revisited.
 
 **Status:** `PROPOSED` (`Agent_Claude`, 2026-08-14) — supersedes VR-4's “REQUIRES API” framing
 **Accepted:** the gossip **write** path already accepts any `Entity` and is running today with no addon
-code. V3/V4 needs only an accessor onto `Villager.gossips` to **read** the mob's own reputation.
+code. V4 reputation-aware selection / V6 discounts need only an accessor onto `Villager.gossips` to
+**read** the mob's own reputation. Canonical Village Work V3 has no reputation consumer or probe gate.
 **Rejected:** a reputation bridge, a UUID-mapping shim, or a parallel Scavenger-side reputation ledger
 (SPM-2 duplication).
 **Consequence to accept honestly:** B-VR-13 already happens — a PlayerMob that AOEs a villager is
@@ -5155,7 +5447,7 @@ WALK → FACE → re-fetch → stage → simulate → revalidate → APPLY → `
 
 ### D-VR-076: Wealth trading is a separate consumer, not part of V2-TE (`User`, 2026-08-16)
 
-**Status:** `LOCKED` (architecture + sequence) · **amendments A–D `OPEN`** (see below)
+**Status:** `LOCKED` (architecture + Wealth-track-local sequence) · amendments A–D **RESOLVED and incorporated** by the 2026-08-16 review below
 
 **Accepted — the layering.** Trade Everything is **opportunity truth, never economic motive**. It
 answers *"given this villager and this item, what exact trade exists?"* and never *"should Bob become
@@ -5170,11 +5462,17 @@ WEALTH (Portfolio)       ─┘                       (vanilla | Trade Everythin
                                           TradeWithVillagerGoal ─► VillagerTradeAdapter
 ```
 
-**Sequence (locked).** 1. **V2-TE** — compatibility only; no Wealth motive, so the first
-compatibility runtime test stays interpretable (VR-T2k/l). 2. **V2-W** — Portfolio utility + Greed
-authorizing discretionary trades, reusing the proven executor. 3. **Portfolio evolution** —
+**Sequence (locked; WEALTH TRACK LOCAL, not global phase order).** 1. **V2-TE** — compatibility only;
+no Wealth motive, so the first compatibility runtime test stays interpretable (VR-T2k/l). 2.
+**V2-W** — Portfolio utility + Greed authorizing discretionary trades, reusing the proven executor.
+3. **Portfolio evolution** —
 `D-VP-MI-022` first; `D-VP-MI-023` scarcity and `D-VP-MI-024` consumption velocity only after the
 NEED/WEALTH split earns its complexity.
+
+**Synchronization ruling (User directive, 2026-08-19):** this ordering constrains only work that
+chooses to advance the optional Wealth branch. V2-W is **DEFERRED / NON-BLOCKING** and is not a
+hidden prerequisite for canonical Village Work V3. The global phase order remains V2 → V3 → V4…;
+when Wealth work resumes, it must still obey V2-TE → V2-W → portfolio evolution internally.
 
 **Locked invariants.**
 
@@ -5837,7 +6135,7 @@ Village trades consume **emeralds** and **tools** that chain to `RFC-VANILLA-AUT
 
 SPM is **PolyForm Shield 1.0.0**. Trade/defense goals belong in **`spmscavenger`** with reflection (`PlayerMobs.java` pattern) or user-authorized SPM collaboration — not silent SPM forks.
 
-## Appendix D — `VillageInteractionDirector` goal catalogue (`Agent_ChatGPT`)
+## Appendix D — Village interaction executor catalogue (`Agent_ChatGPT`; conceptual names)
 
 | Goal | Phase | Reuses |
 | --- | --- | --- |
@@ -5845,28 +6143,30 @@ SPM is **PolyForm Shield 1.0.0**. Trade/defense goals belong in **`spmscavenger`
 | `RingVillageBellGoal` | V1 | `InteractableCapability` |
 | `TradeWithVillagerGoal` | V2 | `VillagerTradeAdapter` |
 | `SupportVillagePopulationGoal` | V3 | `GiftPolicy`, `HarvestCropsGoal` |
-| `ReplantCropGoal` | V3 | harvest executor |
+| Committed harvest→replant episode | V3 | one target-bound harvest executor; **not** a separately admitted `ReplantCropGoal` (`D-VR-079`) |
 | `CompostGoal` | V3 | `InteractableCapability` |
-| `CureVillagerGoal` | V3 | adapter + `CommandedUse` |
+| `CureVillagerGoal` | **V6 (DEFERRED; prior V3 row SUPERSEDED by D-VR-078)** | adapter + `CommandedUse` + player-credit/relationship decision |
 | `RaidAwareness` (observer) | V5 | `level.getRaidAt` |
 | Raid support bundle | V5 | bell + SPM combat + shelter |
 
-Director selects among these via utility; SPM combat/flee still preempt at priorities 0–2.
+Existing activity authority admits these executors: urgent work and live/pending mandatory
+progression preempt discretionary village work. V3 does not add a second utility director
+(`D-VR-078`); the exact numeric goal priorities remain a V3-A pre-lock task.
 
 ---
 
 ### D-VR-077: V2-TE trade-source architecture — three coordinates, source provenance, caller-authorized quote inputs (`User` + `Agent_Claude`, 2026-08-17)
 
-**Status:** `IMPLEMENTED / POSITIVE PATH RUNTIME CONFIRMED` by `V2-DEF-003c-R1`; `VR-T2l` remains
-`UNVERIFIED`.
+**Status:** `IMPLEMENTED / POSITIVE PATH RUNTIME CONFIRMED` by `V2-DEF-003c-R1`; V2-TE is closed.
+`VR-T2l` remains `UNVERIFIED / DEFERRED / NON-BLOCKING`.
 **Refines:** `D-VR-068` (unchanged; this fixes the type design under it).
 **Preconditions closed:** `P0-1` (ensureIndexed prerequisite, direct↔TE live quote parity, session
 teardown), `P0-2` (detached execution source trace + runtime witness, TE `afterTrade` fires
 detached, marker preservation, `rewardExp` observed), `P0-3` (economic B reachability). The
 compatibility unknowns were answered experimentally, the permanent multi-source model was
-implemented, and the 2026-08-19 Step-7A run exercised its positive path end to end. The remaining
-runtime frontier is the separate absent/incompatible-source negative, not production authority for
-the positive path.
+implemented, and the 2026-08-19 Step-7A run exercised its positive path end to end. The separate
+absent/incompatible-source negative is deferred validation, not the RFC frontier and not production
+authority for the positive path.
 
 #### Accepted — 1. Revalidation strictness is per source, and vanilla must not change
 
@@ -6087,3 +6387,80 @@ Steps 2–5 are provable with Trade Everything uninstalled, which is where a reg
 `VillagerTradeAdapter.executeResolved` remains the sole transaction owner throughout: one staging
 array, one debit pair, one preflight, one commit, one `notifyTrade`. No second offer model, no second
 transaction system, no `TradeEverythingTradeGoal`.
+
+### D-VR-078: One canonical V3 phase and explicit capability dispositions (`User` + `Agent_Codex`, 2026-08-19)
+
+**Status:** `LOCKED` for phase identity and scope disposition; individual V3 mechanisms remain at
+their task/decision lifecycle states.
+
+**Conflict preserved and resolved:** the earlier dependency graph called reputation/discounts
+`Tier V3`, while the later implementation map called V3 Village Work. The dependency graph remains
+useful history but its phase labels are `SUPERSEDED`; it is renamed conceptual `L0…L5`. “V3” now
+unambiguously means:
+
+```text
+Village Work
+  IN: committed crop harvest→replant
+  IN: composting from disposable surplus
+  IN: population food support
+  IN: read-only workstation awareness
+  IN: ally/public storage safety
+  OUT / V6: zombie-villager curing
+```
+
+**Superseded statements:** legacy `P5 Cure → V3`, Appendix-D `CureVillagerGoal | V3`, and any old
+`Tier V3 Reputation` implementation reading. Reputation-aware selection belongs to V4; player-typed
+discounts and curing belong to V6. The non-player reputation-consumer probe follows those consumers
+and does not gate V3.
+
+**V2 disposition:** V2 and the V2-TE positive path are closed to their recorded runtime scope.
+VR-T2l, V2-I, profiling, proactive registry pruning, and dense-villager merchant windows are
+deferred/non-blocking. `D-VR-076` is a Wealth-track-local sequence, so V2-W does not block V3.
+
+**Rejected:** leaving both V3 labels active; closing V3 from only replant + one chest scenario;
+silently leaving curing owned by two phases; treating deferred V2 verification as the main frontier.
+
+### D-VR-079: Managed harvesting is one committed harvest→replant episode (`User` + `Agent_Codex`, 2026-08-19)
+
+**Status:** `LOCKED` architecture direction; V3-C implementation remains unauthorized.
+
+**Accepted:** candidate, crop/seed representation, held-seed reserve, target position, world
+preconditions, harvest mutation, replant mutation, exceptional repair, invalidation, and completion
+belong to one episode. Before mutation the candidate/path is disposable. At interaction, revalidate
+and perform harvest→age-0 replacement in one server tick; declare success only after replacement is
+present. If an exceptional post-mutation failure occurs, the exact-position repair remains mandatory
+and bounded until restored or invalidated by changed support/another actor.
+
+**Why this fits the target:** pinned host `HarvestCropsGoal` currently removes the crop, spills seeds,
+and can be preempted like ordinary priority-6 work. A second independently admitted replant goal
+would make bare farmland an expected GoalSelector state rather than an exceptional repair state.
+
+**Alternative rejected:** separate `ReplantCropGoal` for the normal managed-field path. It is locally
+simple but cannot preserve ownership across interruption, resource reallocation, or another activity
+winning between harvest and replant. A later repair-only executor may implement the exceptional
+cleanup step, but it consumes the same episode; it is not a second appetite or authority.
+
+**Must happen:** managed harvest with valid support/held seed ends replanted at the same position.
+**Must not happen:** successful managed harvest routinely returns to discretionary arbitration while
+the position is bare.
+
+### Contribution — User + Agent_Codex (minimum RFC synchronization pass, 2026-08-19)
+
+Agent: `Agent_Codex` acting on explicit User scope/disposition requirements
+Contribution type: `DESIGN / DOCUMENTATION SYNCHRONIZATION / MAIBS PRE-IMPLEMENTATION`
+
+**Frontier before:** contradictory V3 identities; V2 simultaneously closed/partial; V2 residuals
+presented as frontier; D-VR-012 depended on proposed D-VR-017 while VR-T3 substituted HOME/HIGH;
+UNKNOWN ownership undefined; V3 had five-plus ambiguous capabilities, one partial acceptance row,
+no task decomposition, and no MAIBS prediction.
+
+**Action:** established canonical Village Work V3 (`D-VR-078`); made the old graph conceptual L0…L5;
+synchronized V2 closure and deferred work; scoped D-VR-076 locally; amended D-VR-012/017 and
+explicitly superseded HOME/HIGH permission; failed UNKNOWN closed; deferred curing to V6; selected
+committed crop ownership (`D-VR-079`); added V3-A…G, VR-T3a…k, and the V3 MAIBS prediction.
+
+**Frontier after:** four pre-lock decisions remain: (1) production profile source/default/migration;
+(2) positive storage-classification evidence for mob-owned/shared access; (3) numeric placement in
+the existing activity authority; and (4) target-evidenced scan/backoff/deficit/surplus budgets.
+V3 is **not LOCKED and not implementation-authorized**. No Java, tests, mixins, Gradle, config,
+datapack, runtime, commit, or push action belongs to this contribution.
