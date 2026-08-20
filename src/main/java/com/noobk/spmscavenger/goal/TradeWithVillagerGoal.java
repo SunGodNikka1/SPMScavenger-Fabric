@@ -20,6 +20,7 @@ import com.noobk.spmscavenger.village.trade.TradeChainPolicy;
 import com.noobk.spmscavenger.village.trade.TradeEpisodeLedger;
 import com.noobk.spmscavenger.village.trade.TradeDemandGate;
 import com.noobk.spmscavenger.village.trade.TradeEvaluationPolicy;
+import com.noobk.spmscavenger.village.trade.TradeMarketDiscoveryCooldown;
 import com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow;
 import com.noobk.spmscavenger.village.trade.VillagerTradeAdapter;
 import net.minecraft.core.BlockPos;
@@ -73,6 +74,18 @@ public class TradeWithVillagerGoal extends Goal {
     private final Mob mob;
     private final double speed;
     private final TradeCandidateRound round = new TradeCandidateRound();
+    private final TradeMarketDiscoveryCooldown marketDiscoveryCooldown =
+            new TradeMarketDiscoveryCooldown();
+
+    /**
+     * The one Q1 result admitted by {@link #canUse()}, consumed exactly once by {@link #start()}.
+     *
+     * <p>This is transition state, not durable market knowledge. GoalSelector calls these methods
+     * synchronously; the exact offer is still revalidated at the transaction boundary after the
+     * walk. Keeping the admitted attempt removes a second villager/offer/quote pass without turning
+     * planning permission into transaction permission.
+     */
+    private AuthorizedAttempt pendingAttempt;
 
     private Villager target;
     private OfferSnapshot plannedOffer;
@@ -151,6 +164,8 @@ public class TradeWithVillagerGoal extends Goal {
 
     @Override
     public boolean canUse() {
+        // A prior admission that was not started is stale transition state, never market evidence.
+        pendingAttempt = null;
         if (!(mob.level() instanceof ServerLevel level)) {
             return false;
         }
@@ -158,7 +173,35 @@ public class TradeWithVillagerGoal extends Goal {
         if (round.coolingDown(now)) {
             return false;
         }
-        return authorizedCandidate(level, null).isPresent();
+
+        // The authority gate is deliberately paid before discovery. These cheap checks are
+        // repeated inside authorizedCandidate because continuation/reselection also enter there,
+        // but no villager entity query, vanilla offer population or optional-source quote happens
+        // while the existing route still owns this consumer.
+        Optional<WorkDemandPolicy.MaterialDemand> demand = liveDemand(level);
+        if (demand.isEmpty() || !existingRouteInfeasible(level, demand.get())) {
+            return false;
+        }
+        Container backpack = PlayerMobs.backpack(mob);
+        if (backpack == null) {
+            return false;
+        }
+        if (marketDiscoveryCooldown.coolingDown(
+                demand.get().consumerKey(), demand.get().materialKey(), now)) {
+            return false;
+        }
+
+        Optional<AuthorizedAttempt> admitted = authorizedCandidate(level, null);
+        if (admitted.isEmpty()) {
+            // Because demand, route authority and backpack were checked synchronously above, this
+            // empty result follows a completed market discovery rather than absence of permission.
+            marketDiscoveryCooldown.recordEmpty(
+                    demand.get().consumerKey(), demand.get().materialKey(), now);
+            return false;
+        }
+        marketDiscoveryCooldown.clear();
+        pendingAttempt = admitted.get();
+        return true;
     }
 
     @Override
@@ -186,9 +229,10 @@ public class TradeWithVillagerGoal extends Goal {
 
     @Override
     public void start() {
-        if (mob.level() instanceof ServerLevel level) {
-            authorizedCandidate(level, null)
-                    .ifPresent(attempt -> beginAttempt(level, attempt));
+        AuthorizedAttempt admitted = pendingAttempt;
+        pendingAttempt = null;
+        if (admitted != null && mob.level() instanceof ServerLevel level) {
+            beginAttempt(level, admitted);
         }
     }
 
@@ -213,6 +257,7 @@ public class TradeWithVillagerGoal extends Goal {
             emitTradeEpisode(level);
         }
         round.clear();
+        pendingAttempt = null;
         target = null;
         plannedOffer = null;
         attemptFunding = null;
@@ -685,6 +730,13 @@ public class TradeWithVillagerGoal extends Goal {
         if (demand.isEmpty()) {
             return Optional.empty();
         }
+
+        // Existing work owns mandatory progression until positive exhaustion evidence says it may
+        // be displaced. This must precede the entity query and every offer/quote operation below.
+        boolean existingFeasible = !existingRouteInfeasible(level, demand.get());
+        if (existingFeasible) {
+            return Optional.empty();
+        }
         Container backpack = PlayerMobs.backpack(mob);
         if (backpack == null) {
             return Optional.empty();
@@ -745,9 +797,6 @@ public class TradeWithVillagerGoal extends Goal {
 
         boolean affordable = offers.stream()
                 .anyMatch(offer -> VillagerTradeAdapter.canAfford(backpack, offer));
-
-        // P0/R2: produced, tri-state, and trade proceeds only on positively proven infeasibility.
-        boolean existingFeasible = !existingRouteInfeasible(level, demand.get());
 
         // V2-D bridge: choose the BUY quote first, derive its shortfall, then authorize a disposable
         // material to fund it. Without a live deficit every SELL is refused by design, which is why
