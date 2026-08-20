@@ -233,13 +233,17 @@ class ProductionRoutePathTest {
         // no longer answers for iron.
         assertTrue(body.contains("lastScanFamilies.contains(route.precursor())"),
                 "protected or not, a candidate of THIS resource means the route is not exhausted");
-        assertTrue(body.contains("GatherRoutePrecursor.scanCovers("),
-                "the scan must have been asked for this demand's precursor");
+        assertTrue(!body.contains("GatherRoutePrecursor.scanCovers("),
+                "scanCovers must NOT be re-checked here — it lives in ownedMandatoryRoute, the "
+                        + "ONE predicate both consumers share (V2-DEF-003 shape)");
         assertTrue(body.contains("Reason.SEARCH_COMPLETED_EMPTY"));
-        // D-VR-084 / task-52: the canonical route derivation (demand + precursor) is factored and
-        // shared with the pending-claim publisher — one reading of which route Gather owns, not
-        // two. The precursor question itself lives in ownedMandatoryRoute.
+        // D-VR-084 / task-52: the canonical route derivation (demand + precursor + coverage) is
+        // factored and shared with the pending-claim publisher — one reading of which route Gather
+        // owns, not two. The precursor AND coverage questions live in ownedMandatoryRoute.
         String owned = bodyOf(gather, "private java.util.Optional<OwnedRoute> ownedMandatoryRoute(");
+        assertTrue(owned.contains("GatherRoutePrecursor.scanCovers("),
+                "scanCovers belongs in the factored prefix: a scan may speak for a route only when "
+                        + "the current Gather intent was actually asked for that precursor");
         assertTrue(owned.contains("GatherRoutePrecursor.of(demand.get())"),
                 "and the question is scoped to the demand's own precursor");
     }

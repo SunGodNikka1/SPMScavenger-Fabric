@@ -131,8 +131,8 @@ consuming the registry's live claim), `GatherResourcesGoal` is the one wired pub
 published before `scanClock.claim(now)` so the scan-cadence gap cannot admit EXPLORE. The four states
 and the anti-self-renewal invariant (a claim may never be refreshed by demand existence) are
 structural. Automated behavioural acceptance: 12 scenarios + 2 temporal simulations + producer-side
-controls, 50 new tests, full suite **1354 tests, 0 failures**. The second repair-gate row below
-(unservable demand) is enforced by simulation B (EXPLORE still legal at T400).
+controls, 53 tests (50 + 3 R1 wiring controls), full suite **1357 tests, 0 failures**. The second
+repair-gate row below (unservable demand) is enforced by simulation B (EXPLORE still legal at T400).
 
 **The third status line is the honest one and must not be dropped because the suite is green:**
 task-52 wires **one** publisher. Trade, Mining and future V3 cleanup remain unwired, and for their

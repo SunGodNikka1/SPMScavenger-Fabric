@@ -1,10 +1,38 @@
 # Task 52 report — shared `MandatoryOwnership` + `V2-DEF-002` repair (`D-VR-084`)
 
-**Status:** `DONE` — static-behavioural acceptance; runtime witness deliberately deferred to the
-batched V3 campaign per the brief (AV-1: this proof class is not `CONFIRMED` behaviour).
-**Brief:** `.superpowers/sdd/task-52-brief.md` (amended QW-V3-1, 2026-08-20).
+**Status:** `DONE_WITH_CONCERNS` — static-behavioural acceptance after R1 repair; runtime witness
+deliberately deferred to the batched V3 campaign per the brief (AV-1: this proof class is not
+`CONFIRMED` behaviour).
+**Brief:** `.superpowers/sdd/task-52-brief.md` (amended QW-V3-1, 2026-08-20; R1 review 2026-08-20).
 **RFC:** `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` D-VR-084.
 **Authorization:** User (task-52 already authorized; QW-V3-1 lock and QW-V3-2 disposition applied).
+**Commit record:** the implementation was committed as `2215c0b` (author SunGodNikka1, 2026-08-20
+02:14) on `master`, including this report. No commit was made by the implementing agent in this
+session; the working tree was committed externally after the work.
+
+## R1 repair (2026-08-20, review-driven)
+
+**Blocker fixed — `ownedMandatoryRoute` is now the single authority.** The first implementation
+factored only `select → of` into `ownedMandatoryRoute`, leaving `scanCovers` checked separately
+inside `publishRouteExhaustion`. That split the predicate: the pending-claim publisher asked "a
+demand with a modelled precursor", the exhaustion publisher asked "a demand whose intent covers
+the precursor" — two policies remaining equivalent by coincidence until a change separates them,
+which is the V2-DEF-003 class. The full factored prefix is now:
+
+```text
+WorkDemandPolicy.select(...)
+    -> GatherRoutePrecursor.scanCovers(demand, currentIntent())
+    -> GatherRoutePrecursor.of(demand)
+    -> OwnedRoute
+```
+
+`publishRouteExhaustion` consumes `ownedMandatoryRoute` and no longer re-checks coverage. One
+predicate, two consumers. Structural controls added: `scanCoversLivesInTheFactoredRouteOnly`
+(asserts `scanCovers` is in `ownedMandatoryRoute` and absent from `publishRouteExhaustion`), plus
+the updated `ProductionRoutePathTest` pinning the same property.
+
+**Verification evidence corrected.** The original report overstated TDD and mutation coverage. The
+accurate record is in the RED/mutation section below.
 
 ## Files changed
 
@@ -17,40 +45,57 @@ batched V3 campaign per the brief (AV-1: this proof class is not `CONFIRMED` beh
 | `src/main/java/com/noobk/spmscavenger/opinion/InvalidationCause.java` | add `MANDATORY_PENDING_CLAIM` |
 | `src/main/java/com/noobk/spmscavenger/opinion/DiscretionaryActivityDirector.java` | consumes `MandatoryOwnership.evaluate` instead of `DiscretionaryEligibility` directly (requirement 9) |
 | `src/main/java/com/noobk/spmscavenger/SpmScavenger.java` | eviction: `release(ORDINARY)` on unload, `removePermanently` on destroy/death, `shutdownServerState` on server stop |
-| `src/main/java/com/noobk/spmscavenger/goal/GatherResourcesGoal.java` | factored `ownedMandatoryRoute` + `OwnedRoute`/`MandatoryRouteIdentity`; pending claim published before `scanClock.claim(now)`; releases on ABANDONED/ROUTE_HANDED_OFF/EXECUTOR_STARTED; generation minted only at `EXECUTOR_STARTED` with a live claim |
+| `src/main/java/com/noobk/spmscavenger/goal/GatherResourcesGoal.java` | factored `ownedMandatoryRoute` (select + scanCovers + of) + `OwnedRoute`/`MandatoryRouteIdentity`; pending claim published before `scanClock.claim(now)`; releases on ABANDONED/ROUTE_HANDED_OFF/EXECUTOR_STARTED; generation minted only at `EXECUTOR_STARTED` with a live claim |
 | `src/test/java/com/noobk/spmscavenger/activity/MandatoryOwnershipTest.java` | **new** — scenarios 1–12 decision rows + delegation structural control |
 | `src/test/java/com/noobk/spmscavenger/activity/MandatoryOwnershipRegistryTest.java` | **new** — anti-self-renewal, generation, release reasons, RET-1 lifetime |
 | `src/test/java/com/noobk/spmscavenger/activity/MandatoryOwnershipTemporalSimulationTest.java` | **new** — simulations A and B |
-| `src/test/java/com/noobk/spmscavenger/activity/MandatoryOwnershipWiringTest.java` | **new** — structural silent-revert protections |
+| `src/test/java/com/noobk/spmscavenger/activity/MandatoryOwnershipWiringTest.java` | **new** — structural silent-revert protections incl. R1 single-authority + mint-site controls |
 | `src/test/java/com/noobk/spmscavenger/WealthMaskingMandatoryRouteTest.java` | updated assertion to the factored `route.precursor()` seam |
-| `src/test/java/com/noobk/spmscavenger/village/trade/ProductionRoutePathTest.java` | updated assertion: precursor question moved to `ownedMandatoryRoute` |
+| `src/test/java/com/noobk/spmscavenger/village/trade/ProductionRoutePathTest.java` | updated assertion: precursor + coverage questions live in `ownedMandatoryRoute`, not duplicated |
 
 ## Verification commands (all from `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`)
 
 | Command | Result |
 | --- | --- |
-| `.\gradlew.bat compileTestJava` (before implementation) | `BUILD FAILED` — **RED captured**: `MandatoryOwnership` / `MandatoryOwnershipRegistry` / `MandatoryOwnershipClaim` missing, all new test classes fail to compile |
+| `.\gradlew.bat compileTestJava` (before implementation) | `BUILD FAILED` — **RED (compile)**: new test classes reference absent production types |
 | `.\gradlew.bat test --tests "com.noobk.spmscavenger.activity.*"` (after impl) | `BUILD SUCCESSFUL` — 50 tests green |
-| `.\gradlew.bat test` (full suite) | `BUILD SUCCESSFUL` — **1354 tests, 0 failures/errors/skips** |
-| `.\gradlew.bat clean build` | `BUILD SUCCESSFUL` — artifact `build/libs/spmscavenger-1.11.0.jar` |
-| JAR inspection | 4 `activity/MandatoryOwnership*` classes packaged; `DiscretionaryEligibility` packaged |
-| artifact SHA-256 | `8AE2395B12FFDA7F02C636D0B0B87731C86788F42662DBDA781F9107E7F21925` |
+| `.\gradlew.bat test` (full suite) | `BUILD SUCCESSFUL` — **1357 tests, 0 failures/errors/skips** (1354 pre-R1 + 3 new wiring controls) |
+| `.\gradlew.bat clean build` (pre-R1) | `BUILD SUCCESSFUL` — `spmscavenger-1.11.0.jar`, SHA-256 `8AE2395B…21925` |
+| `.\gradlew.bat test` (post-R1, mutation-reverted tree) | `BUILD SUCCESSFUL` — 1357 tests green |
+| JAR inspection (pre-R1) | 4 `activity/MandatoryOwnership*` classes packaged |
+| source scan post-R1 | no `TEMP NEGATIVE-CONTROL MUTATION` markers remain |
 
-## RED-before-GREEN capture (brief requires scenarios 3, 5, 11)
+## RED-before-GREEN — accurate record
 
-RED was the module compile failure of the new test classes against the absent implementation
-(`compileTestJava` → `BUILD FAILED`, captured above). After implementation, the load-bearing
-**scenario 5** negative control was additionally verified by mutation in isolation:
+The brief names scenarios 3, 5, 11 for RED-before-GREEN. The honest record:
 
-| Mutation | Result |
-| --- | --- |
-| remove the anti-self-renewal guard from `publish` | `scenario5_sameDemandAfterExpiryDoesNotSelfRenew` **FAILED** at `MandatoryOwnershipRegistryTest.java:61` (republish accepted — the frozen-demand freeze returns) |
-| revert | full suite green again |
+- **Original TDD: PARTIAL.** Pre-implementation RED was a general test compilation failure because
+  the production classes did not exist yet. That proves the tests referenced missing types; it does
+  NOT demonstrate that scenarios 3 or 11 reject a plausible wrong implementation on their own.
+- **Scenario 5 mutation: CONFIRMED post-implementation.** Removing the anti-self-renewal guard
+  made `scenario5_sameDemandAfterExpiryDoesNotSelfRenew` fail at line 61, in isolation.
+- **Scenarios 3/11: green behavioral assertions present; targeted mutation proof now provided**
+  (below) — the brief's demand is satisfied post-implementation, not pre-implementation.
 
-Scenario 3 and scenario 11 were asserted in the suite and in isolated class runs:
-`simulationB_unservableDemandNeverFreezesDiscretionary` (EXPLORE legal at T3 and T400 — the
-unservable-demand gate) and `scenario11_unloadAndServerStopRemoveTheClaim` (runtime claim
-disappears) pass in isolation.
+### Mutation matrix — every control actually run in isolation, then reverted
+
+| Control | Mutation | Fails | Result |
+| --- | --- | --- | --- |
+| NC-1 (generation comparison) | remove anti-self-renewal guard from `publish` | `scenario5_sameDemandAfterExpiryDoesNotSelfRenew` (line 61) | `CONFIRMED` |
+| NC-2 (expiry is deletion, not predicate) | `liveClaim` returns the expired claim instead of deleting | `expiredClaimIsDeletedNotPredicateFalse` + `scenario5` | `CONFIRMED` |
+| NC-3 (running arm delegates) | `MandatoryOwnership` re-derives the blocking set locally | `negativeControl_runningArmDelegatesToDiscretionaryEligibility` + `scenario9` (cause wrong: MANDATORY_AUTHORITY vs UNKNOWN_ACTIVE) | `CONFIRMED` |
+| Scenario 3 (fail-open) | no claim → deny (frozen-demand shape) | `scenario3_demandExistsNobodyClaimsAllowsDiscretionary` + `simulationB_unservableDemandNeverFreezesDiscretionary` | `CONFIRMED` |
+| Scenario 11 (runtime-only) | `release` is a no-op | `scenario11_unloadAndServerStopRemoveTheClaim` + `ordinaryReleaseDeletesTheClaim` | `CONFIRMED` |
+| NC-5 / P2 (mint per scan) | `mandatoryEpisodeGeneration++` added in `canUse` | `generationIsMintedOnlyAtExecutorStart` + `generationCounterAppearsOnlyOncePlusTheStartIncrement` | `CONFIRMED` |
+| NC-8 / P6-P7 (termination mints) | `mandatoryEpisodeGeneration++` added at the ABANDONED release | `generationIsMintedOnlyAtExecutorStart` + `generationCounterAppearsOnlyOncePlusTheStartIncrement` (producer-side; the registry-level abandon test alone cannot catch a producer-side increment — this is why the wiring controls exist) | `CONFIRMED` |
+
+Eight controls were required; seven were exercised by actual mutation runs. **NC-4 (advance
+generation on TTL expiry) is covered by the same mechanism as NC-5/NC-8** — the producer counter has
+exactly one mint site (`generationCounterAppearsOnlyOncePlusTheStartIncrement` asserts exactly one
+increment in the whole goal), so any path that advances generation — TTL, scan, abandon, handoff —
+fails the same two wiring tests. This is stated rather than run as a separate mutation because the
+counter-mint-site assertion makes TTL-advance structurally indistinguishable from the tested scan
+and abandon variants.
 
 ## Twelve scenarios + two simulations — all green
 
@@ -97,9 +142,10 @@ refused (scenario 6c).
 | 8 VILLAGE_TRADE blocks discretionary | `CONFIRMED` — scenario 8 + structural |
 | 9 director gains input, not policy | `CONFIRMED` — single-line seam swap; no scoring/utility change |
 | 10 RET-1 named key/bound/eviction | `CONFIRMED` — mobId key, one slot, expiry deletion, 3+ production call sites |
-| TDD | `CONFIRMED` — RED compile captured; scenario-5 mutation verified; isolation runs |
+| TDD | **PARTIAL** — pre-GREEN RED was compile-only (missing types); scenario-5 mutation `CONFIRMED` post-implementation; scenarios 3/11 targeted mutations now run and `CONFIRMED`; NC-2/3/5/8 also mutation-run (see matrix) |
 | SPM stock, no world scan in decision | `CONFIRMED` — `MandatoryOwnership` has no `Level`/world access |
 | Gather remains sole `RouteExhaustionEvidence` publisher | `CONFIRMED` — untouched; claim is not exhaustion evidence |
+| Single authority (R1) | `CONFIRMED` — `ownedMandatoryRoute` owns select+scanCovers+of; `publishRouteExhaustion` consumes, no duplicate coverage check; structural test |
 
 ## Concerns
 
@@ -122,6 +168,19 @@ refused (scenario 6c).
 6. **Runtime witness deferred by decision** (no dedicated session): pending claim active → no
    expedition; abandoned/expired → discretionary movement resumes. Folded into the batched V3
    campaign per the brief; do not schedule a standalone session.
+7. **Multi-publisher release/start identity binding — prerequisite of the first multi-publisher
+   expansion, NOT solved here.** `release(UUID, ReleaseReason)` does not identify which claim/owner
+   is being released, and `Gather.start()` treats any live claim for the mob as the claim it is
+   taking over. That is valid with exactly one publisher (Gather). The moment Trade, Mining, or V3
+   cleanup becomes a second publisher, the shape is unsafe: Trade publishes a claim, an unrelated
+   Gather start sees "some live claim", releases Trade's claim, and increments Gather's generation.
+   Before the second publisher is wired, release/start ownership must carry identity-bound
+   authorization (the releasing owner must prove it owns the claim it releases; the starting
+   executor must prove the claim belongs to its route). Do not solve in task-52 R1 — record it as
+   the explicit prerequisite of the first multi-publisher task (task-53 wiring a second publisher is
+   the first such task).
+8. **`publish` is not identity-parameterized for the owner** — the claim's `consumerKey`/route
+   identity names the *work*, not the *publisher*. Same consequence as concern 7; folded into it.
 
 ## V2-DEF-002 status (four-part, `KNOWN_DEFECTS.md`)
 

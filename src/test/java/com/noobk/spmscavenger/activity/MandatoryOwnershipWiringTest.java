@@ -122,6 +122,81 @@ class MandatoryOwnershipWiringTest {
                 "D-VR-084 forbids persistence; do not register the claim store in forgetAll");
     }
 
+    /**
+     * P2 / NC-5 — the producer-side generation is minted ONLY at the EXECUTOR_STARTED release,
+     * never per scan or per canUse. Moving the increment into canUse/scan fails this test.
+     */
+    @Test
+    void generationIsMintedOnlyAtExecutorStart() throws IOException {
+        String body = source("goal/GatherResourcesGoal.java");
+        String canUse = bodyOf(body, "public boolean canUse() {");
+        assertTrue(!canUse.contains("mandatoryEpisodeGeneration++"),
+                "generation must not advance per canUse/scan (P2)");
+        String start = bodyOf(body, "public void start() {");
+        assertTrue(start.contains("mandatoryEpisodeGeneration++"),
+                "generation advances only at the executor-start release");
+        assertTrue(start.contains("ReleaseReason.EXECUTOR_STARTED"),
+                "and that release is EXECUTOR_STARTED");
+        assertTrue(start.contains("liveClaim(mob.getUUID(), now).isPresent()"),
+                "the mint is guarded by a live pending claim (a wealth/cooperative start cannot mint)");
+    }
+
+    /**
+     * NC-8 / P6/P7 — release reasons other than EXECUTOR_STARTED delete without minting. The
+     * producer counter appears exactly once (declaration) plus the single start() increment.
+     */
+    @Test
+    void generationCounterAppearsOnlyOncePlusTheStartIncrement() throws IOException {
+        String body = source("goal/GatherResourcesGoal.java");
+        int declarations = count(body, "int mandatoryEpisodeGeneration = 0;");
+        int increments = count(body, "mandatoryEpisodeGeneration++");
+        assertTrue(declarations == 1, "one producer-side counter declaration");
+        assertTrue(increments == 1, "one mint site (start()), not one per scan/release path");
+    }
+
+    /**
+     * Single-authority control — the canonical route predicate (select + scanCovers + of) lives
+     * in ownedMandatoryRoute; publishRouteExhaustion consumes it and does not re-check coverage.
+     * Splitting the predicate back into two questions fails this test (V2-DEF-003 shape).
+     */
+    @Test
+    void scanCoversLivesInTheFactoredRouteOnly() throws IOException {
+        String body = source("goal/GatherResourcesGoal.java");
+        String owned = bodyOf(body,
+                "private java.util.Optional<OwnedRoute> ownedMandatoryRoute(");
+        assertTrue(owned.contains("GatherRoutePrecursor.scanCovers("),
+                "scanCovers is part of the ONE factored predicate");
+        String exhaustion = bodyOf(body,
+                "private java.util.Optional<MandatoryHandoffPolicy.HandoffPublication> "
+                        + "publishRouteExhaustion(");
+        assertTrue(!exhaustion.contains("GatherRoutePrecursor.scanCovers("),
+                "publishRouteExhaustion must consume OwnedRoute, not re-check coverage");
+    }
+
+    private static String bodyOf(String body, String methodHeader) {
+        int start = body.indexOf(methodHeader);
+        if (start < 0) {
+            return "";
+        }
+        int brace = body.indexOf('{', start);
+        if (brace < 0) {
+            return "";
+        }
+        int depth = 1;
+        for (int i = brace + 1; i < body.length(); i++) {
+            char c = body.charAt(i);
+            if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    return body.substring(start, i + 1);
+                }
+            }
+        }
+        return body.substring(start);
+    }
+
     private static int count(String body, String needle) {
         int n = 0;
         int idx = 0;

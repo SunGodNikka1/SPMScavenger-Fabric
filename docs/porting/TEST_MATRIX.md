@@ -514,12 +514,14 @@ Runtime evidence: user-captured `[TE3] step-7A autonomous readout`, 2026-08-19. 
 `episodes=0` was also captured. It is a readout fact, not relationship-learning acceptance evidence
 for this scenario.
 
-## D-VR-084 / task-52 — MandatoryOwnership pending-claim authority (2026-08-20)
+## D-VR-084 / task-52 — MandatoryOwnership pending-claim authority (2026-08-20, R1 2026-08-20)
 
 Canonical design: `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` D-VR-084; brief
-`.superpowers/sdd/task-52-brief.md` (amended QW-V3-1). Full clean build: **1354 tests, 0 failures/errors/skips**;
-artifact `build/libs/spmscavenger-1.11.0.jar` SHA-256 `8AE2395B12FFDA7F02C636D0B0B87731C86788F42662DBDA781F9107E7F21925`.
-Automated behavioural acceptance only; the runtime witness is deferred to the batched V3 campaign (AV-1).
+`.superpowers/sdd/task-52-brief.md` (amended QW-V3-1). Full clean build: **1357 tests, 0 failures/errors/skips**
+(1354 + 3 R1 wiring controls). R1 repair: `ownedMandatoryRoute` owns the full
+`select → scanCovers → of` predicate; `publishRouteExhaustion` consumes it without a duplicate
+coverage check (single authority). Automated behavioural acceptance only; the runtime witness is
+deferred to the batched V3 campaign (AV-1). Mutation matrix in `.superpowers/sdd/task-52-report.md`.
 
 | # | Scenario | Must happen | Must not happen | Evidence |
 | --- | --- | --- | --- | --- |
@@ -567,3 +569,5 @@ Automated behavioural acceptance only; the runtime witness is deferred to the ba
 | cause exists | `InvalidationCause` contains `MANDATORY_PENDING_CLAIM` |
 | RET-1 eviction wired | `SpmScavenger` releases on unload/death, clears on server stop; `removePermanently` on destroy |
 | runtime-only | `PerMobSavedData` contains no `MandatoryOwnership` reference |
+| **single authority (R1)** | `scanCovers` is in `ownedMandatoryRoute` and absent from `publishRouteExhaustion` — one predicate, two consumers (V2-DEF-003 shape) |
+| **mint site (NC-5/NC-8)** | `mandatoryEpisodeGeneration++` appears exactly once, inside `start()`, guarded by a live claim — no per-scan, TTL, abandon, or handoff mint |

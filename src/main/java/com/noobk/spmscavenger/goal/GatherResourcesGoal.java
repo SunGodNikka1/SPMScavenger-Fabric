@@ -615,10 +615,26 @@ public class GatherResourcesGoal extends Goal {
     }
 
     /**
-     * The canonical mandatory route this goal owns, derived once per evaluation from the same
-     * {@code WorkDemandPolicy.select} call the exhaustion path uses. Empty when the mob has no
-     * mandatory demand or no modelled precursor — a wealth-only desire must never mint a claim
-     * (P4), and this is the seam that keeps NEED separate from WEALTH.
+     * The canonical mandatory route this goal owns — the ONE predicate, consumed by BOTH the
+     * pending-claim publisher and {@code publishRouteExhaustion}. Derived once per evaluation
+     * from the same {@code WorkDemandPolicy.select} call.
+     *
+     * <p>The full factored prefix per the task-52 brief (QW-V3-1):
+     *
+     * <pre>
+     * WorkDemandPolicy.select(...)
+     *     -&gt; GatherRoutePrecursor.scanCovers(demand, currentIntent())
+     *     -&gt; GatherRoutePrecursor.of(demand)
+     *     -&gt; OwnedRoute
+     * </pre>
+     *
+     * {@code scanCovers} is load-bearing and lives HERE, not in the exhaustion path: a scan may
+     * speak for a route only when the current Gather intent was actually asked for that precursor.
+     * Two consumers must answer the same question; leaving one of them to re-check coverage is the
+     * V2-DEF-003 shape (two policies remaining equivalent by coincidence until a change separates
+     * them). Empty when the mob has no mandatory demand, its intent does not cover the demand's
+     * precursor, or the demand has no modelled precursor — a wealth-only desire must never mint a
+     * claim (P4).
      */
     private java.util.Optional<OwnedRoute> ownedMandatoryRoute(ScavengerConfig cfg) {
         Container backpack = PlayerMobs.backpack(mob);
@@ -629,6 +645,9 @@ public class GatherResourcesGoal extends Goal {
                 .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), cfg)
                 .map(WorkDemandPolicy.WorkDemand::payload);
         if (demand.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        if (!GatherRoutePrecursor.scanCovers(demand.get(), currentIntent())) {
             return java.util.Optional.empty();
         }
         java.util.Optional<GatherIntentPolicy.Resource> precursor =
@@ -649,16 +668,14 @@ public class GatherResourcesGoal extends Goal {
         if (scanScope != null) {
             return java.util.Optional.empty();
         }
-        // D-VR-084: consume the same canonical route derivation as the claim publisher. A second
-        // interpretation of which route Gather owns is the V2-DEF-003 shape and is forbidden.
+        // D-VR-084: consume the same canonical route derivation as the claim publisher — the ONE
+        // predicate, including scanCovers, lives in ownedMandatoryRoute. A second interpretation
+        // of which route Gather owns is the V2-DEF-003 shape and is forbidden.
         java.util.Optional<OwnedRoute> owned = ownedMandatoryRoute(cfg);
         if (owned.isEmpty()) {
             return java.util.Optional.empty();
         }
         OwnedRoute route = owned.get();
-        if (!GatherRoutePrecursor.scanCovers(route.demand(), currentIntent())) {
-            return java.util.Optional.empty();
-        }
         // V2-DEF-003b: THIS resource's own result, not the scan's overall verdict. A saturated
         // wealth log winning target selection used to make the whole scan "successful" and silence
         // an iron route that had genuinely found nothing.
