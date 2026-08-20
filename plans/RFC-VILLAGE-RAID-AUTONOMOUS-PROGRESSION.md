@@ -8,10 +8,10 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `PLANNING` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE positive path CLOSED**; V3 synchronization only, no implementation authorization |
-| **Status** | `V3 DESIGN HOLD` — **VR-T2 PASS** and **V2-TE positive path PASS (`V2-DEF-003c-R1`)**. V2 transaction, evaluation, route admission, SELL→BUY chain, executor, arbitration, relationship learning, vanilla supply/projection, and positive Trade Everything compatibility are **CLOSED / runtime-confirmed to their recorded scope**. Residual V2 verification, tooling, and profiling are **DEFERRED / NON-BLOCKING**. V3 has one canonical Village Work scope but remains short of `LOCKED` pending the four pre-lock decisions named below. |
-| **Nearest frontier** | **V3 pre-lock decisions:** define production `VillageScenarioProfile` acquisition/default/migration; pin positive storage-permission evidence; place V3 in the existing numeric/admission authority; and set target-evidenced scan/backoff/deficit/surplus budgets. V2-W is a separate deferred wealth-track continuation, not a prerequisite for V3. |
-| **Last update** | 2026-08-19 (**minimum RFC synchronization pass** — canonical V3 Village Work phase, V2 closure sync, ally-storage authority, V3 tasks/scenarios, MAIBS pre-implementation prediction; RFC only) |
+| **Mode** | `PLANNING` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE positive path CLOSED**; **V3 pre-lock LOCKED** (`D-VR-080…083`); V3 implementation not authorized |
+| **Status** | `V3 PRE-LOCK LOCKED` — **VR-T2 PASS** and **V2-TE positive path PASS (`V2-DEF-003c-R1`)**. V2 is **CLOSED** to recorded scope. **D-VR-080…083 `LOCKED`** (User peer review, 2026-08-19). V3-A/B are **dependency-ready**; phase implementation remains separately authorized. |
+| **Nearest frontier** | **Authorize V3-A / task-52** (`VillageScenarioProfile` cross-dimension policy store + `VillageWorkAdmission`). V2-W deferred; not a V3 prerequisite. |
+| **Last update** | 2026-08-19 (User peer review — **D-VR-080…083 `LOCKED`**; corrected profile ownership, storage lifecycle, mandatory-owner admission, population predicate, budget contract) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -683,7 +683,8 @@ visible "my village" play.
 Minecraft launch.
 
 **Historical frontier (SUPERSEDED):** this section originally pointed to V2 Trading / task-47.
-V2 is now **CLOSED — VR-T2 RUNTIME PASS**; the canonical current frontier is the V3 pre-lock work
+V2 is now **CLOSED — VR-T2 RUNTIME PASS**; the canonical current frontier is **authorize V3-A /
+task-52** (`D-VR-080…083 `LOCKED`).
 in `Topic: Phased implementation plan`.
 
 ### V2 implementation contract (`IMPLEMENTED + CLOSED` — historical contract retained)
@@ -4553,8 +4554,8 @@ familiarity, an active loot goal, or absence of a V3 work candidate.
 
 | Task | Dependencies | Objective | Must happen | Must not happen | Scenarios | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| **V3-A — authority/profile contract** | V1.5 relationship; current activity/progression seams | Implement `VillageScenarioProfile` production ownership and a village-work admission facade that defers to urgent + mandatory authority | Selected profile is explicit, inspectable, and revalidated; pending mandatory work blocks new village work | HOME/HIGH or Opinion silently manufactures `VILLAGE_ALLY`; active-goal absence is treated as idle | VR-T3j | **BLOCKED** — profile source/default/migration decision |
-| **V3-B — minimum StorageOwnership + host guard** | V3-A; D-VR-012/017 | Produce explicit mob permission vs `VILLAGE_PUBLIC` / `FOREIGN` / `UNKNOWN`; guard host loot admission and continuation | Ally may use only explicitly mob-owned/shared storage; revocation closes active container cleanly | UNKNOWN permits loot; global removal of `RaidContainersGoal`; non-ally behavior changes | VR-T3g–i | **BLOCKED** — positive classification evidence source |
+| **V3-A — authority/profile contract** | V1.5 relationship; D-VR-080/082 | Cross-dimension `VillageScenarioProfile` policy store + `VillageWorkAdmission` (`NO LIVE MANDATORY OWNER`) + optional `VillageWorkSelector` among V3 intents | Profile explicit, inspectable, cross-dimension consistent; mandatory owners block admission | Profile in dimension-local village memory; HOME/HIGH → ally; `MaterialDemand` alone defines mandatory | VR-T3j | **LOCK-CLEAN** — authorize task-52 |
+| **V3-B — minimum StorageOwnership + host guard** | V3-A; D-VR-012/017/081 | `GlobalPos`-keyed permission registry + classifier; continuous `RaidContainersGoal` guard | Ally uses only mob-owned/shared storage; permissions survive unload/restart | Evict grants on chunk unload/dimension change; naked `BlockPos`; ambiguous double-chest halves | VR-T3g–i | **LOCK-CLEAN** — after V3-A |
 | **V3-C — committed crop episode** | V3-A; pinned host `HarvestCropsGoal` mechanics | Replace loose harvest/replant ownership with one target-bound committed episode | Managed mature crop ends replanted or in mandatory bounded repair after a post-mutation failure | Successful managed harvest routinely leaves farmland barren after preemption | VR-T3a–c/k | **PROPOSED** |
 | **V3-D — workstation awareness** | V3-A; existing `VillagePerception` scheduler/budget | Add bounded loaded job-site/restock facts without another scanner | Facts invalidate when POI/villager state changes and never load chunks | Workstation facts authorize trade, placement, claiming, or mandatory displacement | VR-T3f | **PROPOSED** |
 | **V3-E — population food support** | V3-A; disposable-resource policy; existing gift/drop seam | Offer bounded food surplus when population evidence requests support | Revalidate population, target, inventory reserve, and path at handoff | Consume personal/progression reserve; command breeding; loop gifts with no deficit | VR-T3e/j | **PROPOSED** |
@@ -4586,20 +4587,18 @@ but V3-B must land before any behavior is described as ally-safe.
 **Phase closure:** V3 requires V3-A…G plus all applicable VR-T3a–k rows. No subset consisting only
 of replant + storage may close the phase.
 
-#### Remaining questions that prevent V3 `LOCKED`
+#### Pre-lock decisions — `LOCKED` (`D-VR-080…083`, User peer review 2026-08-19)
 
-1. **Profile acquisition/default/migration:** what production fact or user/config choice assigns
-   `VillageScenarioProfile`, and what do existing mobs load as? HOME/HIGH may inform a later explicit
-   transition but cannot silently equal `VILLAGE_ALLY`.
-2. **Positive storage evidence:** what pinned, persistent or data-driven fact proves
-   `MOB_OWNED` / `EXPLICITLY_SHARED_WITH_MOB`, including double containers and moved/destroyed block
-   entities? Absence of that fact is already locked to `UNKNOWN → deny`.
-3. **Numeric activity placement:** which existing registration priority/admission seam implements the
-   locked urgent > mandatory > cleanup > discretionary order without duplicating authority?
-4. **Budgets and tuning:** bounded crop/workstation/composter scans, empty-result backoff,
-   population-deficit threshold, and disposable-surplus thresholds need target-specific values or
-   policies plus 1/10/50/100-mob cost estimates before architecture lock. No generic host constant is
-   accepted merely because it already exists.
+The four architecture blockers are resolved. See [Topic: Decisions](#topic-decisions) for full text.
+
+| ID | Summary |
+| --- | --- |
+| **D-VR-080** | `VillageScenarioProfile` is **one cross-dimension policy per mob** — not stored in `MobVillageMemory` / `VillageMemorySavedData`. Default `NEUTRAL`; `VILLAGE_ALLY` only via explicit config-at-spawn or operator command; HOME/HIGH never auto-promote; existing worlds migrate to `NEUTRAL`. New store must register in `PerMobSavedData.forgetAll()`. |
+| **D-VR-081** | Storage permission keyed by **`GlobalPos`**; **preserve** on chunk unload, mob dimension change, and server restart; **delete** on explicit revoke, container destroyed/replaced, mob permanent removal. Double chests canonicalize to one logical container key. Continuous ally guard on `RaidContainersGoal`. |
+| **D-VR-082** | V3 executor goals at **priority 4**. `VillageWorkAdmission` blocks when **any live mandatory owner** exists (not merely `MaterialDemand`). Optional `VillageWorkSelector` chooses among V3 intents — **not** a parallel `VillageWorkDirector`; subordinate to village orchestration (`VillageInteractionDirector` when shipped). |
+| **D-VR-083** | **Budget contract `LOCKED`**; numeric constants **`PROVISIONAL` / `UNVERIFIED`** until profiling. Population food support when `freePopulationCapacity = max(0, eligibleBeds − villagerCount) > 0` (and `villagerCount ≥ 2`), not `villagers − beds > 0`. |
+
+**Phase architecture lock:** V3 mechanism design is **LOCKED** through D-VR-078/079/080…083. **Implementation** of V3-A…G remains separately authorized (next: **task-52 / V3-A**).
 
 ### Legacy phase map (superseded)
 
@@ -4702,13 +4701,13 @@ another actor has already restored/changed the position.
 | Activity | Current/proposed band | Flags | Can interrupt V3 work? | Retained state | Expected observable result |
 | --- | ---: | --- | --- | --- | --- |
 | Command/emergency/combat | Existing higher authority (combat P0–2 where registered) | commonly MOVE/LOOK | Yes before interaction; same server-tick commit is not split between Java statements | Crop candidate/path discarded; post-mutation repair only if exceptional failure occurred | Mob stops village travel and responds immediately; later re-resolves world truth |
-| Mandatory Gather/Smelt/Craft/Trade | Existing deliberate-work authority (P3 paths) plus pending demand truth | MOVE/LOOK as applicable | Yes; V3-A must refuse admission while pending or active | Mandatory consumer survives under its existing lifecycle; V3 candidate is disposable | Mob continues progression instead of wandering to farm/composter/villager |
-| V3 discretionary village work | Numeric priority **OPEN in V3-A**, semantically below mandatory work | MOVE/LOOK executor-specific | Peer work cannot steal a committed interaction | Candidate/path disposable before mutation; crop episode owns exceptional repair | One visible bounded job, then re-resolve rather than oscillate |
-| Storage guard | Continuous policy, not a competing goal | none | It vetoes host loot admission/continuation regardless of activity | No long-lived entity/world reference required for minimum policy | Ally never opens/continues a denied container; teardown closes an already-open container |
+| Mandatory Gather/Smelt/Craft/Trade | Deliberate-work band **priority 3** | MOVE/LOOK as applicable | Yes; `VillageWorkAdmission` refuses while **any live mandatory owner** exists (`D-VR-082`) | Mandatory consumer survives; V3 candidate disposable | Mob continues progression instead of village work |
+| V3 discretionary village work | **Priority 4** (`D-VR-082`); semantically below mandatory work | MOVE/LOOK executor-specific | Peer discretionary work cannot steal a committed interaction | Candidate/path disposable before mutation; crop episode owns exceptional repair | One visible bounded job, then re-resolve |
+| Storage guard | Continuous policy (`D-VR-081`), not a competing goal | none | Vetoes host loot admission/continuation regardless of activity | Permission survives unload/restart until revoked or container gone | Ally never opens/continues denied container |
 
-The numeric V3 goal priority remains a pre-lock question; semantic ordering is locked: urgent >
-mandatory pending/running > committed cleanup > discretionary village work. Choosing “6” merely
-because host harvest uses 6 would be cargo-culting until V3-A traces every competing registered goal.
+Semantic ordering is **locked** (`D-VR-082`): urgent > mandatory pending/running > committed cleanup >
+discretionary village work. V3 goals at priority **4** sit below gather/craft/smelt/trade at **3**
+(`SpmScavenger.java` deliberate-work band) and above explore/wander at **8**.
 
 #### Time and feedback simulation
 
@@ -4992,7 +4991,7 @@ registering TRADE before feasibility exists; a dedicated P3 trade goal that igno
 ### D-VR-017: `VillageScenarioProfile` gates ally behaviour (`LOCKED`, implementation absent)
 
 **Status:** `LOCKED` for authority semantics (User synchronization directive, 2026-08-19);
-production profile acquisition and storage classification remain V3 pre-lock dependencies.
+production wiring per **D-VR-080** (profile store) and **D-VR-081** (permission registry).
 
 **Accepted:** `VILLAGE_ALLY` is the sole ally-policy authority for VR-20 storage suppression, trade
 fairness, and later raid DEFEND priority. Settlement attachment (`HOME` / HIGH familiarity) is factual
@@ -5016,11 +5015,12 @@ AND ownership in {VILLAGE_PUBLIC, FOREIGN, UNKNOWN}
 exists in addon `src/main`, pinned SPM `src/main`, or the production mixin configuration. The RFC is
 defining V3-A/B work, not claiming shipped capability.
 
-**Still open before V3 `LOCKED`:** the production source/default/migration for a mob's profile, and
-the evidence mechanism that positively classifies `MOB_OWNED` or `EXPLICITLY_SHARED_WITH_MOB`.
+**Still open before V3 implementation:** production wiring per **D-VR-080** (profile store) and
+**D-VR-081** (permission registry). Predicate semantics above remain **LOCKED**.
 
 **Rejected:** per-mob hardcoded village UUID allowlists; HOME/HIGH as ally permission; treating
-missing ownership evidence as public or permitted; globally stripping `RaidContainersGoal`.
+missing ownership evidence as public or permitted; globally stripping `RaidContainersGoal`; storing
+`VillageScenarioProfile` in dimension-local `MobVillageMemory` (`D-VR-080`).
 
 ### D-VR-018: Day/night director arbitration (`PROPOSED`)
 
@@ -6151,7 +6151,7 @@ SPM is **PolyForm Shield 1.0.0**. Trade/defense goals belong in **`spmscavenger`
 
 Existing activity authority admits these executors: urgent work and live/pending mandatory
 progression preempt discretionary village work. V3 does not add a second utility director
-(`D-VR-078`); the exact numeric goal priorities remain a V3-A pre-lock task.
+(`D-VR-078`); V3 goal priority **4** and `VillageWorkAdmission` are **LOCKED** (`D-VR-082`).
 
 ---
 
@@ -6444,6 +6444,118 @@ cleanup step, but it consumes the same episode; it is not a second appetite or a
 **Must not happen:** successful managed harvest routinely returns to discretionary arbitration while
 the position is bare.
 
+### D-VR-080: `VillageScenarioProfile` persistence and acquisition (`User` + `Agent_Cursor`, 2026-08-19)
+
+**Status:** `LOCKED`
+
+**Accepted:**
+
+- `VillageScenarioProfile` (`NEUTRAL`, `VILLAGE_ALLY`, `COWARD`, `TRADER`, `RAIDER`, …) is **one
+  cross-dimension policy value per mob** — a PlayerMob policy, not village cognition.
+- **Do not** store the profile in `MobVillageMemory` or `VillageMemorySavedData`. Those are
+  deliberately **per-dimension** village memory; a profile there would allow incoherent states such as
+  `VILLAGE_ALLY` in the Overworld and `NEUTRAL` in the Nether for the same mob.
+- Implementation: entity-attached NBT **or** a dedicated cross-dimension policy `SavedData` accessor.
+  If a new per-mob persisted store is introduced, it **must** register in
+  `PerMobSavedData.forgetAll()` (`PerMobSavedData.java` — Gate RET-1e permanent-removal contract).
+- **Default:** `NEUTRAL` on first load and for existing-world migration.
+- **`VILLAGE_ALLY` acquisition (gen-1):** explicit operator command and/or `ScavengerConfig` default
+  at spawn only — never silent promotion from `HOME_VILLAGE`, `AttachmentBand.HIGH`, trade episodes, or
+  Opinion preference.
+- `SettlementRelationship` remains factual input for V4/V5 (social bias, raid DEFEND utility) and does
+  **not** imply ally permission (extends D-VR-017).
+
+**Rejected:** profile inside dimension-local village memory; HOME/HIGH → `VILLAGE_ALLY` without explicit
+assignment; per-village UUID allowlists.
+
+### D-VR-081: Storage permission lifecycle and keys (`User` + `Agent_Cursor`, 2026-08-19)
+
+**Status:** `LOCKED` (implements D-VR-017 positive-evidence half)
+
+**Accepted:**
+
+- Positive permission registry entries are keyed by **`GlobalPos`** (dimension + block position), not
+  naked `BlockPos`.
+- **Semantic persistent state** — permissions mean *"this mob may use this container"* until revoked or
+  invalidated:
+  - chunk unload → **PRESERVE**
+  - mob dimension change → **PRESERVE**
+  - server stop / restart → **PERSIST** (save/load)
+  - explicit operator revoke → **DELETE**
+  - container block destroyed or replaced (block entity identity lost) → **DELETE** or classify **UNKNOWN**
+  - mob permanently removed (`PerMobSavedData.forgetAll`) → **DELETE** that mob's grants
+- **Double chests:** gen-1 must define a **deterministic** rule — either attach permission to the
+  logical container (both halves share one canonical key) or canonicalize both halves to the same
+  registry entry before classify/admit. Opening the opposite half must not change ownership class.
+- Classifier output unchanged from D-VR-017: `MOB_OWNED`, `EXPLICITLY_SHARED_WITH_MOB`,
+  `VILLAGE_PUBLIC`, `FOREIGN`, `UNKNOWN` (ally + non-permitted → deny admission **and** continuation).
+- Guard: continuous predicate on pinned SPM `RaidContainersGoal` admission/continuation — not global
+  goal removal.
+
+**Rejected:** evicting permission grants on chunk unload, dimension change, or server stop (conflicts
+with RET-1 semantic-memory contract in `PerMobSavedData` javadoc).
+
+### D-VR-082: Village work admission and priority (`User` + `Agent_Cursor`, 2026-08-19)
+
+**Status:** `LOCKED`
+
+**Accepted:**
+
+- V3 executor goals register at **priority 4** — below deliberate-work band **3** (gather/craft/smelt/trade
+  per `SpmScavenger.java`) and above explore/wander **8**.
+- **`VillageWorkAdmission`** (single admission facade) gates every V3 goal `canUse()`. Invariant:
+
+```text
+NO LIVE MANDATORY OWNER  →  village work may admit
+ANY LIVE MANDATORY OWNER →  village work must refuse
+```
+
+- **Mandatory owner** is **broader than `WorkDemandPolicy` / `MaterialDemand` alone.** Admission must
+  consult at least:
+  - live consumer `MaterialDemand` (progression)
+  - active or pending **mining project execution** (`MiningExecutionGuard` / `PROJECT_EXECUTION`)
+  - **mandatory cleanup/repair** commitment (e.g. post-mutation crop repair per D-VR-079)
+  - **published mandatory handoff** still owning the slot (`MandatoryHandoffPolicy` / `HandoffPublication`)
+  - urgent safety / player command / combat (may additionally be enforced by higher GoalSelector priority)
+- Among discretionary V3 intents only, an optional **`VillageWorkSelector`** (or `VillageWorkPolicy`)
+  picks ≤1 candidate (crop episode, population food, compost, …). This is **subordinate** to the RFC's
+  village orchestration architecture (`VillageInteractionDirector` when shipped) — **not** a parallel
+  `VillageWorkDirector` competing with `MiningDirector`, `DiscretionaryActivityDirector`, etc.
+- Storage safety remains **outside** this admission (`D-VR-081` continuous guard).
+
+**Rejected:** `WorkDemandPolicy.select().isEmpty()` as sole mandatory gate; introducing
+`VillageWorkDirector` as a fourth top-level director; cargo-culting host `HarvestCropsGoal` priority 6
+for village-work banding.
+
+### D-VR-083: Village work budget contract (`User` + `Agent_Cursor`, 2026-08-19)
+
+**Status:** `LOCKED` (contract); numeric constants **`PROVISIONAL` / `UNVERIFIED`** until profiling
+
+**Accepted — budget contract (architecture):**
+
+- Crop / workstation / composter discovery **must**: inspect **loaded** chunks only; use a **finite**
+  spatial radius; cap **candidate count** per evaluation; **back off** after empty/blocked search (never
+  scan every tick); **reuse** `VillagePerceptionScheduler` / existing village perception where
+  applicable (no second world scanner for V3-D).
+- **Population food support eligibility (gen-1):**
+
+```text
+freePopulationCapacity = max(0, eligibleBedCount - villagerCount)
+food support eligible  iff villagerCount >= 2 AND freePopulationCapacity > 0
+```
+
+  V3 still does **not** command breeding, claim beds, or mutate villager Brain state (D-VR-078).
+- **Disposable surplus** gates (compost / population / gift) run **after** survival, progression
+  protected inputs, committed replant seed reserve, and active mandatory owners — same permission-before-
+  preference shape as `FuelExpendability` / `SellExpendabilityPolicy`.
+- **Numeric tuning:** initial values live in `VillageWorkTuning` as **`PROVISIONAL`** until 1/10/50/100-mob
+  profiling. "Matches another subsystem" is a starting guess, not lock evidence. **Exception:** values
+  **derived** from an existing lifecycle dependency (e.g. `MandatoryHandoffPolicy.YIELD_WINDOW_TICKS` from
+  `TradeCandidateRound.EXHAUSTED_ROUND_COOLDOWN_TICKS`) may cite that derivation as evidenced tuning.
+
+**Rejected:** locking specific constants (e.g. crop cap 8, radius 24, backoff 40) as architecture;
+population predicate `villagerCount - bedCount > 0` (reversed — rewards villages that already lack beds).
+
 ### Contribution — User + Agent_Codex (minimum RFC synchronization pass, 2026-08-19)
 
 Agent: `Agent_Codex` acting on explicit User scope/disposition requirements
@@ -6464,3 +6576,18 @@ committed crop ownership (`D-VR-079`); added V3-A…G, VR-T3a…k, and the V3 MA
 the existing activity authority; and (4) target-evidenced scan/backoff/deficit/surplus budgets.
 V3 is **not LOCKED and not implementation-authorized**. No Java, tests, mixins, Gradle, config,
 datapack, runtime, commit, or push action belongs to this contribution.
+
+### Contribution — User peer review: D-VR-080…083 lock (`User` + `Agent_Cursor`, 2026-08-19)
+
+**Frontier before:** Cursor-proposed D-VR-080…083 draft; V3-A/B **BLOCKED** on four pre-lock items.
+
+**Action:** User challenged and corrected four proposals; **D-VR-080…083 `LOCKED`** with amendments:
+(1) profile is cross-dimension per-mob policy — **not** `MobVillageMemory`; must join
+`PerMobSavedData.forgetAll()`; (2) storage permission uses `GlobalPos`, survives unload/restart, deletes
+only on revoke/destruction/permanent mob removal; double-chest canonicalization required; (3)
+`VillageWorkAdmission` uses **NO LIVE MANDATORY OWNER** (broader than `MaterialDemand`); priority **4**;
+`VillageWorkSelector` subordinate to village orchestration — no `VillageWorkDirector`; (4) budget
+**contract** locked, numbers **PROVISIONAL**; population uses `max(0, beds − villagers)`.
+
+**Frontier after:** V3 architecture **LOCKED** through D-VR-078/079/080…083. **Authorize task-52 / V3-A**
+is the next step; implementation not authorized by this contribution.
