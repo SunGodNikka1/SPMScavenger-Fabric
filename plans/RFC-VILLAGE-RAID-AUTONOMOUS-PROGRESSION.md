@@ -8,10 +8,10 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `PLANNING` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE positive path CLOSED**; **V3 pre-lock LOCKED** (`D-VR-080…083`); V3 implementation not authorized |
-| **Status** | `V3 PRE-LOCK LOCKED` — **VR-T2 PASS** and **V2-TE positive path PASS (`V2-DEF-003c-R1`)**. V2 is **CLOSED** to recorded scope. **D-VR-080…083 `LOCKED`** (User peer review, 2026-08-19). V3-A/B are **dependency-ready**; phase implementation remains separately authorized. |
-| **Nearest frontier** | **Authorize task-52 — shared `MandatoryOwnership` + `V2-DEF-002` repair** (`D-VR-084`; brief at `.superpowers/sdd/task-52-brief.md`). V3-A becomes **task-53** and is blocked on it. V2-W deferred; not a V3 prerequisite. |
-| **Last update** | 2026-08-19 (User peer review — **D-VR-080…083 `LOCKED`**; corrected profile ownership, storage lifecycle, mandatory-owner admission, population predicate, budget contract) |
+| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE positive path CLOSED**; **V3 pre-lock LOCKED** (`D-VR-080…083`); **task-52 IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT (2026-08-20)**; V3 implementation not authorized |
+| **Status** | `V3 PRE-LOCK LOCKED` — **VR-T2 PASS** and **V2-TE positive path PASS (`V2-DEF-003c-R1`)**. V2 is **CLOSED** to recorded scope. **D-VR-080…083 `LOCKED`** (User peer review, 2026-08-19). **task-52 (D-VR-084) `IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (2026-08-20; 1354 tests). V3-A/B are **dependency-ready**; phase implementation remains separately authorized. |
+| **Nearest frontier** | **Authorize task-53 — V3-A** (`VillageScenarioProfile` + `VillageWorkAdmission` consuming the now-implemented `MandatoryOwnership` seam). task-52 is done; `V2-DEF-002` repair shipped with the four-part status. V2-W deferred; not a V3 prerequisite. |
+| **Last update** | 2026-08-20 (task-52 implementation — shared `MandatoryOwnership` seam shipped; V2-DEF-002 four-part status recorded) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -6626,6 +6626,20 @@ No second scanner, and no change to the locked predicate itself.
 **Status:** `LOCKED` (architecture). Supersedes the admission-source list in `D-VR-082`.
 **Prerequisite of:** V3-A (**task-53**). **Own slice:** **task-52** — see
 `.superpowers/sdd/task-52-brief.md`. **Subsumes:** `V2-DEF-002` (promoted from deferred debt).
+
+**Implementation status (task-52, 2026-08-20):** `IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`.
+`MandatoryOwnershipClaim` + `MandatoryOwnershipRegistry` + `MandatoryOwnership` shipped in
+`activity/`; `DiscretionaryActivityDirector` consumes `MandatoryOwnership.evaluate`;
+`VILLAGE_TRADE` joins `blocksDiscretionaryChoice`; `InvalidationCause.MANDATORY_PENDING_CLAIM`
+added; `GatherResourcesGoal` is the one wired publisher (factored `ownedMandatoryRoute` shared
+with `publishRouteExhaustion`, pending claim published before `scanClock.claim(now)`, generation
+minted only at `EXECUTOR_STARTED` release with a live claim). Twelve scenarios + two temporal
+simulations + producer-side controls: 50 new tests; full clean build **1354 tests, 0 failures**;
+artifact `spmscavenger-1.11.0.jar` SHA-256 `8AE2395B12FFDA7F02C636D0B0B87731C86788F42662DBDA781F9107E7F21925`.
+`V2-DEF-002` status is the four-part record (Gather path `REPAIRED / STATIC-BEHAVIORAL ACCEPT`;
+shared seam `IMPLEMENTED`; unwired publishers `DEFERRED` fail-open; runtime witness deferred to the
+batched V3 campaign) — not a blanket `REPAIRED`. The runtime witness is folded into the later V3
+campaign, so no dedicated session is scheduled.
 
 #### The evidence this comes from
 

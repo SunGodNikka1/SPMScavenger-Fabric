@@ -58,7 +58,12 @@ public final class DiscretionaryEligibility {
                     DUNGEON_TRAIN,
                     SOCIAL_TRAVEL,
                     COMBAT_PREP,
-                    SOCIAL_REFLEX -> true;
+                    SOCIAL_REFLEX,
+                    // D-VR-082-A1 item 2: VILLAGE_TRADE is deliberate-band mandatory work at
+                    // priority 3; the shared authority must not read a running trade as
+                    // "discretionary eligible". This is the semantic lie the flags happened to
+                    // hide before MandatoryOwnership made the authority load-bearing.
+                    VILLAGE_TRADE -> true;
             default -> false;
         };
     }

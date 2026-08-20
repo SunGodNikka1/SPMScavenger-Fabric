@@ -1,9 +1,13 @@
 package com.noobk.spmscavenger.opinion;
 
 import com.noobk.spmscavenger.activity.ActivityObservationService;
+import com.noobk.spmscavenger.activity.MandatoryOwnership;
+import com.noobk.spmscavenger.activity.MandatoryOwnershipClaim;
+import com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry;
 import com.noobk.spmscavenger.experience.MobExperienceContext;
 import com.noobk.spmscavenger.experience.OpinionExperienceRegistry;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -80,7 +84,14 @@ public final class DiscretionaryActivityDirector {
             return;
         }
         MobExperienceContext context = OpinionExperienceRegistry.contextFor(mobId);
-        boolean eligible = DiscretionaryEligibility.isDiscretionaryEligible(observation, combatTarget);
+        // D-VR-084: consume the shared discretionary-permission authority. The running half is
+        // delegated (never re-derived); the pending half adds the live published claim. The
+        // director gains an input, not a policy — scoring, utility and intent lifecycle are
+        // untouched.
+        Optional<MandatoryOwnershipClaim> liveClaim =
+                MandatoryOwnershipRegistry.liveClaim(mobId, gameTime);
+        boolean eligible = MandatoryOwnership.evaluate(
+                observation, combatTarget, liveClaim, gameTime).eligible();
 
         // Subject-specific inputs are read only when there is a subject. Asking the entity-opinion
         // memory about nobody would allocate nothing useful and invite a null-shaped default to

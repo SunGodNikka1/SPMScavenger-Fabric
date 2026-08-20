@@ -513,3 +513,57 @@ Runtime evidence: user-captured `[TE3] step-7A autonomous readout`, 2026-08-19. 
 
 `episodes=0` was also captured. It is a readout fact, not relationship-learning acceptance evidence
 for this scenario.
+
+## D-VR-084 / task-52 — MandatoryOwnership pending-claim authority (2026-08-20)
+
+Canonical design: `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` D-VR-084; brief
+`.superpowers/sdd/task-52-brief.md` (amended QW-V3-1). Full clean build: **1354 tests, 0 failures/errors/skips**;
+artifact `build/libs/spmscavenger-1.11.0.jar` SHA-256 `8AE2395B12FFDA7F02C636D0B0B87731C86788F42662DBDA781F9107E7F21925`.
+Automated behavioural acceptance only; the runtime witness is deferred to the batched V3 campaign (AV-1).
+
+| # | Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- | --- |
+| 1 | RUNNING mandatory work | discretionary **denied** | eligible while SCAVENGE_WORK runs | `MandatoryOwnershipTest.scenario1_*` `CONFIRMED` |
+| 2 | LIVE pending claim | discretionary **denied** with `MANDATORY_PENDING_CLAIM` | claim ignored while live | `scenario2_*` `CONFIRMED` |
+| 3 | demand exists, nobody claims | discretionary **allowed** | demand existence blocks | `scenario3_*` `CONFIRMED` |
+| 4 | claim expires without progress | discretionary **becomes allowed** | expired claim still blocks | `scenario4_*` + `simulationA_expiryVariant*` `CONFIRMED` |
+| 5 | same demand after expiry | claim does **NOT** self-renew | republish mints a successor | `scenario5_*` `CONFIRMED`; negative-control mutation verified (guard removed → test fails) |
+| 6a | executor genuinely started | same identity may later use the NEXT generation | unrelated event mints | `scenario6a_*` `CONFIRMED`; producer-side mint only at `EXECUTOR_STARTED` release with live claim |
+| 6b | canonical route identity genuinely changed | exactly one distinct successor may publish | repeats of the new pair accepted | `scenario6b_*` `CONFIRMED` |
+| 6c | same identity + merely fresher observation | no successor claim in task-52 | fresh scan reauthorizes | `scenario6c_*` `CONFIRMED` |
+| 7 | owner abandons or satisfies | claim released immediately | stale claim blocks | `ordinaryReleaseDeletesTheClaim` `CONFIRMED` |
+| 8 | `VILLAGE_TRADE` running | discretionary **denied** | trade reads as discretionary-eligible | `scenario8_*` + `WiringTest.villageTradeBlocksDiscretionaryChoice` `CONFIRMED` |
+| 9 | unknown running goal | **fail closed** | unknown reads as eligible | `scenario9_*` `CONFIRMED` |
+| 10 | future owner forgets to publish | pending side **fails open** | missing publish blocks | `scenario10_*` + status line 3 in KNOWN_DEFECTS `CONFIRMED` |
+| 11 | unload / dimension transfer / server stop | runtime claim disappears | stale claim survives | `scenario11_*` + `SpmScavenger` eviction wiring `CONFIRMED` |
+| 12 | restart | no stale `MandatoryOwnership` resurrects | persisted claim | `scenario12_*` + runtime-only store `CONFIRMED` |
+
+### Temporal simulations
+
+| ID | Timeline | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- | --- |
+| A | T0 demand → T1 CLAIM → T40 progress → T80 impossible → T120 abandon → T121 EXPLORE legal | claim blocks until abandon, then permission returns | abandoned claim lingers | `simulationA_servableDemandAbandonsAndDiscretionaryResumes` `CONFIRMED` |
+| B | T0 impossible demand → T1 no owner accepts → T2 no claim → T3 EXPLORE legal → still legal T400 | unservable demand never freezes the mob | demand existence blocks forever | `simulationB_unservableDemandNeverFreezesDiscretionary` `CONFIRMED` |
+
+### Producer-side negative controls (Gather)
+
+| # | Control | Expected | Evidence |
+| --- | --- | --- | --- |
+| P1 | same consumer/material + route across TTLs/scan intervals | no new generation | registry refuses same-route same-generation republish; producer counter advanced only at `EXECUTOR_STARTED` with live claim |
+| P2 | increment generation per scan | **must fail** | generation field minted only in `start()` guarded by live claim; structural wiring test |
+| P3 | explicitly authorized semantic episode input changes | exactly one distinct successor | `scenario6b_*` `CONFIRMED` |
+| P4 | wealth-only intent, no canonical `MaterialDemand` | no pending claim | `ownedMandatoryRoute` empty → no publish (code path); `WiringTest.gatherPublisherUsesFactoredCanonicalRoute` |
+| P5 | responsibility accepted while scan clock refuses | claim live immediately; EXPLORE cannot be admitted | publish call textually above `scanClock.claim(now)` in `canUse`; `WiringTest.gatherPublishesBeforeScanClockClaim` |
+| P6 | repeated ABANDONED → unchanged demand | no further accepted claim | `routeHandoffAndAbandonDoNotAdvanceGeneration` `CONFIRMED` |
+| P7 | ROUTE_HANDED_OFF → unchanged demand | no further accepted claim | exposed in task-52 (release site in `canUse` handoff/yield paths); `CONFIRMED` |
+
+### Structural wiring (silent-revert protection)
+
+| Contract | Assertion |
+| --- | --- |
+| director consumes the shared authority | `DiscretionaryActivityDirector` calls `MandatoryOwnership.evaluate`; no direct `DiscretionaryEligibility.isDiscretionaryEligible(` |
+| running arm delegates | `MandatoryOwnership.java` calls `DiscretionaryEligibility.isDiscretionaryEligible` + `invalidationForObservation` |
+| `VILLAGE_TRADE` blocks discretionary | `DiscretionaryEligibility.java` `blocksDiscretionaryChoice` contains `VILLAGE_TRADE` |
+| cause exists | `InvalidationCause` contains `MANDATORY_PENDING_CLAIM` |
+| RET-1 eviction wired | `SpmScavenger` releases on unload/death, clears on server stop; `removePermanently` on destroy |
+| runtime-only | `PerMobSavedData` contains no `MandatoryOwnership` reference |

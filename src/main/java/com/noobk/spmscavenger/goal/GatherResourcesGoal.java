@@ -11,6 +11,7 @@ import com.noobk.spmscavenger.GatherIntentPolicy;
 import com.noobk.spmscavenger.GatherProtection;
 import com.noobk.spmscavenger.GatherTargetPolicy;
 import com.noobk.spmscavenger.WorkDemandPolicy;
+import com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry;
 import com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence;
 import com.noobk.spmscavenger.village.trade.GatherRoutePrecursor;
 import com.noobk.spmscavenger.PlayerMobs;
@@ -28,6 +29,7 @@ import com.noobk.spmscavenger.mining.MiningExecutionGuard;
 import com.noobk.spmscavenger.mining.MiningGoalKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
@@ -141,6 +143,13 @@ public class GatherResourcesGoal extends Goal {
     /** Most recent break position for {@link DiscoveryMode#NEWLY_EXPOSED} vein follow (MI-13). */
     private DiscoveryPolicy.HarvestReveal lastHarvest;
 
+    /**
+     * D-VR-084 — the producer-side episode generation, minted ONLY at the
+     * {@code EXECUTOR_STARTED} release. Never advanced by another scan, tick, TTL, or demand
+     * existence; see the task-52 brief's anti-self-renewal mechanics.
+     */
+    private int mandatoryEpisodeGeneration = 0;
+
     private static final int SCAN_INTERVAL = 60;
     private static final int SCAN_PHASE_SALT = 61;
     /** Match craft/smelt goals — partial tree paths need longer than ~7s. */
@@ -214,6 +223,16 @@ public class GatherResourcesGoal extends Goal {
             return false;
         }
         long now = mob.level().getGameTime();
+        // D-VR-084 / P5: ownership became knowable at wantsMore. Publish the pending claim BEFORE
+        // the scan clock can refuse, so EXPLORE cannot be admitted in the up-to-60-tick gap between
+        // accepting responsibility and the next permitted sweep. Wealth-only desire produces no
+        // canonical MaterialDemand, so ownedMandatoryRoute is empty and nothing is published (P4).
+        ownedMandatoryRoute(cfg).ifPresent(route -> MandatoryOwnershipRegistry.publish(
+                mob.getUUID(),
+                route.demand().consumerKey(),
+                route.identity(),
+                mandatoryEpisodeGeneration,
+                now));
         if (!scanClock.claim(now)) {
             return false;
         }
@@ -228,6 +247,14 @@ public class GatherResourcesGoal extends Goal {
         java.util.Optional<MandatoryHandoffPolicy.HandoffPublication> handoff =
                 publishRouteExhaustion(cfg, now);
         if (selected == null) {
+            // D-VR-084: this attempt cannot serve the route. A handoff publication means the
+            // completed sweep proved exhaustion / ownership handed off; otherwise the attempt
+            // simply found nothing it could take. Either way the pending claim is released —
+            // neither event mints the next generation (ABANDONED / ROUTE_HANDED_OFF never mint).
+            MandatoryOwnershipRegistry.release(mob.getUUID(),
+                    handoff.isPresent()
+                            ? MandatoryOwnershipRegistry.ReleaseReason.ROUTE_HANDED_OFF
+                            : MandatoryOwnershipRegistry.ReleaseReason.ABANDONED);
             yieldWindow = MandatoryHandoffPolicy.YieldWindow.NONE;
             scanClock.resetAfter(now);
             return false;
@@ -242,6 +269,9 @@ public class GatherResourcesGoal extends Goal {
                                 mob.level().getBlockState(selected.blockPos())),
                         yieldWindow, now);
         if (yielding.isPresent()) {
+            // D-VR-084: ownership left Gather for the published handoff. No mint.
+            MandatoryOwnershipRegistry.release(mob.getUUID(),
+                    MandatoryOwnershipRegistry.ReleaseReason.ROUTE_HANDED_OFF);
             yieldWindow = yielding.get();
             scanClock.resetAfter(now);
             return false;
@@ -285,6 +315,19 @@ public class GatherResourcesGoal extends Goal {
 
     @Override
     public void start() {
+        // D-VR-084: the executor genuinely began. If a pending claim is live for this mob, the
+        // executor started for THAT mandatory episode: release it — the running ActivityClass
+        // (SCAVENGE_WORK) now supplies the blocker — and mint the next episode generation.
+        // EXECUTOR_STARTED is the ONLY event that mints; every other release reason deletes
+        // without advancing (see the task-52 brief's anti-self-renewal mechanics). A start with
+        // no live claim (wealth-only or cooperative acquisition) has nothing to release and must
+        // NOT mint: otherwise an unrelated start would reauthorize an abandoned mandatory identity.
+        long now = mob.level().getGameTime();
+        if (MandatoryOwnershipRegistry.liveClaim(mob.getUUID(), now).isPresent()) {
+            mandatoryEpisodeGeneration++;
+            MandatoryOwnershipRegistry.release(mob.getUUID(),
+                    MandatoryOwnershipRegistry.ReleaseReason.EXECUTOR_STARTED);
+        }
         approachTicks = 0;
         breakTicks = 0;
         breakTotal = 0;
@@ -299,6 +342,10 @@ public class GatherResourcesGoal extends Goal {
 
     @Override
     public void stop() {
+        // D-VR-084: ordinary release. The claim was already released at start(); this is the
+        // defensive path for goals that never began (e.g. an interrupted cooperative admission).
+        MandatoryOwnershipRegistry.release(mob.getUUID(),
+                MandatoryOwnershipRegistry.ReleaseReason.ORDINARY);
         if (target != null && approachTicks >= MAX_APPROACH_TICKS) {
             backOff(failureKey != null ? failureKey : target);
         }
@@ -544,15 +591,36 @@ public class GatherResourcesGoal extends Goal {
      * </ol>
      */
     /**
-     * @return the publication when evidence was actually written — the single authority for a
-     *     handoff. Every early return below is a reason no handoff exists, and the scheduler now
-     *     inherits all of them instead of re-deriving a subset.
+     * D-VR-084 — the canonical mandatory route this goal owns: the selected consumer demand and
+     * its precursor resource. Both the pending-claim publisher and {@code publishRouteExhaustion}
+     * consume this single derivation, so there is exactly one reading of which route Gather owns
+     * (the V2-DEF-003 shape — two interpretations of one fact are forbidden here).
      */
-    private java.util.Optional<MandatoryHandoffPolicy.HandoffPublication> publishRouteExhaustion(
-            ScavengerConfig cfg, long now) {
-        if (scanScope != null) {
-            return java.util.Optional.empty();
+    private record OwnedRoute(WorkDemandPolicy.MaterialDemand demand,
+            GatherIntentPolicy.Resource precursor) {
+        /**
+         * The stable semantic route identity for the claim registry: material + precursor only —
+         * never the derived deficit, scan results, timestamps, candidate positions, or evidence
+         * epochs (QW-V3-1). The deficit must not join the identity: it is a per-evaluation
+         * quantity and would turn identity into a disguised scan counter.
+         */
+        Object identity() {
+            return new MandatoryRouteIdentity(demand.materialKey(), precursor);
         }
+    }
+
+    /** Immutable stable route identity: {@code (materialKey, precursor)}. */
+    private record MandatoryRouteIdentity(ResourceLocation materialKey,
+            GatherIntentPolicy.Resource precursor) {
+    }
+
+    /**
+     * The canonical mandatory route this goal owns, derived once per evaluation from the same
+     * {@code WorkDemandPolicy.select} call the exhaustion path uses. Empty when the mob has no
+     * mandatory demand or no modelled precursor — a wealth-only desire must never mint a claim
+     * (P4), and this is the seam that keeps NEED separate from WEALTH.
+     */
+    private java.util.Optional<OwnedRoute> ownedMandatoryRoute(ScavengerConfig cfg) {
         Container backpack = PlayerMobs.backpack(mob);
         if (backpack == null) {
             return java.util.Optional.empty();
@@ -563,24 +631,44 @@ public class GatherResourcesGoal extends Goal {
         if (demand.isEmpty()) {
             return java.util.Optional.empty();
         }
-        if (!GatherRoutePrecursor.scanCovers(demand.get(), currentIntent())) {
-            return java.util.Optional.empty();
-        }
-        // V2-DEF-003b: THIS resource's own result, not the scan's overall verdict. A saturated
-        // wealth log winning target selection used to make the whole scan "successful" and silence
-        // an iron route that had genuinely found nothing.
         java.util.Optional<GatherIntentPolicy.Resource> precursor =
                 GatherRoutePrecursor.of(demand.get());
         if (precursor.isEmpty()) {
             return java.util.Optional.empty();
         }
-        if (lastScanFamilies.contains(precursor.get())) {
+        return java.util.Optional.of(new OwnedRoute(demand.get(), precursor.get()));
+    }
+
+    /**
+     * @return the publication when evidence was actually written — the single authority for a
+     *     handoff. Every early return below is a reason no handoff exists, and the scheduler now
+     *     inherits all of them instead of re-deriving a subset.
+     */
+    private java.util.Optional<MandatoryHandoffPolicy.HandoffPublication> publishRouteExhaustion(
+            ScavengerConfig cfg, long now) {
+        if (scanScope != null) {
             return java.util.Optional.empty();
         }
-        RouteExhaustionEvidence.publish(mob.getUUID(), demand.get(),
+        // D-VR-084: consume the same canonical route derivation as the claim publisher. A second
+        // interpretation of which route Gather owns is the V2-DEF-003 shape and is forbidden.
+        java.util.Optional<OwnedRoute> owned = ownedMandatoryRoute(cfg);
+        if (owned.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        OwnedRoute route = owned.get();
+        if (!GatherRoutePrecursor.scanCovers(route.demand(), currentIntent())) {
+            return java.util.Optional.empty();
+        }
+        // V2-DEF-003b: THIS resource's own result, not the scan's overall verdict. A saturated
+        // wealth log winning target selection used to make the whole scan "successful" and silence
+        // an iron route that had genuinely found nothing.
+        if (lastScanFamilies.contains(route.precursor())) {
+            return java.util.Optional.empty();
+        }
+        RouteExhaustionEvidence.publish(mob.getUUID(), route.demand(),
                 RouteExhaustionEvidence.Reason.SEARCH_COMPLETED_EMPTY, now);
         return java.util.Optional.of(new MandatoryHandoffPolicy.HandoffPublication(
-                demand.get().consumerKey(), demand.get().materialKey(), precursor.get()));
+                route.demand().consumerKey(), route.demand().materialKey(), route.precursor()));
     }
 
     /**

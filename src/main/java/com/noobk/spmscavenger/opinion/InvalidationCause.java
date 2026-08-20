@@ -6,6 +6,8 @@ package com.noobk.spmscavenger.opinion;
 public enum InvalidationCause {
     NONE,
     MANDATORY_AUTHORITY,
+    /** D-VR-084 — a published pending claim blocks a fresh discretionary selection. */
+    MANDATORY_PENDING_CLAIM,
     COMBAT_TARGET,
     PLAYER_COMMAND,
     UNKNOWN_ACTIVE,

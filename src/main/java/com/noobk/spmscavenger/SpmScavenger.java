@@ -128,6 +128,13 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.clear(mob.getUUID());
+                // D-VR-084 / RET-1: the pending-claim store is runtime-only; unload (chunk or
+                // dimension) releases the claim so no claim outlives its owner's presence. The
+                // remembered terminal survives ordinary unload (the mob may return); permanent
+                // removal below clears the whole slot.
+                com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.release(
+                        mob.getUUID(),
+                        com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.ReleaseReason.ORDINARY);
                 if (world.getServer() != null) {
                     VillagePerceptionScheduler.forServer(world.getServer())
                             .unregisterObserver(mob.getUUID());
@@ -139,6 +146,10 @@ public class SpmScavenger implements ModInitializer {
                 // on, so it is populated here.
                 net.minecraft.world.entity.Entity.RemovalReason reason = mob.getRemovalReason();
                 if (reason != null && reason.shouldDestroy()) {
+                    // D-VR-084 / RET-1: the mob is permanently gone — clear the whole slot,
+                    // including the anti-self-renewal terminal, so no stale memory lingers.
+                    com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.removePermanently(
+                            mob.getUUID());
                     // V1-R3: every dimension, not just this one. The mob keeps its UUID across a
                     // dimension change, so memory written in the Overworld outlives a death in the
                     // Nether unless the sweep is global.
@@ -175,6 +186,7 @@ public class SpmScavenger implements ModInitializer {
                     com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.shutdownServerState();
                     com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.shutdownServerState();
                     com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.shutdownServerState();
+                    com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.shutdownServerState();
                     VillagePerceptionScheduler.shutdown(server);
                 });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
@@ -187,6 +199,12 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.clear(mob.getUUID());
+                com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.release(
+                        mob.getUUID(),
+                        com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.ReleaseReason.ORDINARY);
+                // D-VR-084 / RET-1: death is permanent — the whole slot (claim + terminal) is gone.
+                com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.removePermanently(
+                        mob.getUUID());
                 if (mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
                     VillagePerceptionScheduler.forServer(serverLevel.getServer())
                             .unregisterObserver(mob.getUUID());

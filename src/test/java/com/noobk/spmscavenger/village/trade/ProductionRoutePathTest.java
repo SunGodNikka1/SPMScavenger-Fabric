@@ -226,17 +226,22 @@ class ProductionRoutePathTest {
                 "a handoff exists only where evidence was actually written");
         assertTrue(body.contains("scanScope != null"),
                 "a cooperative sub-probe is not a completed bounded search");
-        // V2-DEF-003b: the same property, now asked PER RESOURCE. Families are recorded at pass
-        // one, before protection runs, so an iron candidate that protection rejected still marks
-        // RAW_IRON present and still blocks the publish - the material IS there. What changed is
-        // that a saturated wealth LOG winning target selection no longer answers for iron.
-        assertTrue(body.contains("lastScanFamilies.contains(precursor.get())"),
+        // V2-DEF-003b: the same property, now asked PER RESOURCE via the D-VR-084 factored route.
+        // Families are recorded at pass one, before protection runs, so an iron candidate that
+        // protection rejected still marks RAW_IRON present and still blocks the publish - the
+        // material IS there. What changed is that a saturated wealth LOG winning target selection
+        // no longer answers for iron.
+        assertTrue(body.contains("lastScanFamilies.contains(route.precursor())"),
                 "protected or not, a candidate of THIS resource means the route is not exhausted");
-        assertTrue(body.contains("GatherRoutePrecursor.of(demand.get())"),
-                "and the question is scoped to the demand's own precursor");
         assertTrue(body.contains("GatherRoutePrecursor.scanCovers("),
                 "the scan must have been asked for this demand's precursor");
         assertTrue(body.contains("Reason.SEARCH_COMPLETED_EMPTY"));
+        // D-VR-084 / task-52: the canonical route derivation (demand + precursor) is factored and
+        // shared with the pending-claim publisher — one reading of which route Gather owns, not
+        // two. The precursor question itself lives in ownedMandatoryRoute.
+        String owned = bodyOf(gather, "private java.util.Optional<OwnedRoute> ownedMandatoryRoute(");
+        assertTrue(owned.contains("GatherRoutePrecursor.of(demand.get())"),
+                "and the question is scoped to the demand's own precursor");
     }
 
     /** The episode's lifetime is bound to the consumer in exactly one place, not four. */

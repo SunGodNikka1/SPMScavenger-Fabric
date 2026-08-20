@@ -110,17 +110,36 @@ Until both are observed, this defect is repaired, not closed.
 
 ## V2-DEF-002 — discretionary activity can displace *pending* mandatory progression
 
-**Status:** OPEN, architecture finding — **PROMOTED 2026-08-19 from deferred debt to a V3-A
-prerequisite.** **Discovered:** step 7B runtime, 2026-08-18. **Applies to:** Opinion / discretionary
+**Status (four-part, 2026-08-20 — task-52):** not a blanket `REPAIRED`. Recorded separately per the
+task-52 brief and Gate AV-1:
+
+```text
+Gather-owned observed path      REPAIRED / STATIC-BEHAVIORAL ACCEPT
+shared MandatoryOwnership seam  IMPLEMENTED
+unwired mandatory publishers    DEFERRED - fail-open coverage, by design
+runtime witness                 DEFERRED - batched V3 campaign
+```
+
+**Discovered:** step 7B runtime, 2026-08-18. **Applies to:** Opinion / discretionary
 director, not Trade Everything. **Severity:** low frequency, high surprise.
 
-**Promotion note.** The V3 Village amendment pass found that `VillageWorkAdmission` needs exactly the
-missing state this defect names: `ActivityObservationService` only observes `WrappedGoal.isRunning()`,
-so "mandatory work exists but no executor is running yet" is invisible to every consumer. Building a
-village-local answer would have forked the model. The repair is now specified as the shared
-claim-based `MandatoryOwnership` authority in **`D-VR-084`**
-(`plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md`), whose four states and anti-self-renewal
-invariant subsume the repair gate below. This does not reopen V2 as a phase.
+**Repair summary (task-52 / `D-VR-084`, 2026-08-20).** The shared claim-based `MandatoryOwnership`
+authority is implemented and wired: `DiscretionaryActivityDirector` consumes
+`MandatoryOwnership.evaluate` (running half delegated to `DiscretionaryEligibility`, pending half
+consuming the registry's live claim), `GatherResourcesGoal` is the one wired publisher
+(`ownedMandatoryRoute` factored and shared with `publishRouteExhaustion`), and the pending claim is
+published before `scanClock.claim(now)` so the scan-cadence gap cannot admit EXPLORE. The four states
+and the anti-self-renewal invariant (a claim may never be refreshed by demand existence) are
+structural. Automated behavioural acceptance: 12 scenarios + 2 temporal simulations + producer-side
+controls, 50 new tests, full suite **1354 tests, 0 failures**. The second repair-gate row below
+(unservable demand) is enforced by simulation B (EXPLORE still legal at T400).
+
+**The third status line is the honest one and must not be dropped because the suite is green:**
+task-52 wires **one** publisher. Trade, Mining and future V3 cleanup remain unwired, and for their
+episodes the pending side fails open exactly as before — scenario 10 behaving as designed, but the
+defect's general form survives this slice. The runtime witness (pending claim active → no expedition;
+abandoned/expired → discretionary movement resumes) is folded into the batched V3 campaign; no
+dedicated session is scheduled.
 
 ### What was observed
 
@@ -178,12 +197,14 @@ policy, or V2-C.
 
 | Scenario | Must happen | Must not happen | Evidence |
 | --- | --- | --- | --- |
-| Progression demand exists, route owner not yet executable | discretionary EXPLORE is refused admission | a ~150-block expedition starts while the mob has unresolved mandatory work | `OPEN` |
-| Progression demand genuinely unsatisfiable (no route at all) | discretionary activity resumes normally | the mob stands idle for ever guarding a demand it cannot serve | `OPEN` |
-| No progression demand | today's behaviour unchanged | discretionary activity is suppressed by a blocker that never clears | `OPEN` |
+| Progression demand exists, route owner not yet executable | discretionary EXPLORE is refused admission | a ~150-block expedition starts while the mob has unresolved mandatory work | Gather-owned path `STATIC-BEHAVIORAL ACCEPT` (task-52): pending claim published pre-scan-clock, `MandatoryOwnership.evaluate` denies; runtime witness deferred to V3 campaign |
+| Progression demand genuinely unsatisfiable (no route at all) | discretionary activity resumes normally | the mob stands idle for ever guarding a demand it cannot serve | simulation B: no claim → EXPLORE legal, still legal at T400 (test) |
+| No progression demand | today's behaviour unchanged | discretionary activity is suppressed by a blocker that never clears | scenario 3/10 `CONFIRMED` (test); full 1354-test suite |
 
 Runtime proof class (AV-1): an observed objective trace, not a compile. The second row is the one
-that makes this non-trivial — a naive blocker converts a wandering mob into a frozen one.
+that makes this non-trivial — a naive blocker converts a wandering mob into a frozen one. The
+automated rows above are static-behavioural acceptance, not runtime `CONFIRMED`; the runtime witness
+is deferred by decision to the batched V3 campaign.
 
 ---
 

@@ -203,12 +203,18 @@ its next physical sweep.
 - continued existence of the same demand
 - an unchanged repeated empty scan
 
+**Route identity is stable semantic facts only.** For Gather, `routeIdentity` is the canonical
+consumer/material/precursor set of the selected `MaterialDemand` — never scan results, timestamps,
+candidate positions, evidence epochs, or any observation-derived value. This is the locked
+`QW-V3-1` definition; an identity that can mutate from a fresher scan is a disguised scan counter
+and is the defect the generation field exists to audit.
+
 **A new generation requires a semantic episode transition:**
 
-- the selected mandatory consumer/material identity changes
+- the selected mandatory consumer/material identity changes — this is a **different canonical
+  route identity**, accepted as a different episode; generation is not consulted
 - explicit ownership leaves Gather and later returns through an authoritative transition
-- materially fresh route evidence changes the Gather route context after the previous claim was
-  abandoned
+- the executor genuinely started (the only generation-advancing event; see the table below)
 
 **Named production mechanism for task-52 — generation is minted at *release*, never at *publish*, and
 only ONE release reason mints it.** An arbitrary mutable counter incremented at publish time is
@@ -223,18 +229,31 @@ semantic episode transition:
 | ordinary release | deleted | **does NOT advance** |
 | **TTL expiry** | deleted | **does NOT advance** |
 | continued demand existence | — | **does NOT advance** |
-| identity change (`consumerKey`/`materialKey` differs from the remembered slot) | new episode | not consulted — a different pair is accepted outright |
+| canonical identity change (`consumerKey`/`materialKey`/`precursor` differs from the remembered slot) | new episode | not consulted — a different pair is accepted outright (one distinct successor per change, then the remembered slot refuses repeats of the new pair) |
 
 **Only `EXECUTOR_STARTED` advances.** Letting a *termination* mint the next generation would make
 `ABANDONED -> republish -> ABANDONED` a self-renewal loop with extra steps — requirement 3 defeated
 by the very mechanism meant to enforce it. A claim that ends does not thereby earn its successor.
 
-**Reacquisition after handoff or abandonment is NOT granted by task-52.** Re-claiming the same
-identity requires an explicit future *authoritative transition* or materially fresh actionable
-evidence; neither is defined in this slice, and **the previous claim having ended is not one of
-them**. So within task-52, once Gather hands off or abandons an identity, that identity produces no
-further accepted claim — the pending side fails open and discretionary work resumes, which is the
-designed third state, not a gap.
+**Reacquisition after handoff or abandonment is NOT granted by task-52 — locked `QW-V3-1` wording:**
+
+```text
+SAME canonical route identity
+    -> only EXECUTOR_STARTED can advance generation
+
+DIFFERENT canonical route identity
+    -> different pair, accepted as a different episode
+    -> generation not consulted
+
+fresh evidence + same identity
+    -> does NOT authorize reacquisition in task-52
+```
+
+Re-claiming the same identity requires an explicit future *authoritative transition* — not "materially
+fresh actionable evidence", which is deliberately removed as a reacquisition justification. Merely
+fresher observation of the same demand is not an event and must not mint one. So within task-52, once
+Gather hands off or abandons an identity, that identity produces no further accepted claim — the
+pending side fails open and discretionary work resumes, which is the designed third state, not a gap.
 
 Consequence, and the reason this mechanization is chosen: after expiry, handoff or abandonment with
 an unchanged demand the producer has no way to obtain a higher generation, so its next publish
@@ -266,7 +285,7 @@ same episode. Pending is the *pre-execution* state only.
 | --- | --- | --- |
 | P1 | hold the same consumer/material **and** route evidence across multiple TTLs and multiple scan intervals | Gather may **not** mint another generation |
 | P2 | remove the producer-side episode guard / increment generation per scan | **this test must fail** |
-| P3 | change an explicitly authorized semantic episode input | **exactly one** new generation becomes publishable |
+| P3 | change an explicitly authorized semantic episode input (canonical identity changes) | **exactly one** distinct successor claim becomes publishable; a repeat publish of the new pair with no intervening event is refused |
 | P4 | wealth-only Gather intent, no canonical `MaterialDemand` | **no** pending mandatory claim |
 | P5 | responsibility accepted while `scanClock` refuses for the full interval | claim is live **immediately**; EXPLORE cannot be admitted in the gap |
 | P6 | repeated `ABANDONED` → same unchanged demand, across **multiple intervals** | **no** further accepted claim for that identity |
@@ -291,6 +310,18 @@ episode — scenario 10. Wiring that owner is a later task; name it in the repor
 - Do not touch `MandatoryHandoffPolicy`, `GatherScanSweep`, transaction capacity, or the autonomous seed.
 - **Gather remains the only party allowed to publish `RouteExhaustionEvidence`.** A `MandatoryOwnershipClaim` is not exhaustion evidence and must not be read as any.
 
+### Disposition — observation-cadence concern (QW-V3-2, User 2026-08-20)
+
+A proposed one-tick gap between claim release in `start()` and the running-class observation does
+**not** hold against normal GoalSelector ordering and is **REJECTED as a blocker**: the selector's
+goal-update phase runs `canUse()` → `start()`, then ticks running goals; the observer runs inside
+`ExplorationActivityGoal.tick()`, which is a running-goal tick that happens **after** `start()` has
+marked the `WrappedGoal` running. There is no observation point halfway through `Gather.start()`.
+
+`canUse` (pending claim live) → `start()` (claim released, goal now running) → later running-goal
+tick (`ExplorationActivityGoal.tick()` sees Gather `RUNNING`). A cheap scheduler-order structural
+test is optional if the implementation agent wants one; it is **not** a task-52 gate.
+
 ## Verification — automated behavioural acceptance (User, 2026-08-19)
 
 Runtime is **deliberately not** part of this slice. *"Unit tests cannot show a mob stopped
@@ -304,7 +335,7 @@ stronger than isolated unit tests. All twelve scenarios are required:
 | 3 | demand exists, nobody claims | discretionary **allowed** |
 | 4 | claim expires without progress | discretionary **becomes allowed** |
 | 5 | **same demand still exists after expiry** | claim does **NOT** self-renew |
-| 6 | meaningful progress / fresh actionable evidence | a new bounded claim **MAY** be published |
+| 6 | executor genuinely started (6a) **or** canonical route identity genuinely changed (6b) | 6a: same canonical identity may later use the **next** generation; 6b: **exactly one** distinct successor claim may publish. 6c: same identity + merely fresher observation → **no** successor claim in task-52 |
 | 7 | owner abandons or satisfies the work | claim released **immediately** |
 | 8 | `VILLAGE_TRADE` running | discretionary **denied** |
 | 9 | unknown running goal | **fail closed** |

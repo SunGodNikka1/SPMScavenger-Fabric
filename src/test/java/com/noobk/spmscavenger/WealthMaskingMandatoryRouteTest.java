@@ -214,7 +214,10 @@ class WealthMaskingMandatoryRouteTest {
         String gather = java.nio.file.Files.readString(java.nio.file.Path.of(
                 "src/main/java/com/noobk/spmscavenger/goal/GatherResourcesGoal.java"));
 
-        assertTrue(gather.contains("lastScanFamilies.contains(precursor.get())"),
+        // D-VR-084 / task-52: the exhaustion publisher now consumes the factored
+        // ownedMandatoryRoute seam; the per-resource question is asked about that route's
+        // precursor, not about whether the scan found anything.
+        assertTrue(gather.contains("lastScanFamilies.contains(route.precursor())"),
                 "the question is asked about RAW_IRON, not about whether the scan found anything");
         assertFalse(gather.contains(
                         "lastScanFailure != GatherCandidatePolicy.ScanFailureReason"
