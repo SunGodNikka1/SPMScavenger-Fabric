@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 
 import java.util.EnumSet;
 import java.util.function.BooleanSupplier;
@@ -19,8 +20,12 @@ import java.util.function.BooleanSupplier;
  * <p>Marks observation dirty on chunk transition or heartbeat, then enqueues a deduplicated scheduler
  * request. It never claims MOVE or LOOK and does not call {@link com.noobk.spmscavenger.village.VillagePerception}
  * directly — the server scheduler owns the POI query budget.
+ *
+ * <p>This subclasses {@link RandomLookAroundGoal} solely because SPM 0.86.0's objective readout
+ * filters that host type as cosmetic/background noise. The inherited look lifecycle is disabled;
+ * only this observer's perception tick executes.
  */
-public final class VillagePerceptionObserver extends Goal {
+public final class VillagePerceptionObserver extends RandomLookAroundGoal {
 
     public static final int PRIORITY = 9;
 
@@ -40,6 +45,7 @@ public final class VillagePerceptionObserver extends Goal {
     }
 
     VillagePerceptionObserver(Mob mob, VillagePerceptionEnqueueDebounce enqueueDebounce, PhasedScanClock heartbeatClock) {
+        super(mob);
         this.mob = mob;
         this.enqueueDebounce = enqueueDebounce;
         this.heartbeatClock = heartbeatClock;
@@ -56,6 +62,15 @@ public final class VillagePerceptionObserver extends Goal {
     @Override
     public boolean canContinueToUse() {
         return canUse();
+    }
+
+    /** Do not inherit vanilla look behavior; only SPM's readout classification is used. */
+    @Override
+    public void start() {
+    }
+
+    @Override
+    public void stop() {
     }
 
     @Override

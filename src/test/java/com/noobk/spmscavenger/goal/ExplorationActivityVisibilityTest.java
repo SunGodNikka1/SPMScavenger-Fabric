@@ -16,6 +16,13 @@ final class ExplorationActivityVisibilityTest {
     }
 
     @Test
+    void villagePerceptionObserverUsesTheHostCosmeticGoalContract() {
+        assertTrue(RandomLookAroundGoal.class.isAssignableFrom(VillagePerceptionObserver.class),
+                "The always-running village perception observer must remain hidden by SPM's "
+                        + "RandomLookAroundGoal objective filter");
+    }
+
+    @Test
     void anticsDecoratorUsesTheHostCosmeticGoalContract() {
         assertTrue(RandomLookAroundGoal.class.isAssignableFrom(AnticsGoal.class),
                 "The always-running antics decorator must remain hidden by SPM's "
