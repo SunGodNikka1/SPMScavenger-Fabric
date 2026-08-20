@@ -210,23 +210,37 @@ its next physical sweep.
 - materially fresh route evidence changes the Gather route context after the previous claim was
   abandoned
 
-**Named production mechanism for task-52 — generation is minted at *release*, never at *publish*.**
-An arbitrary mutable counter incremented at publish time is exactly what this clause forbids, so the
-counter is moved to the one place that already carries semantic meaning:
+**Named production mechanism for task-52 — generation is minted at *release*, never at *publish*, and
+only ONE release reason mints it.** An arbitrary mutable counter incremented at publish time is
+exactly what this clause forbids, so the counter moves to the one event that is unambiguously a
+semantic episode transition:
 
 | Event | Claim | Episode generation |
 | --- | --- | --- |
 | `release(mobId, EXECUTOR_STARTED)` — the Gather executor began; the running `ActivityClass` now supplies the blocker | deleted | **advances** |
-| `release(mobId, ROUTE_HANDED_OFF)` — completed sweep proved exhaustion / ownership handed off | deleted | **advances** |
-| `release(mobId, ABANDONED)` — this attempt cannot serve the route | deleted | **advances** |
+| `release(mobId, ROUTE_HANDED_OFF)` — completed sweep proved exhaustion / ownership handed off | deleted | **does NOT advance** |
+| `release(mobId, ABANDONED)` — this attempt cannot serve the route | deleted | **does NOT advance** |
+| ordinary release | deleted | **does NOT advance** |
 | **TTL expiry** | deleted | **does NOT advance** |
+| continued demand existence | — | **does NOT advance** |
 | identity change (`consumerKey`/`materialKey` differs from the remembered slot) | new episode | not consulted — a different pair is accepted outright |
 
-Consequence, and the reason this mechanization is chosen: after TTL expiry with an unchanged demand
-the producer has no way to obtain a higher generation, so its next publish carries the remembered
-one and the registry **refuses it**. Requirement 3 becomes structural rather than a rule someone must
-remember. If the implementer finds a better mechanism, it must be argued in the report against these
-same negative controls — not substituted silently.
+**Only `EXECUTOR_STARTED` advances.** Letting a *termination* mint the next generation would make
+`ABANDONED -> republish -> ABANDONED` a self-renewal loop with extra steps — requirement 3 defeated
+by the very mechanism meant to enforce it. A claim that ends does not thereby earn its successor.
+
+**Reacquisition after handoff or abandonment is NOT granted by task-52.** Re-claiming the same
+identity requires an explicit future *authoritative transition* or materially fresh actionable
+evidence; neither is defined in this slice, and **the previous claim having ended is not one of
+them**. So within task-52, once Gather hands off or abandons an identity, that identity produces no
+further accepted claim — the pending side fails open and discretionary work resumes, which is the
+designed third state, not a gap.
+
+Consequence, and the reason this mechanization is chosen: after expiry, handoff or abandonment with
+an unchanged demand the producer has no way to obtain a higher generation, so its next publish
+carries the remembered one and the registry **refuses it**. Requirement 3 becomes structural rather
+than a rule someone must remember. If the implementer finds a better mechanism, it must be argued in
+the report against these same negative controls — not substituted silently.
 
 ### 4 — Pending claim lifecycle
 
@@ -239,8 +253,8 @@ completed sweep proves route exhausted / ownership handed off
     -> release / abandon pending claim
 owner determines this attempt cannot serve the route
     -> release / abandon
-unchanged demand after expiry
-    -> NO automatic new generation
+unchanged demand after expiry / handoff / abandonment
+    -> NO automatic new generation, and therefore no accepted successor claim
 ```
 
 The second row matters: a live pending claim and a running executor must never both block for the
@@ -255,9 +269,14 @@ same episode. Pending is the *pre-execution* state only.
 | P3 | change an explicitly authorized semantic episode input | **exactly one** new generation becomes publishable |
 | P4 | wealth-only Gather intent, no canonical `MaterialDemand` | **no** pending mandatory claim |
 | P5 | responsibility accepted while `scanClock` refuses for the full interval | claim is live **immediately**; EXPLORE cannot be admitted in the gap |
+| P6 | repeated `ABANDONED` → same unchanged demand, across **multiple intervals** | **no** further accepted claim for that identity |
+| P7 | `ROUTE_HANDED_OFF` → unchanged demand — **required if and only if task-52 exposes that release path**; if it does not, say so explicitly in the report rather than omitting the row | **no** further accepted claim for that identity |
 
-P5 is the assertion that closes the remaining escape hatch: it must fail if the publish call is moved
-below `scanClock.claim(now)`. Assert it at the tick of acceptance, not merely by the next sweep.
+P5 is the assertion that closes the scan-cadence escape hatch: it must fail if the publish call is
+moved below `scanClock.claim(now)`. Assert it at the tick of acceptance, not merely by the next sweep.
+
+P6 is the assertion that closes the *termination* escape hatch. Run it over several intervals, not
+one cycle — a single abandon/republish pair can pass by accident where a loop cannot.
 
 **Out of scope, record only:** if `wantsMore(cfg)` is false because another owner (e.g. a ready craft
 step) holds the demand, Gather correctly publishes nothing and the pending side fails open for that
@@ -330,6 +349,7 @@ Run each **in isolation** and name the test it breaks:
 6. move the publish call below `scanClock.claim(now)` → **P5** must fail
 7. derive the publisher's demand from `wantsMore()` / gather intent instead of the factored
    canonical `MaterialDemand` → **P4** must fail
+8. make `ABANDONED` (or `ROUTE_HANDED_OFF`) advance the generation → **P6** (and **P7**) must fail
 
 ### Commands
 
@@ -345,9 +365,25 @@ Report the total test count and every negative-control result.
 
 | File | Update |
 | --- | --- |
-| `docs/porting/KNOWN_DEFECTS.md` | `V2-DEF-002` → **`REPAIRED / STATIC-BEHAVIORAL ACCEPT`, runtime witness `DEFERRED`**. Not `CLOSED`, not "runtime confirmed" |
+| `docs/porting/KNOWN_DEFECTS.md` | `V2-DEF-002` → the **four-part status** below. Not a blanket `REPAIRED`, not `CLOSED`, not "runtime confirmed" |
 | `docs/porting/TEST_MATRIX.md` | one row per scenario 1–12 plus both temporal simulations |
 | `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` | `D-VR-084` implementation status; record that the runtime witness is folded into the later batched V3 campaign |
+
+### `V2-DEF-002` status precision (User, 2026-08-20)
+
+The defect is **not** to be marked fully `REPAIRED`. Record all four lines:
+
+```text
+Gather-owned observed path      REPAIRED / STATIC-BEHAVIORAL ACCEPT
+shared MandatoryOwnership seam  IMPLEMENTED
+unwired mandatory publishers    DEFERRED - fail-open coverage, by design
+runtime witness                 DEFERRED - batched V3 campaign
+```
+
+The third line is the honest one and must not be dropped when the suite goes green: task-52 wires
+**one** publisher. Trade, Mining and future V3 cleanup remain unwired, and for their episodes the
+pending side fails open exactly as it does today. That is scenario 10 behaving as designed — but it
+means the defect's general form survives this slice, and the status must say so.
 
 **Deferred runtime witness (do not schedule a session for it).** One observation, batched with the
 V3 integration campaign:

@@ -6705,11 +6705,15 @@ semantic episode transition: the owned consumer/material identity changes, owner
 and later returns through an authoritative transition, or materially fresh route evidence changes the
 context after the previous claim was abandoned.
 
-Mechanization: **mint the generation at *release*, never at *publish*.** An authoritative release
-(executor started, route handed off, attempt abandoned) advances the episode; **TTL expiry deletes
-the claim without advancing it**. The producer therefore has no way to obtain a higher generation
-from an unchanged demand, and requirement 3 becomes structural instead of a rule someone must
-remember. A `generation` field any caller may increment fails this decision regardless of green
+Mechanization: **mint the generation at *release*, never at *publish*, and only ONE release reason
+mints it — the executor actually starting.** `ROUTE_HANDED_OFF`, `ABANDONED`, ordinary release, TTL
+expiry and continued demand existence all delete or leave the claim **without advancing it**. Letting
+a *termination* mint the next generation would make `ABANDONED -> republish -> ABANDONED` a
+self-renewal loop with extra steps: a claim that ends does not thereby earn its successor.
+**Reacquiring the same identity after handoff or abandonment requires an explicit authoritative
+transition or materially fresh actionable evidence — the previous claim having ended is not one.**
+The producer therefore has no way to obtain a higher generation from an unchanged demand, and
+requirement 3 becomes structural instead of a rule someone must remember. A `generation` field any caller may increment fails this decision regardless of green
 tests. Every publisher must additionally derive its demand from the **canonical** mandatory
 `MaterialDemand` its domain already uses, and must publish **early enough that its own scan/retry
 cadence cannot open a discretionary gap** between accepting responsibility and becoming visible —
@@ -6796,9 +6800,18 @@ Two temporal simulations are required rather than optional — a servable demand
 (`no owner accepts -> no claim -> EXPLORE remains legal, and still legal at T400`). The second is
 `V2-DEF-002`'s second repair-gate row.
 
-**Resulting status wording.** After acceptance, `V2-DEF-002` becomes
-**`REPAIRED / STATIC-BEHAVIORAL ACCEPT`, runtime witness `DEFERRED`** — *not* `CLOSED`, and not
-"runtime confirmed" (Gate AV-1). The deferred witness is one observation folded into the later
+**Resulting status wording.** `V2-DEF-002` is **not** marked fully `REPAIRED`. Four lines, recorded
+separately (Gate AV-1):
+
+```text
+Gather-owned observed path      REPAIRED / STATIC-BEHAVIORAL ACCEPT
+shared MandatoryOwnership seam  IMPLEMENTED
+unwired mandatory publishers    DEFERRED - fail-open coverage, by design
+runtime witness                 DEFERRED - batched V3 campaign
+```
+
+The third line must survive a green suite: the first slice wires **one** publisher, so the defect
+general form outlives it. The deferred witness is one observation folded into the later
 batched V3 runtime campaign:
 
 ```text
