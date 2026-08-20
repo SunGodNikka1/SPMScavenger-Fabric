@@ -10,7 +10,7 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE positive path CLOSED**; **V3 pre-lock LOCKED** (`D-VR-080…083`); V3 implementation not authorized |
 | **Status** | `V3 PRE-LOCK LOCKED` — **VR-T2 PASS** and **V2-TE positive path PASS (`V2-DEF-003c-R1`)**. V2 is **CLOSED** to recorded scope. **D-VR-080…083 `LOCKED`** (User peer review, 2026-08-19). V3-A/B are **dependency-ready**; phase implementation remains separately authorized. |
-| **Nearest frontier** | **Authorize V3-A / task-52** (`VillageScenarioProfile` cross-dimension policy store + `VillageWorkAdmission`). V2-W deferred; not a V3 prerequisite. |
+| **Nearest frontier** | **Authorize task-52 — shared `MandatoryOwnership` + `V2-DEF-002` repair** (`D-VR-084`; brief at `.superpowers/sdd/task-52-brief.md`). V3-A becomes **task-53** and is blocked on it. V2-W deferred; not a V3 prerequisite. |
 | **Last update** | 2026-08-19 (User peer review — **D-VR-080…083 `LOCKED`**; corrected profile ownership, storage lifecycle, mandatory-owner admission, population predicate, budget contract) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
@@ -683,8 +683,9 @@ visible "my village" play.
 Minecraft launch.
 
 **Historical frontier (SUPERSEDED):** this section originally pointed to V2 Trading / task-47.
-V2 is now **CLOSED — VR-T2 RUNTIME PASS**; the canonical current frontier is **authorize V3-A /
-task-52** (`D-VR-080…083 `LOCKED`).
+V2 is now **CLOSED — VR-T2 RUNTIME PASS**. The canonical current frontier is **authorize task-52 —
+shared `MandatoryOwnership` / `V2-DEF-002` repair** (`D-VR-084`); V3-A follows as **task-53**
+(`D-VR-080/081/083` `LOCKED`, `D-VR-079-A1`/`082-A1` amended).
 in `Topic: Phased implementation plan`.
 
 ### V2 implementation contract (`IMPLEMENTED + CLOSED` — historical contract retained)
@@ -4554,7 +4555,7 @@ familiarity, an active loot goal, or absence of a V3 work candidate.
 
 | Task | Dependencies | Objective | Must happen | Must not happen | Scenarios | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| **V3-A — authority/profile contract** | V1.5 relationship; D-VR-080/**082-A1**/**084**; **V2-DEF-002 repair** | Cross-dimension `VillageScenarioProfile` policy store + `VillageWorkAdmission` that **consumes** the shared discretionary-permission seam + optional `VillageWorkSelector` among V3 intents | Profile explicit, inspectable, cross-dimension consistent; admission refuses through the **same** authority `DiscretionaryActivityDirector` consumes | Profile in dimension-local village memory; HOME/HIGH → ally; `MaterialDemand` alone defines mandatory; **a village-local reconstruction of "mandatory work exists"** | VR-T3j | **AMENDED — NOT implementation-ready**; task-52 **not authorized** (D-VR-082-A1, D-VR-084) |
+| **V3-A — authority/profile contract** | V1.5 relationship; D-VR-080/**082-A1**/**084**; **V2-DEF-002 repair** | Cross-dimension `VillageScenarioProfile` policy store + `VillageWorkAdmission` that **consumes** the shared discretionary-permission seam + optional `VillageWorkSelector` among V3 intents | Profile explicit, inspectable, cross-dimension consistent; admission refuses through the **same** authority `DiscretionaryActivityDirector` consumes | Profile in dimension-local village memory; HOME/HIGH → ally; `MaterialDemand` alone defines mandatory; **a village-local reconstruction of "mandatory work exists"** | VR-T3j | **AMENDED — NOT implementation-ready**; now **task-53**, blocked on task-52 (D-VR-082-A1, D-VR-084) |
 | **V3-B — minimum StorageOwnership + host guard** | V3-A; D-VR-012/017/081 | `GlobalPos`-keyed permission registry + classifier; continuous `RaidContainersGoal` guard | Ally uses only mob-owned/shared storage; permissions survive unload/restart | Evict grants on chunk unload/dimension change; naked `BlockPos`; ambiguous double-chest halves | VR-T3g–i | **LOCK-CLEAN** — after V3-A |
 | **V3-C — committed crop episode** | V3-A; pinned host `HarvestCropsGoal` mechanics; **D-VR-079-A1** | One target-bound committed episode over the **managed crop domain**, plus a continuous host-harvest veto inside that domain and direct banking of the episode's own replant-capable drops | Managed mature crop ends replanted or in mandatory bounded repair; episode banks its own replant drops; host destructive harvest cannot bypass the contract inside the domain | Successful managed harvest routinely leaves farmland barren after preemption; **planting supply depends on floor-item pickup**; **veto fires when the domain cannot be positively established** | VR-T3a–c/k, **VR-T3l/m** | **AMENDED — PROPOSED** |
 | **V3-D — workstation awareness** | V3-A; existing `VillagePerception` scheduler/budget | Add bounded loaded job-site/restock facts without another scanner | Facts invalidate when POI/villager state changes and never load chunks | Workstation facts authorize trade, placement, claiming, or mandatory displacement | VR-T3f | **PROPOSED** |
@@ -4611,11 +4612,34 @@ User): `D-VR-082` → `D-VR-082-A1`, `D-VR-079` → `D-VR-079-A1`, plus new `D-V
 | **D-VR-079-A1** | **AMENDS D-VR-079.** Defines the **managed crop domain** without `SettlementRelationship`; requires a continuous host-`HarvestCropsGoal` veto inside it that **fails toward stock** when the domain cannot be positively established; requires the episode to bank its own replant-capable drops (F8), with crop-specific reserve accounting. |
 
 **Phase architecture lock:** V3 mechanism design is **LOCKED** through D-VR-078/080/081/083 and
-**amended** through D-VR-079-A1 / D-VR-082-A1 / D-VR-084. **`V3-A` is not implementation-ready and
-`task-52` is not authorized**: its admission seam now depends on the shared `MandatoryOwnership`
-authority (D-VR-084), which subsumes the previously deferred **`V2-DEF-002`** defect. That defect is
-hereby **promoted from deferred debt to a V3-A prerequisite** — this does not reopen V2 as a phase;
-it records that V3 made a deferred shared-authority defect load-bearing.
+**amended** through D-VR-079-A1 / D-VR-082-A1 / D-VR-084. **`V3-A` is not implementation-ready**: its
+admission seam depends on the shared `MandatoryOwnership` authority (D-VR-084), which subsumes the
+previously deferred **`V2-DEF-002`** defect. That defect is hereby **promoted from deferred debt to a
+V3-A prerequisite** — this does not reopen V2 as a phase; it records that V3 made a deferred
+shared-authority defect load-bearing.
+
+**Task renumbering (User, 2026-08-19).** `task-52` was never authorized or created, so the numbering
+is repurposed rather than shifted. The shared authority repair is **not** an internal subtask of
+V3-A — D-VR-084 now has two consumers and deserves its own boundary and acceptance report:
+
+```text
+task-52 = MandatoryOwnership / V2-DEF-002 repair   (brief written; implementation not yet authorized)
+task-53 = V3-A        task-54 = V3-B        ... V3-C/D/E/F/G follow
+```
+
+**Runtime sequencing (User, 2026-08-19).** D-VR-084 gets **automated behavioural acceptance now and
+no dedicated Minecraft session**. Changing `DiscretionaryActivityDirector` is a real shipped-behaviour
+change, but "unit tests cannot show a mob stopped wandering" implies a *stronger automated acceptance
+model*, not an immediate launch:
+
+```text
+D-VR-084 architecture LOCKED
+        -> implement shared MandatoryOwnership + repair V2-DEF-002   (task-52)
+        -> automated behavioural / static acceptance
+        -> V3-A (task-53)
+        -> V3-B/C/D/E/F
+        -> ONE later batched runtime campaign, including the D-VR-084 witness
+```
 
 ### Legacy phase map (superseded)
 
@@ -6600,7 +6624,8 @@ No second scanner, and no change to the locked predicate itself.
 ### D-VR-084: `MandatoryOwnership` — one claim-based discretionary-permission authority (`Agent_Claude` + `User`, 2026-08-19)
 
 **Status:** `LOCKED` (architecture). Supersedes the admission-source list in `D-VR-082`.
-**Prerequisite of:** V3-A / task-52. **Subsumes:** `V2-DEF-002` (promoted from deferred debt).
+**Prerequisite of:** V3-A (**task-53**). **Own slice:** **task-52** — see
+`.superpowers/sdd/task-52-brief.md`. **Subsumes:** `V2-DEF-002` (promoted from deferred debt).
 
 #### The evidence this comes from
 
@@ -6727,6 +6752,43 @@ can serve. Anyone tempted to "fix" the asymmetry must first answer the second ro
 any component judging viability.
 **Must not happen:** a second mandatory-work model; a claim refreshed by demand alone; a persisted
 claim outliving the session that created it.
+
+#### Acceptance model — automated now, runtime batched later (`User`, 2026-08-19)
+
+D-VR-084 is accepted on **automated behavioural acceptance**, and is explicitly *not* granted its own
+Minecraft session. Twelve scenarios plus two temporal simulations are required; the full vectors live
+in `.superpowers/sdd/task-52-brief.md`.
+
+```text
+ 1 RUNNING mandatory work           -> denied        7 owner abandons/satisfies -> released now
+ 2 LIVE pending claim               -> denied        8 VILLAGE_TRADE running    -> denied
+ 3 demand exists, nobody claims     -> allowed       9 unknown running goal     -> fail closed
+ 4 claim expires without progress   -> allowed      10 owner forgets to publish -> fails open
+ 5 same demand after expiry         -> NO RENEW     11 unload/dim/stop          -> claim gone
+ 6 progress / fresh evidence        -> MAY publish  12 restart                  -> no resurrection
+```
+
+**Scenario 5 is the load-bearing negative control.** If it fails, the design has degenerated into
+`demand exists -> block` with a timer wrapped around it, which is exactly the frozen-demand problem
+`V2-DEF-002` rejects.
+
+Two temporal simulations are required rather than optional — a servable demand
+(`claim -> progress -> impossible -> abandoned -> EXPLORE legal at T121`) and an unservable one
+(`no owner accepts -> no claim -> EXPLORE remains legal, and still legal at T400`). The second is
+`V2-DEF-002`'s second repair-gate row.
+
+**Resulting status wording.** After acceptance, `V2-DEF-002` becomes
+**`REPAIRED / STATIC-BEHAVIORAL ACCEPT`, runtime witness `DEFERRED`** — *not* `CLOSED`, and not
+"runtime confirmed" (Gate AV-1). The deferred witness is one observation folded into the later
+batched V3 runtime campaign:
+
+```text
+mandatory pending claim active -> no expedition
+claim abandoned / expires      -> discretionary movement eventually resumes
+```
+
+That single witness can close D-VR-084 / `V2-DEF-002` alongside several VR-T3 rows instead of
+creating another standalone session.
 
 ### D-VR-082-A1: amendment — consume the shared seam; taxonomy; P4 co-tenancy (`Agent_Claude` + `User`, 2026-08-19)
 
@@ -6982,7 +7044,13 @@ episode already claimed" (passes VR-T3a by definition while the village is damag
 replacement seed so the replant loop is mathematically infinite; "fixing" `MAINTENANCE` to match
 `VILLAGE_WORK`.
 
-**Frontier after:** `V3-A` is **not implementation-ready** and **task-52 is not authorized**. The
-nearest frontier is the shared `MandatoryOwnership` authority (`D-VR-084`) — which is also
-`V2-DEF-002`'s repair, and is not itself dependency-blocked. No Java, test, mixin, Gradle, config,
-datapack, runtime, commit, or push action belongs to this contribution.
+**Frontier after:** `V3-A` is **not implementation-ready**. The nearest frontier is the shared
+`MandatoryOwnership` authority (`D-VR-084`) — also `V2-DEF-002`'s repair, and not itself
+dependency-blocked. Renumbered to its own slice **task-52** (V3-A becomes task-53) and given an
+automated-acceptance model with the runtime witness batched into the later V3 campaign; the
+implementation brief is `.superpowers/sdd/task-52-brief.md`.
+
+**Reviewer position corrected by the User:** an earlier recommendation that D-VR-084 warrants its own
+runtime session was **rejected** — a real shipped-behaviour change calls for a stronger automated
+acceptance model, not an immediate launch. No Java, test, mixin, Gradle, config, datapack, runtime,
+commit, or push action belongs to this contribution.
