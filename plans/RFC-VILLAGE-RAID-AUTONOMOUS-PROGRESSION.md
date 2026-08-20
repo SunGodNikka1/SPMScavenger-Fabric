@@ -6697,6 +6697,25 @@ must never refresh its claim.** `generation` exists to make that auditable: a re
 previous generation with no intervening justification is the defect, and it is detectable in a
 log-frequency sample (Gate RET-1d).
 
+**Producer-side sharpening (User, 2026-08-20).** `generation` is **producer-side authority, not a
+retry counter**, and every publisher inherits this — not just the task-52 Gather one. It may **not**
+advance for another `canUse()`, another tick, another scan-clock opportunity, TTL expiry, the
+continued existence of the same demand, or an unchanged repeated empty scan. It advances only on a
+semantic episode transition: the owned consumer/material identity changes, ownership leaves the owner
+and later returns through an authoritative transition, or materially fresh route evidence changes the
+context after the previous claim was abandoned.
+
+Mechanization: **mint the generation at *release*, never at *publish*.** An authoritative release
+(executor started, route handed off, attempt abandoned) advances the episode; **TTL expiry deletes
+the claim without advancing it**. The producer therefore has no way to obtain a higher generation
+from an unchanged demand, and requirement 3 becomes structural instead of a rule someone must
+remember. A `generation` field any caller may increment fails this decision regardless of green
+tests. Every publisher must additionally derive its demand from the **canonical** mandatory
+`MaterialDemand` its domain already uses, and must publish **early enough that its own scan/retry
+cadence cannot open a discretionary gap** between accepting responsibility and becoming visible —
+for Gather that means before `PhasedScanClock` grants the next sweep (`GatherResourcesGoal.java:217`,
+`SCAN_INTERVAL = 60`). Full vectors: `.superpowers/sdd/task-52-brief.md`.
+
 #### Shape
 
 ```text

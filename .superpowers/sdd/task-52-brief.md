@@ -64,7 +64,7 @@ difficulty, and requirement 5 below is where it lives.
 | `src/main/java/com/noobk/spmscavenger/opinion/InvalidationCause.java` | add `MANDATORY_PENDING_CLAIM` |
 | `src/main/java/com/noobk/spmscavenger/opinion/DiscretionaryActivityDirector.java` | consume `MandatoryOwnership` instead of `DiscretionaryEligibility` directly (`:83`) |
 | `src/main/java/com/noobk/spmscavenger/SpmScavenger.java` | three eviction call sites (below) |
-| `src/main/java/com/noobk/spmscavenger/village/trade/…` / `goal/GatherResourcesGoal.java` | **one** publishing owner wired (see "Scope of publishers") |
+| `src/main/java/com/noobk/spmscavenger/goal/GatherResourcesGoal.java` | the **one** publishing owner wired this slice — see **Gather publisher contract** |
 
 **Package choice:** `activity`, not `opinion`. This is activity-ownership truth with two consumers;
 putting it in `opinion` would make Village Work depend on Opinion for permission and re-create the
@@ -147,6 +147,122 @@ observed failing — and prove the seam. Do **not** retrofit Trade, Mining and f
 task-52; each is its own reviewable change, and requirement 7 means an unwired owner degrades to
 today's behaviour rather than breaking.
 
+## Gather publisher contract (User, 2026-08-20)
+
+### 1 — One canonical mandatory demand, reused not reinterpreted
+
+The publisher consumes the **same** canonical `WorkDemandPolicy.MaterialDemand` the existing
+route-exhaustion path uses. `CODE_CONFIRMED` — `GatherResourcesGoal.java:551-583`
+(`publishRouteExhaustion`) already derives it:
+
+```java
+WorkDemandPolicy.select(backpack, mainHand, offHand, cfg).map(WorkDemand::payload)
+    -> GatherRoutePrecursor.scanCovers(demand, currentIntent())
+    -> GatherRoutePrecursor.of(demand)                      // precursor present
+```
+
+**Factor that prefix out** (e.g. `Optional<OwnedRoute> ownedMandatoryRoute(cfg)` carrying demand +
+precursor) and have **both** the claim publisher and `publishRouteExhaustion` consume it. Creating a
+second interpretation of which demand Gather owns is the `V2-DEF-003` shape — two readings of one
+fact, disagreeing — and it is forbidden here.
+
+**Optional/wealth-only Gather desire must never mint a claim.** `wantsMore()` being true is an
+appetite; only a canonical `MaterialDemand` is ownership. This is the `NEED` vs `WEALTH` boundary
+already established by `V2-DEF-003`.
+
+Note the split: the **claim** needs only `ownedMandatoryRoute` and **no sweep**. Exhaustion
+publication additionally needs `lastScanFamilies`, i.e. a *completed* sweep. Do not couple them.
+
+### 2 — Publication must outrun the scan clock
+
+`CODE_CONFIRMED` — `GatherResourcesGoal.java:217` gates `canUse` on
+`scanClock.claim(now)` with `SCAN_INTERVAL = 60` (`:144`), phase-salted per mob, and
+`publishRouteExhaustion` runs only *after* that gate. Publishing the pending claim from the existing
+post-sweep site would therefore leave up to a full scan interval in which responsibility has been
+accepted but nothing is visible — **the original `V2-DEF-002` window, preserved**.
+
+```text
+canUse:
+    tryCooperativeAdmission / wantsMore(cfg)          <- ownership becomes knowable here
+    >>> PUBLISH PENDING CLAIM <<<                     <- must be evaluated at this point
+    if (!scanClock.claim(now)) return false;          <- may refuse for up to 60 ticks
+    findTarget -> publishRouteExhaustion(cfg, now)    <- needs a completed sweep
+```
+
+A newly accepted mandatory Gather episode **may and must** publish before `PhasedScanClock` permits
+its next physical sweep.
+
+### 3 — Generation is producer-side authority, not a retry counter
+
+**Generation may NOT advance because of:**
+
+- another `canUse()` call
+- another server tick
+- another scan-clock opportunity
+- TTL expiry
+- continued existence of the same demand
+- an unchanged repeated empty scan
+
+**A new generation requires a semantic episode transition:**
+
+- the selected mandatory consumer/material identity changes
+- explicit ownership leaves Gather and later returns through an authoritative transition
+- materially fresh route evidence changes the Gather route context after the previous claim was
+  abandoned
+
+**Named production mechanism for task-52 — generation is minted at *release*, never at *publish*.**
+An arbitrary mutable counter incremented at publish time is exactly what this clause forbids, so the
+counter is moved to the one place that already carries semantic meaning:
+
+| Event | Claim | Episode generation |
+| --- | --- | --- |
+| `release(mobId, EXECUTOR_STARTED)` — the Gather executor began; the running `ActivityClass` now supplies the blocker | deleted | **advances** |
+| `release(mobId, ROUTE_HANDED_OFF)` — completed sweep proved exhaustion / ownership handed off | deleted | **advances** |
+| `release(mobId, ABANDONED)` — this attempt cannot serve the route | deleted | **advances** |
+| **TTL expiry** | deleted | **does NOT advance** |
+| identity change (`consumerKey`/`materialKey` differs from the remembered slot) | new episode | not consulted — a different pair is accepted outright |
+
+Consequence, and the reason this mechanization is chosen: after TTL expiry with an unchanged demand
+the producer has no way to obtain a higher generation, so its next publish carries the remembered
+one and the registry **refuses it**. Requirement 3 becomes structural rather than a rule someone must
+remember. If the implementer finds a better mechanism, it must be argued in the report against these
+same negative controls — not substituted silently.
+
+### 4 — Pending claim lifecycle
+
+```text
+new eligible Gather-owned mandatory episode
+    -> publish one bounded pending claim
+Gather executor starts
+    -> release pending claim   (running ActivityClass now supplies the blocker)
+completed sweep proves route exhausted / ownership handed off
+    -> release / abandon pending claim
+owner determines this attempt cannot serve the route
+    -> release / abandon
+unchanged demand after expiry
+    -> NO automatic new generation
+```
+
+The second row matters: a live pending claim and a running executor must never both block for the
+same episode. Pending is the *pre-execution* state only.
+
+### 5 — Producer-side negative controls (in addition to the twelve scenarios)
+
+| # | Control | Expected |
+| --- | --- | --- |
+| P1 | hold the same consumer/material **and** route evidence across multiple TTLs and multiple scan intervals | Gather may **not** mint another generation |
+| P2 | remove the producer-side episode guard / increment generation per scan | **this test must fail** |
+| P3 | change an explicitly authorized semantic episode input | **exactly one** new generation becomes publishable |
+| P4 | wealth-only Gather intent, no canonical `MaterialDemand` | **no** pending mandatory claim |
+| P5 | responsibility accepted while `scanClock` refuses for the full interval | claim is live **immediately**; EXPLORE cannot be admitted in the gap |
+
+P5 is the assertion that closes the remaining escape hatch: it must fail if the publish call is moved
+below `scanClock.claim(now)`. Assert it at the tick of acceptance, not merely by the next sweep.
+
+**Out of scope, record only:** if `wantsMore(cfg)` is false because another owner (e.g. a ready craft
+step) holds the demand, Gather correctly publishes nothing and the pending side fails open for that
+episode — scenario 10. Wiring that owner is a later task; name it in the report's concerns.
+
 ## Constraints
 
 - **TDD required.** Capture RED output before GREEN for at least scenarios 3, 5 and 11.
@@ -209,6 +325,11 @@ Run each **in isolation** and name the test it breaks:
 1. remove the `generation` comparison → scenario 5 must fail
 2. make expiry a predicate instead of a deletion → RET-1a assertion must fail
 3. re-derive the blocking set locally instead of delegating → the structural delegation test must fail
+4. advance generation on TTL expiry → **P1** must fail
+5. increment generation per scan / per `canUse` → **P2** must fail (this is P2)
+6. move the publish call below `scanClock.claim(now)` → **P5** must fail
+7. derive the publisher's demand from `wantsMore()` / gather intent instead of the factored
+   canonical `MaterialDemand` → **P4** must fail
 
 ### Commands
 
@@ -246,3 +367,7 @@ limit and the deliberate fail-open of the pending half.
 
 **Do not mark the behavioural claim `CONFIRMED`.** Per Gate AV-1 the proof class here is
 static-behavioural acceptance; the runtime witness is deferred by decision, not by omission.
+
+**Name the mechanism.** The report must state the exact production event(s) chosen for generation
+advancement and show the call sites. "A counter that goes up when it should" is not an answer, and a
+generation field that any caller may increment fails this brief regardless of green tests.
