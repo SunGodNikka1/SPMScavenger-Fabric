@@ -8,9 +8,9 @@ when the domain cannot be positively established.
 
 | Gate | Status | User phrase to authorize |
 | --- | --- | --- |
-| **Brief design** | **v2 — peer-review repairs applied** | (this document) |
-| **Gate 0 — read-only source audit** | **HOLD** — brief contradictions repaired; audit scope revised | **authorize task-55 gate 0** |
-| **Gate 0 closure** | **BLOCKED** — atomic `setBlock` commit must be lockable; no `MandatoryOwnership` publisher | — |
+| **Brief design** | **v2.1 — drop-roll contract locked** | (this document) |
+| **Gate 0 — read-only source audit** | **AUTHORIZED** — User 2026-08-21 | **authorize task-55 gate 0** |
+| **Gate 0 closure** | **PASS** — see `task-55-gate0-report.md` | — |
 | **Full implementation** | **NOT AUTHORIZED** | **authorize task-55** / **Implement V3-C** |
 
 **Brief revision history:**
@@ -22,6 +22,9 @@ when the domain cannot be positively established.
   set includes **wheat**; vanilla-only `CropReplantSemantics`; atomic mature→age-0 transaction; **no**
   second `MandatoryOwnership` publisher; `VillageWorkAdmission` is sole profile+mandatory gate for
   episode admission
+- v2.1 — **User 2026-08-21:** `Block.getDrops` **only inside COMMIT PREPARE** (no SCAN/PATH/WINDUP
+  sampling); `harvestCandidate` = deterministic feasibility from hard lower-bound audit, not loot
+  rerolling; held-seed rule for crops whose planting-material lower bound can be 0
 
 **Target:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`
 
@@ -100,7 +103,7 @@ exactly VR-T3a's must-not-happen. **D-VR-079-A1** therefore requires:
 | --- | --- |
 | 1 | **Two predicates, not one.** `managedCropCell` (domain + veto identity) and `harvestCandidate` (episode selection) are separate. Domain **must not** depend on maturity. |
 | 2 | **`managedCropCell`** — `profile == VILLAGE_ALLY` **and** positive remembered village resolution **and** `SettlementBoundsPolicy.within(pos, anchor)` **and** `CropReplantSemantics.supportedCrop(state)` on valid farmland. **Any crop age.** No `SettlementRelationship` term. |
-| 3 | **`harvestCandidate`** — `managedCropCell` **and** `CropReplantSemantics.isMature(state)` **and** replant transaction feasible (see PREPARE). |
+| 3 | **`harvestCandidate`** — `managedCropCell` **and** `CropReplantSemantics.isMature(state)` **and** deterministic replant feasibility (see below). **Must not** call `Block.getDrops` during scan/path/windup. |
 | 4 | **Gen-1 supported crops:** wheat, carrots, potatoes, beetroot — each with crop-specific planting item mapping in `CropReplantSemantics`. Host's narrower forage set is irrelevant. |
 | 5 | **Fail direction on veto uncertainty** — cannot positively establish `managedCropCell` → **do not veto** host `HarvestCropsGoal`. Opposite of storage (`D-VR-081`). |
 | 6 | **Host veto is continuous** on `canUse` **and** `canContinueToUse` when `managedCropCell` is positively true at `targetPos`. Wilderness and immature managed cells inside domain are still vetoed if they are supported crops on farmland (host targets mature only, but continuation must not lose veto when state changes). |
@@ -108,7 +111,8 @@ exactly VR-T3a's must-not-happen. **D-VR-079-A1** therefore requires:
 | 8 | **Episode is not hunger-gated** — unlike host P6. Village maintenance runs when admission passes. |
 | 9 | **Atomic commit** — normal path: mature crop → age-0 **same crop** via one `setBlock`; **no** `destroyBlock`; **no** deliberate bare-farmland intermediate. Drops computed **once** in PREPARE from actual `Block.getDrops` output. |
 | 10 | **F8 own-drop banking** — after verified commit, bank replant surplus **first**, then food/output; **never** depend on `CollectFloorItemsGoal` (VR-T3m). |
-| 11 | **Staged-drop preflight** — do not reason from minimum expected seed counts. Generate actual staged drops once in PREPARE; if no planting unit (staged replant material **or** exactly one mob-held reserve unit), **ABORT with world unchanged**. |
+| 11 | **No loot rerolling** — `Block.getDrops` is called **exactly once**, inside COMMIT PREPARE only. SCAN/PATH/WINDUP **never** sample drops. `harvestCandidate` uses **hard lower-bound** planting-material guarantees from Gate 0, not a dry-run roll. |
+| 11b | **Held-seed rule (Gate 0 locked)** — if audited hard lower bound for planting material is **≥ 1**, staged drops may supply the planting unit at COMMIT. If lower bound **can be 0** (wheat/beetroot seeds), require **≥ 1 held planting item in inventory before COMMIT** (do not sample drops to decide candidacy). |
 | 12 | **No `MandatoryOwnership` publisher in task-55.** If Gate 0 proves V3-caused bare state is unavoidable asynchronously, **STOP** and redesign identity-bound multi-publisher semantics **before** implementation — do not discover mid-task-55. |
 | 13 | **Pre-mutation interruption** — SCAN/PATH/WINDUP: if `VillageWorkAdmission` becomes false → abort safely, no mutation (VR-T3b). |
 | 14 | **Preflight abort** — invalid support/crop/planting unit before COMMIT → no world change (VR-T3c). |
@@ -130,7 +134,8 @@ exactly VR-T3a's must-not-happen. **D-VR-079-A1** therefore requires:
 | Second `MandatoryOwnership` publisher | Single slot per mob; Gather UUID-only `release` clobber hazard |
 | Repair continuation despite admission deny | Smell removed by atomic commit — no repair phase |
 | Separate profile check in episode `canUse` | Duplicates `VillageWorkAdmission` |
-| Minimum expected seed preflight | Weaker than staged actual `getDrops` |
+| `Block.getDrops` during SCAN/PATH/WINDUP | RNG reroll on unchanged crop until favorable loot |
+| Loot-table dry-run as `harvestCandidate` | Same reroll hazard; use hard lower-bound audit instead |
 | Separate `ReplantCropGoal` | Breaks episode ownership |
 | Hunger-gate V3 episode on `wantsFood()` | Wrong semantics |
 | Floor-pickup replant recovery | F8 violation |
@@ -176,14 +181,27 @@ supported crop on valid farmland. Maturity is **not** part of this predicate.
 
 **Village resolution:** `VillageMemorySavedData.peek` only. Empty memory → not managed → veto does not fire.
 
-### `harvestCandidate` (episode selection)
+### `harvestCandidate` (episode selection — deterministic only)
 
 ```text
 harvestCandidate(mob, level, pos) :=
       managedCropCell(mob, level, pos)
   AND CropReplantSemantics.isMature(level.getBlockState(pos))
-  AND replantTransactionFeasible(mob, level, pos)   // PREPARE dry-run succeeds
+  AND reachable / loaded / mobGriefing / no combat target
+  AND deterministicReplantFeasible(mob, state)   // NO Block.getDrops here
 ```
+
+**`deterministicReplantFeasible` (Gate 0 locked):**
+
+| Crop | Planting material | Hard lower bound (mature break) | Pre-COMMIT requirement |
+| --- | --- | --- | --- |
+| Carrot | carrot | **≥ 1** plantable carrot (loot pool 1 unconditional) | none — staged drop may supply at COMMIT |
+| Potato | potato | **≥ 1** plantable potato (loot pool 1 unconditional) | none |
+| Wheat | wheat_seeds | **can be 0** (`binomial_with_bonus_count`, extra=3, p≈4/7) | **≥ 1 held wheat_seeds** before COMMIT |
+| Beetroot | beetroot_seeds | **can be 0** (same binomial seed pool) | **≥ 1 held beetroot_seeds** before COMMIT |
+
+At COMMIT PREPARE the actual `getDrops` roll runs once; planting unit = first staged replant
+material **or** one escrowed held unit (for wheat/beetroot when staged seeds = 0 but held ≥ 1).
 
 ### Gen-1 crop table (contract — Gate 0 pins vanilla evidence)
 
@@ -224,24 +242,23 @@ episodeAdmission(mob, observation, liveClaim, now) :=
 **Episode `canUse` stack:**
 
 ```text
-1. episodeAdmission → permit
+1. VillageWorkAdmission.evaluate(...) → permit   // profile + mandatory — sole admission gate
 2. GameRule mobGriefing
 3. mob.getTarget() == null
-4. findClosestHarvestCandidate() != null   // uses harvestCandidate predicate
+4. findClosestHarvestCandidate() != null       // deterministic harvestCandidate only
 ```
 
 **Episode `canContinueToUse`:**
 
 ```text
-phase in {PATH, WINDUP}  // not yet mutating
+phase in {PATH, WINDUP}                        // COMMIT is synchronous — no multi-tick repair
 AND target != null
 AND alive, no combat target
-AND episodeAdmission still permits
-AND harvestCandidate still true at target   // maturity + feasibility may have changed
+AND VillageWorkAdmission still permits
+AND harvestCandidate still true at target
 ```
 
-**No repair exception.** COMMIT is synchronous inside one goal tick; if admission fails during
-SCAN/PATH/WINDUP, `stop()` abandons with no mutation.
+If admission fails during SCAN/PATH/WINDUP → `stop()`, no mutation.
 
 ## Atomic crop transaction (locked — normal path)
 
@@ -285,9 +302,9 @@ ON COMMIT FAILED
 **Beetroot / wheat examples (staged-drop logic):**
 
 ```text
-beetroot, staged drops = 0 seeds, mob held = 0 → ABORT, crop stays mature
-beetroot, staged drops = 0 seeds, mob held = 1 → RESERVE held seed → COMMIT → consume held seed
-beetroot, staged drops = 2 seeds → COMMIT → consume 1 from staged, bank 1 replant surplus
+beetroot, held = 0 → not a harvestCandidate (never reaches COMMIT / never samples drops)
+beetroot, held = 1, staged roll = 0 → COMMIT → consume held seed → age0 → pause until new seed
+beetroot, held = 1, staged roll = 2 → COMMIT → consume 1 from staged, bank 1 surplus
 ```
 
 ## Episode state machine
@@ -416,10 +433,9 @@ memory peek stale → veto fail-open.
 
 ## Frontier after this brief
 
-1. User reviews brief v2.
-2. When satisfied: **authorize task-55 gate 0** → read-only audit → `task-55-gate0-report.md` with
-   atomic-commit decision gate outcome.
-3. Gate 0 closure → **authorize task-55** for implementation.
+1. ~~User reviews brief v2~~ — **done**; v2.1 drop-roll contract locked.
+2. ~~**authorize task-55 gate 0**~~ — **done** → `task-55-gate0-report.md` (**PASS**).
+3. **authorize task-55** for implementation (not yet authorized).
 4. Runtime witnesses batch in V3-G campaign (Minecraft closed until explicit approval).
 
 ## Verdict table (User peer review 2026-08-21)

@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **V3-B STATIC ACCEPT** — task-54; **V3-C brief v2** — task-55 design HOLD (Gate 0 not authorized) | `task-54-report.md`; `task-55-brief.md` |
+| **V3 Village Work** | **V3-C Gate 0 PASS** — task-55 brief v2.1; implementation NOT authorized | `task-55-gate0-report.md`; `task-55-brief.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -86,6 +86,6 @@ Task 53: complete with concerns (V3-A — VillageScenarioProfile + PlayerMobVill
 
 Task 54: complete / STATIC-BEHAVIORAL ACCEPT (V3-B + R1/R1.2 repair — 1435 tests, 0 failures; owner/share invariant + replacement + stale-placement unit-confirmed; runtime VR-T3g–i UNVERIFIED — deferred to batched V3 campaign)
 
-Task 55: brief v2 (V3-C design — peer-review repairs: managedCropCell vs harvestCandidate, atomic setBlock commit, no MandatoryOwnership publisher; Gate 0 HOLD; implementation NOT authorized)
+Task 55: Gate 0 PASS (V3-C — atomic setBlock commit locked; drop-roll contract locked; no MandatoryOwnership publisher; brief v2.1; implementation NOT authorized)
 
 No commits unless user requests. No Minecraft launches unless separately approved.
