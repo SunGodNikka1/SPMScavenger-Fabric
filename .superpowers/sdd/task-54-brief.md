@@ -1,12 +1,22 @@
 # Task 54 brief: V3-B minimum `StorageOwnership` + host `RaidContainersGoal` guard (`D-VR-081`, `D-VR-017`)
 
 **Slice:** `GlobalPos`-keyed explicit storage permission registry + ally loot guard on pinned SPM
-`RaidContainersGoal`. **Authorization:** brief only — User, 2026-08-20. **Implementation is NOT
-authorized** until User separately says **authorize task-54** or **Implement V3-B**.
+`RaidContainersGoal`.
 
-**Brief revision:** User peer review, 2026-08-20 — **Blocker repairs** (destruction seam API,
-hot-path scanner, purity split, chest topology, command safety, guard compatibility sentinel).
-**Still not implementation-authorized.**
+**Authorization gates (LOCKED sequence):**
+
+| Gate | Status | User phrase to authorize |
+| --- | --- | --- |
+| **Brief design** | **v3 — peer-review repairs applied** | (this document) |
+| **Gate 0 — read-only source audit** | **NOT AUTHORIZED** | **authorize task-54 Gate 0** |
+| **Gate 0 closure** | **BLOCKED** — lifecycle hook + host `targetPos` access must be **LOCKED** in audit report | — |
+| **Full implementation** | **NOT AUTHORIZED** | **authorize task-54** / **Implement V3-B** (only after Gate 0 locks hooks) |
+
+**Brief revision history:**
+
+- v1 — initial draft (rejected: `BlockEntity#setRemoved(RemovalReason)`, POI hot path)
+- v2 — architecture split, topology policy, command loaded-chunk create gate
+- v3 — enforcement/diagnostics separation, Gate 0 sequence, tri-state settlement fact, asymmetric revoke, mixin access/injection pinned to Gate 0
 
 **Target:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`
 
@@ -16,7 +26,7 @@ hot-path scanner, purity split, chest topology, command safety, guard compatibil
 
 | Path | Evidence |
 | --- | --- |
-| `.../entity/goal/RaidContainersGoal.java` | Priority-3 loot goal; `canUse()` scans loaded chunks, sets `targetPos`, returns true; `canContinueToUse()` while `targetPos != null`; `isLootableContainer` = chest/barrel/shulker only |
+| `.../entity/goal/RaidContainersGoal.java` | Priority-3 loot goal; `canUse()` scans loaded chunks, sets `targetPos`, returns true; `canContinueToUse()` while `targetPos != null`; private field `targetPos` |
 | `.../entity/PlayerMobEntity.java:835` | Registers `RaidContainersGoal` at priority **3** |
 | `.../entity/goal/RaidContainersGoal.java:240-247` | Mid-raid bail when BE is no longer a `Container` — **does not** consult ally policy today |
 
@@ -25,9 +35,8 @@ hot-path scanner, purity split, chest topology, command safety, guard compatibil
 
 **RFC:** `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` — D-VR-017, D-VR-081, VR-T3g–i.
 
-**Not authorized:** Minecraft runtime launch · commit · push · V3 executors (crop/compost/population) ·
-`VillageWorkSelector` · global `RaidContainersGoal` removal · new `MandatoryOwnership` publisher ·
-full personal/village chest economy · `VILLAGE_PUBLIC` operator-free auto-permission.
+**Not authorized without Gate 0 closure:** production Java · mixin wiring · lifecycle hook · Minecraft
+runtime launch · commit · push.
 
 ```text
                    explicit operator grants
@@ -39,28 +48,29 @@ full personal/village chest economy · `VILLAGE_PUBLIC` operator-free auto-permi
              ┌──────────────┴──────────────┐
              ▼                             ▼
 StorageContainerResolver          StorageGrantLifecycle
- loaded/non-loading truth         block-state replacement
- canonical logical identity       chest topology transitions
- loaded validation                stale-row cleanup
+ loaded/non-loading truth         block-state change hook
+ canonical logical identity       (Gate 0 — hook TBD)
+ chest topology invalidation       stale-row cleanup
              │                             │
              └──────────────┬──────────────┘
                             ▼
                   StorageOwnershipPolicy
-                    PURE classification
-                    (diagnostics / commands)
+                    PURE diagnostics only
                             │
               ┌─────────────┴─────────────┐
               ▼                           ▼
      diagnostics / `storage get`    StorageRaidPolicy
-                                    HOT PATH — ally only:
-                                    loaded valid container
-                                    + explicit grant for mob
+                                    ENFORCEMENT ONLY
+                                    (no compatibility import)
+                                            ▲
                                             │
-                                            ▼
                             RaidContainersAllyStorageMixin
-                              canUse + canContinueToUse
-                            + StorageGuardCompatibility
-                              (must not fail silently)
+                              canUse RETURN veto
+                              canContinueToUse HEAD veto
+                                            │
+                            StorageGuardCompatibility
+                              DIAGNOSTICS ONLY — never
+                              participates in mayLoot()
 ```
 
 ## Why this slice exists
@@ -68,319 +78,268 @@ StorageContainerResolver          StorageGrantLifecycle
 SPM `RaidContainersGoal` treats every visible chest/barrel/shulker alike (`CODE_CONFIRMED` — pinned
 host). For a `VILLAGE_ALLY` PlayerMob that is **dangerous**: only **explicit** mob-owned or
 operator-shared containers may loot (`D-VR-017` / `D-VR-081`). Task-53 locked profile authority;
-task-54 implements the **positive permission registry** and the **continuous host guard** — not a
-one-shot admission strip.
+task-54 implements the **positive permission registry** and the **continuous host guard**.
 
-**Peer review incorporated (User, 2026-08-20):**
+---
 
-1. **`BlockEntity#setRemoved(RemovalReason)` does not exist in 1.21.1** — brief reopened; destruction
-   seam must follow **block-state replacement**, not entity-style removal reasons.
-2. **`VillagePerception.observe()` must not run on the guard hot path** — ally safety is
-   **grant-or-deny**; `VILLAGE_PUBLIC` is a diagnostic category only.
-3. **Side effects split from pure policy** — resolver + lifecycle vs `StorageOwnershipPolicy`.
-4. **Chest topology transitions** invalidate old logical grants — no clever migration in gen-1.
-5. **`own`/`share`/`unshare`/`revoke` require loaded, established container truth** — no chunk loading.
-6. **Guard compatibility sentinel** — supported SPM present ⇒ hook **must** be verifiably installed.
+## Task-54 Gate 0 — read-only source audit (authorize separately)
+
+**Purpose:** lock the two production integration points that v3 deliberately leaves open before any
+implementation code ships.
+
+**Deliverable:** `.superpowers/sdd/task-54-gate0-report.md` — read-only; no production Java except
+optional pinned-source notes. Updates this brief's **LOCKED** sections when audit passes.
+
+### Gate 0-A — lifecycle invalidation hook
+
+**Leading candidate (must be source-audited, not assumed):**
+
+```text
+ServerLevel.onBlockStateChange(BlockPos pos, BlockState oldState, BlockState newState)
+```
+
+Also exposed on `Level`. May be preferable to `BlockBehaviour.onRemove(oldState, level, pos, newState, moved)`
+because task-54 must observe **same-block-type topology transitions**:
+
+```text
+CHEST[SINGLE] → CHEST[LEFT]
+CHEST[RIGHT]  → CHEST[SINGLE]
+re-pairing    → different connected half
+```
+
+**Audit must answer (with pinned class/method paths + evidence class):**
+
+| # | Question | Required answer |
+| --- | --- | --- |
+| G0-1 | Does the chosen hook receive container → air / container → non-container replacement? | **YES** |
+| G0-2 | Does it receive chest SINGLE → LEFT/RIGHT? | **YES** |
+| G0-3 | Does it receive chest LEFT/RIGHT → SINGLE? | **YES** |
+| G0-4 | Does it receive re-pairing / neighbour change events? | **YES** (or document supplemental hook) |
+| G0-5 | Does ordinary **chunk unload** invoke it? | **NO** |
+| G0-6 | Does **chunk load / deserialization** falsely invalidate? | **NO** |
+
+**If `onBlockStateChange` passes G0-1…G0-6:** lock it as the central seam:
+
+```text
+ServerLevel.onBlockStateChange
+        ↓ oldState + newState + pos
+StorageGrantLifecycle.onBlockStateChange(...)
+```
+
+**Fallback candidates** (compare in report, do not implement until one wins audit):
+
+- `BlockBehaviour.onRemove(oldState, level, pos, newState, moved)`
+- Tail of `Level#setBlock` / `Level#removeBlock` (document full call chain)
+
+**Rejected regardless of audit outcome:**
+
+| Hook | Verdict |
+| --- | --- |
+| `BlockEntity#setRemoved(RemovalReason)` | **REJECT** — API does not exist on `BlockEntity` in 1.21.1 |
+| `ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD` → delete grant | **REJECT** — unload ≠ destruction |
+| Chunk unload eviction | **REJECT** |
+
+### Gate 0-B — host `RaidContainersGoal` integration shape
+
+Audit pinned SPM distributed jar / reference source and lock:
+
+| # | Decision | Options |
+| --- | --- | --- |
+| G0-B1 | **`targetPos` access** | **Prefer** `OptionalRaidContainerTargetResolver` in `compat` (reflective/cached, same boundary as `OptionalGoalMobResolver`). **Only** use `@Shadow targetPos` if distributed field name is verified stable across pinned SPM. |
+| G0-B2 | **`canUse` injection site** | **Prefer** `@Inject(method = {canUse, method_6264}, at = @At("RETURN"), cancellable = true)` — if host returned `true`, read selected `targetPos`, apply `StorageRaidPolicy` veto (`true → false` only). Keeps host scan untouched; avoids instruction-level anchor on `targetPos = found`. |
+| G0-B3 | **`canContinueToUse` injection** | `@At("HEAD")`, cancellable — resolve `targetPos`, apply same policy. |
+| G0-B4 | **Field / method names on distributed jar** | Record readable + intermediary names for `SpmGoalMixinNamingTest` extension. |
+
+**Gate 0 closure criterion:** both **lifecycle hook** and **mixin access/injection plan** recorded as
+**LOCKED** in `task-54-gate0-report.md` with `CONFIRMED` / `INFERRED` labels. Only then may User
+authorize full task-54 implementation.
+
+---
 
 ## Load-bearing requirements
 
 | # | Requirement |
 | --- | --- |
-| 1 | **`StorageOwnership` enum** outputs exactly: `MOB_OWNED`, `EXPLICITLY_SHARED_WITH_MOB`, `VILLAGE_PUBLIC`, `FOREIGN`, `UNKNOWN` — semantics locked by `D-VR-017`. |
-| 2 | **Positive permission is explicit only.** `MOB_OWNED` and `EXPLICITLY_SHARED_WITH_MOB` come **only** from the permission registry (operator commands in gen-1). HOME/HIGH/trade/village discovery **must not** create grants. |
-| 3 | **Registry keys are canonical `GlobalPos`.** Never naked `BlockPos`. Double-chest halves **must** resolve to one key before grant, revoke, invalidation, or guard evaluation. |
-| 4 | **Semantic persistence (D-VR-081):** grants survive chunk unload, mob dimension change, and server restart. Normal deletion: explicit revoke, block-state replacement / topology invalidation, loaded stale cleanup, and permanent mob removal via `PerMobSavedData.forgetAll`. |
-| 5 | **Do not treat chunk unload or block-entity unload as destruction.** Fabric `ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD` represents unload, **not** typed destruction — **must not** delete grants. |
-| 6 | **Continuous guard** on pinned `RaidContainersGoal` at **`canUse` (after candidate selection) and `canContinueToUse` (every evaluation)** — not global goal removal, not mixin-only on `canUse`. |
-| 7 | **Non-ally behaviour unchanged.** When `profile != VILLAGE_ALLY`, `StorageRaidPolicy` is a **no-op permit** — host scheduling unchanged. |
-| 8 | **Ally hot path (D-VR-017 enforcement):** when `profile == VILLAGE_ALLY`, permit **only** if chunk loaded, target is still a valid lootable logical container, **and** registry carries explicit permission for **that mob**. Everything else → deny. **Do not** invoke `VillagePerception.observe()` on this path. |
-| 9 | **`MandatoryOwnership` untouched.** Storage guard **does not** publish or consume `MandatoryOwnership`. No second publisher unless implementation proves a blocker — brief assumes none. |
-| 10 | **RET-1:** register mob-attributed grant cleanup in `PerMobSavedData.forgetAll()`; peek-only cleanup; no silent LRU/TTL authority eviction. |
-| 11 | **Side effects live in `StorageGrantLifecycle` only** — not in `StorageOwnershipPolicy` or `StorageRaidPolicy`. |
-| 12 | **Chest topology policy (gen-1):** any SINGLE ↔ LEFT/RIGHT transition invalidates grants tied to the **pre-transition logical container identity**; operator must re-grant explicitly. |
-| 13 | **Guard compatibility:** when pinned SPM is present and ally-storage feature is enabled, the guard hook **must** be verifiably installed; unsupported host shape ⇒ loud diagnostic and **disable ally-storage enforcement** (fail safe for non-allies; do not pretend allies are protected). |
-
-## Deliverables (implementation-authorized later)
-
-| Path | Role |
-| --- | --- |
-| `village/storage/StorageOwnership.java` | **new** — enum |
-| `village/storage/StorageContainerResolver.java` | **new** — loaded truth, canonical identity, lootable-container predicate (host-equivalent) |
-| `village/storage/StorageGrantLifecycle.java` | **new** — replacement/topology invalidation + stale-row cleanup (mutating) |
-| `village/storage/StorageOwnershipPolicy.java` | **new** — **pure** classify from supplied facts + registry snapshot |
-| `village/storage/StoragePermissionSavedData.java` | **new** — persisted explicit grants + reverse UUID index |
-| `village/storage/StorageRaidPolicy.java` | **new** — **hot path** ally grant-or-deny only |
-| `village/storage/StorageGuardCompatibility.java` | **new** — init-time / runtime sentinel for mixin install state |
-| `mixin/RaidContainersAllyStorageMixin.java` | **new** — `@Pseudo` inject on `RaidContainersGoal` only |
-| `command/VillageStorageCommands.java` | **new** — operator grant/revoke/query |
-| `PerMobSavedData.java` | register mob grant sweep |
-| `SpmScavenger.java` | register lifecycle hooks, compatibility check, commands |
-| Tests | VR-T3g–i + lifecycle/topology + structural negatives |
-
-**Explicitly NOT in this slice:** V3 executors · `VillageWorkAdmission` changes · global goal removal ·
-auto-grants · `VillagePerception.observe()` on guard hot path · clever chest-topology grant migration.
+| 1 | **`StorageOwnership` enum:** `MOB_OWNED`, `EXPLICITLY_SHARED_WITH_MOB`, `VILLAGE_PUBLIC`, `FOREIGN`, `UNKNOWN` — `D-VR-017`. |
+| 2 | **Explicit grants only** — operator commands in gen-1; no HOME/HIGH/trade auto-grants. |
+| 3 | **Registry keys:** canonical `GlobalPos`; never naked `BlockPos`. |
+| 4 | **Persistence (D-VR-081):** survive unload/restart/dimension change; delete on replacement/topology invalidation, explicit revoke, stale cleanup, `forgetAll`. |
+| 5 | **Unload is not destruction** — no grant deletion on chunk or block-entity unload. |
+| 6 | **Continuous guard** — `canUse` + `canContinueToUse` on pinned `RaidContainersGoal`. |
+| 7 | **Non-ally unchanged** — `StorageRaidPolicy` no-op permit when profile ≠ `VILLAGE_ALLY`. |
+| 8 | **Ally enforcement:** loaded valid container + explicit grant → permit; else → deny. **No** `VillagePerception.observe()` on hot path. |
+| 9 | **`MandatoryOwnership` untouched** — no second publisher. |
+| 10 | **RET-1** — `PerMobSavedData.forgetAll`; peek-only cleanup; no TTL/LRU authority loss. |
+| 11 | **Mutations in `StorageGrantLifecycle` only** — not in policy or raid guard. |
+| 12 | **Chest topology (gen-1):** SINGLE ↔ LEFT/RIGHT invalidates pre-transition logical grants; re-grant explicitly. |
+| 13 | **Enforcement / diagnostics separation:** `StorageRaidPolicy` **must not** import or consult `StorageGuardCompatibility`. If mixin callback runs, enforce. Compatibility tracks wiring only. |
+| 14 | **Gate 0 before implementation** — lifecycle hook and mixin shape **LOCKED** in gate0 report. |
+| 15 | **Diagnostic settlement fact** — tri-state `SettlementStorageFact`; no boolean collapse of unknown vs outside. |
+| 16 | **Asymmetric command evidence** — create authority requires loaded world truth; delete authority may target exact persisted `GlobalPos` without chunk load. |
 
 ---
 
 ## Architecture split (LOCKED)
 
-### `StorageContainerResolver` — world truth, no persistence mutation
+### `StorageContainerResolver`
 
-Responsibilities:
+- Chunk loaded check without loading/generating
+- Host-equivalent lootable-container predicate
+- Canonical logical identity for **loaded** positions
+- `resolveLoaded(level, pos) → Optional<ResolvedContainer>`
 
-- Chunk loaded check **without loading/generating** the chunk
-- Host-equivalent lootable-container predicate (chest/barrel/shulker)
-- Canonical logical identity for a **loaded** position (`ChestBlock.getConnectedBlockPos` + lexicographic min for stable doubles)
-- `resolveLoaded(level, pos) → Optional<ResolvedContainer>` with canonical `GlobalPos` + logical kind
+**Must not:** mutate SavedData · POI scans · load chunks.
 
-**Must not:** write SavedData · call `VillagePerception.observe()` · load chunks.
+### `StorageGrantLifecycle`
 
-### `StorageGrantLifecycle` — all mutating cleanup
+- All grant invalidation / stale-row deletion
+- Wired to **Gate-0-locked** block-state change hook
+- Computes **pre-transition logical identity** from `oldState` before topology/replacement events
 
-Responsibilities:
+**Must not:** run from `canContinueToUse` every tick.
 
-- Invalidate grants at **pre-transition logical identity** (see Lifecycle seam + Topology)
-- Stale-row cleanup when loaded validation proves grant target is no longer a valid logical container
-- Called from block-state replacement hook and explicit command paths — **not** from `StorageRaidPolicy`
+### `SettlementStorageFact` — tri-state diagnostic input (LOCKED)
 
-**Must not:** be invoked from every `canContinueToUse` tick unless a separate bounded maintenance
-task is added later (not in gen-1).
+```java
+enum SettlementStorageFact {
+    IN_KNOWN_SETTLEMENT,      // positively inside a remembered settlement anchor radius
+    OUTSIDE_KNOWN_SETTLEMENT,   // positively outside all known anchors for this dimension
+    UNKNOWN                     // insufficient evidence (no anchors, unloaded context, etc.)
+}
+```
 
-### `StorageOwnershipPolicy` — pure classification
+**Source (gen-1 diagnostics only):** union of `KnownVillage` anchors already in dimension
+`VillageMemorySavedData` + `SettlementBoundsPolicy.within(containerPos, anchor)` — **cheap radius
+check only**; no fresh `VillagePerception.observe()`.
+
+### `StorageOwnershipPolicy` — pure diagnostics
 
 ```java
 StorageOwnership classify(
-        ResolvedContainerFacts facts,   // supplied by caller
+        ResolvedContainerFacts facts,
+        SettlementStorageFact settlement,
         UUID mobId,
-        GrantSnapshot grants)           // read-only registry view
+        GrantSnapshot grants)
 ```
 
-**Pure:** no I/O, no SavedData writes, no world mutation.
-
-**Decision order (diagnostics / `storage get` only — first match wins):**
+**Decision order (diagnostics / `storage get` only):**
 
 | Step | Condition | Result |
 | --- | --- | --- |
-| P1 | Facts: chunk not loaded | `UNKNOWN` |
-| P2 | Facts: not a valid lootable logical container | `UNKNOWN` |
-| P3 | Grants: `ownerMobId == mobId` | `MOB_OWNED` |
-| P4 | Grants: `mobId ∈ sharedMobIds` | `EXPLICITLY_SHARED_WITH_MOB` |
-| P5 | Facts: `withinSettlementBounds == true` | `VILLAGE_PUBLIC` |
-| P6 | Loaded container, no grant, not public | `FOREIGN` |
+| P1 | Chunk not loaded | `UNKNOWN` |
+| P2 | Not a valid lootable logical container | `UNKNOWN` |
+| P3 | Grant: owner == mobId | `MOB_OWNED` |
+| P4 | Grant: mobId ∈ shared | `EXPLICITLY_SHARED_WITH_MOB` |
+| P5 | `settlement == IN_KNOWN_SETTLEMENT` | `VILLAGE_PUBLIC` |
+| P6 | `settlement == OUTSIDE_KNOWN_SETTLEMENT` | `FOREIGN` |
+| P7 | `settlement == UNKNOWN` (or P1/P2) | `UNKNOWN` |
 
-**P5 fact source (LOCKED for gen-1 diagnostics):** caller supplies a **bounded boolean** derived
-from **existing** village memory / perception **cache or scheduler output** — **not** a fresh
-`VillagePerception.observe()` call per classification. Acceptable gen-1 sources:
+**Must not:** conflate "no remembered village" with `FOREIGN`.
 
-- `KnownVillage` anchor list already in dimension memory **and** `SettlementBoundsPolicy.within(containerPos, anchor)` for any known anchor in that dimension; **or**
-- a explicitly passed-in diagnostic fact from a command that already loaded the chunk.
-
-**Rejected for P5:** invoking `VillagePerception.observe(level, pos)` inside policy or guard;
-goal-tick POI scans; V3-D workstation scanner duplication.
-
-### `StorageRaidPolicy` — hot path (LOCKED)
+### `StorageRaidPolicy` — enforcement only (LOCKED)
 
 ```java
 boolean mayLoot(PlayerMob mob, ServerLevel level, BlockPos targetPos) {
     if (profileOf(mob) != VILLAGE_ALLY) {
-        return true;                         // non-ally: host unchanged
-    }
-    if (!StorageGuardCompatibility.guardActive()) {
-        return true;                         // only when SPM absent / feature disabled — see Compatibility
+        return true;
     }
     Optional<ResolvedContainer> resolved = resolver.resolveLoaded(level, targetPos);
     if (resolved.isEmpty()) {
-        return false;                        // unloaded or not a valid container → deny ally
+        return false;
     }
     return grants.hasExplicitPermission(resolved.get().canonicalGlobal(), mob.getUUID());
 }
 ```
 
-**Explicit permission** = owner or share row at canonical `GlobalPos` for this mob.
+**Invariants:**
 
-**Must not happen on hot path:** `StorageOwnershipPolicy.classify()` ·
-`VillagePerception.observe()` · POI queries · grant lifecycle mutation · settlement scans.
+- **No** `StorageGuardCompatibility` import or branch
+- **No** `StorageOwnershipPolicy.classify()` on hot path
+- **No** lifecycle mutation
+- If mixin callback executes → this logic runs → ally without grant is **denied**
 
-**Equivalence note:** for `VILLAGE_ALLY`, deny when classification would be
-`{VILLAGE_PUBLIC, FOREIGN, UNKNOWN}` **without** needing to compute which one — grant-or-deny only.
+**Equivalence:** ally deny covers `{VILLAGE_PUBLIC, FOREIGN, UNKNOWN}` without computing labels.
+
+### `StorageGuardCompatibility` — diagnostics only (LOCKED)
+
+Tracks whether protection is **known to be wired**. **Never grants permission.**
+
+```java
+enum GuardObservation {
+    HOST_SHAPE_SUPPORTED,           // pinned SPM goal class + expected methods/fields verified
+    CAN_USE_HOOK_OBSERVED,          // canUse inject callback executed at least once
+    CONTINUATION_HOOK_OBSERVED      // canContinueToUse inject callback executed at least once
+}
+```
+
+**Separate flags** — observing `canUse` does **not** prove `canContinueToUse` injected (`require=0`
+history; `SpmGoalMixinNamingTest` exists because silent misses happened before).
+
+| Signal | Use |
+| --- | --- |
+| All three true | Log/info: ally storage guard operational |
+| SPM absent | No observations expected; no error |
+| SPM present, any false after server warm-up | **WARN/ERROR** — ally storage safety **UNVERIFIED**; operators must not assume protection |
+| Mixin completely failed | Callbacks never run — **policy never invoked**; compatibility reports false; **must not** be masked by a permissive flag inside `mayLoot` |
+
+**Structural tests (CI):** dual method names on mixin; **`StorageRaidPolicy` must not reference
+`StorageGuardCompatibility`**; dedicated test that compatibility type is not on raid policy classpath
+wiring.
+
+**Runtime observation:** set flags from inject callbacks (first execution). Optional server-start
+shape probe for `HOST_SHAPE_SUPPORTED`.
 
 ---
 
 ## Double-chest canonical identity (stable topology)
 
-When the loaded chest topology is already stable (single, or an established LEFT/RIGHT pair):
-
-```text
-canonicalPos(level, pos):
-    if pos is a double-chest half:
-        other = ChestBlock.getConnectedBlockPos(pos, blockState)
-        return lexicographically smaller BlockPos among {pos, other}
-    else:
-        return pos
-
-canonicalGlobal(level, pos) = GlobalPos.of(level.dimension(), canonicalPos(level, pos))
-```
-
-**Must happen:** grant at either half → one canonical row; guard at either half → same decision.
-
-**Must not happen:** two registry rows for one double chest.
+(Unchanged — lexicographic min of double pair; see v2.)
 
 ---
 
 ## Chest topology transitions (LOCKED — gen-1)
 
-Stable canonicalization **alone is insufficient**. Logical container identity can change while both
-positions remain chest blocks.
-
-| Transition | Policy |
-| --- | --- |
-| SINGLE granted at A → chest B placed → A+B become double | **Invalidate** grant stored under A's old single identity **and** any grant under new double canonical key before merge completes |
-| DOUBLE granted → either half destroyed → survivor becomes SINGLE | **Invalidate** double grant (old logical identity) |
-| DOUBLE half re-pairs to different neighbour | **Invalidate** old double grant |
-| Barrel / shulker replaced with different block | **Invalidate** via replacement seam |
-
-**Gen-1 rule:** **Any chest topology transition SINGLE ↔ LEFT/RIGHT invalidates grants for the
-affected pre-transition logical container(s). Re-grant explicitly.** No automatic migration.
-
-**Lifecycle hook requirement:** replacement/topology handler must compute **old logical identity from
-`oldState` + `pos` before the transition**, invalidate grants for that identity, **then** allow the
-world to settle. Post-transition canonicalization alone cannot detect "grant at A, now canonical is B".
-
-### Topology test vectors (required)
-
-| ID | Scenario | Expected |
-| --- | --- | --- |
-| T1 | Single granted at A → merge into double A+B | old grant **invalidated** |
-| T2 | Double granted → destroy one half | double grant **invalidated** |
-| T3 | Double re-pairs to different neighbour | old double grant **invalidated** |
-| T4 | Stable double, grant one half, query other | same grant / permit |
+(Unchanged — SINGLE ↔ LEFT/RIGHT invalidates pre-transition grants; tests T1–T4.)
 
 ---
 
 ## Permission registry (`StoragePermissionSavedData`)
 
-(Semantics unchanged from prior draft — explicit owner/share, Overworld-hosted, reverse index, peek/get
-discipline, RET-1 via `forgetAll`.)
-
-**Rejected:** TTL/LRU silent eviction · unload-triggered deletion · chunk loading from command paths.
-
----
-
-## Fabric 1.21.1 destruction / replacement lifecycle seam (REOPENED — User correction)
-
-### Why `BlockEntity#setRemoved(RemovalReason)` is rejected
-
-In Mojang-mapped **Minecraft 1.21.1** (this project's compile baseline), `BlockEntity` exposes:
-
-```text
-setRemoved()
-clearRemoved()
-isRemoved()
-```
-
-**There is no `RemovalReason` argument on `BlockEntity`.** That API belongs to ordinary `Entity`, not
-block entities. Fabric `ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD` is an unload notification only —
-**not** a typed destruction discriminator.
-
-**Brief status:** the prior `setRemoved(UNLOADED)` vs `setRemoved(CHANGED)` distinction is **REJECTED**
-and must not appear in implementation or tests.
-
-### Correct semantic direction (LOCKED intent, mixin target TBD)
-
-Invalidate grants on **logical container replacement/destruction**, preserve on **chunk unload**:
-
-```text
-chunk unload
-    → no logical block replacement at grant key
-    → KEEP grant
-
-
-old logical container replaced/destroyed
-    → block-state replacement at affected position(s)
-    → INVALIDATE grant(s) for pre-transition logical identity
-```
-
-**Candidate seam (1.21.1 mapped API):** `BlockBehaviour.onRemove(oldState, level, pos, newState, moved)`
-— receives both old and new block states. This is the semantic event needed to:
-
-1. Detect container → non-container replacement
-2. Detect chest topology transitions (SINGLE ↔ LEFT/RIGHT) via `oldState` vs `newState`
-3. **Avoid** firing on mere chunk unload (no block replacement)
-
-### Gate 0 — source audit before locking mixin target (mandatory first implementation step)
-
-Implementer **must** trace and document the actual server path (pinned mappings / decompile), e.g.:
-
-```text
-Level#setBlock / Level#removeBlock
-    → Block#onRemove(oldState, ...)
-    → block entity removal / creation
-    → (confirm unload path does NOT invoke onRemove for mere chunk unload)
-```
-
-**Deliverable:** short audit note in `task-54-report.md` with pinned class/method paths and the chosen
-hook(s). **Do not lock exact mixin target in code until Gate 0 passes.**
-
-**Rejected hooks:**
-
-| Hook | Verdict |
-| --- | --- |
-| `BlockEntity#setRemoved(RemovalReason)` | **REJECT** — API does not exist |
-| `ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD` → delete grant | **REJECT** — unload ≠ destruction |
-| Chunk unload eviction | **REJECT** |
-
-**Fabric unload event:** may be used for **optional bounded validation on load** only — never grant deletion on unload alone.
-
-### Bounded stale-grant handling (via lifecycle, not guard)
-
-| When | Action | Owner |
-| --- | --- | --- |
-| Block-state replacement / topology change | invalidate pre-transition logical grant(s) | `StorageGrantLifecycle` |
-| Loaded admin/diagnostic validation finds invalid target | delete stale row | `StorageGrantLifecycle` |
-| Unloaded chunk | preserve grant; ally guard **denies** via `resolveLoaded` empty | `StorageRaidPolicy` |
-| Guard hot path every tick | **no lifecycle mutation** | — |
+Overworld-canonical `SavedData`; `GlobalPos` keys; reverse UUID index; peek/get discipline; RET-1.
 
 ---
 
 ## Continuous `RaidContainersGoal` guard
 
-### Mixin
+### Mixin (shape locked at Gate 0-B)
 
-**New mixin** — `RaidContainersAllyStorageMixin` — **`@Pseudo`**, targets **only**
-`games.brennan.playermob.entity.goal.RaidContainersGoal`.
+**New mixin** — `RaidContainersAllyStorageMixin` — `@Pseudo`, **only** `RaidContainersGoal`.
 
-| Method | Injection | Behaviour |
-| --- | --- | --- |
-| `canUse` | after `targetPos` assigned, before return true | if `!StorageRaidPolicy.mayLoot(...)` → false |
-| `canContinueToUse` | `@At("HEAD")`, cancellable | if `targetPos != null` && `!mayLoot(...)` → false |
+**Recommended pattern (pending Gate 0-B confirmation):**
 
-**Method names:** both readable and intermediary (`method_6264` / `method_6266`) per
-`SpmGoalMixinNamingTest`.
+```text
+canUse @ RETURN (cancellable):
+    if host returned false → leave false
+    if host returned true:
+        target = OptionalRaidContainerTargetResolver.resolve(this)
+        if target empty → leave true (host decision stands)
+        if !StorageRaidPolicy.mayLoot(mob, level, target) → false
 
-### Guard compatibility sentinel (LOCKED — addresses `require = 0` risk)
+canContinueToUse @ HEAD (cancellable):
+    target = OptionalRaidContainerTargetResolver.resolve(this)
+    if target present && !mayLoot(...) → false
+```
 
-`@Inject(..., require = 0)` remains acceptable **only together with** explicit compatibility enforcement:
+**Method names:** readable + intermediary per `SpmGoalMixinNamingTest`.
 
-| State | Behaviour |
-| --- | --- |
-| SPM **absent** | Guard inactive; no-op; no error |
-| Pinned SPM **present**, host shape **supported** | `StorageGuardCompatibility.guardActive() == true` after init self-test; mixin injections verified (structural test + optional runtime flag set from successful inject callback) |
-| SPM present, shape **unsupported** (mixin miss / method rename) | **Loud diagnostic** at server start; `guardActive() == false`; **do not silently claim ally safety** |
-
-**Must happen:** structural test fails CI if `RaidContainersAllyStorageMixin` lacks dual method names
-or policy wiring.
-
-**Must not happen:** supported SPM + silent mixin miss → allies loot protected containers believing
-guard is active. Log level **WARN or ERROR**, not debug-only.
-
-**Product note:** when `guardActive()` is false but profile is `VILLAGE_ALLY`, operators should treat
-ally storage safety as **UNVERIFIED** — document in command feedback / log.
+**`require = 0`** acceptable with: dual-name structural test + separate continuation observation +
+compatibility diagnostics — **not** with permissive fallback inside `mayLoot`.
 
 ---
 
-## Commands (gen-1 explicit assignment)
+## Commands (gen-1)
 
-All `/spmscavenger village storage …` require operator permission (`hasPermission(2)`).
+Operator permission level 2.
 
 ```text
 /spmscavenger village storage get <x> <y> <z> [@mob]
@@ -388,116 +347,135 @@ All `/spmscavenger village storage …` require operator permission (`hasPermiss
 /spmscavenger village storage share <mob> <x> <y> <z>
 /spmscavenger village storage unshare <mob> <x> <y> <z>
 /spmscavenger village storage revoke <x> <y> <z>
+/spmscavenger village storage revoke-key <dimension> <x> <y> <z>
 /spmscavenger village storage list <mob>
 ```
 
-### Positional command safety (LOCKED)
+### Authority evidence asymmetry (LOCKED)
 
-**`own` / `share`:**
-
-```text
-require chunk already loaded at target (no load/generate)
-require host-equivalent lootable container exists at target
-canonicalize from loaded world truth via StorageContainerResolver
-then write grant via get(server)
-```
-
-**`unshare` / `revoke` (gen-1):**
+**Creating permission (`own` / `share`):**
 
 ```text
-require chunk loaded + resolvable canonical target
-then mutate via peek(server)
+require chunk loaded (no load/generate)
+require host-equivalent lootable container at target
+canonicalize from loaded world truth
+write via get(server)
 ```
 
-**`get`:**
+**Removing permission (`unshare` / `revoke` / `revoke-key`):**
 
 ```text
-unloaded target → report UNKNOWN (no chunk load)
-loaded → resolve + pure policy classify (may use bounded settlement fact)
+require only an exact persisted grant identity
+MUST NOT require positive loaded world truth
+MUST NOT load/generate chunk
 ```
 
-**`list <mob>`:** returns persisted canonical `GlobalPos` keys — diagnostic even when chunks unloaded.
+| Command | Target resolution |
+| --- | --- |
+| `unshare <mob> <x> <y> <z>` | If chunk **loaded** → canonicalize normally. If **unloaded** → reject positional form; operator uses `revoke-key` or `list` output. |
+| `revoke <x> <y> <z>` | Same — loaded positional canonicalize **or** use `revoke-key`. |
+| `revoke-key <dimension> <x> <y> <z>` | Delete exact `GlobalPos` row if present via `peek(server)` — **no world query**. |
 
-**Rejected:** granting against unloaded coordinates; commands that force chunk loading/generation.
+**`list <mob>`:** print canonical `GlobalPos` keys suitable for `revoke-key` — essential for stale-row
+admin when lifecycle cleanup missed.
+
+**`get`:** unloaded → `UNKNOWN` classification context; loaded → resolve + tri-state settlement +
+pure policy.
 
 ---
 
-## Verification — VR-T3g–i + lifecycle + structural negatives
+## Deliverables
 
-### VR-T3 scenarios (static / unit)
+### Gate 0 only (when Gate 0 authorized)
+
+| Path | Role |
+| --- | --- |
+| `.superpowers/sdd/task-54-gate0-report.md` | Audit answers G0-1…G0-6 + G0-B1…B4; **LOCK** hooks |
+
+### Full implementation (when Gate 0 closed + User authorizes task-54)
+
+| Path | Role |
+| --- | --- |
+| `village/storage/StorageOwnership.java` | enum |
+| `village/storage/SettlementStorageFact.java` | tri-state diagnostic fact |
+| `village/storage/StorageContainerResolver.java` | loaded truth / canonical identity |
+| `village/storage/StorageGrantLifecycle.java` | mutating invalidation (Gate-0 hook) |
+| `village/storage/StorageOwnershipPolicy.java` | pure diagnostics |
+| `village/storage/StoragePermissionSavedData.java` | grants + reverse index |
+| `village/storage/StorageRaidPolicy.java` | enforcement — **no compatibility import** |
+| `village/storage/StorageGuardCompatibility.java` | diagnostics observations only |
+| `compat/OptionalRaidContainerTargetResolver.java` | host `targetPos` access (if Gate 0-B selects) |
+| `mixin/RaidContainersAllyStorageMixin.java` | guard injects |
+| `command/VillageStorageCommands.java` | operator commands |
+| `PerMobSavedData.java` | forget sweep |
+| Tests | VR-T3g–i, topology, lifecycle, structural negatives |
+
+---
+
+## Verification
+
+### VR-T3 (static)
 
 | ID | Scenario | Expected |
 | --- | --- | --- |
-| **VR-T3g** | `VILLAGE_ALLY` + no explicit grant at settlement chest | `mayLoot` false; mixin denies admit + continuation |
-| **VR-T3h** | `VILLAGE_ALLY` + unloaded / unresolvable target | fail closed |
-| **VR-T3i-a** | `NEUTRAL` + any target | guard permits |
-| **VR-T3i-b** | `VILLAGE_ALLY` + explicit own/share grant | guard permits |
-| **VR-T3i-c** | `VILLAGE_ALLY` + grant at settlement chest | **grant permits** — hot path does not need `VILLAGE_PUBLIC` label |
+| **VR-T3g** | `VILLAGE_ALLY`, no grant, settlement chest | deny |
+| **VR-T3h** | `VILLAGE_ALLY`, unloaded / invalid target | deny |
+| **VR-T3i-a** | `NEUTRAL` | permit |
+| **VR-T3i-b** | `VILLAGE_ALLY` + explicit grant | permit |
+| **VR-T3i-c** | `VILLAGE_ALLY` + grant at settlement chest | permit (grant wins hot path) |
 
-### Lifecycle / topology tests
+### Diagnostic policy tests
 
 | ID | Scenario | Expected |
 | --- | --- | --- |
-| L1 | Grant survives chunk unload/reload | row persists |
-| L2 | Block-state replacement container → stone | grant invalidated (lifecycle) |
-| L3 | `BLOCK_ENTITY_UNLOAD` only | grant **preserved** |
-| L4 | Loaded stale validation | lifecycle deletes row |
-| L5 | Stable double half query | same grant |
-| L6 | `forgetAll(mobId)` | peek-only sweep |
-| T1–T4 | Topology table above | grants invalidated per policy |
+| D1 | No village memory evidence, loaded chest | `UNKNOWN`, **not** `FOREIGN` |
+| D2 | Inside known anchor radius | `VILLAGE_PUBLIC` (no grant) |
+| D3 | Positively outside all anchors | `FOREIGN` |
+
+### Command tests
+
+| ID | Scenario | Expected |
+| --- | --- | --- |
+| C1 | `own` on unloaded chunk | refuse |
+| C2 | `revoke-key` on stale GlobalPos, chunk unloaded | succeeds; row removed |
+| C3 | `revoke` positional, container destroyed, grant stale | refuse positional; `revoke-key` succeeds |
 
 ### Structural negatives
 
-| ID | Check | Must fail if |
+| ID | Check |
+| --- | --- |
+| S1 | Naked `BlockPos` keys |
+| S2 | Unload deletes grants |
+| S3 | `BlockEntity#setRemoved(RemovalReason)` |
+| S4 | `VillagePerception.observe` in `StorageRaidPolicy` |
+| S5 | `StorageOwnershipPolicy` mutates SavedData |
+| S6 | Mixin missing `canContinueToUse` |
+| S7 | Non-ally denied |
+| S8 | `own`/`share` on unloaded chunk succeeds |
+| S9 | Commands force chunk load |
+| S10 | `StorageRaidPolicy` imports `StorageGuardCompatibility` |
+| S11 | `guardActive()` or equivalent affects `mayLoot` return |
+| S12 | `MandatoryOwnership` in storage guard |
+| S13 | `PerMobSavedData` registration missing |
+| S14 | Boolean settlement fact (must be tri-state) |
+| S15 | `revoke` requires loaded container for exact-key stale repair |
+
+---
+
+## Peer review disposition
+
+| Item | v2 | v3 |
 | --- | --- | --- |
-| S1 | Naked `BlockPos` grant keys | no `GlobalPos` |
-| S2 | Unload deletes grants | unload listener mutates registry |
-| S3 | `BlockEntity#setRemoved(RemovalReason)` | any reference in production/tests |
-| S4 | `VillagePerception.observe` in `StorageRaidPolicy` | hot-path import/call |
-| S5 | `StorageOwnershipPolicy` mutates SavedData | purity violation |
-| S6 | Mixin only `canUse` | missing `canContinueToUse` |
-| S7 | Non-ally denied | `NEUTRAL` → false |
-| S8 | `own`/`share` on unloaded chunk | command succeeds |
-| S9 | Chunk load from storage command | forced load API used |
-| S10 | Supported SPM + guard silently inactive | no compatibility sentinel |
-| S11 | `MandatoryOwnership` in storage guard | wiring grep |
-| S12 | UUID store not in `PerMobSavedData` | removal contract test |
+| Resolver / lifecycle / policy split | **ACCEPT** | **KEEP** |
+| Hot-path grant-or-deny | **ACCEPT** | **KEEP** |
+| Topology T1–T4 | **ACCEPT** | **KEEP** |
+| `guardActive()` inside `mayLoot` | **BLOCKER** | **REMOVED** — diagnostics only |
+| Lifecycle hook TBD at implement time | **BLOCKER** | **Gate 0 required before implementation** |
+| Boolean `withinSettlementBounds` | **BLOCKER** | **FIXED** — `SettlementStorageFact` tri-state |
+| Revoke requires loaded target | **BLOCKER** | **FIXED** — asymmetric evidence + `revoke-key` |
+| `targetPos` access unspecified | **GAP** | **Gate 0-B** |
+| `canUse` instruction-level inject | **GAP** | **Prefer RETURN veto (Gate 0-B)** |
 
-### Commands
+**Full task-54 implementation:** **NOT AUTHORIZED**
 
-```powershell
-cd "d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric"
-.\gradlew.bat compileJava
-.\gradlew.bat test
-```
-
----
-
-## Docs to update (when implementation is authorized)
-
-| File | Update |
-| --- | --- |
-| `docs/porting/TEST_MATRIX.md` | VR-T3g–i + lifecycle/topology rows |
-| `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` | V3-B brief revision; destruction seam correction |
-| `.superpowers/sdd/progress.md` | brief revision note |
-
-## Report (when implemented)
-
-`.superpowers/sdd/task-54-report.md` — Gate 0 source audit paths; map every brief requirement;
-label `CONFIRMED`/`INFERRED`/`UNVERIFIED`. Runtime VR-T3g–i **UNVERIFIED** until approved launch.
-
----
-
-## Peer review disposition (2026-08-20)
-
-| Item | Verdict |
-| --- | --- |
-| GlobalPos, Overworld SavedData, explicit grants, continuous guard, RET-1 peek cleanup, no MandatoryOwnership publisher | **KEEP** |
-| `BlockEntity#setRemoved(RemovalReason)` seam | **REJECT** — corrected above |
-| C5 `VillagePerception.observe()` on guard/classifier hot path | **REJECT** — hot path grant-or-deny; P5 diagnostics bounded only |
-| Monolithic "pure classifier" with purge side effect | **FIXED** — resolver / lifecycle / policy split |
-| Chest merge/split semantics | **ADDED** — topology invalidation + tests |
-| Unloaded grant commands | **ADDED** — loaded-chunk requirement |
-| Silent optional guard (`require=0` alone) | **HARDENED** — compatibility sentinel |
-
-**task-54 implementation:** **NOT AUTHORIZED**
+**Task-54 Gate 0 source audit:** **NOT AUTHORIZED** (await User: **authorize task-54 Gate 0**)
