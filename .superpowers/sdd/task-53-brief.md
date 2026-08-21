@@ -42,16 +42,21 @@ consumer and the profile store — **without** inventing placeholder scheduler p
 first Cursor draft. No fake goals, no empty selectors, no speculative enum values, no
 village-memory eviction copy, no mega-admission.
 
+**Peer review — second pass (User, 2026-08-20):** three surgical corrections — **NEUTRAL = store
+absence** (no NEUTRAL rows); **`Result.authorityCause`** preserves `MandatoryOwnership` attribution;
+**operator-gated commands** + server-canonical cross-dimension read semantics (no per-dimension
+`DataStorage`).
+
 ## Load-bearing requirements
 
 | # | Requirement |
 | --- | --- |
-| 1 | **`VillageScenarioProfile` ships only `NEUTRAL` and `VILLAGE_ALLY`.** Unknown, future, or corrupt serialized values deserialize to **`NEUTRAL`**. Do not add `COWARD` / `TRADER` / `RAIDER` names until they have contracts. |
-| 2 | **Cross-dimension store — not in `MobVillageMemory` / `VillageMemorySavedData`.** One server-global profile per mob UUID, same value in Overworld / Nether / End. |
-| 3 | **`PlayerMobVillagePolicySavedData`** — single canonical instance hosted on **Overworld** `DataStorage`. **`get(server)`** uses `computeIfAbsent`; **`peek(server)`** uses non-creating `get`; **`forget(server, mobId)`** uses **`peek` only** so cleanup never materializes a file for a mob that never had a profile. |
+| 1 | **`VillageScenarioProfile` ships only `NEUTRAL` and `VILLAGE_ALLY`.** **`NEUTRAL` = absence in the store** — no row is written for NEUTRAL. Unknown, future, or corrupt serialized values deserialize to **`NEUTRAL`** and are **not preserved** as rows on rewrite/save. Do not add `COWARD` / `TRADER` / `RAIDER` names until they have contracts. |
+| 2 | **Cross-dimension store — not in `MobVillageMemory` / `VillageMemorySavedData`.** One server-global profile per mob UUID via **`MinecraftServer` → Overworld `DataStorage` only**. Same value regardless of which dimension the mob or caller is in. |
+| 3 | **`PlayerMobVillagePolicySavedData`** — single canonical instance hosted on **Overworld** `DataStorage`. **`get(server)`** uses `computeIfAbsent` (writes only); **`peek(server)`** uses non-creating `get`; **`profileOf(server, mobId)`** uses **`peek` only** — absent row = `NEUTRAL`, never materializes the file; **`setProfile(..., VILLAGE_ALLY)`** uses **`get`**; **`setProfile(..., NEUTRAL)`** and **`forget(server, mobId)`** use **`peek` only**. Tracked entries = mobs with actual non-default policy. |
 | 4 | **RET-1 for this store:** key = mob `UUID`; normal bound = one tiny entry per **explicitly assigned** mob; **normal eviction = permanent mob removal only** (`PerMobSavedData.forgetAll`); chunk unload / dimension change **preserve**; server stop **persist**. **Do not** copy `VillageMemorySavedData.MAX_TRACKED_MOBS` silent eviction — silently demoting `VILLAGE_ALLY` → `NEUTRAL` is worse than forgetting observational cache. If a catastrophic leak guard is added later, it must be generous, diagnostic, or alert — not silent policy mutation on live mobs. |
 | 5 | **`VillageWorkAdmission` answers one question:** *Is this mob generally permitted to enter discretionary Village Work right now?* **Profile gate + `MandatoryOwnership.evaluate` only.** No settlement anchor, crop candidate, composter, population, or storage checks. |
-| 6 | **`VILLAGE_ALLY` acquisition (gen-1):** explicit operator command only. HOME village, HIGH relationship, successful trade, and village discovery **must not** promote. No config-at-spawn in this slice. |
+| 6 | **`VILLAGE_ALLY` acquisition (gen-1):** explicit **operator-permission-gated** command only. HOME village, HIGH relationship, successful trade, and village discovery **must not** promote. No config-at-spawn in this slice. Non-PlayerMob targets **rejected** with explicit feedback. |
 | 7 | **`ActivityClass.VILLAGE_WORK`** added to the enum; **`DiscretionaryEligibility`** adds `VILLAGE_WORK` to `blocksDiscretionaryChoice`. **`MAINTENANCE` stays out** — deliberate P4 asymmetry (`D-VR-082-A1` §4). |
 | 8 | **No production goal at P4.** Classifier pin on `MoveHolderClassifier` **deferred** until the first real V3 executor exists. Taxonomy is tested via `DiscretionaryEligibility` + synthetic observations. |
 | 9 | **`VillageWorkAdmission` is a consumer, not a publisher.** It must **not** call `MandatoryOwnershipRegistry` directly, inspect `WorkDemandPolicy`, enumerate `ActivityClass` blockers locally, or read `SettlementRelationship`. |
@@ -95,24 +100,52 @@ public enum VillageScenarioProfile {
 }
 ```
 
-**Default:** `NEUTRAL` for missing entries, existing-world migration, and corrupt NBT.
+**Default / absence:** no row = **`NEUTRAL`**. Missing entries, `profileOf` on untouched mobs,
+existing-world migration, corrupt NBT on load, and unknown serialized values all resolve to
+**`NEUTRAL`** without creating or preserving a row.
+
+**Storage invariant (locked):**
+
+```text
+no row                          = NEUTRAL
+set VILLAGE_ALLY                → create/update row (via get)
+set NEUTRAL                     → remove row (via peek-only forget)
+unknown/corrupt serialized      → interpret as NEUTRAL; do not preserve as row
+```
+
+Tracked entries = mobs with actual non-default policy — not every mob someone typed `neutral` for.
+`set neutral` is a genuine **revocation**, not writing a default row.
 
 **Rejected:** reserved enum constants without semantics; storing profile inside
-`MobVillageMemory`; HOME/HIGH/trade → ally.
+`MobVillageMemory`; HOME/HIGH/trade → ally; persisting NEUTRAL rows.
 
 ## `PlayerMobVillagePolicySavedData`
 
 **Hosting (locked):**
 
 ```text
-get(server)   → server.overworld().getDataStorage().computeIfAbsent(...)
-peek(server)  → server.overworld().getDataStorage().get(...)     // non-creating
+get(server)              → server.overworld().getDataStorage().computeIfAbsent(...)
+peek(server)             → server.overworld().getDataStorage().get(...)     // non-creating
+
+profileOf(server, mobId) → peek only; absent row → NEUTRAL; never materializes file
+
+setProfile(server, mobId, VILLAGE_ALLY)
+    → get(server); write/update row
+
+setProfile(server, mobId, NEUTRAL)
+    → forget via peek-only path (same as explicit revocation)
+
 forget(server, mobId)
     → peek(server); if non-null, remove mobId from map; markDirty if changed
 ```
 
-**Cross-dimension read/write:** all accessors take `MinecraftServer` (or derive from any
-`ServerLevel` via `level.getServer()`), never a dimension-local store.
+**Queries must not allocate state.** A `/profile get` on a completely untouched mob reports
+`NEUTRAL` without creating `spmscavenger_village_policy.dat` (or whatever id is chosen).
+
+**Cross-dimension access (locked):** all production accessors take **`MinecraftServer`** and route
+through Overworld `DataStorage`. If a convenience overload accepts `ServerLevel`, it must
+immediately derive `level.getServer()` and delegate — **never** call that level's
+`getDataStorage()`. There is only **one** policy `SavedData` instance for the entire server.
 
 **`forgetEverywhere` is NOT required** — unlike `VillageMemorySavedData`, there is exactly one
 canonical file. `PerMobSavedData.forgetAll` calls `PlayerMobVillagePolicySavedData.forget(server,
@@ -122,27 +155,33 @@ mobId)` once.
 
 | Event | Behaviour |
 | --- | --- |
-| Explicit `setProfile` / operator command | write entry |
-| Chunk unload | **preserve** |
-| Dimension change | **preserve** |
-| Server stop / restart | **persist** (save/load round-trip) |
+| `setProfile(..., VILLAGE_ALLY)` | create/update row via **`get`** |
+| `setProfile(..., NEUTRAL)` | **remove row** via peek-only forget (revocation) |
+| `profileOf` / read-only query | **`peek` only**; absent = NEUTRAL |
+| Chunk unload | **preserve** existing ally row |
+| Dimension change | **preserve** existing ally row |
+| Server stop / restart | **persist** ally rows (save/load round-trip) |
 | Permanent mob removal | **`forget`** via `PerMobSavedData.forgetAll` |
 | Ordinary unload only | **preserve** — no hook on `ENTITY_UNLOAD` for this store |
+| Load unknown/corrupt value | interpret as NEUTRAL; **do not** write a canonical NEUTRAL row on save |
 
-**Must not happen:** `forgetEverywhere` sweeping all dimensions; `computeIfAbsent` on the forget
-path; silent LRU eviction of live ally assignments.
+**Must not happen:** `forgetEverywhere` sweeping all dimensions; `computeIfAbsent` on read,
+forget, or `profileOf` paths; silent LRU eviction of live ally assignments; storing NEUTRAL rows.
 
 ## `VillageWorkAdmission`
 
 **Single question:** may discretionary village work compete at all?
 
 ```java
-public record Result(boolean permitted, DenyCause cause) { ... }
+public record Result(
+        boolean permitted,
+        DenyCause cause,
+        InvalidationCause authorityCause) {}
 
 public enum DenyCause {
     NONE,
-    DENY_PROFILE,           // not VILLAGE_ALLY
-    DENY_MANDATORY_AUTHORITY // MandatoryOwnership denied — carry underlying InvalidationCause in tests
+    DENY_PROFILE,
+    DENY_MANDATORY_AUTHORITY
 }
 
 public static Result evaluate(
@@ -153,28 +192,39 @@ public static Result evaluate(
         long now)
 ```
 
+**Result semantics (locked):**
+
+| Outcome | `permitted` | `cause` | `authorityCause` |
+| --- | --- | --- | --- |
+| Profile denied | `false` | `DENY_PROFILE` | `NONE` |
+| `MandatoryOwnership` denied | `false` | `DENY_MANDATORY_AUTHORITY` | `permission.cause()` |
+| Allowed | `true` | `NONE` | `NONE` |
+
 **Decision order (locked):**
 
 ```text
 profile != VILLAGE_ALLY
-    → DENY_PROFILE
+    → DENY_PROFILE, authorityCause = NONE
 
 MandatoryOwnership.evaluate(...).eligible() == false
-    → DENY_MANDATORY_AUTHORITY
+    → DENY_MANDATORY_AUTHORITY, authorityCause = permission.cause()
 
 otherwise
-    → permitted
+    → permitted, both causes = NONE
 ```
 
-**Consume, do not reimplement:**
+**Consume, do not reimplement or flatten:**
 
 ```java
 MandatoryOwnership.Permission permission =
         MandatoryOwnership.evaluate(observation, combatTarget, liveClaim, now);
+// preserve permission.cause() in authorityCause when denied
 ```
 
 The admission class must not duplicate combat handling, pending-claim handling, or running-arm
-delegation.
+delegation. **`authorityCause` must carry the exact task-52 attribution** — e.g.
+`MANDATORY_PENDING_CLAIM`, `MANDATORY_AUTHORITY`, `UNKNOWN_ACTIVE`, `COMBAT_TARGET` — without
+re-deriving those values locally.
 
 **Layering for future work (document in report, do not implement):**
 
@@ -198,7 +248,9 @@ exists.
 
 ## Commands
 
-Minimal explicit assignment path (`D-VR-080`):
+Minimal explicit assignment path (`D-VR-080`). **All `/spmscavenger village profile …` subcommands
+require operator permission** (e.g. `requires(source -> source.hasPermission(2))` or the project's
+equivalent minimum for destructive/administration commands).
 
 ```text
 /spmscavenger village profile get <mob>
@@ -208,11 +260,18 @@ Minimal explicit assignment path (`D-VR-080`):
 
 **Properties (must hold in tests or structural assertions where applicable):**
 
+- **Operator permission required** — non-operators cannot read or mutate profiles
+- Target must be a **PlayerMob** (`PlayerMobs.isPlayerMob`); vanilla or other mobs → **reject /
+  skip with explicit command feedback** — no accidental profile assignment
+- `set village_ally` → `setProfile(..., VILLAGE_ALLY)` via **`get`**
+- `set neutral` → `setProfile(..., NEUTRAL)` → **row removed** (revocation), not a NEUTRAL row written
+- `get` on untouched mob → reports **`NEUTRAL`** via **`profileOf` / peek** — SavedData file **not**
+  materialized
 - Only explicit assignment sets `VILLAGE_ALLY`
 - `SettlementRelationship` / HOME / HIGH / trade success / village discovery **must not** call
   `setProfile` anywhere in production code added by this slice
 
-Target selector: `@e` PlayerMob entities (use existing `PlayerMobs.isPlayerMob` guard).
+Target selector: `@e` entities filtered to PlayerMobs only.
 
 **Not in scope:** config-at-spawn mass-default allies; storage permit commands (task-54).
 
@@ -230,18 +289,28 @@ Target selector: `@e` PlayerMob entities (use existing `PlayerMobs.isPlayerMob` 
 
 | # | Scenario | Expected |
 | --- | --- | --- |
-| 1 | Pending Gather claim active; profile `VILLAGE_ALLY` | admission **denied** (`DENY_MANDATORY_AUTHORITY` / pending cause) |
-| 2 | Running Gather; profile `VILLAGE_ALLY` | **denied** |
-| 3 | Running village trade (`VILLAGE_TRADE`); profile `VILLAGE_ALLY` | **denied** |
-| 4 | Demand exists, no claim, no running mandatory executor; profile `VILLAGE_ALLY` | **allowed** (fail-open third state — task-52 simulation B) |
-| 5 | Profile `NEUTRAL` regardless of settlement relationship | **denied** (`DENY_PROFILE`) |
-| 6 | Profile `VILLAGE_ALLY` read via Overworld / Nether / End accessors | **identical** value |
-| 7 | Chunk unload / dimension change | profile **persists** |
-| 8 | Permanent mob removal (`forgetAll`) | profile entry **removed** |
-| 9 | Save / reload round-trip | `VILLAGE_ALLY` **survives** |
-| 10 | Missing / unknown serialized profile | **`NEUTRAL`** |
+| 1 | Pending Gather claim active; profile `VILLAGE_ALLY` | **denied** — `cause=DENY_MANDATORY_AUTHORITY`, `authorityCause=MANDATORY_PENDING_CLAIM` |
+| 2 | Running Gather; profile `VILLAGE_ALLY` | **denied** — `authorityCause=MANDATORY_AUTHORITY` (or the exact cause `DiscretionaryEligibility` returns for Gather) |
+| 3 | Running village trade (`VILLAGE_TRADE`); profile `VILLAGE_ALLY` | **denied** — `authorityCause=MANDATORY_AUTHORITY` |
+| 4 | Demand exists, no claim, no running mandatory executor; profile `VILLAGE_ALLY` | **allowed** — `cause=NONE`, `authorityCause=NONE` (fail-open third state — task-52 simulation B) |
+| 5 | Profile `NEUTRAL` (absent row) regardless of settlement relationship | **denied** — `cause=DENY_PROFILE`, `authorityCause=NONE` |
+| 6 | Ally row set once; `profileOf(server, mobId)` while mob/caller context is Overworld, then Nether, then End | **same** `VILLAGE_ALLY` each time; **only one** policy `SavedData` exists (Overworld-hosted); no dimension-local `getDataStorage()` |
+| 7 | Chunk unload / dimension change with existing ally row | ally row **persists** |
+| 8 | Permanent mob removal (`forgetAll`) | ally row **removed** |
+| 9 | Save / reload round-trip with ally row | `VILLAGE_ALLY` **survives** |
+| 10 | Missing / unknown serialized profile on load | resolves to **`NEUTRAL`**; after rewrite/save, **no** canonical stored assignment row for that mob |
 | 11 | Synthetic observation: `VILLAGE_WORK` running | `DiscretionaryEligibility` **blocks** fresh discretionary selection |
 | 12 | Synthetic observation: `MAINTENANCE` running alone | `DiscretionaryEligibility` **does not block** |
+
+### Store-specific tests (add to `PlayerMobVillagePolicySavedDataTest`)
+
+| Test | Expected |
+| --- | --- |
+| `profileOf` untouched mob | `NEUTRAL`; policy SavedData **not materialized** |
+| `set VILLAGE_ALLY` | exactly **one** entry |
+| `set NEUTRAL` after ally | entry **gone**; `profileOf` → `NEUTRAL` |
+| Load unknown serialized value | `NEUTRAL`; no row preserved after rewrite/save |
+| `profileOf` / `get` command on untouched mob | `NEUTRAL` without creating save file |
 
 ### Structural negatives (run in isolation; name the test each breaks)
 
@@ -253,9 +322,12 @@ Target selector: `@e` PlayerMob entities (use existing `PlayerMobs.isPlayerMob` 
 | S4 | Admission reads `SettlementRelationship` or village memory | wiring test |
 | S5 | Profile stored in `MobVillageMemory` | structural / grep test |
 | S6 | Profile deleted on ordinary `ENTITY_UNLOAD` | must not — no unload hook |
-| S7 | `forgetAll` uses `computeIfAbsent` on policy store | `PerMobRemovalContractTest` peek materialization pattern |
+| S7 | `forgetAll` / `profileOf` / `forget` uses `computeIfAbsent` on policy store | materialization structural test |
 | S8 | New SavedData with UUID keys not registered in `PerMobSavedData.forgetAll` | `PerMobRemovalContractTest` |
 | S9 | Silent `MAX_TRACKED_MOBS`-style eviction on policy store | reject — no such eviction in production code |
+| S10 | `setProfile(..., NEUTRAL)` writes a NEUTRAL row instead of removing | store-specific test must fail |
+| S11 | `profileOf` on untouched mob materializes SavedData | store-specific test must fail |
+| S12 | Convenience `ServerLevel` accessor calls that level's `getDataStorage()` | structural / grep test must fail |
 
 ### Commands
 
