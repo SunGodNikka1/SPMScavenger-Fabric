@@ -28,19 +28,12 @@ public final class StorageGrantLifecycle {
 
     static void invalidateIfIdentityChanged(
             ServerLevel level, BlockPos pos, BlockState oldState, BlockState newState) {
-        if (!StorageLogicalIdentity.logicalIdentityChanged(oldState, newState, pos)) {
-            return;
-        }
-        StoragePermissionSavedData data = StoragePermissionSavedData.peek(level.getServer());
-        if (data == null) {
-            return;
-        }
-        StorageLogicalIdentity.Identity oldId = StorageLogicalIdentity.of(oldState, pos);
-        if (!oldId.supported()) {
-            return;
-        }
-        GlobalPos oldKey = GlobalPos.of(level.dimension(), oldId.canonicalPos());
-        data.invalidateAt(oldKey);
+        invalidateIfIdentityChanged(
+                StoragePermissionSavedData.peek(level.getServer()),
+                level.dimension(),
+                pos,
+                oldState,
+                newState);
     }
 
     /** Test seam — invalidate using an explicit store without server plumbing. */
@@ -57,6 +50,11 @@ public final class StorageGrantLifecycle {
             return;
         }
         StorageLogicalIdentity.Identity oldId = StorageLogicalIdentity.of(oldState, pos);
+        StorageLogicalIdentity.Identity newId = StorageLogicalIdentity.of(newState, pos);
+        if (!oldId.supported() && newId.supported()) {
+            data.invalidateAt(GlobalPos.of(dimension, pos.immutable()));
+            return;
+        }
         if (!oldId.supported()) {
             return;
         }

@@ -13,6 +13,8 @@ Explicit `GlobalPos`-keyed storage permission registry, diagnostic ownership cla
 
 **R1 repair (2026-08-21):** fixed selective `forget`, pure logical-identity lifecycle predicate, fail-closed continuation on unresolved mob, compatibility session lifecycle, and `revoke-key` Brigadier parsing.
 
+**R1.2 repair (2026-08-21):** owner/share role disjointness invariant; same-block replacement within Kind; stale-grant purge on unsupported→supported placement.
+
 ---
 
 ## Verification
@@ -20,7 +22,7 @@ Explicit `GlobalPos`-keyed storage permission registry, diagnostic ownership cla
 | Command | CWD | Result |
 | --- | --- | --- |
 | `.\gradlew.bat compileJava` | `Projects/SPMScavenger-1.21.1-Fabric` | **PASS** |
-| `.\gradlew.bat test` | same | **PASS** — **1428 tests**, 0 failures |
+| `.\gradlew.bat test` | same | **PASS** — **1435 tests**, 0 failures |
 
 **Evidence class:** compile + unit/structural/Brigadier-parse tests. Runtime VR-T3g–i and live mixin witness remain **UNVERIFIED** (no Minecraft launch authorized).
 
@@ -35,6 +37,9 @@ Explicit `GlobalPos`-keyed storage permission registry, diagnostic ownership cla
 | **R1-3** | `canContinueToUse`: `mob == null` → `TARGET_RESOLUTION_FAILED` + `false`; non-ally returns to host | `RaidContainersAllyStorageMixin.java` |
 | **R1-4** | `observeCanUseHook` at inject entry; `beginServerSession` / `shutdownServerState` / bounded warm-up tick; target-resolution warn | `StorageGuardCompatibilityTest`; `SpmScavenger.java` wiring; corrected `OptionalRaidContainerTargetResolver` warn text |
 | **R1-5** | `revoke-key` uses `ResourceLocationArgument.id()` | `VillageStorageCommandsParseTest.revokeKeyParsesNamespacedDimensionAndCoordinates` |
+| **R1.2-a** | `GrantRow` invariant owner ∉ shared on grant/share/load/forget | `StoragePermissionSavedDataForgetTest` overlap + load-normalize |
+| **R1.2-b** | same-Kind block replacement (`getBlock() !=`) invalidates | `StorageLogicalIdentityTest` trapped-chest + shulker-color; `StorageGrantLifecycleTest.sameKindChestReplacement` |
+| **R1.2-c** | unsupported→supported invalidates exact `GlobalPos(pos)` stale row | `StorageGrantLifecycleTest.staleGrantClearedWhenChestPlacedOnStone` |
 
 ---
 
@@ -52,10 +57,12 @@ Explicit `GlobalPos`-keyed storage permission registry, diagnostic ownership cla
 
 ---
 
-## Architecture invariants (CONFIRMED — post-R1)
+## Architecture invariants (CONFIRMED — post-R1.2)
 
+- `GrantRow`: `owner == null` OR owner ∉ `shared` — all mutation and load paths normalize.
 - `forget` never calls `revokeKey` for owner removal — shared mobs on same row survive.
-- Lifecycle invalidates at **old** canonical key only when `StorageLogicalIdentity.logicalIdentityChanged` is true (includes SINGLE↔double and connected-direction change).
+- Lifecycle invalidates old canonical on supported→* change; exact `pos` key on unsupported→supported (stale-row purge).
+- Same physical block replacement within Kind (`chest`→`trapped_chest`, dyed shulker swap) invalidates.
 - `StorageRaidPolicy` does not import `StorageGuardCompatibility`.
 - Ally `canUse` RETURN veto calls `clearTarget(goal)` before `false`.
 - Chunk unload does not delete grants.

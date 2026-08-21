@@ -80,6 +80,22 @@ class StorageLogicalIdentityTest {
     }
 
     @Test
+    void normalChestToTrappedChestChangesIdentity() {
+        BlockState normal = chest(ChestType.SINGLE, Direction.NORTH);
+        BlockState trapped = Blocks.TRAPPED_CHEST.defaultBlockState()
+                .setValue(ChestBlock.TYPE, ChestType.SINGLE)
+                .setValue(ChestBlock.FACING, Direction.NORTH);
+        assertTrue(StorageLogicalIdentity.logicalIdentityChanged(normal, trapped, POS));
+    }
+
+    @Test
+    void shulkerColorChangeChangesIdentity() {
+        BlockState white = Blocks.WHITE_SHULKER_BOX.defaultBlockState();
+        BlockState red = Blocks.RED_SHULKER_BOX.defaultBlockState();
+        assertTrue(StorageLogicalIdentity.logicalIdentityChanged(white, red, POS));
+    }
+
+    @Test
     void stoneToStoneDoesNotChangeIdentity() {
         BlockState a = Blocks.STONE.defaultBlockState();
         BlockState b = Blocks.COBBLESTONE.defaultBlockState();

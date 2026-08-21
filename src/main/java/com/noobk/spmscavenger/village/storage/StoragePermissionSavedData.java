@@ -42,9 +42,17 @@ public final class StoragePermissionSavedData extends SavedData implements Grant
     }
 
     private record GrantRow(UUID owner, Set<UUID> shared) {
-        GrantRow copy() {
-            return new GrantRow(owner, new HashSet<>(shared));
+        static GrantRow of(UUID owner, Set<UUID> shared) {
+            Set<UUID> normalizedShared = shared == null ? new HashSet<>() : new HashSet<>(shared);
+            if (owner != null) {
+                normalizedShared.remove(owner);
+            }
+            return new GrantRow(owner, normalizedShared);
         }
+    }
+
+    private static GrantRow normalizeLoadedRow(UUID owner, Set<UUID> shared) {
+        return GrantRow.of(owner, shared);
     }
 
     private static Factory<StoragePermissionSavedData> factory() {
@@ -108,7 +116,8 @@ public final class StoragePermissionSavedData extends SavedData implements Grant
         if (existing != null && existing.owner() != null) {
             removeFromReverse(existing.owner(), key);
         }
-        grants.put(key, new GrantRow(owner, shared));
+        shared.remove(owner);
+        grants.put(key, GrantRow.of(owner, shared));
         addToReverse(owner, key);
         setDirty();
         return true;
@@ -120,8 +129,11 @@ public final class StoragePermissionSavedData extends SavedData implements Grant
         }
         GrantRow row = grants.get(key);
         if (row == null) {
-            row = new GrantRow(null, new HashSet<>());
-            grants.put(key, row);
+            grants.put(key, GrantRow.of(null, new HashSet<>()));
+            row = grants.get(key);
+        }
+        if (mobId.equals(row.owner())) {
+            return false;
         }
         if (row.shared().contains(mobId)) {
             return false;
@@ -209,7 +221,9 @@ public final class StoragePermissionSavedData extends SavedData implements Grant
                 continue;
             }
             if (mobId.equals(row.owner())) {
-                grants.put(key, new GrantRow(null, new HashSet<>(row.shared())));
+                Set<UUID> shared = new HashSet<>(row.shared());
+                shared.remove(mobId);
+                grants.put(key, GrantRow.of(null, shared));
                 removeFromReverse(mobId, key);
                 changed = true;
             } else if (row.shared().remove(mobId)) {
@@ -273,11 +287,15 @@ public final class StoragePermissionSavedData extends SavedData implements Grant
             if (owner == null && shared.isEmpty()) {
                 continue;
             }
-            data.grants.put(key, new GrantRow(owner, shared));
-            if (owner != null) {
-                data.addToReverse(owner, key);
+            GrantRow row = normalizeLoadedRow(owner, shared);
+            if (row.owner() == null && row.shared().isEmpty()) {
+                continue;
             }
-            for (UUID mob : shared) {
+            data.grants.put(key, row);
+            if (row.owner() != null) {
+                data.addToReverse(row.owner(), key);
+            }
+            for (UUID mob : row.shared()) {
                 data.addToReverse(mob, key);
             }
         }

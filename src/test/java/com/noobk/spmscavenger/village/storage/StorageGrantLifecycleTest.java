@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.village.storage;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -63,6 +64,28 @@ class StorageGrantLifecycleTest {
         BlockState stone = Blocks.STONE.defaultBlockState();
         StorageGrantLifecycle.invalidateIfIdentityChanged(data, OVERWORLD, POS, chest, stone);
         assertFalse(data.hasExplicitPermission(KEY, MOB));
+    }
+
+    @Test
+    void sameKindChestReplacementInvalidatesGrant() {
+        StoragePermissionSavedData data = granted();
+        BlockState normal = chest(ChestType.SINGLE, Direction.NORTH);
+        BlockState trapped = Blocks.TRAPPED_CHEST.defaultBlockState()
+                .setValue(ChestBlock.TYPE, ChestType.SINGLE)
+                .setValue(ChestBlock.FACING, Direction.NORTH);
+        StorageGrantLifecycle.invalidateIfIdentityChanged(data, OVERWORLD, POS, normal, trapped);
+        assertFalse(data.hasExplicitPermission(KEY, MOB));
+    }
+
+    @Test
+    void staleGrantClearedWhenChestPlacedOnStone() {
+        StoragePermissionSavedData data = new StoragePermissionSavedData();
+        data.grantOwner(KEY, MOB);
+        BlockState stone = Blocks.STONE.defaultBlockState();
+        BlockState chest = chest(ChestType.SINGLE, Direction.NORTH);
+        StorageGrantLifecycle.invalidateIfIdentityChanged(data, OVERWORLD, POS, stone, chest);
+        assertFalse(data.hasExplicitPermission(KEY, MOB));
+        assertEquals(0, data.grantCount());
     }
 
     @Test

@@ -65,6 +65,53 @@ class StoragePermissionSavedDataForgetTest {
     }
 
     @Test
+    void shareAfterOwnRejectsOwnerOverlap() {
+        StoragePermissionSavedData data = new StoragePermissionSavedData();
+        data.grantOwner(KEY, OWNER);
+        assertFalse(data.addShare(KEY, OWNER));
+        assertTrue(data.hasExplicitPermission(KEY, OWNER));
+        assertTrue(data.listForMob(OWNER).contains(KEY));
+    }
+
+    @Test
+    void forgetOwnerAfterOwnDoesNotLeaveGhostSharePermission() {
+        StoragePermissionSavedData data = new StoragePermissionSavedData();
+        data.grantOwner(KEY, OWNER);
+        assertFalse(data.addShare(KEY, OWNER));
+        assertTrue(data.forget(OWNER));
+        assertFalse(data.hasExplicitPermission(KEY, OWNER));
+        assertTrue(data.listForMob(OWNER).isEmpty());
+        assertEquals(0, data.grantCount());
+
+        StoragePermissionSavedData reloaded = roundTrip(data);
+        assertFalse(reloaded.hasExplicitPermission(KEY, OWNER));
+        assertTrue(reloaded.listForMob(OWNER).isEmpty());
+    }
+
+    @Test
+    void loadNormalizesOverlappingOwnerAndShare() {
+        CompoundTag tag = new CompoundTag();
+        net.minecraft.nbt.ListTag list = new net.minecraft.nbt.ListTag();
+        CompoundTag entry = new CompoundTag();
+        entry.put("pos", (CompoundTag) GlobalPos.CODEC.encodeStart(
+                registries.createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE),
+                KEY).result().orElse(new CompoundTag()));
+        entry.putUUID("owner", OWNER);
+        net.minecraft.nbt.ListTag shared = new net.minecraft.nbt.ListTag();
+        shared.add(net.minecraft.nbt.NbtUtils.createUUID(OWNER));
+        entry.put("shared", shared);
+        list.add(entry);
+        tag.put("grants", list);
+
+        StoragePermissionSavedData loaded = StoragePermissionSavedData.load(tag, registries);
+        assertTrue(loaded.hasExplicitPermission(KEY, OWNER));
+        assertEquals(1, loaded.listForMob(OWNER).size());
+        assertTrue(loaded.forget(OWNER));
+        assertFalse(loaded.hasExplicitPermission(KEY, OWNER));
+        assertTrue(loaded.listForMob(OWNER).isEmpty());
+    }
+
+    @Test
     void forgetSharedMobOnSharedOnlyRowPrunesGrant() {
         StoragePermissionSavedData data = new StoragePermissionSavedData();
         data.addShare(KEY, SHARED);

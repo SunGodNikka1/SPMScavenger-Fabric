@@ -84,6 +84,6 @@ Task 52: complete with concerns (D-VR-084 shared MandatoryOwnership + V2-DEF-002
 
 Task 53: complete with concerns (V3-A — VillageScenarioProfile + PlayerMobVillagePolicySavedData + VillageWorkAdmission + VILLAGE_WORK taxonomy + operator commands; 29 new tests; 1386 total, 0 failures; S1/S10 mutation-confirmed; no P4 goal/selector/classifier pin; admission not wired to executor by design; runtime UNVERIFIED)
 
-Task 54: complete with concerns (V3-B + R1 repair — storage registry/guard/lifecycle/commands; 1428 total tests, 0 failures; forget/lifecycle/compat/revoke-key R1 unit-confirmed; runtime VR-T3g–i UNVERIFIED)
+Task 54: complete with concerns (V3-B + R1/R1.2 repair — 1435 tests, 0 failures; owner/share invariant + replacement + stale-placement unit-confirmed; runtime VR-T3g–i UNVERIFIED)
 
 No commits unless user requests. No Minecraft launches unless separately approved.

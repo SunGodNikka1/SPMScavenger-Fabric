@@ -62,6 +62,9 @@ public final class StorageLogicalIdentity {
         if (oldId.kind() != newId.kind()) {
             return true;
         }
+        if (oldId.supported() && newId.supported() && oldState.getBlock() != newState.getBlock()) {
+            return true;
+        }
         if (chestPartnerTopologyChanged(oldState, newState)) {
             return true;
         }
