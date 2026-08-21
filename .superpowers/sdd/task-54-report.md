@@ -1,6 +1,6 @@
 # Task 54 report: V3-B minimum `StorageOwnership` + host `RaidContainersGoal` guard
 
-**Status:** `DONE_WITH_CONCERNS` (post **R1 repair**)
+**Status:** `STATIC-BEHAVIORAL ACCEPT` (post **R1** + **R1.2** repair; user acceptance 2026-08-21)
 
 **Brief:** `.superpowers/sdd/task-54-brief.md` v3.2  
 **Gate 0:** `.superpowers/sdd/task-54-gate0-report.md` — PASS
