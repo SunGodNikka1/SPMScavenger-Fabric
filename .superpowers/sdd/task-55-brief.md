@@ -11,7 +11,7 @@ when the domain cannot be positively established.
 | **Brief design** | **v2.1 — drop-roll contract locked** | (this document) |
 | **Gate 0 — read-only source audit** | **AUTHORIZED** — User 2026-08-21 | **authorize task-55 gate 0** |
 | **Gate 0 closure** | **PASS** — see `task-55-gate0-report.md` | — |
-| **Full implementation** | **NOT AUTHORIZED** | **authorize task-55** / **Implement V3-C** |
+| **Full implementation** | **AUTHORIZED** — User 2026-08-21 | — |
 
 **Brief revision history:**
 

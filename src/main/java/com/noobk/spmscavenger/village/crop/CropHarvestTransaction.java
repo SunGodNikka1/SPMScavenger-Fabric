@@ -1,0 +1,205 @@
+package com.noobk.spmscavenger.village.crop;
+
+import com.noobk.spmscavenger.SpmScavenger;
+import com.noobk.spmscavenger.inventory.ContainerMerge;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Atomic mature→age-0 crop harvest transaction (task-55). No {@code destroyBlock}, no
+ * {@code MandatoryOwnership} publisher.
+ */
+public final class CropHarvestTransaction {
+
+    public enum CommitOutcome {
+        SUCCESS,
+        ABORT,
+        INVARIANT_FAILURE
+    }
+
+    public record CommitResult(CommitOutcome outcome, List<ItemStack> overflow) {
+        public static CommitResult abort() {
+            return new CommitResult(CommitOutcome.ABORT, List.of());
+        }
+
+        public static CommitResult invariantFailure() {
+            return new CommitResult(CommitOutcome.INVARIANT_FAILURE, List.of());
+        }
+
+        public static CommitResult success(List<ItemStack> overflow) {
+            return new CommitResult(CommitOutcome.SUCCESS, overflow);
+        }
+    }
+
+    private record PlantingUnit(ItemStack stack, boolean fromInventory) {
+    }
+
+    private CropHarvestTransaction() {
+    }
+
+    /**
+     * COMMIT path — caller must have finished WINDUP. Revalidates every deterministic precondition
+     * immediately before the single {@code Block.getDrops} roll.
+     */
+    public static CommitResult commit(
+            ServerLevel level,
+            LivingEntity harvester,
+            Container backpack,
+            BlockPos pos,
+            BlockState expectedMature,
+            boolean admissionPermits) {
+        if (!admissionPermits) {
+            return CommitResult.abort();
+        }
+        BlockState current = level.getBlockState(pos);
+        if (!current.equals(expectedMature)
+                || !CropReplantSemantics.isMature(current)
+                || !CropReplantSemantics.supportedCrop(current)) {
+            return CommitResult.abort();
+        }
+        if (!CropReplantSemantics.hasValidFarmlandSupport(level, current, pos)) {
+            return CommitResult.abort();
+        }
+        if (!HarvestCandidatePolicy.deterministicReplantFeasible(current, backpack)) {
+            return CommitResult.abort();
+        }
+
+        List<ItemStack> stagedDrops = Block.getDrops(
+                current,
+                level,
+                pos,
+                null,
+                harvester,
+                harvester.getMainHandItem());
+
+        PlantingUnit unit = choosePlantingUnit(current, stagedDrops, backpack);
+        if (unit == null) {
+            return CommitResult.abort();
+        }
+
+        ItemStack escrow = ItemStack.EMPTY;
+        if (unit.fromInventory()) {
+            Item template = unit.stack().getItem();
+            int removed = ContainerMerge.remove(backpack, new ItemStack(template), 1);
+            if (removed != 1) {
+                return CommitResult.abort();
+            }
+            escrow = unit.stack().copy();
+        }
+
+        BlockState ageZero = CropReplantSemantics.ageZero(current);
+        boolean setOk = level.setBlock(pos, ageZero, Block.UPDATE_ALL);
+        if (!setOk) {
+            restoreEscrow(backpack, escrow);
+            return CommitResult.abort();
+        }
+
+        BlockState after = level.getBlockState(pos);
+        if (!after.equals(ageZero)) {
+            restoreEscrow(backpack, escrow);
+            SpmScavenger.LOGGER.error(
+                    "[spmscavenger] Crop harvest invariant failure at {}: expected {} but found {}",
+                    pos, ageZero, after);
+            return CommitResult.invariantFailure();
+        }
+
+        consumePlantingUnit(unit, stagedDrops);
+        List<ItemStack> overflow = bankDrops(harvester, backpack, current, stagedDrops);
+        return CommitResult.success(overflow);
+    }
+
+    private static PlantingUnit choosePlantingUnit(
+            BlockState cropState,
+            List<ItemStack> stagedDrops,
+            Container backpack) {
+        for (ItemStack drop : stagedDrops) {
+            if (CropReplantSemantics.isReplantMaterial(cropState, drop) && !drop.isEmpty()) {
+                return new PlantingUnit(drop.copyWithCount(1), false);
+            }
+        }
+        Item planting = CropReplantSemantics.plantingItem(cropState);
+        if (ContainerMerge.count(backpack, new ItemStack(planting)) >= 1) {
+            return new PlantingUnit(new ItemStack(planting), true);
+        }
+        return null;
+    }
+
+    private static void consumePlantingUnit(PlantingUnit unit, List<ItemStack> stagedDrops) {
+        if (unit.fromInventory()) {
+            return;
+        }
+        ItemStack template = unit.stack();
+        for (ItemStack drop : stagedDrops) {
+            if (ItemStack.isSameItemSameComponents(drop, template) && drop.getCount() > 0) {
+                drop.shrink(1);
+                return;
+            }
+        }
+    }
+
+    private static List<ItemStack> bankDrops(
+            LivingEntity harvester,
+            Container backpack,
+            BlockState cropState,
+            List<ItemStack> stagedDrops) {
+        List<ItemStack> overflow = new ArrayList<>();
+        List<ItemStack> replantSurplus = new ArrayList<>();
+        List<ItemStack> foodOutput = new ArrayList<>();
+        for (ItemStack drop : stagedDrops) {
+            if (drop.isEmpty()) {
+                continue;
+            }
+            if (CropReplantSemantics.isReplantMaterial(cropState, drop)) {
+                replantSurplus.add(drop.copy());
+            } else if (CropReplantSemantics.isFoodOutput(cropState, drop)) {
+                foodOutput.add(drop.copy());
+            } else {
+                foodOutput.add(drop.copy());
+            }
+        }
+        for (ItemStack stack : replantSurplus) {
+            overflow.addAll(deposit(backpack, stack));
+        }
+        for (ItemStack stack : foodOutput) {
+            overflow.addAll(deposit(backpack, stack));
+        }
+        for (ItemStack stack : overflow) {
+            if (harvester instanceof net.minecraft.world.entity.Mob mob) {
+                mob.spawnAtLocation(stack);
+            }
+        }
+        return overflow;
+    }
+
+    private static List<ItemStack> deposit(Container backpack, ItemStack stack) {
+        if (backpack == null) {
+            return List.of(stack.copy());
+        }
+        ItemStack remaining = ContainerMerge.insert(backpack, stack);
+        if (remaining.isEmpty()) {
+            return List.of();
+        }
+        return List.of(remaining);
+    }
+
+    private static void restoreEscrow(Container backpack, ItemStack escrow) {
+        if (backpack == null || escrow.isEmpty()) {
+            return;
+        }
+        ItemStack remaining = ContainerMerge.insert(backpack, escrow);
+        if (!remaining.isEmpty()) {
+            SpmScavenger.LOGGER.warn(
+                    "[spmscavenger] Crop harvest escrow restore left {} uninserted",
+                    remaining);
+        }
+    }
+}

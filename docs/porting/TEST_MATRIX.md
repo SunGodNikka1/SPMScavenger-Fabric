@@ -615,3 +615,19 @@ ally mixin witness (VR-T3g–i live) remains `UNVERIFIED` (AV-1).
 | S3–S14 subset | structural negatives | see `StorageOwnershipStructuralTest` | violations | static `CONFIRMED` |
 | T1–T4 lifecycle (subset) | **PASS** (unit) | `StorageLogicalIdentityTest` + `StorageGrantLifecycleTest` — identity predicate + grant invalidation; **not** full `ServerLevel` block-place integration |
 | runtime VR-T3 | live ally at chest | mixin denies without grant | silent host loot | `UNVERIFIED` — launch not authorized |
+
+## D-VR-079 / task-55 — V3-C harvest→replant episode (2026-08-21)
+
+**Brief:** `.superpowers/sdd/task-55-brief.md` v2.1. **Report:** `.superpowers/sdd/task-55-report.md`.
+Full clean build after task-55: **1453 tests, 0 failures** (+18 task-55 tests). Runtime VR-T3a–c/k/l/m
+remain `UNVERIFIED` (AV-1).
+
+| ID | Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- | --- |
+| VR-T3a | mature managed crop commit | age-0 same crop via `setBlock` | `destroyBlock` / bare farmland | structural `CONFIRMED` |
+| VR-T3b | interrupt before COMMIT | no mutation | crop stripped | static `INFERRED` |
+| VR-T3c | setBlock false / invariant | ABORT or INVARIANT_FAILURE | false success | `CropHarvestTransactionTest` `CONFIRMED` |
+| VR-T3k | multi-mob | commit-time revalidation | global reservation map | static `CONFIRMED` |
+| VR-T3l | managed domain + admission deny | host veto | hunger host harvest | static `INFERRED` |
+| VR-T3m | multi-cycle banking | backpack insert | floor pickup | `ContainerMergeTest` + transaction order `CONFIRMED` |
+| runtime VR-T3 crop | live ally field work | episode + veto | host strip / reroll | `UNVERIFIED` — launch not authorized |

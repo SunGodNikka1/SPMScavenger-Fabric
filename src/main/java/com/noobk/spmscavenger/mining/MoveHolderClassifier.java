@@ -9,6 +9,7 @@ import com.noobk.spmscavenger.goal.EnvironmentalEscapeGoal;
 import com.noobk.spmscavenger.goal.ExplorationActivityGoal;
 import com.noobk.spmscavenger.goal.ExploringGoal;
 import com.noobk.spmscavenger.goal.GatherResourcesGoal;
+import com.noobk.spmscavenger.goal.VillageHarvestEpisodeGoal;
 import com.noobk.spmscavenger.goal.PlaceTorchGoal;
 import com.noobk.spmscavenger.goal.SeekShelterGoal;
 import com.noobk.spmscavenger.goal.SmeltAtFurnaceGoal;
@@ -97,6 +98,9 @@ public final class MoveHolderClassifier {
         }
         if (PlaceTorchGoal.class.isAssignableFrom(goalType)) {
             return ActivityClass.MAINTENANCE;
+        }
+        if (VillageHarvestEpisodeGoal.class.isAssignableFrom(goalType)) {
+            return ActivityClass.VILLAGE_WORK;
         }
         if (CampfireGoal.class.isAssignableFrom(goalType)) {
             return ActivityClass.REST_APPROACH;

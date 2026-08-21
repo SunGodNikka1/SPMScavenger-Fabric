@@ -18,6 +18,7 @@ import com.noobk.spmscavenger.goal.VillagePerceptionObserver;
 import com.noobk.spmscavenger.village.VillagePerceptionScheduler;
 import com.noobk.spmscavenger.goal.EnvironmentalEscapeGoal;
 import com.noobk.spmscavenger.goal.PlaceTorchGoal;
+import com.noobk.spmscavenger.goal.VillageHarvestEpisodeGoal;
 import com.noobk.spmscavenger.goal.SeekShelterGoal;
 import com.noobk.spmscavenger.goal.SmeltAtFurnaceGoal;
 import com.noobk.spmscavenger.goal.TrackedLocalWanderGoal;
@@ -112,6 +113,7 @@ public class SpmScavenger implements ModInitializer {
                 server -> {
                     VillagePerceptionScheduler.forServer(server).onServerTick(server);
                     com.noobk.spmscavenger.village.storage.StorageGuardCompatibility.onServerTick();
+                    com.noobk.spmscavenger.village.crop.HarvestCropGuardCompatibility.onServerTick();
                 });
         // Optional market source. Guarded and reflective: nothing on the common trade path names a
         // Trade Everything class, so common classes load normally when the mod is absent.
@@ -176,6 +178,7 @@ public class SpmScavenger implements ModInitializer {
         // lifecycle event, and it warns when it fires because that should not happen.
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             com.noobk.spmscavenger.village.storage.StorageGuardCompatibility.beginServerSession();
+            com.noobk.spmscavenger.village.crop.HarvestCropGuardCompatibility.beginServerSession();
             for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
                 int evicted = com.noobk.spmscavenger.village.VillageMemorySavedData.get(level)
                         .prune();
@@ -197,6 +200,7 @@ public class SpmScavenger implements ModInitializer {
                     com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.shutdownServerState();
                     com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.shutdownServerState();
                     com.noobk.spmscavenger.village.storage.StorageGuardCompatibility.shutdownServerState();
+                    com.noobk.spmscavenger.village.crop.HarvestCropGuardCompatibility.shutdownServerState();
                     VillagePerceptionScheduler.shutdown(server);
                 });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
@@ -252,6 +256,7 @@ public class SpmScavenger implements ModInitializer {
         SeekShelterGoal shelterGoal = new SeekShelterGoal(mob, 1.0);
         selector.addGoal(2, shelterGoal);
         selector.addGoal(4, new PlaceTorchGoal(mob, 1.0));
+        selector.addGoal(4, new VillageHarvestEpisodeGoal(mob, selector, 0.9));
         CampfireGoal campfireGoal = new CampfireGoal(mob, 0.9);
         selector.addGoal(7, campfireGoal);
         selector.addGoal(PassiveExpressionGoal.PRIORITY, new PassiveExpressionGoal(mob));
