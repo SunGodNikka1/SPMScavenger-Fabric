@@ -18,6 +18,7 @@
 - v2 — architecture split, topology policy, command loaded-chunk create gate
 - v3 — enforcement/diagnostics separation, Gate 0 sequence, tri-state settlement fact, asymmetric revoke, mixin access/injection pinned to Gate 0
 - v3.1 — **Gate 0 CLOSED** (`task-54-gate0-report.md`): lock `ServerLevel.onBlockStateChange`; chest partner via `getConnectedDirection`; ally fail-closed on unresolved `targetPos`
+- v3.2 — sync pass: mixin pseudocode matches Gate 0 deny semantics; **`clearTarget(goal)` on `canUse` veto** (RETURN inject writes `targetPos` before our hook)
 
 **Target:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`
 
@@ -120,15 +121,24 @@ wider mixin surface. Use as **supplemental** only if Gate 0 report bypass reprod
 
 | # | Decision | **Locked choice** |
 | --- | --- | --- |
-| G0-B1 | **`targetPos` / `mob` access** | **`OptionalRaidContainerTargetResolver`** — reflective cached `targetPos` + `mob` (same boundary as `OptionalGoalMobResolver`). **CONFIRMED** field names in pinned jar (`javap`). |
+| G0-B1 | **`targetPos` / `mob` access** | **`OptionalRaidContainerTargetResolver`** in `compat` — **`resolveTarget(goal)`** and **`clearTarget(goal)`** only (no arbitrary reflective writes). **`mob`** via existing `OptionalGoalMobResolver`. Field names **CONFIRMED** in pinned jar (`javap`). |
 | G0-B2 | **`canUse` inject** | **`@At("RETURN")` cancellable** — veto only when host returned `true`. Methods: `canUse` + `method_6264`. |
 | G0-B3 | **`canContinueToUse` inject** | **`@At("HEAD")` cancellable**. Methods: `canContinueToUse` + `method_6266`. |
 | G0-B4 | **Jar method names** | Pinned processedMods jar uses **readable** overrides; mixin **still lists intermediary** per `SpmGoalMixinNamingTest`. |
 
 **Ally fail-closed on unresolved target (LOCKED):** when profile is `VILLAGE_ALLY` and host `canUse`
-returned `true` but `targetPos` cannot be resolved → **deny** (`false`), record
-`TARGET_RESOLUTION_FAILED` diagnostic. **Do not** preserve host `true`. Same in `canContinueToUse`
-when continuation expects a target. Non-allies: unchanged.
+returned `true` but `targetPos` cannot be resolved → **`clearTarget(goal)`**, **deny** (`false`),
+record `TARGET_RESOLUTION_FAILED`. **Do not** preserve host `true`. Same deny semantics in
+`canContinueToUse` when ally enforcement applies. Non-allies: unchanged.
+
+**`canUse` RETURN veto and host state (LOCKED):** pinned host assigns `targetPos = found` **before**
+returning `true` (`RaidContainersGoal.java` 127–128). A storage veto therefore **must not** leave a
+stale selected target. On any ally **`canUse` denial** (unresolved target, policy deny, or resolution
+failure): **`clearTarget(goal)` then `return false`**. Conceptual invariant: same as host
+`canUse() == false` with **no selected raid target** — not `false` with `targetPos` still pointing
+at a protected chest. **`canContinueToUse` denial** may rely on host `stop()` clearing `targetPos`
+(`RaidContainersGoal.stop()` 161–163) when the selector drops the goal; **`canUse` has no such
+reset**.
 
 Full evidence: `task-54-gate0-report.md` § Gate 0-B.
 
@@ -154,6 +164,7 @@ Full evidence: `task-54-gate0-report.md` § Gate 0-B.
 | 14 | **Gate 0 before implementation** — lifecycle hook and mixin shape **LOCKED** in gate0 report. |
 | 15 | **Diagnostic settlement fact** — tri-state `SettlementStorageFact`; no boolean collapse of unknown vs outside. |
 | 16 | **Asymmetric command evidence** — create authority requires loaded world truth; delete authority may target exact persisted `GlobalPos` without chunk load. |
+| 17 | **`canUse` veto clears host target:** ally denial after host `canUse` returned `true` → **`OptionalRaidContainerTargetResolver.clearTarget(goal)`** before `false`. |
 
 ---
 
@@ -309,20 +320,36 @@ Overworld-canonical `SavedData`; `GlobalPos` keys; reverse UUID index; peek/get 
 
 **New mixin** — `RaidContainersAllyStorageMixin` — `@Pseudo`, **only** `RaidContainersGoal`.
 
-**Recommended pattern (pending Gate 0-B confirmation):**
+**LOCKED pattern:**
 
 ```text
 canUse @ RETURN (cancellable):
     if host returned false → leave false
+    if profile != VILLAGE_ALLY → leave true            // non-ally unchanged
     if host returned true:
-        target = OptionalRaidContainerTargetResolver.resolve(this)
-        if target empty → leave true (host decision stands)
-        if !StorageRaidPolicy.mayLoot(mob, level, target) → false
+        mob = OptionalGoalMobResolver.resolve(this)
+        target = OptionalRaidContainerTargetResolver.resolveTarget(this)
+        if mob null OR target empty:
+            clearTarget(this)                          // idempotent
+            TARGET_RESOLUTION_FAILED
+            return false                                 // fail closed — NOT leave true
+        if !StorageRaidPolicy.mayLoot(mob, level, target):
+            clearTarget(this)                          // host wrote targetPos before return
+            return false
 
 canContinueToUse @ HEAD (cancellable):
-    target = OptionalRaidContainerTargetResolver.resolve(this)
-    if target present && !mayLoot(...) → false
+    if profile != VILLAGE_ALLY → leave host result
+    mob = OptionalGoalMobResolver.resolve(this)
+    target = OptionalRaidContainerTargetResolver.resolveTarget(this)
+    if mob null OR target empty:
+        return false                                   // ally fail closed
+    if !StorageRaidPolicy.mayLoot(mob, level, target):
+        return false                                   // host stop() clears targetPos on drop
 ```
+
+**Compat API (LOCKED):** `OptionalRaidContainerTargetResolver` exposes only
+`resolveTarget(Object goal)` and `clearTarget(Object goal)` — set `targetPos` to `null` via cached
+reflective field access; no other host mutation surface.
 
 **Method names:** readable + intermediary per `SpmGoalMixinNamingTest`.
 
@@ -398,7 +425,7 @@ pure policy.
 | `village/storage/StoragePermissionSavedData.java` | grants + reverse index |
 | `village/storage/StorageRaidPolicy.java` | enforcement — **no compatibility import** |
 | `village/storage/StorageGuardCompatibility.java` | diagnostics observations only |
-| `compat/OptionalRaidContainerTargetResolver.java` | host `targetPos` access (if Gate 0-B selects) |
+| `compat/OptionalRaidContainerTargetResolver.java` | **`resolveTarget` / `clearTarget`** — narrow host `targetPos` boundary |
 | `mixin/RaidContainersAllyStorageMixin.java` | guard injects |
 | `command/VillageStorageCommands.java` | operator commands |
 | `PerMobSavedData.java` | forget sweep |
@@ -468,7 +495,7 @@ pure policy.
 | Boolean `withinSettlementBounds` | **BLOCKER** | **FIXED** — `SettlementStorageFact` tri-state |
 | Revoke requires loaded target | **BLOCKER** | **FIXED** — asymmetric evidence + `revoke-key` |
 | `targetPos` access unspecified | **GAP** | **Gate 0-B** |
-| `canUse` instruction-level inject | **GAP** | **Prefer RETURN veto (Gate 0-B)** |
+| `canUse` instruction-level inject | **FIXED** | RETURN veto + **`clearTarget` on ally deny** |
 
 **Full task-54 implementation:** **NOT AUTHORIZED**
 

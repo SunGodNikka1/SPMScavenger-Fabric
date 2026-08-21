@@ -1,7 +1,6 @@
 # Task-54 Gate 0 report — read-only source audit
 
-**Status:** `GATE_0_CLOSED` — lifecycle hook and SPM integration shape **LOCKED** for brief/task-54
-implementation planning. **Full task-54 implementation remains separately unauthorized.**
+**Status:** `GATE_0_ACCEPTED` — lifecycle hook and SPM integration shape **LOCKED** (brief v3.2 synced).
 
 **Audit date:** 2026-08-20  
 **Target project:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`  
@@ -20,7 +19,7 @@ implementation planning. **Full task-54 implementation remains separately unauth
 | --- | --- | --- |
 | **Gate 0-A lifecycle** | **PASS** | **`@Mixin` inject into `ServerLevel.onBlockStateChange(BlockPos, BlockState old, BlockState new)`** at **`HEAD`**, delegate to `StorageGrantLifecycle.onBlockStateChange(serverLevel, pos, old, new)`. |
 | **Rejected lifecycle hooks** | **CONFIRMED reject** | `BlockEntity#setRemoved(RemovalReason)` — API absent; chunk unload `clearAllBlockEntities` → `setRemoved()` only; Fabric `BLOCK_ENTITY_UNLOAD` → not destruction. |
-| **Gate 0-B host guard** | **PASS** | `OptionalRaidContainerTargetResolver` (reflect `mob`, `targetPos`); `canUse` **`@At("RETURN")` veto**; `canContinueToUse` **`@At("HEAD")` veto**; ally + unresolved `targetPos` → **fail closed**. |
+| **Gate 0-B host guard** | **PASS** | `OptionalRaidContainerTargetResolver.resolveTarget` / **`clearTarget`**; `canUse` RETURN veto **clears target on ally deny**; `canContinueToUse` HEAD veto; ally + unresolved → fail closed. |
 | **Brief correction** | **Required** | `ChestBlock.getConnectedBlockPos` **NOT FOUND** in 1.21.1 — canonical double-chest partner uses **`ChestBlock.getConnectedDirection` + `BlockPos.relative`**. |
 
 ---
@@ -160,7 +159,7 @@ void spmscavenger$onBlockStateChange(BlockPos pos, BlockState oldState, BlockSta
 
 | ID | Decision | Lock |
 | --- | --- | --- |
-| **G0-B1** | `targetPos` + `mob` access | **`OptionalRaidContainerTargetResolver`** in `compat` — reflective cached fields `targetPos` and reuse/`parallel` pattern to `OptionalGoalMobResolver` for `mob`. **Do not** `@Shadow` unless resolver fails on a future pinned jar. |
+| **G0-B1** | `targetPos` + `mob` access | **`OptionalRaidContainerTargetResolver.resolveTarget` / `clearTarget`** in `compat`; **`OptionalGoalMobResolver`** for `mob`. Narrow API only — no arbitrary reflective writes. **Do not** `@Shadow` unless resolver fails on a future pinned jar. |
 | **G0-B2** | `canUse` inject | **`@Inject(method = {"canUse", "method_6264"}, at = @At("RETURN"), cancellable = true, require = 0)`** — if `CallbackInfoReturnable.getReturnValue() == true`, resolve `targetPos`, run enforcement veto (`true → false` only). Host scan untouched. |
 | **G0-B3** | `canContinueToUse` inject | **`@Inject(method = {"canContinueToUse", "method_6266"}, at = @At("HEAD"), cancellable = true, require = 0)`** — resolve `targetPos`; if present, run same policy. |
 | **G0-B4** | Method names | Readable **`canUse`**, **`canContinueToUse`** (confirmed jar); add intermediary **`method_6264`**, **`method_6266`** per `SpmGoalMixinNamingTest` / `Goal` mapping. |
@@ -183,16 +182,28 @@ RaidContainersAllyStorageMixin handler
 When the **`canUse` RETURN** hook observes host **`true`** (candidate selected) **and** profile is **`VILLAGE_ALLY`**:
 
 ```text
-targetPos = OptionalRaidContainerTargetResolver.resolve(goal)
-if targetPos == null:
-    convert return to FALSE          // fail closed — do NOT preserve host true
-    record StorageGuardCompatibility.TARGET_RESOLUTION_FAILED (diagnostic)
+targetPos = OptionalRaidContainerTargetResolver.resolveTarget(goal)
+if targetPos == null OR mob == null:
+    clearTarget(goal)                  // idempotent
+    convert return to FALSE
+    record TARGET_RESOLUTION_FAILED
     return
-else:
-    apply StorageRaidPolicy.mayLoot(...)
+if !StorageRaidPolicy.mayLoot(...):
+    clearTarget(goal)                  // host assigned targetPos before returning true
+    return FALSE
 ```
 
-Same rule in **`canContinueToUse` HEAD** when `targetPos` expected non-null (phase active): unresolved → **deny** + diagnostic.
+**Why `clearTarget` on `canUse` veto (brief v3.2 sync):** pinned host sets `targetPos = found`
+**before** `return true` (`RaidContainersGoal.java` 127–128). Returning `false` alone would leave a
+stale private target. **`canUse` false does not invoke `stop()`**, which is the only other host path
+that nulls `targetPos` (`stop()` 161–163). **`canContinueToUse` denial** may rely on selector-invoked
+`stop()` for cleanup.
+
+Same rule in **`canContinueToUse` HEAD** when ally enforcement applies: unresolved target → **deny**
+(not permit).
+
+**Compat API (LOCKED):** `resolveTarget(goal)` and `clearTarget(goal)` only — no arbitrary reflective
+writes.
 
 **Non-allies:** bypass policy (return host result unchanged) — host behaviour preserved.
 
@@ -221,8 +232,8 @@ Track separately (User v3):
 
 1. **Lifecycle hook:** lock **`ServerLevel.onBlockStateChange`** (not `BlockEntity#setRemoved(RemovalReason)`).
 2. **Double-chest partner pos:** replace brief’s `ChestBlock.getConnectedBlockPos` with **`getConnectedDirection(BlockState)` + `blockPos.relative(direction)`** (`ChestBlock.java` 182–184) — **`getConnectedBlockPos` NOT FOUND** in 1.21.1 sources (≥3 probes: `ChestBlock.java`, repo-wide sources grep, `AbstractChestBlock` absent as separate file in merged jar listing).
-3. **Ally unresolved target:** fail closed + compatibility diagnostic (added to brief v3.1).
-4. **Gate 0 status:** **CLOSED** — User may authorize **task-54 implementation** separately.
+3. **Ally unresolved target:** fail closed + `TARGET_RESOLUTION_FAILED`; **`clearTarget` on every ally `canUse` veto** (brief v3.2 sync).
+4. **Gate 0 status:** **ACCEPTED** — User may authorize **task-54 implementation** separately.
 
 ---
 
