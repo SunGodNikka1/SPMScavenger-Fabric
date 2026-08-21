@@ -120,6 +120,16 @@ public final class VillageMemorySavedData extends SavedData {
         return level.getDataStorage().get(factory(), DATA_NAME);
     }
 
+    /** Non-creating read for diagnostics — never materializes storage. */
+    public static VillageMemorySavedData peekInDimension(ServerLevel level) {
+        return peekIn(level);
+    }
+
+    /** Diagnostic iteration over mob ids with remembered settlements. */
+    public Iterable<UUID> trackedMobIds() {
+        return byMob.keySet();
+    }
+
     /** Non-allocating read. */
     public Optional<MobVillageMemory> peek(UUID mob) {
         return Optional.ofNullable(byMob.get(mob));
