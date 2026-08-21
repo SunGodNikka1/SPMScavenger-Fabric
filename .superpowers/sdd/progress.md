@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **V3-A CLOSED (static)** — task-53 done; **task-54 brief v3** (Gate 0 + contract blockers fixed); **Gate 0 NOT authorized**; **implementation NOT authorized** | `task-54-brief.md`; `task-53-report.md` |
+| **V3 Village Work** | **Gate 0 CLOSED** — task-54 hooks locked in `task-54-gate0-report.md`; brief v3.1; **implementation NOT authorized** | `task-54-gate0-report.md`; `task-54-brief.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |

@@ -8,15 +8,16 @@
 | Gate | Status | User phrase to authorize |
 | --- | --- | --- |
 | **Brief design** | **v3 — peer-review repairs applied** | (this document) |
-| **Gate 0 — read-only source audit** | **NOT AUTHORIZED** | **authorize task-54 Gate 0** |
-| **Gate 0 closure** | **BLOCKED** — lifecycle hook + host `targetPos` access must be **LOCKED** in audit report | — |
-| **Full implementation** | **NOT AUTHORIZED** | **authorize task-54** / **Implement V3-B** (only after Gate 0 locks hooks) |
+| **Gate 0 — read-only source audit** | **CLOSED** — see `task-54-gate0-report.md` | (authorized 2026-08-20) |
+| **Gate 0 closure** | **PASS** — lifecycle + mixin shape **LOCKED** | — |
+| **Full implementation** | **NOT AUTHORIZED** | **authorize task-54** / **Implement V3-B** (separate from Gate 0) |
 
 **Brief revision history:**
 
 - v1 — initial draft (rejected: `BlockEntity#setRemoved(RemovalReason)`, POI hot path)
 - v2 — architecture split, topology policy, command loaded-chunk create gate
 - v3 — enforcement/diagnostics separation, Gate 0 sequence, tri-state settlement fact, asymmetric revoke, mixin access/injection pinned to Gate 0
+- v3.1 — **Gate 0 CLOSED** (`task-54-gate0-report.md`): lock `ServerLevel.onBlockStateChange`; chest partner via `getConnectedDirection`; ally fail-closed on unresolved `targetPos`
 
 **Target:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`
 
@@ -35,8 +36,7 @@
 
 **RFC:** `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` — D-VR-017, D-VR-081, VR-T3g–i.
 
-**Not authorized without Gate 0 closure:** production Java · mixin wiring · lifecycle hook · Minecraft
-runtime launch · commit · push.
+**Not authorized without separate implementation authorization:** production Java · mixin wiring · Minecraft runtime launch · commit · push.
 
 ```text
                    explicit operator grants
@@ -90,69 +90,47 @@ implementation code ships.
 **Deliverable:** `.superpowers/sdd/task-54-gate0-report.md` — read-only; no production Java except
 optional pinned-source notes. Updates this brief's **LOCKED** sections when audit passes.
 
-### Gate 0-A — lifecycle invalidation hook
+### Gate 0-A — lifecycle invalidation hook (**LOCKED — Gate 0 CLOSED**)
 
-**Leading candidate (must be source-audited, not assumed):**
-
-```text
-ServerLevel.onBlockStateChange(BlockPos pos, BlockState oldState, BlockState newState)
-```
-
-Also exposed on `Level`. May be preferable to `BlockBehaviour.onRemove(oldState, level, pos, newState, moved)`
-because task-54 must observe **same-block-type topology transitions**:
+**Primary seam (CONFIRMED — Mojang 1.21.1 decompiled sources + call-chain trace):**
 
 ```text
-CHEST[SINGLE] → CHEST[LEFT]
-CHEST[RIGHT]  → CHEST[SINGLE]
-re-pairing    → different connected half
+Level.setBlock(...)
+    → LevelChunk.setBlockState(...)   // oldState.onRemove / newState.onPlace
+    → Level.onBlockStateChange(pos, oldState, newState)
+        → ServerLevel.onBlockStateChange(...)   // ← MIXIN HEAD → StorageGrantLifecycle
 ```
 
-**Audit must answer (with pinned class/method paths + evidence class):**
+```java
+// LOCKED mixin target:
+// net.minecraft.server.level.ServerLevel#onBlockStateChange(BlockPos, BlockState, BlockState)
+//   param2 = OLD state, param3 = NEW state
+```
 
-| # | Question | Required answer |
+**Why not `BlockBehaviour.onRemove` alone:** per-block callback inside chunk; same old/new data but
+wider mixin surface. Use as **supplemental** only if Gate 0 report bypass reproducer appears.
+
+**Why not `BlockEntity#setRemoved(RemovalReason)`:** API **does not exist** on `BlockEntity` in 1.21.1
+(`setRemoved()` boolean flag only). Chunk unload uses `clearAllBlockEntities()` → `setRemoved()` with
+**no** `Level.setBlock` / `onBlockStateChange` (`ServerLevel.unload`, `LevelChunk.java` 614–618).
+
+**Gate 0 audit answers (G0-1…G0-6):** all **PASS** — see `task-54-gate0-report.md`.
+
+### Gate 0-B — host `RaidContainersGoal` integration shape (**LOCKED — Gate 0 CLOSED**)
+
+| # | Decision | **Locked choice** |
 | --- | --- | --- |
-| G0-1 | Does the chosen hook receive container → air / container → non-container replacement? | **YES** |
-| G0-2 | Does it receive chest SINGLE → LEFT/RIGHT? | **YES** |
-| G0-3 | Does it receive chest LEFT/RIGHT → SINGLE? | **YES** |
-| G0-4 | Does it receive re-pairing / neighbour change events? | **YES** (or document supplemental hook) |
-| G0-5 | Does ordinary **chunk unload** invoke it? | **NO** |
-| G0-6 | Does **chunk load / deserialization** falsely invalidate? | **NO** |
+| G0-B1 | **`targetPos` / `mob` access** | **`OptionalRaidContainerTargetResolver`** — reflective cached `targetPos` + `mob` (same boundary as `OptionalGoalMobResolver`). **CONFIRMED** field names in pinned jar (`javap`). |
+| G0-B2 | **`canUse` inject** | **`@At("RETURN")` cancellable** — veto only when host returned `true`. Methods: `canUse` + `method_6264`. |
+| G0-B3 | **`canContinueToUse` inject** | **`@At("HEAD")` cancellable**. Methods: `canContinueToUse` + `method_6266`. |
+| G0-B4 | **Jar method names** | Pinned processedMods jar uses **readable** overrides; mixin **still lists intermediary** per `SpmGoalMixinNamingTest`. |
 
-**If `onBlockStateChange` passes G0-1…G0-6:** lock it as the central seam:
+**Ally fail-closed on unresolved target (LOCKED):** when profile is `VILLAGE_ALLY` and host `canUse`
+returned `true` but `targetPos` cannot be resolved → **deny** (`false`), record
+`TARGET_RESOLUTION_FAILED` diagnostic. **Do not** preserve host `true`. Same in `canContinueToUse`
+when continuation expects a target. Non-allies: unchanged.
 
-```text
-ServerLevel.onBlockStateChange
-        ↓ oldState + newState + pos
-StorageGrantLifecycle.onBlockStateChange(...)
-```
-
-**Fallback candidates** (compare in report, do not implement until one wins audit):
-
-- `BlockBehaviour.onRemove(oldState, level, pos, newState, moved)`
-- Tail of `Level#setBlock` / `Level#removeBlock` (document full call chain)
-
-**Rejected regardless of audit outcome:**
-
-| Hook | Verdict |
-| --- | --- |
-| `BlockEntity#setRemoved(RemovalReason)` | **REJECT** — API does not exist on `BlockEntity` in 1.21.1 |
-| `ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD` → delete grant | **REJECT** — unload ≠ destruction |
-| Chunk unload eviction | **REJECT** |
-
-### Gate 0-B — host `RaidContainersGoal` integration shape
-
-Audit pinned SPM distributed jar / reference source and lock:
-
-| # | Decision | Options |
-| --- | --- | --- |
-| G0-B1 | **`targetPos` access** | **Prefer** `OptionalRaidContainerTargetResolver` in `compat` (reflective/cached, same boundary as `OptionalGoalMobResolver`). **Only** use `@Shadow targetPos` if distributed field name is verified stable across pinned SPM. |
-| G0-B2 | **`canUse` injection site** | **Prefer** `@Inject(method = {canUse, method_6264}, at = @At("RETURN"), cancellable = true)` — if host returned `true`, read selected `targetPos`, apply `StorageRaidPolicy` veto (`true → false` only). Keeps host scan untouched; avoids instruction-level anchor on `targetPos = found`. |
-| G0-B3 | **`canContinueToUse` injection** | `@At("HEAD")`, cancellable — resolve `targetPos`, apply same policy. |
-| G0-B4 | **Field / method names on distributed jar** | Record readable + intermediary names for `SpmGoalMixinNamingTest` extension. |
-
-**Gate 0 closure criterion:** both **lifecycle hook** and **mixin access/injection plan** recorded as
-**LOCKED** in `task-54-gate0-report.md` with `CONFIRMED` / `INFERRED` labels. Only then may User
-authorize full task-54 implementation.
+Full evidence: `task-54-gate0-report.md` § Gate 0-B.
 
 ---
 
@@ -281,6 +259,7 @@ history; `SpmGoalMixinNamingTest` exists because silent misses happened before).
 | SPM absent | No observations expected; no error |
 | SPM present, any false after server warm-up | **WARN/ERROR** — ally storage safety **UNVERIFIED**; operators must not assume protection |
 | Mixin completely failed | Callbacks never run — **policy never invoked**; compatibility reports false; **must not** be masked by a permissive flag inside `mayLoot` |
+| `TARGET_RESOLUTION_FAILED` | Ally guard ran but `targetPos`/`mob` unreadable — enforcement **denied** (fail closed) |
 
 **Structural tests (CI):** dual method names on mixin; **`StorageRaidPolicy` must not reference
 `StorageGuardCompatibility`**; dedicated test that compatibility type is not on raid policy classpath
@@ -293,7 +272,22 @@ shape probe for `HOST_SHAPE_SUPPORTED`.
 
 ## Double-chest canonical identity (stable topology)
 
-(Unchanged — lexicographic min of double pair; see v2.)
+When the loaded chest topology is already stable (single, or an established LEFT/RIGHT pair):
+
+```text
+canonicalPos(level, pos):
+    state = level.getBlockState(pos)
+    if chest half (ChestType != SINGLE):
+        dir = ChestBlock.getConnectedDirection(state)
+        partner = pos.relative(dir)   // Gate 0: getConnectedBlockPos NOT FOUND in 1.21.1
+        return lexicographically smaller BlockPos among {pos, partner}
+    else:
+        return pos
+
+canonicalGlobal = GlobalPos.of(level.dimension(), canonicalPos)
+```
+
+**Evidence:** `ChestBlock.getConnectedDirection` — Mojang 1.21.1 sources lines 182–184; Gate 0 report.
 
 ---
 
@@ -478,4 +472,4 @@ pure policy.
 
 **Full task-54 implementation:** **NOT AUTHORIZED**
 
-**Task-54 Gate 0 source audit:** **NOT AUTHORIZED** (await User: **authorize task-54 Gate 0**)
+**Task-54 Gate 0 source audit:** **CLOSED** — `task-54-gate0-report.md`

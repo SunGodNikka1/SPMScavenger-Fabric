@@ -10,8 +10,8 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE positive path CLOSED**; **V3 pre-lock LOCKED** (`D-VR-080…083`); **task-52 DONE**; **task-53 (V3-A) IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT (2026-08-20)** |
 | **Status** | `V3-A CLOSED (static)` — **task-53 IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT** (1386 tests). **task-52 (D-VR-084) IMPLEMENTED**. V3-B (task-54) **NOT IMPLEMENTATION-AUTHORIZED**. Runtime witness deferred. |
-| **Nearest frontier** | **Review task-54 brief v3** — then **authorize task-54 Gate 0** (read-only source audit). Full implementation **NOT authorized** until Gate 0 locks lifecycle hook + mixin shape. |
-| **Last update** | 2026-08-20 (task-54 brief v3 — enforcement/diagnostics split; Gate 0 sequence; tri-state settlement; asymmetric revoke; mixin access deferred to Gate 0) |
+| **Nearest frontier** | **Authorize task-54 implementation (V3-B)** — Gate 0 closed; hooks locked. Full implementation **NOT authorized**. |
+| **Last update** | 2026-08-20 (task-54 Gate 0 CLOSED — `ServerLevel.onBlockStateChange` lifecycle; SPM RETURN/HEAD guard; ally fail-closed on unresolved target) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
