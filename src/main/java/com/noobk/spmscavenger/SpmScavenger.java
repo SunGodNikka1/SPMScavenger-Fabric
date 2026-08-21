@@ -172,6 +172,8 @@ public class SpmScavenger implements ModInitializer {
         // by RemovalReason.shouldDestroy() above; this exists purely for mobs that vanish without any
         // lifecycle event, and it warns when it fires because that should not happen.
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            com.noobk.spmscavenger.village.storage.StorageGuardCompatibility
+                    .probeHostShapeOnServerStart();
             for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
                 int evicted = com.noobk.spmscavenger.village.VillageMemorySavedData.get(level)
                         .prune();

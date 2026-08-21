@@ -80,7 +80,8 @@ public abstract class RaidContainersAllyStorageMixin {
         if (mob == null) {
             return false;
         }
-        return PlayerMobVillagePolicySavedData.profileOf(mob.server(), mob.getUUID())
+        return PlayerMobVillagePolicySavedData.profileOf(
+                mob.level().getServer(), mob.getUUID())
                 == VillageScenarioProfile.VILLAGE_ALLY;
     }
 }

@@ -12,7 +12,9 @@
     "DoorOperationShelterHoldMixin",
     "FriendlyGreetAdmissionSeamMixin",
     "FriendlyGreetShelterHoldMixin",
-    "WeaponAttackShelterHoldMixin"
+    "WeaponAttackShelterHoldMixin",
+    "RaidContainersAllyStorageMixin",
+    "ServerLevelStorageGrantLifecycleMixin"
   ],
   "client": [
     "PlayerMobRendererReadoutMixin"

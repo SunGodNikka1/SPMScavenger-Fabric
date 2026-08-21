@@ -597,3 +597,21 @@ village-work behaviour remains `UNVERIFIED` (no executor in this slice; AV-1).
 
 See `.superpowers/sdd/task-53-report.md` mutation matrix. S1 and S10 mutation-confirmed; S2–S9,
 S11–S12 static wiring/store tests green.
+
+## D-VR-017 / D-VR-081 / task-54 — V3-B storage ownership + ally raid guard (2026-08-20)
+
+**Brief:** `.superpowers/sdd/task-54-brief.md` v3.2. **Report:** `.superpowers/sdd/task-54-report.md`.
+Full clean build after task-54: **1409 tests, 0 failures/errors/skips** (+23 task-54 tests). Runtime
+ally mixin witness (VR-T3g–i live) remains `UNVERIFIED` (AV-1).
+
+| ID | Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- | --- |
+| VR-T3g | `VILLAGE_ALLY`, no grant | deny loot | permit via settlement/public | `vrT3g_*` `CONFIRMED` (unit) |
+| VR-T3h | ally, invalid/unloaded target | deny | preserve host `true` | `vrT3h_*` `CONFIRMED` (unit) |
+| VR-T3i-a | `NEUTRAL` | permit | grant required | `vrT3iNeutral*` `CONFIRMED` |
+| VR-T3i-b/c | ally + explicit grant/share | permit | settlement-only deny | `vrT3iAlly*` `CONFIRMED` |
+| D1–D3 | diagnostic classify | tri-state settlement | boolean FOREIGN collapse | `d1_*`–`d3_*` `CONFIRMED` |
+| C2 | `revoke-key` stale row | row removed without chunk load | force-load world | `c2_*` `CONFIRMED` |
+| S3–S14 subset | structural negatives | see `StorageOwnershipStructuralTest` | violations | static `CONFIRMED` |
+| T1–T4 lifecycle | topology invalidation | grants cleared on SINGLE↔double | unload deletes grants | wired `INFERRED`; block-state test `UNVERIFIED` |
+| runtime VR-T3 | live ally at chest | mixin denies without grant | silent host loot | `UNVERIFIED` — launch not authorized |

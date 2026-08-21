@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **Gate 0 ACCEPTED** — brief **v3.2** synced (`clearTarget` on `canUse` veto); **implementation NOT authorized** | `task-54-gate0-report.md`; `task-54-brief.md` |
+| **V3 Village Work** | **V3-B STATIC DONE** — task-54 `DONE_WITH_CONCERNS`; runtime VR-T3g–i **UNVERIFIED** | `task-54-report.md`; `task-54-brief.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -83,5 +83,7 @@ Task 51: complete (V2-E + R1 review repairs - P0 route-feasibility wiring, attem
 Task 52: complete with concerns (D-VR-084 shared MandatoryOwnership + V2-DEF-002 repair — claim registry + pure decision + director wiring + VILLAGE_TRADE blocker + Gather publisher; 12 scenarios + 2 temporal simulations + producer controls, 53 tests; 1357 total, 0 failures; R1 single-authority scanCovers repair + mutation matrix; V2-DEF-002 four-part status; multi-publisher identity-bound release prerequisite recorded; runtime witness deferred to V3 campaign)
 
 Task 53: complete with concerns (V3-A — VillageScenarioProfile + PlayerMobVillagePolicySavedData + VillageWorkAdmission + VILLAGE_WORK taxonomy + operator commands; 29 new tests; 1386 total, 0 failures; S1/S10 mutation-confirmed; no P4 goal/selector/classifier pin; admission not wired to executor by design; runtime UNVERIFIED)
+
+Task 54: complete with concerns (V3-B — StorageOwnership registry + StorageRaidPolicy ally guard + RaidContainersGoal mixin + ServerLevel lifecycle invalidation + storage commands; 23 new tests; 1409 total, 0 failures; VR-T3g–i static PASS; runtime mixin/hook witness UNVERIFIED)
 
 No commits unless user requests. No Minecraft launches unless separately approved.

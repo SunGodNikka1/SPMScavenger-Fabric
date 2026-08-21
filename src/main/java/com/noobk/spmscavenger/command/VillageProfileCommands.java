@@ -3,6 +3,7 @@ package com.noobk.spmscavenger.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.noobk.spmscavenger.PlayerMobs;
+import com.noobk.spmscavenger.command.VillageStorageCommands;
 import com.noobk.spmscavenger.village.PlayerMobVillagePolicySavedData;
 import com.noobk.spmscavenger.village.VillageScenarioProfile;
 import net.minecraft.commands.CommandSourceStack;
@@ -39,7 +40,8 @@ public final class VillageProfileCommands {
                                                                         ctx.getSource(),
                                                                         EntityArgument.getEntity(ctx, "mob"),
                                                                         StringArgumentType.getString(ctx,
-                                                                                "profile")))))))));
+                                                                                "profile")))))))
+                                .then(VillageStorageCommands.storageBranch())));
     }
 
     private static int getProfile(CommandSourceStack source, Entity entity) {

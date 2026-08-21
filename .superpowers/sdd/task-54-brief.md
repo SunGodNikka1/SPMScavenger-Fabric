@@ -10,7 +10,7 @@
 | **Brief design** | **v3 — peer-review repairs applied** | (this document) |
 | **Gate 0 — read-only source audit** | **CLOSED** — see `task-54-gate0-report.md` | (authorized 2026-08-20) |
 | **Gate 0 closure** | **PASS** — lifecycle + mixin shape **LOCKED** | — |
-| **Full implementation** | **NOT AUTHORIZED** | **authorize task-54** / **Implement V3-B** (separate from Gate 0) |
+| **Full implementation** | **AUTHORIZED** — user 2026-08-20 | **authorize task-54** / **Implement V3-B** |
 
 **Brief revision history:**
 
@@ -50,7 +50,7 @@
              ▼                             ▼
 StorageContainerResolver          StorageGrantLifecycle
  loaded/non-loading truth         block-state change hook
- canonical logical identity       (Gate 0 — hook TBD)
+ canonical logical identity       (Gate 0 — LOCKED: ServerLevel.onBlockStateChange)
  chest topology invalidation       stale-row cleanup
              │                             │
              └──────────────┬──────────────┘
@@ -497,6 +497,6 @@ pure policy.
 | `targetPos` access unspecified | **GAP** | **Gate 0-B** |
 | `canUse` instruction-level inject | **FIXED** | RETURN veto + **`clearTarget` on ally deny** |
 
-**Full task-54 implementation:** **NOT AUTHORIZED**
+**Full task-54 implementation:** **DONE** — see `task-54-report.md` (`DONE_WITH_CONCERNS`; runtime UNVERIFIED)
 
 **Task-54 Gate 0 source audit:** **CLOSED** — `task-54-gate0-report.md`

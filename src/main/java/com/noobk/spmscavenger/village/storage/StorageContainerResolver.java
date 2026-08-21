@@ -2,6 +2,7 @@ package com.noobk.spmscavenger.village.storage;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
@@ -55,7 +56,8 @@ public final class StorageContainerResolver {
     }
 
     public static boolean isChunkLoaded(ServerLevel level, BlockPos pos) {
-        return level.hasChunkAt(pos);
+        return level.hasChunk(SectionPos.blockToSectionCoord(pos.getX()),
+                SectionPos.blockToSectionCoord(pos.getZ()));
     }
 
     /** Host-equivalent lootable predicate — pinned {@code RaidContainersGoal#isLootableContainer}. */
