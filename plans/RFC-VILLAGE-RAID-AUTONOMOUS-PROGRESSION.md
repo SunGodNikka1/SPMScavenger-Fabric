@@ -10,8 +10,8 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE positive path CLOSED**; **V3 pre-lock LOCKED** (`D-VR-080…083`); **task-52 DONE**; **task-53 (V3-A) IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT (2026-08-20)** |
 | **Status** | `V3-A CLOSED (static)` — **task-53 IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT** (1386 tests). **task-52 (D-VR-084) IMPLEMENTED**. V3-B (task-54) **NOT IMPLEMENTATION-AUTHORIZED**. Runtime witness deferred. |
-| **Nearest frontier** | **Authorize task-54 — V3-B** (`StorageOwnership`, D-VR-081). V3-A admission seam implemented; no production V3 executor yet. |
-| **Last update** | 2026-08-20 (task-53 closure — profile store + `VillageWorkAdmission` consumer + taxonomy pin; 29 new tests; selector/stub goal deferred per User scope lock) |
+| **Nearest frontier** | **Review task-54 brief — V3-B** (`StorageOwnership` + `RaidContainersGoal` guard). task-53 **CLOSED (static)**. Implementation **NOT authorized**. |
+| **Last update** | 2026-08-20 (task-54 brief drafted — destruction seam, double-chest canonical key, explicit grants, continuous guard; task-53 accepted) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
