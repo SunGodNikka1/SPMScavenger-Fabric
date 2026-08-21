@@ -74,8 +74,8 @@ public final class OptionalRaidContainerTargetResolver {
         MISSING.put(type, Boolean.TRUE);
         FIELDS.remove(type);
         SpmScavenger.LOGGER.warn(
-                "[spmscavenger] SPM raid storage goal shape changed; ally storage guard disabled "
-                        + "for {} and stock scheduling retained.",
+                "[spmscavenger] SPM raid storage goal shape changed; ally storage guard cannot "
+                        + "read targetPos for {} — allies fail closed until the seam is restored.",
                 type.getName(), e);
     }
 }

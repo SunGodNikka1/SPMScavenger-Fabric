@@ -45,15 +45,17 @@ class StoragePermissionSavedDataTest {
         assertEquals(0, data.grantCount());
     }
 
-    /** RET-1 — forgetEverywhere clears owner and share rows. */
+    /** RET-1 — forget removes only the forgotten mob's attribution. */
     @Test
-    void forgetEverywhereClearsOwnerAndShare() {
+    void forgetRemovesOnlyForgottenMobAttribution() {
         StoragePermissionSavedData data = new StoragePermissionSavedData();
         UUID other = UUID.randomUUID();
         data.grantOwner(KEY, MOB);
         data.addShare(KEY, other);
         assertTrue(data.forget(MOB));
-        assertEquals(0, data.grantCount());
+        assertFalse(data.hasExplicitPermission(KEY, MOB));
+        assertTrue(data.hasExplicitPermission(KEY, other));
+        assertEquals(1, data.grantCount());
     }
 
     /** Round-trip persistence preserves canonical GlobalPos key. */

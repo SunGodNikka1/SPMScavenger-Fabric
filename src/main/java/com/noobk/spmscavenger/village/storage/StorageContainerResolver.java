@@ -4,13 +4,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.ChestType;
 
 import java.util.Optional;
 
@@ -82,11 +80,7 @@ public final class StorageContainerResolver {
     }
 
     public static BlockPos canonicalPosFromState(ServerLevel level, BlockPos pos, BlockState state) {
-        if (state.getBlock() instanceof ChestBlock && state.getValue(ChestBlock.TYPE) != ChestType.SINGLE) {
-            BlockPos partner = pos.relative(ChestBlock.getConnectedDirection(state));
-            return lexicographicMin(pos, partner);
-        }
-        return pos.immutable();
+        return StorageLogicalIdentity.canonicalPos(state, pos);
     }
 
     /**
@@ -94,56 +88,10 @@ public final class StorageContainerResolver {
      */
     public static GlobalPos canonicalGlobalFromOldState(
             ServerLevel level, BlockPos pos, BlockState oldState) {
-        BlockPos canonical = canonicalPosFromState(level, pos, oldState);
-        if (oldState.getBlock() instanceof ChestBlock
-                && oldState.getValue(ChestBlock.TYPE) != ChestType.SINGLE) {
-            return GlobalPos.of(level.dimension(), canonical);
-        }
-        if (isLootableContainerBlockState(oldState)) {
-            return GlobalPos.of(level.dimension(), canonical);
-        }
-        return GlobalPos.of(level.dimension(), pos.immutable());
+        return GlobalPos.of(level.dimension(), StorageLogicalIdentity.canonicalPos(oldState, pos));
     }
 
     static boolean isLootableContainerBlockState(BlockState state) {
-        if (state == null || state.isAir()) {
-            return false;
-        }
-        var block = state.getBlock();
-        return block instanceof net.minecraft.world.level.block.ChestBlock
-                || block instanceof net.minecraft.world.level.block.BarrelBlock
-                || block instanceof net.minecraft.world.level.block.ShulkerBoxBlock;
-    }
-
-    static boolean chestTopologyChanged(BlockState oldState, BlockState newState) {
-        ChestType oldType = chestType(oldState);
-        ChestType newType = chestType(newState);
-        if (oldType == ChestType.SINGLE && newType != ChestType.SINGLE) {
-            return true;
-        }
-        if (oldType != ChestType.SINGLE && newType == ChestType.SINGLE) {
-            return true;
-        }
-        if (oldType != ChestType.SINGLE && newType != ChestType.SINGLE && oldType != newType) {
-            return true;
-        }
-        return false;
-    }
-
-    private static ChestType chestType(BlockState state) {
-        if (state != null && state.getBlock() instanceof ChestBlock) {
-            return state.getValue(ChestBlock.TYPE);
-        }
-        return ChestType.SINGLE;
-    }
-
-    private static BlockPos lexicographicMin(BlockPos a, BlockPos b) {
-        if (a.getX() != b.getX()) {
-            return a.getX() < b.getX() ? a.immutable() : b.immutable();
-        }
-        if (a.getY() != b.getY()) {
-            return a.getY() < b.getY() ? a.immutable() : b.immutable();
-        }
-        return a.getZ() <= b.getZ() ? a.immutable() : b.immutable();
+        return StorageLogicalIdentity.of(state, BlockPos.ZERO).supported();
     }
 }

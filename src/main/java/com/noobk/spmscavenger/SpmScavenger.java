@@ -109,7 +109,10 @@ public class SpmScavenger implements ModInitializer {
         }
 
         ServerTickEvents.END_SERVER_TICK.register(
-                server -> VillagePerceptionScheduler.forServer(server).onServerTick(server));
+                server -> {
+                    VillagePerceptionScheduler.forServer(server).onServerTick(server);
+                    com.noobk.spmscavenger.village.storage.StorageGuardCompatibility.onServerTick();
+                });
         // Optional market source. Guarded and reflective: nothing on the common trade path names a
         // Trade Everything class, so common classes load normally when the mod is absent.
         com.noobk.spmscavenger.compat.tradeeverything.TradeEverythingCompat.install();
@@ -172,8 +175,7 @@ public class SpmScavenger implements ModInitializer {
         // by RemovalReason.shouldDestroy() above; this exists purely for mobs that vanish without any
         // lifecycle event, and it warns when it fires because that should not happen.
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            com.noobk.spmscavenger.village.storage.StorageGuardCompatibility
-                    .probeHostShapeOnServerStart();
+            com.noobk.spmscavenger.village.storage.StorageGuardCompatibility.beginServerSession();
             for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
                 int evicted = com.noobk.spmscavenger.village.VillageMemorySavedData.get(level)
                         .prune();
@@ -194,6 +196,7 @@ public class SpmScavenger implements ModInitializer {
                     com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.shutdownServerState();
                     com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.shutdownServerState();
                     com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.shutdownServerState();
+                    com.noobk.spmscavenger.village.storage.StorageGuardCompatibility.shutdownServerState();
                     VillagePerceptionScheduler.shutdown(server);
                 });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {

@@ -23,47 +23,43 @@ public final class StorageGrantLifecycle {
         if (oldState == newState) {
             return;
         }
-        invalidatePreTransitionIdentity(level, pos, oldState, newState);
+        invalidateIfIdentityChanged(level, pos, oldState, newState);
     }
 
-    static void invalidatePreTransitionIdentity(
+    static void invalidateIfIdentityChanged(
             ServerLevel level, BlockPos pos, BlockState oldState, BlockState newState) {
+        if (!StorageLogicalIdentity.logicalIdentityChanged(oldState, newState, pos)) {
+            return;
+        }
         StoragePermissionSavedData data = StoragePermissionSavedData.peek(level.getServer());
         if (data == null) {
             return;
         }
-
-        boolean oldLootable = StorageContainerResolver.isLootableContainerBlockState(oldState);
-        boolean newLootable = StorageContainerResolver.isLootableContainerBlockState(newState);
-        boolean topologyChanged = StorageContainerResolver.chestTopologyChanged(oldState, newState);
-
-        if (oldLootable) {
-            GlobalPos oldKey = StorageContainerResolver.canonicalGlobalFromOldState(level, pos, oldState);
-            data.invalidateAt(oldKey);
-            if (topologyChanged) {
-                invalidateOldDoublePartner(level, pos, oldState, data);
-            }
-        } else if (!newLootable && oldState.hasBlockEntity()) {
-            GlobalPos posKey = GlobalPos.of(level.dimension(), pos.immutable());
-            data.invalidateAt(posKey);
+        StorageLogicalIdentity.Identity oldId = StorageLogicalIdentity.of(oldState, pos);
+        if (!oldId.supported()) {
+            return;
         }
+        GlobalPos oldKey = GlobalPos.of(level.dimension(), oldId.canonicalPos());
+        data.invalidateAt(oldKey);
     }
 
-    private static void invalidateOldDoublePartner(
-            ServerLevel level, BlockPos pos, BlockState oldState,
-            StoragePermissionSavedData data) {
-        if (!(oldState.getBlock() instanceof net.minecraft.world.level.block.ChestBlock)) {
+    /** Test seam — invalidate using an explicit store without server plumbing. */
+    static void invalidateIfIdentityChanged(
+            StoragePermissionSavedData data,
+            net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dimension,
+            BlockPos pos,
+            BlockState oldState,
+            BlockState newState) {
+        if (data == null || dimension == null || pos == null || oldState == null || newState == null) {
             return;
         }
-        if (oldState.getValue(net.minecraft.world.level.block.ChestBlock.TYPE)
-                == net.minecraft.world.level.block.state.properties.ChestType.SINGLE) {
+        if (!StorageLogicalIdentity.logicalIdentityChanged(oldState, newState, pos)) {
             return;
         }
-        BlockPos partner = pos.relative(
-                net.minecraft.world.level.block.ChestBlock.getConnectedDirection(oldState));
-        GlobalPos partnerKey = GlobalPos.of(
-                level.dimension(),
-                StorageContainerResolver.canonicalPosFromState(level, partner, oldState));
-        data.invalidateAt(partnerKey);
+        StorageLogicalIdentity.Identity oldId = StorageLogicalIdentity.of(oldState, pos);
+        if (!oldId.supported()) {
+            return;
+        }
+        data.invalidateAt(GlobalPos.of(dimension, oldId.canonicalPos()));
     }
 }

@@ -2,7 +2,7 @@ package com.noobk.spmscavenger.command;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.arguments.StringArgumentType;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.village.storage.GrantSnapshot;
 import com.noobk.spmscavenger.village.storage.ResolvedContainer;
@@ -80,13 +80,13 @@ public final class VillageStorageCommands {
                                         ctx.getSource(),
                                         BlockPosArgument.getBlockPos(ctx, "pos")))))
                 .then(Commands.literal("revoke-key")
-                        .then(Commands.argument("dimension", StringArgumentType.greedyString())
+                        .then(Commands.argument("dimension", ResourceLocationArgument.id())
                                 .then(Commands.argument("x", IntegerArgumentType.integer())
                                         .then(Commands.argument("y", IntegerArgumentType.integer())
                                                 .then(Commands.argument("z", IntegerArgumentType.integer())
                                                         .executes(ctx -> revokeKey(
                                                                 ctx.getSource(),
-                                                                StringArgumentType.getString(ctx, "dimension"),
+                                                                ResourceLocationArgument.getId(ctx, "dimension"),
                                                                 IntegerArgumentType.getInteger(ctx, "x"),
                                                                 IntegerArgumentType.getInteger(ctx, "y"),
                                                                 IntegerArgumentType.getInteger(ctx, "z"))))))))
@@ -204,13 +204,12 @@ public final class VillageStorageCommands {
     }
 
     private static int revokeKey(
-            CommandSourceStack source, String dimensionId, int x, int y, int z) {
-        ResourceLocation id = ResourceLocation.tryParse(dimensionId);
-        if (id == null) {
-            source.sendFailure(Component.literal("Invalid dimension id: " + dimensionId));
+            CommandSourceStack source, ResourceLocation dimensionId, int x, int y, int z) {
+        if (dimensionId == null) {
+            source.sendFailure(Component.literal("Invalid dimension id."));
             return 0;
         }
-        ResourceKey<Level> dimension = ResourceKey.create(Registries.DIMENSION, id);
+        ResourceKey<Level> dimension = ResourceKey.create(Registries.DIMENSION, dimensionId);
         GlobalPos key = GlobalPos.of(dimension, new BlockPos(x, y, z));
         StoragePermissionSavedData data = StoragePermissionSavedData.peek(source.getServer());
         if (data == null || !data.revokeKey(key)) {

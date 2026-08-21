@@ -196,26 +196,27 @@ public final class StoragePermissionSavedData extends SavedData implements Grant
     }
 
     boolean forget(UUID mobId) {
+        Set<GlobalPos> affected = reverseIndex.get(mobId);
+        if (affected == null || affected.isEmpty()) {
+            return false;
+        }
         boolean changed = false;
-        List<GlobalPos> owned = new ArrayList<>();
-        for (Map.Entry<GlobalPos, GrantRow> entry : grants.entrySet()) {
-            GrantRow row = entry.getValue();
+        for (GlobalPos key : new ArrayList<>(affected)) {
+            GrantRow row = grants.get(key);
+            if (row == null) {
+                removeFromReverse(mobId, key);
+                changed = true;
+                continue;
+            }
             if (mobId.equals(row.owner())) {
-                owned.add(entry.getKey());
+                grants.put(key, new GrantRow(null, new HashSet<>(row.shared())));
+                removeFromReverse(mobId, key);
+                changed = true;
+            } else if (row.shared().remove(mobId)) {
+                removeFromReverse(mobId, key);
+                changed = true;
             }
-        }
-        for (GlobalPos key : owned) {
-            changed |= revokeKey(key);
-        }
-        Set<GlobalPos> indexed = reverseIndex.get(mobId);
-        if (indexed != null) {
-            for (GlobalPos key : new ArrayList<>(indexed)) {
-                GrantRow row = grants.get(key);
-                if (row != null && row.shared().remove(mobId)) {
-                    changed = true;
-                    pruneEmpty(key);
-                }
-            }
+            pruneEmpty(key);
         }
         if (changed) {
             setDirty();

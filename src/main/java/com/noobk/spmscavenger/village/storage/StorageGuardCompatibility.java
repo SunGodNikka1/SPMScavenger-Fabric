@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.village.storage;
 
+import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.SpmScavenger;
 
 import java.util.EnumSet;
@@ -18,12 +19,41 @@ public final class StorageGuardCompatibility {
         TARGET_RESOLUTION_FAILED
     }
 
+    private static final int WARMUP_TICKS = 200;
+
     private static final AtomicBoolean HOST_SHAPE = new AtomicBoolean(false);
     private static final AtomicBoolean CAN_USE_HOOK = new AtomicBoolean(false);
     private static final AtomicBoolean CONTINUATION_HOOK = new AtomicBoolean(false);
     private static final AtomicBoolean TARGET_RESOLUTION_FAILED = new AtomicBoolean(false);
+    private static volatile int warmupRemaining = -1;
 
     private StorageGuardCompatibility() {
+    }
+
+    public static void beginServerSession() {
+        resetForSession();
+        probeHostShapeOnServerStart();
+        if (PlayerMobs.state() == PlayerMobs.State.FOUND) {
+            warmupRemaining = WARMUP_TICKS;
+        }
+    }
+
+    public static void onServerTick() {
+        int remaining = warmupRemaining;
+        if (remaining < 0) {
+            return;
+        }
+        if (remaining == 0) {
+            warmupRemaining = -1;
+            logWarmupStatus();
+            return;
+        }
+        warmupRemaining = remaining - 1;
+    }
+
+    public static void shutdownServerState() {
+        warmupRemaining = -1;
+        resetForSession();
     }
 
     public static void markHostShapeSupported() {
@@ -39,7 +69,15 @@ public final class StorageGuardCompatibility {
     }
 
     public static void recordTargetResolutionFailed() {
-        TARGET_RESOLUTION_FAILED.set(true);
+        if (TARGET_RESOLUTION_FAILED.compareAndSet(false, true)) {
+            SpmScavenger.LOGGER.warn(
+                    "[spmscavenger] Ally storage guard fail-closed: could not read raid goal mob "
+                            + "and/or targetPos — allies are denied until resolution succeeds.");
+        }
+    }
+
+    public static boolean hasTargetResolutionFailed() {
+        return TARGET_RESOLUTION_FAILED.get();
     }
 
     public static boolean isOperational() {
@@ -74,21 +112,32 @@ public final class StorageGuardCompatibility {
     }
 
     public static void logWarmupStatus() {
+        if (TARGET_RESOLUTION_FAILED.get()) {
+            SpmScavenger.LOGGER.warn(
+                    "[spmscavenger] Ally storage guard recorded target-resolution failure this session.");
+        }
         if (isOperational()) {
             SpmScavenger.LOGGER.info(
                     "[spmscavenger] Ally storage guard hooks observed — protection wiring operational.");
             return;
         }
-        Set<GuardObservation> missing = missingObservations();
-        if (missing.isEmpty()) {
+        if (PlayerMobs.state() != PlayerMobs.State.FOUND) {
             return;
         }
-        SpmScavenger.LOGGER.warn(
-                "[spmscavenger] Ally storage guard UNVERIFIED — missing observations: {}", missing);
+        Set<GuardObservation> missing = missingObservations();
+        if (!missing.isEmpty()) {
+            SpmScavenger.LOGGER.warn(
+                    "[spmscavenger] Ally storage guard UNVERIFIED after warm-up — missing: {}", missing);
+        }
     }
 
     /** Test reset — not production API. */
     static void resetForTests() {
+        resetForSession();
+        warmupRemaining = -1;
+    }
+
+    private static void resetForSession() {
         HOST_SHAPE.set(false);
         CAN_USE_HOOK.set(false);
         CONTINUATION_HOOK.set(false);

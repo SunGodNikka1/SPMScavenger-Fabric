@@ -119,9 +119,12 @@ class StorageOwnershipStructuralTest {
     }
 
     @Test
-    void lifecycleUsesBlockStateChangeSeam() throws IOException {
+    void lifecycleUsesLogicalIdentityPredicate() throws IOException {
         String lifecycle = read(STORAGE.resolve("StorageGrantLifecycle.java"));
-        assertTrue(lifecycle.contains("onBlockStateChange"));
+        String identity = read(STORAGE.resolve("StorageLogicalIdentity.java"));
+        assertTrue(lifecycle.contains("StorageLogicalIdentity.logicalIdentityChanged"));
+        assertTrue(identity.contains("getConnectedDirection"));
+        assertFalse(lifecycle.contains("invalidateOldDoublePartner"));
     }
 
     @Test

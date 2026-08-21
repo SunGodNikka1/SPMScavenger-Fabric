@@ -28,10 +28,10 @@ public abstract class RaidContainersAllyStorageMixin {
             cancellable = true,
             require = 0)
     private void spmscavenger$guardCanUse(CallbackInfoReturnable<Boolean> cir) {
+        StorageGuardCompatibility.observeCanUseHook();
         if (!Boolean.TRUE.equals(cir.getReturnValue())) {
             return;
         }
-        StorageGuardCompatibility.observeCanUseHook();
         Mob mob = OptionalGoalMobResolver.resolve(this, "raid storage guard");
         if (mob != null && !isAlly(mob)) {
             return;
@@ -57,7 +57,12 @@ public abstract class RaidContainersAllyStorageMixin {
     private void spmscavenger$guardCanContinueToUse(CallbackInfoReturnable<Boolean> cir) {
         StorageGuardCompatibility.observeContinuationHook();
         Mob mob = OptionalGoalMobResolver.resolve(this, "raid storage guard");
-        if (mob == null || !isAlly(mob)) {
+        if (mob == null) {
+            StorageGuardCompatibility.recordTargetResolutionFailed();
+            cir.setReturnValue(false);
+            return;
+        }
+        if (!isAlly(mob)) {
             return;
         }
         if (!(mob.level() instanceof ServerLevel level)) {

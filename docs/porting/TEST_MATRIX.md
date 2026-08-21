@@ -613,5 +613,5 @@ ally mixin witness (VR-T3g–i live) remains `UNVERIFIED` (AV-1).
 | D1–D3 | diagnostic classify | tri-state settlement | boolean FOREIGN collapse | `d1_*`–`d3_*` `CONFIRMED` |
 | C2 | `revoke-key` stale row | row removed without chunk load | force-load world | `c2_*` `CONFIRMED` |
 | S3–S14 subset | structural negatives | see `StorageOwnershipStructuralTest` | violations | static `CONFIRMED` |
-| T1–T4 lifecycle | topology invalidation | grants cleared on SINGLE↔double | unload deletes grants | wired `INFERRED`; block-state test `UNVERIFIED` |
+| T1–T4 lifecycle (subset) | **PASS** (unit) | `StorageLogicalIdentityTest` + `StorageGrantLifecycleTest` — identity predicate + grant invalidation; **not** full `ServerLevel` block-place integration |
 | runtime VR-T3 | live ally at chest | mixin denies without grant | silent host loot | `UNVERIFIED` — launch not authorized |

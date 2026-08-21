@@ -1,15 +1,17 @@
 # Task 54 report: V3-B minimum `StorageOwnership` + host `RaidContainersGoal` guard
 
-**Status:** `DONE_WITH_CONCERNS`
+**Status:** `DONE_WITH_CONCERNS` (post **R1 repair**)
 
 **Brief:** `.superpowers/sdd/task-54-brief.md` v3.2  
-**Gate 0:** `.superpowers/sdd/task-54-gate0-report.md` — PASS (pre-implementation)
+**Gate 0:** `.superpowers/sdd/task-54-gate0-report.md` — PASS
 
 ---
 
 ## Summary
 
-Implemented explicit `GlobalPos`-keyed storage permission registry, pure diagnostic ownership classification, ally-only hot-path enforcement on pinned SPM `RaidContainersGoal`, block-state lifecycle invalidation via `ServerLevel.onBlockStateChange`, and operator `/spmscavenger village storage …` commands.
+Explicit `GlobalPos`-keyed storage permission registry, diagnostic ownership classification, ally-only `StorageRaidPolicy` enforcement on pinned SPM `RaidContainersGoal`, `ServerLevel.onBlockStateChange` lifecycle invalidation, and operator storage commands.
+
+**R1 repair (2026-08-21):** fixed selective `forget`, pure logical-identity lifecycle predicate, fail-closed continuation on unresolved mob, compatibility session lifecycle, and `revoke-key` Brigadier parsing.
 
 ---
 
@@ -18,31 +20,21 @@ Implemented explicit `GlobalPos`-keyed storage permission registry, pure diagnos
 | Command | CWD | Result |
 | --- | --- | --- |
 | `.\gradlew.bat compileJava` | `Projects/SPMScavenger-1.21.1-Fabric` | **PASS** |
-| `.\gradlew.bat test` | same | **PASS** — 1409 tests, 0 failures |
+| `.\gradlew.bat test` | same | **PASS** — **1428 tests**, 0 failures |
 
-**Evidence class:** compile + unit/structural tests only. Runtime VR-T3g–i remain **UNVERIFIED** (no Minecraft launch authorized).
+**Evidence class:** compile + unit/structural/Brigadier-parse tests. Runtime VR-T3g–i and live mixin witness remain **UNVERIFIED** (no Minecraft launch authorized).
 
 ---
 
-## Deliverables (CONFIRMED — paths exist)
+## R1 repair evidence
 
-| Path | Role |
-| --- | --- |
-| `village/storage/StorageOwnership.java` | enum |
-| `village/storage/SettlementStorageFact.java` | tri-state diagnostic |
-| `village/storage/StorageContainerResolver.java` | loaded truth / canonical identity |
-| `village/storage/StorageGrantLifecycle.java` | mutating invalidation |
-| `village/storage/StorageOwnershipPolicy.java` | pure diagnostics |
-| `village/storage/StoragePermissionSavedData.java` | grants + reverse index |
-| `village/storage/StorageRaidPolicy.java` | enforcement — no compatibility import |
-| `village/storage/StorageGuardCompatibility.java` | diagnostics observations |
-| `village/storage/SettlementStorageFactSource.java` | cheap anchor-radius fact |
-| `compat/OptionalRaidContainerTargetResolver.java` | `resolveTarget` / `clearTarget` |
-| `mixin/RaidContainersAllyStorageMixin.java` | canUse RETURN + canContinueToUse HEAD |
-| `mixin/ServerLevelStorageGrantLifecycleMixin.java` | lifecycle seam |
-| `command/VillageStorageCommands.java` | operator commands (chained under profile registrar) |
-| `PerMobSavedData.java` | `StoragePermissionSavedData.forgetEverywhere` registered |
-| Tests under `src/test/.../village/storage/` | VR-T3, D1–D3, C2, structural S3/S4/S5/S6/S10–S14 |
+| ID | Fix | Evidence |
+| --- | --- | --- |
+| **R1-1** | `StoragePermissionSavedData.forget` uses reverse index; clears owner attribution without revoking row; prunes shared-only rows | `StoragePermissionSavedDataForgetTest` (3 scenarios + save/reload each); `StoragePermissionSavedDataTest.forgetRemovesOnlyForgottenMobAttribution` |
+| **R1-2** | `StorageLogicalIdentity.logicalIdentityChanged` + lifecycle invalidates only on identity change; removed `invalidateOldDoublePartner` | `StorageLogicalIdentityTest` (8 pure cases); `StorageGrantLifecycleTest` (4 grant cases); structural gate |
+| **R1-3** | `canContinueToUse`: `mob == null` → `TARGET_RESOLUTION_FAILED` + `false`; non-ally returns to host | `RaidContainersAllyStorageMixin.java` |
+| **R1-4** | `observeCanUseHook` at inject entry; `beginServerSession` / `shutdownServerState` / bounded warm-up tick; target-resolution warn | `StorageGuardCompatibilityTest`; `SpmScavenger.java` wiring; corrected `OptionalRaidContainerTargetResolver` warn text |
+| **R1-5** | `revoke-key` uses `ResourceLocationArgument.id()` | `VillageStorageCommandsParseTest.revokeKeyParsesNamespacedDimensionAndCoordinates` |
 
 ---
 
@@ -50,41 +42,30 @@ Implemented explicit `GlobalPos`-keyed storage permission registry, pure diagnos
 
 | ID | Static result | Notes |
 | --- | --- | --- |
-| VR-T3g | **PASS** (unit) | ally without grant → deny path via empty explicit permission |
-| VR-T3h | **PASS** (unit) | ally + null level → deny |
-| VR-T3i-a | **PASS** | NEUTRAL permits without grant |
-| VR-T3i-b/c | **PASS** | explicit owner/share → permit on hot-path predicate |
-| D1–D3 | **PASS** | tri-state settlement fact preserved in diagnostics |
-| C2 | **PASS** | `revoke-key` removes row without world load |
-| S3,S4,S5,S6,S10–S14 | **PASS** | structural source gates |
-| Lifecycle T1–T4 | **INFERRED** | invalidation wired to `onBlockStateChange`; no block-state integration test |
-| VR-T3g–i runtime | **UNVERIFIED** | requires approved `runClient` + ally mob + chest |
+| VR-T3g–i | **PASS** (unit) | ally grant-or-deny predicate |
+| D1–D3 | **PASS** | tri-state diagnostics |
+| C2 | **PASS** | `revoke-key` row delete |
+| Lifecycle T1–T4 (subset) | **PASS** (unit) | pure identity + grant invalidation at changed pos only — **not** full `ServerLevel` integration |
+| Structural S3–S14 | **PASS** | source gates |
+| VR-T3g–i **runtime** | **UNVERIFIED** | requires approved `runClient` + ally mob at chest |
+| Live mixin hooks operational | **UNVERIFIED** | compatibility flags need production hook execution |
 
 ---
 
-## Architecture invariants (CONFIRMED — code inspection)
+## Architecture invariants (CONFIRMED — post-R1)
 
-- `StorageRaidPolicy` does not import or branch on `StorageGuardCompatibility`.
+- `forget` never calls `revokeKey` for owner removal — shared mobs on same row survive.
+- Lifecycle invalidates at **old** canonical key only when `StorageLogicalIdentity.logicalIdentityChanged` is true (includes SINGLE↔double and connected-direction change).
+- `StorageRaidPolicy` does not import `StorageGuardCompatibility`.
 - Ally `canUse` RETURN veto calls `clearTarget(goal)` before `false`.
-- Chunk unload does not delete grants (no lifecycle hook on unload path).
-- `MandatoryOwnership` untouched — no second publisher.
-- Create commands require loaded lootable container; `revoke-key` uses `peek` only.
+- Chunk unload does not delete grants.
 
 ---
 
 ## Concerns / deferred
 
-1. **Runtime ally guard** — mixin `require = 0`; compatibility flags prove wiring only after live hook execution.
-2. **Lifecycle topology T1–T4** — logic present; no simulated `ServerLevel` block-state test in CI.
-3. **Command C1/C3** — structural intent covered; no Brigadier integration test.
-4. **`own`/`share` use `getLoadedBlockPos`** — rejects unloaded chunks (aligned with brief); does not force-load.
-
----
-
-## Docs touched
-
-- `task-54-brief.md` — Gate 0 diagram label + authorization row
-- `progress.md` — task-54 complete
-- `docs/porting/TEST_MATRIX.md` — VR-T3g–i static rows
+1. **Runtime ally guard** — mixin `require = 0`; warm-up log is diagnostic only.
+2. **`ServerLevel.onBlockStateChange` integration** — lifecycle logic unit-tested via test seam; no in-process block-place simulation in CI.
+3. **Command C1/C3 execution** — parse proven for `revoke-key`; loaded-chunk create/refuse paths not Brigadier-executed in CI.
 
 No git commit (user did not request).
