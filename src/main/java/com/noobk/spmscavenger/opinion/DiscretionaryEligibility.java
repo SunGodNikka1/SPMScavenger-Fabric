@@ -63,7 +63,10 @@ public final class DiscretionaryEligibility {
                     // priority 3; the shared authority must not read a running trade as
                     // "discretionary eligible". This is the semantic lie the flags happened to
                     // hide before MandatoryOwnership made the authority load-bearing.
-                    VILLAGE_TRADE -> true;
+                    VILLAGE_TRADE,
+                    // D-VR-082-A1 item 3: a running bounded V3 commitment blocks a fresh
+                    // discretionary selection; MAINTENANCE deliberately stays out (item 4).
+                    VILLAGE_WORK -> true;
             default -> false;
         };
     }

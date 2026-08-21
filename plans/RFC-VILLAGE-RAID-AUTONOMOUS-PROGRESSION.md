@@ -8,10 +8,10 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE positive path CLOSED**; **V3 pre-lock LOCKED** (`D-VR-080…083`); **task-52 IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT + R1 (2026-08-20)**; V3 implementation not authorized |
-| **Status** | `V3 PRE-LOCK LOCKED` — **VR-T2 PASS** and **V2-TE positive path PASS (`V2-DEF-003c-R1`)**. V2 is **CLOSED** to recorded scope. **D-VR-080…083 `LOCKED`** (User peer review, 2026-08-19). **task-52 (D-VR-084) `IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT` + R1 single-authority repair** (2026-08-20; 1357 tests). V3-A/B are **dependency-ready**; phase implementation remains separately authorized. |
-| **Nearest frontier** | **Authorize task-53 — V3-A** (`VillageScenarioProfile` + `VillageWorkAdmission`, a second **consumer** of the now-implemented `MandatoryOwnership` seam). task-52 done. V2-W deferred; not a V3 prerequisite. |
-| **Last update** | 2026-08-20 (task-52 closure sync — NC-4 WAIVED as structurally subsumed; identity-bound release/start scoped to the first second-publisher task; V3-A / task-53 set `DEPENDENCY-READY / NOT YET IMPLEMENTATION-AUTHORIZED`; runtime witness preserved as deferred) |
+| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE positive path CLOSED**; **V3 pre-lock LOCKED** (`D-VR-080…083`); **task-52 DONE**; **task-53 (V3-A) IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT (2026-08-20)** |
+| **Status** | `V3-A CLOSED (static)` — **task-53 IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT** (1386 tests). **task-52 (D-VR-084) IMPLEMENTED**. V3-B (task-54) **NOT IMPLEMENTATION-AUTHORIZED**. Runtime witness deferred. |
+| **Nearest frontier** | **Authorize task-54 — V3-B** (`StorageOwnership`, D-VR-081). V3-A admission seam implemented; no production V3 executor yet. |
+| **Last update** | 2026-08-20 (task-53 closure — profile store + `VillageWorkAdmission` consumer + taxonomy pin; 29 new tests; selector/stub goal deferred per User scope lock) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |

@@ -40,6 +40,12 @@ public enum ActivityClass {
      * ordinary host work, not cooperative project work. See {@code MoveHolderClassifier}.
      */
     VILLAGE_TRADE,
+    /**
+     * D-VR-082-A1 — bounded village work commitment at priority 4. Classifier pin deferred until
+     * the first real V3 executor exists; taxonomy blocking is wired in
+     * {@code DiscretionaryEligibility}.
+     */
+    VILLAGE_WORK,
     EXPEDITION,
     PASSIVE_OBSERVER,
     UNKNOWN_ACTIVE;

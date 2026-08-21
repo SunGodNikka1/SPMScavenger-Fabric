@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **PRE-LOCK LOCKED** — D-VR-080…083; **task-52 DONE**; **task-53 brief LOCK-CLEAN** (User scope lock + 3 surgical corrections 2026-08-20); **implementation NOT authorized** | `task-53-brief.md`; `task-52-report.md`; `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
+| **V3 Village Work** | **V3-A CLOSED (static)** — task-53 **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT** (1386 tests); **authorize task-54 / V3-B** | `task-53-report.md`; `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -81,5 +81,7 @@ Task 50: complete (V2-D transient TradeChainPlan SELL->BUY; 1015 tests; 3 archit
 Task 51: complete (V2-E + R1 review repairs - P0 route-feasibility wiring, attempt tick bound, real offer index, offhand, continuation revalidation; 1040 tests, 6 negative controls; runtime UNVERIFIED, VR-T2 held)
 
 Task 52: complete with concerns (D-VR-084 shared MandatoryOwnership + V2-DEF-002 repair — claim registry + pure decision + director wiring + VILLAGE_TRADE blocker + Gather publisher; 12 scenarios + 2 temporal simulations + producer controls, 53 tests; 1357 total, 0 failures; R1 single-authority scanCovers repair + mutation matrix; V2-DEF-002 four-part status; multi-publisher identity-bound release prerequisite recorded; runtime witness deferred to V3 campaign)
+
+Task 53: complete with concerns (V3-A — VillageScenarioProfile + PlayerMobVillagePolicySavedData + VillageWorkAdmission + VILLAGE_WORK taxonomy + operator commands; 29 new tests; 1386 total, 0 failures; S1/S10 mutation-confirmed; no P4 goal/selector/classifier pin; admission not wired to executor by design; runtime UNVERIFIED)
 
 No commits unless user requests. No Minecraft launches unless separately approved.

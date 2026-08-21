@@ -571,3 +571,29 @@ deferred to the batched V3 campaign (AV-1). Mutation matrix in `.superpowers/sdd
 | runtime-only | `PerMobSavedData` contains no `MandatoryOwnership` reference |
 | **single authority (R1)** | `scanCovers` is in `ownedMandatoryRoute` and absent from `publishRouteExhaustion` — one predicate, two consumers (V2-DEF-003 shape) |
 | **mint site (NC-5/NC-8)** | `mandatoryEpisodeGeneration++` appears exactly once, inside `start()`, guarded by a live claim — no per-scan, TTL, abandon, or handoff mint |
+
+## D-VR-080 / D-VR-082-A1 / task-53 — V3-A authority/profile foundation (2026-08-20)
+
+**Brief:** `.superpowers/sdd/task-53-brief.md`. **Report:** `.superpowers/sdd/task-53-report.md`.
+Full clean build after task-53: **1386 tests, 0 failures/errors/skips** (+29 task-53 tests). Runtime
+village-work behaviour remains `UNVERIFIED` (no executor in this slice; AV-1).
+
+| # | Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- | --- |
+| 1 | pending Gather claim + `VILLAGE_ALLY` | denied; `MANDATORY_PENDING_CLAIM` | allowed | `scenario1_*` `CONFIRMED` |
+| 2 | running Gather + ally | denied; `MANDATORY_AUTHORITY` | allowed | `scenario2_*` `CONFIRMED` |
+| 3 | running trade + ally | denied | allowed | `scenario3_*` `CONFIRMED` |
+| 4 | demand, no claim/executor + ally | allowed | frozen-demand deny | `scenario4_*` `CONFIRMED` |
+| 5 | `NEUTRAL` profile | `DENY_PROFILE` | allowed | `scenario5_*` `CONFIRMED` |
+| 6 | server-canonical profile | same ally read | per-dimension stores | `scenario6_*` + S12 `CONFIRMED` |
+| 7 | unload / dimension change | ally row preserved | unload hook deletes | S6 `CONFIRMED` |
+| 8 | permanent removal | row removed | survives | `scenario8_*` + S8 `CONFIRMED` |
+| 9 | save/reload | ally survives | lost | `scenario9_*` `CONFIRMED` |
+| 10 | unknown/missing serialized | `NEUTRAL`; no row | persisted NEUTRAL row | `loadUnknown*` `CONFIRMED` |
+| 11 | `VILLAGE_WORK` running | blocks discretionary | passes | `scenario11_*` `CONFIRMED` |
+| 12 | `MAINTENANCE` running | does not block | blocks | `scenario12_*` `CONFIRMED` |
+
+### Structural negatives S1–S12
+
+See `.superpowers/sdd/task-53-report.md` mutation matrix. S1 and S10 mutation-confirmed; S2–S9,
+S11–S12 static wiring/store tests green.

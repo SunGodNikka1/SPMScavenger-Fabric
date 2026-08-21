@@ -65,6 +65,8 @@ public final class PerMobSavedData {
         released += com.noobk.spmscavenger.mining.MiningProjectSavedData
                 .forgetEverywhere(server, mobId);
         released += FurnaceJobSavedData.forgetEverywhere(server, mobId);
+        released += com.noobk.spmscavenger.village.PlayerMobVillagePolicySavedData
+                .forgetEverywhere(server, mobId);
         return released;
     }
 
