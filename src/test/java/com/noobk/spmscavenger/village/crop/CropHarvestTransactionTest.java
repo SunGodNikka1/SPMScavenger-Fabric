@@ -36,10 +36,13 @@ class CropHarvestTransactionTest {
     void commitRollsDropsOnceInsideCommitPrepare() throws Exception {
         String body = Files.readString(
                 Path.of("src/main/java/com/noobk/spmscavenger/village/crop/CropHarvestTransaction.java"));
-        assertEquals(1, body.split("stagedDrops = Block\\.getDrops").length - 1);
-        int dropsIndex = body.indexOf("stagedDrops = Block.getDrops");
-        int setBlockIndex = body.indexOf("level.setBlock(pos, ageZero");
-        assertTrue(dropsIndex > 0 && setBlockIndex > dropsIndex);
+        int kernel = body.indexOf("static CommitResult commitKernel");
+        int kernelEnd = body.indexOf("private static PlantingUnit", kernel);
+        String kernelBody = body.substring(kernel, kernelEnd);
+        assertEquals(1, kernelBody.split("dropRolls\\+\\+").length - 1);
+        int dropsIndex = kernelBody.indexOf("dropRolls++");
+        int replaceIndex = kernelBody.indexOf("replacements++");
+        assertTrue(dropsIndex > 0 && replaceIndex > dropsIndex);
     }
 
     @Test
@@ -55,8 +58,13 @@ class CropHarvestTransactionTest {
     void commitRevalidatesDeterministicFeasibilityBeforeDropRoll() throws Exception {
         String body = Files.readString(
                 Path.of("src/main/java/com/noobk/spmscavenger/village/crop/CropHarvestTransaction.java"));
-        int feasibility = body.indexOf("HarvestCandidatePolicy.deterministicReplantFeasible");
-        int drops = body.indexOf("stagedDrops = Block.getDrops");
-        assertTrue(feasibility > 0 && drops > feasibility);
+        int kernel = body.indexOf("static CommitResult commitKernel");
+        int kernelEnd = body.indexOf("private static PlantingUnit", kernel);
+        String kernelBody = body.substring(kernel, kernelEnd);
+        int griefing = kernelBody.indexOf("world.mobGriefing()");
+        int loaded = kernelBody.indexOf("!world.isLoaded(pos)");
+        int feasibility = kernelBody.indexOf("HarvestCandidatePolicy.deterministicReplantFeasible");
+        int drops = kernelBody.indexOf("dropRolls++");
+        assertTrue(griefing > 0 && loaded > griefing && feasibility > loaded && drops > feasibility);
     }
 }

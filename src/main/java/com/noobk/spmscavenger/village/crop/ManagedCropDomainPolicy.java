@@ -1,11 +1,5 @@
 package com.noobk.spmscavenger.village.crop;
 
-import com.noobk.spmscavenger.village.KnownVillage;
-import com.noobk.spmscavenger.village.MobVillageMemory;
-import com.noobk.spmscavenger.village.PlayerMobVillagePolicySavedData;
-import com.noobk.spmscavenger.village.SettlementBoundsPolicy;
-import com.noobk.spmscavenger.village.VillageMemorySavedData;
-import com.noobk.spmscavenger.village.VillageScenarioProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
@@ -26,33 +20,11 @@ public final class ManagedCropDomainPolicy {
         if (mob == null || level == null || pos == null) {
             return false;
         }
-        VillageScenarioProfile profile = PlayerMobVillagePolicySavedData.profileOf(
-                level.getServer(), mob.getUUID());
-        if (profile != VillageScenarioProfile.VILLAGE_ALLY) {
-            return false;
-        }
         BlockState cropState = level.getBlockState(pos);
         if (!CropReplantSemantics.supportedCrop(cropState)) {
             return false;
         }
-        if (!CropReplantSemantics.hasValidFarmlandSupport(level, cropState, pos)) {
-            return false;
-        }
-        VillageMemorySavedData memory = VillageMemorySavedData.peekInDimension(level);
-        if (memory == null) {
-            return false;
-        }
-        return memory.peek(mob.getUUID())
-                .map(mem -> withinAnyVillage(mem, pos))
-                .orElse(false);
-    }
-
-    private static boolean withinAnyVillage(MobVillageMemory memory, BlockPos pos) {
-        for (KnownVillage village : memory.villages()) {
-            if (SettlementBoundsPolicy.within(pos, village.anchor())) {
-                return true;
-            }
-        }
-        return false;
+        return ManagedCropDomainContext.capture(mob, level)
+                .isManagedCell(CropWorldView.from(level), pos, cropState);
     }
 }

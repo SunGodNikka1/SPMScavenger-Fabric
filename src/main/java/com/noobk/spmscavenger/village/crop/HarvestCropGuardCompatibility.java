@@ -8,7 +8,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Diagnostics-only crop guard observations (task-55).
+ * Diagnostics-only crop guard observations (task-55 / R1-4).
  */
 public final class HarvestCropGuardCompatibility {
 
@@ -32,6 +32,7 @@ public final class HarvestCropGuardCompatibility {
 
     public static void beginServerSession() {
         resetForSession();
+        probeHostShapeOnServerStart();
         if (PlayerMobs.state() == PlayerMobs.State.FOUND) {
             warmupRemaining = WARMUP_TICKS;
         }
@@ -70,8 +71,31 @@ public final class HarvestCropGuardCompatibility {
     public static void recordTargetResolutionFailed() {
         if (TARGET_RESOLUTION_FAILED.compareAndSet(false, true)) {
             SpmScavenger.LOGGER.warn(
-                    "[spmscavenger] Managed crop veto could not read harvest goal targetPos.");
+                    "[spmscavenger] Managed crop veto could not read harvest goal mob "
+                            + "and/or targetPos — fail-open until resolution succeeds.");
         }
+    }
+
+    public static boolean hasTargetResolutionFailed() {
+        return TARGET_RESOLUTION_FAILED.get();
+    }
+
+    public static boolean isOperational() {
+        return HOST_SHAPE.get() && CAN_USE_HOOK.get() && CONTINUATION_HOOK.get();
+    }
+
+    public static Set<GuardObservation> missingObservations() {
+        EnumSet<GuardObservation> missing = EnumSet.noneOf(GuardObservation.class);
+        if (!HOST_SHAPE.get()) {
+            missing.add(GuardObservation.HOST_SHAPE_SUPPORTED);
+        }
+        if (!CAN_USE_HOOK.get()) {
+            missing.add(GuardObservation.CAN_USE_HOOK_OBSERVED);
+        }
+        if (!CONTINUATION_HOOK.get()) {
+            missing.add(GuardObservation.CONTINUATION_HOOK_OBSERVED);
+        }
+        return missing;
     }
 
     public static Set<GuardObservation> observations() {
@@ -91,25 +115,52 @@ public final class HarvestCropGuardCompatibility {
         return set;
     }
 
+    public static void probeHostShapeOnServerStart() {
+        try {
+            Class<?> goal = Class.forName("games.brennan.playermob.entity.goal.HarvestCropsGoal");
+            goal.getDeclaredField("targetPos");
+            goal.getDeclaredField("mob");
+            goal.getDeclaredMethod("canUse");
+            goal.getDeclaredMethod("canContinueToUse");
+            markHostShapeSupported();
+        } catch (ReflectiveOperationException e) {
+            SpmScavenger.LOGGER.debug(
+                    "[spmscavenger] HarvestCropsGoal shape probe skipped — SPM absent or changed.", e);
+        }
+    }
+
+    public static void logWarmupStatus() {
+        if (TARGET_RESOLUTION_FAILED.get()) {
+            SpmScavenger.LOGGER.warn(
+                    "[spmscavenger] Managed crop guard recorded target-resolution failure this session.");
+        }
+        if (isOperational()) {
+            SpmScavenger.LOGGER.info(
+                    "[spmscavenger] Managed crop guard hooks observed — veto wiring operational.");
+            return;
+        }
+        if (PlayerMobs.state() != PlayerMobs.State.FOUND) {
+            return;
+        }
+        Set<GuardObservation> missing = missingObservations();
+        if (!missing.isEmpty()) {
+            SpmScavenger.LOGGER.warn(
+                    "[spmscavenger] Managed crop guard UNVERIFIED after warm-up — missing: {} "
+                            + "(possible silent require=0 no-op)",
+                    missing);
+        }
+    }
+
+    /** Test reset — not production API. */
+    static void resetForTests() {
+        resetForSession();
+        warmupRemaining = -1;
+    }
+
     private static void resetForSession() {
         HOST_SHAPE.set(false);
         CAN_USE_HOOK.set(false);
         CONTINUATION_HOOK.set(false);
         TARGET_RESOLUTION_FAILED.set(false);
-    }
-
-    private static void logWarmupStatus() {
-        if (!HOST_SHAPE.get()) {
-            SpmScavenger.LOGGER.info(
-                    "[spmscavenger] Crop guard warmup ended: host HarvestCropsGoal shape not yet "
-                            + "probed (fail-open).");
-            return;
-        }
-        SpmScavenger.LOGGER.info(
-                "[spmscavenger] Crop guard warmup ended: canUse={}, continuation={}, "
-                        + "targetResolutionFailed={}",
-                CAN_USE_HOOK.get(),
-                CONTINUATION_HOOK.get(),
-                TARGET_RESOLUTION_FAILED.get());
     }
 }

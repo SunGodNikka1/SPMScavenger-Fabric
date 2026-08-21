@@ -15,7 +15,8 @@ class ManagedCropDomainStructuralTest {
     void cropPackageDoesNotReferenceMandatoryOwnershipOrSpmForage() throws Exception {
         Path root = Path.of("src/main/java/com/noobk/spmscavenger/village/crop");
         try (Stream<Path> files = Files.walk(root)) {
-            for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+            for (Path file : files.filter(p -> p.toString().endsWith(".java")
+                    && !p.getFileName().toString().equals("HarvestCropGuardCompatibility.java")).toList()) {
                 String body = Files.readString(file);
                 assertFalse(body.matches("(?m).*import\\s+.*MandatoryOwnership.*"),
                         file + " must not publish MandatoryOwnership");

@@ -1,6 +1,6 @@
 # Task 55 report: V3-C committed harvest→replant episode
 
-**Status:** `DONE_WITH_CONCERNS`  
+**Status:** `DONE_WITH_CONCERNS` (R1 repair complete)  
 **Slice:** D-VR-079 / D-VR-079-A1 / D-VR-083 (budget contract)  
 **Brief:** `.superpowers/sdd/task-55-brief.md` v2.1  
 **Gate 0:** `.superpowers/sdd/task-55-gate0-report.md` — PASS  
@@ -9,17 +9,20 @@
 ## Summary
 
 Implemented V3-C: managed crop domain + continuous host `HarvestCropsGoal` veto + priority-4
-`VillageHarvestEpisodeGoal` with atomic mature→age-0 `setBlock` commit, single `Block.getDrops`
-roll at COMMIT, F8 backpack banking via `ContainerMerge.insert` remainder semantics, and
-`VILLAGE_WORK` taxonomy pin. No `destroyBlock`, no `MandatoryOwnership` publisher in the crop
-package.
+`VillageHarvestEpisodeGoal` with atomic mature→age-0 `setBlock` commit, single drop roll at COMMIT,
+F8 backpack banking via `ContainerMerge.insert` remainder semantics, and `VILLAGE_WORK` taxonomy pin.
+
+**R1 repair (architecture accepted):** reachability-aware bounded target selection, commit-time
+`mobGriefing`/loaded-world revalidation, exact-self activity observation exclusion, crop-guard
+compatibility diagnostics parity with task-54, and behavioral transaction harness sharing the
+production commit kernel.
 
 ## User implementation locks (applied)
 
 | Lock | Implementation |
 | --- | --- |
-| Final pre-roll revalidation | `CropHarvestTransaction.commit` re-checks admission (caller), mature state equality, farmland, `deterministicReplantFeasible` **before** `Block.getDrops` |
-| Exact post-commit verification | `after.equals(ageZero)`; `setBlock==false` → ABORT + escrow restore; mismatch after `setBlock==true` → INVARIANT_FAILURE, no drop grant |
+| Final pre-roll revalidation | `CropHarvestTransaction.commitKernel` re-checks admission, `mobGriefing`, loaded chunk, mature state equality, farmland, `deterministicReplantFeasible` **before** `Operations.rollDrops` |
+| Exact post-commit verification | `after.equals(ageZero)`; `replaceBlock==false` → ABORT + escrow restore; mismatch after success → INVARIANT_FAILURE, no drop grant |
 | Named update flag | `Block.UPDATE_ALL` (not magic `3`) |
 | Remainder insertion API | `ContainerMerge.insert(Container, ItemStack) → ItemStack` remainder |
 
@@ -27,31 +30,61 @@ package.
 
 | Command | CWD | Result |
 | --- | --- | --- |
-| `.\gradlew.bat test` | `Projects/SPMScavenger-1.21.1-Fabric` | **1453 tests, 0 failures** `CONFIRMED` |
+| `.\gradlew.bat compileJava` | `Projects/SPMScavenger-1.21.1-Fabric` | **PASS** `CONFIRMED` |
+| `.\gradlew.bat test` | `Projects/SPMScavenger-1.21.1-Fabric` | **1475 tests, 0 failures** `CONFIRMED` |
 
-### New tests (task-55)
+### Behavioral proof (R1-5 primary evidence)
 
-| Class | Rows |
+| Scenario | Test | Result |
+| --- | --- | --- |
+| Admission denied → 0 rolls, 0 replacement | `CropHarvestTransactionBehaviorTest.admissionDeniedPerformsNoDropRollOrReplacement` | `CONFIRMED` |
+| `mobGriefing=false` → 0 rolls, 0 replacement | `CropHarvestTransactionBehaviorTest.mobGriefingFalsePerformsNoDropRollOrReplacement` | `CONFIRMED` |
+| Stale crop → 0 rolls | `CropHarvestTransactionBehaviorTest.staleCropPerformsNoDropRoll` | `CONFIRMED` |
+| Wheat/beetroot no seed → 0 rolls | `CropHarvestTransactionBehaviorTest.wheatWithoutHeldSeedPerformsNoDropRoll` | `CONFIRMED` |
+| Accepted transaction → exactly 1 roll | `CropHarvestTransactionBehaviorTest.acceptedTransactionRollsDropsExactlyOnce` | `CONFIRMED` |
+| Replacement false → escrow restored, no loot | `CropHarvestTransactionBehaviorTest.replacementFalseRestoresEscrowAndGrantsNoLoot` | `CONFIRMED` |
+| Replacement success → age 0 | `CropHarvestTransactionBehaviorTest.successfulReplacementVerifiesExactAgeZero` | `CONFIRMED` |
+| Invariant mismatch → no staged loot | `CropHarvestTransactionBehaviorTest.invariantMismatchGrantsNoStagedLoot` | `CONFIRMED` |
+| Partial inventory → conservation | `CropHarvestTransactionBehaviorTest.partialInventoryFillConservesItems` | `CONFIRMED` |
+| Second actor after age-0 → 0 roll/mutation | `CropHarvestTransactionBehaviorTest.secondActorAfterAgeZeroPerformsNoRollOrMutation` | `CONFIRMED` |
+| Nearest inaccessible + farther reachable | `HarvestCropTargetSelectorTest.nearestInaccessibleFartherReachableSelectsFarther` | `CONFIRMED` |
+| All inaccessible → backoff, no admission target | `HarvestCropTargetSelectorTest.allInaccessibleYieldsNoTargetAndBacksOff` | `CONFIRMED` |
+| Backoff active / expires | `HarvestCropTargetSelectorTest.backoffSkipsCropUntilExpiry` | `CONFIRMED` |
+| Path probes hard-bounded | `HarvestCropTargetSelectorTest.pathProbesAreHardBounded` | `CONFIRMED` |
+| Exact-self observation exclusion | `ActivityObservationServiceExclusionTest` (4 cases) | `CONFIRMED` |
+| Crop guard compat session lifecycle | `HarvestCropGuardCompatibilityTest` (4 cases) | `CONFIRMED` |
+
+### Structural proof (wiring guards only)
+
+| Class | Role |
 | --- | --- |
-| `CropReplantSemanticsTest` | gen-1 crops, maturity split, Gate 0 drop flags |
-| `HarvestCandidatePolicyTest` | held-seed rule, immature exclusion |
-| `CropHarvestTransactionTest` | admission abort, structural commit contract |
-| `ContainerMergeTest` | remainder conservation |
-| `ManagedCropDomainStructuralTest` | no SPM/MandatoryOwnership imports in crop package |
+| `CropHarvestTransactionTest` | `UPDATE_ALL`, single `dropRolls++` in kernel, abort vs invariant, precondition order |
+| `ManagedCropDomainStructuralTest` | crop package import boundaries |
 | `VillageHarvestTaxonomyTest` | `VILLAGE_WORK` pin |
+| `CropReplantSemanticsTest`, `HarvestCandidatePolicyTest`, `ContainerMergeTest` | policy/unit semantics |
 
 ### VR-T3 static matrix
 
 | ID | Must happen | Must not happen | Evidence |
 | --- | --- | --- | --- |
-| VR-T3a | mature→age-0 via one `setBlock` | `destroyBlock` | structural + semantics tests `CONFIRMED` |
-| VR-T3b | pre-COMMIT abort safe | world mutation | goal abort paths + transaction admission gate `INFERRED` |
-| VR-T3c | preflight/setBlock false → ABORT | grant on failure | `CropHarvestTransactionTest` structural `CONFIRMED` |
-| VR-T3k | commit-time block truth | global reservation map | revalidation in `commit` `CONFIRMED` (static) |
+| VR-T3a | mature→age-0 via one `setBlock` | `destroyBlock` | behavioral + semantics tests `CONFIRMED` |
+| VR-T3b | pre-COMMIT abort safe | world mutation | behavioral abort cases `CONFIRMED` |
+| VR-T3c | preflight/replace false → ABORT | grant on failure | behavioral `CONFIRMED` |
+| VR-T3k | commit-time block truth | global reservation map | behavioral stale/loaded/griefing `CONFIRMED` |
 | VR-T3l | veto in managed domain | host strip when admission denies | mixin + veto policy `INFERRED` (no live SPM) |
-| VR-T3m | backpack banking | floor pickup recovery | `ContainerMerge` + F8 ordering in transaction `CONFIRMED` (static) |
+| VR-T3m | backpack banking | floor pickup recovery | behavioral conservation `CONFIRMED` |
 
 **Runtime VR-T3a–c/k/l/m:** `UNVERIFIED` — Minecraft launch not authorized.
+
+## R1 deliverables
+
+| ID | Change |
+| --- | --- |
+| R1-1 | `HarvestCropTargetSelector` — bounded scan/shortlist/path-probe; `ManagedCropDomainContext` snapshot; `HarvestTargetBackoff`; stored `Path` in `start()` |
+| R1-2 | `mobGriefing` in `canContinueToUse` + `commitKernel`; loaded/mature/farmland/feasibility before drop roll |
+| R1-3 | `ActivityObservationService.observeExcluding` (exact goal instance); removed class-wide `VILLAGE_WORK` filter from admission |
+| R1-4 | `HarvestCropGuardCompatibility` — proactive host shape probe, warmup WARN, `recordTargetResolutionFailed` on unresolved host target |
+| R1-5 | `CropHarvestTransaction.Operations` + `commitKernel` shared by production `ServerLevel` adapter and behavioral tests |
 
 ## Deliverables
 
@@ -59,29 +92,31 @@ package.
 | --- | --- |
 | `village/crop/CropReplantSemantics.java` | vanilla-only crop semantics |
 | `village/crop/ManagedCropDomainPolicy.java` | `managedCropCell` |
+| `village/crop/ManagedCropDomainContext.java` | per-scan domain snapshot |
+| `village/crop/HarvestCropTargetSelector.java` | reachability-aware selection |
+| `village/crop/HarvestTargetBackoff.java` | per-goal transient backoff |
+| `village/crop/CropWorldView.java` | scan block-truth surface |
 | `village/crop/HarvestCandidatePolicy.java` | deterministic candidacy |
 | `village/crop/HarvestCropVetoPolicy.java` | host veto predicate |
-| `village/crop/CropHarvestTransaction.java` | PREPARE/COMMIT/abort |
-| `village/crop/HarvestCropGuardCompatibility.java` | diagnostics |
-| `village/VillageHarvestAdmission.java` | admission wiring (excludes self `VILLAGE_WORK` on continuation) |
+| `village/crop/CropHarvestTransaction.java` | shared commit kernel + `ServerLevel` adapter |
+| `village/crop/HarvestCropGuardCompatibility.java` | diagnostics (task-54 parity) |
+| `village/VillageHarvestAdmission.java` | admission wiring (`observeExcluding` on continuation) |
+| `activity/ActivityObservationService.java` | `observeExcluding` / `observeRunningGoalsExcluding` |
 | `inventory/ContainerMerge.java` | remainder insert API |
-| `goal/VillageHarvestEpisodeGoal.java` | P4 episode |
+| `goal/VillageHarvestEpisodeGoal.java` | P4 episode with path storage |
 | `compat/OptionalHarvestCropTargetResolver.java` | reflective target |
-| `mixin/HarvestCropsManagedDomainMixin.java` | continuous veto |
+| `mixin/HarvestCropsManagedDomainMixin.java` | continuous veto + target-resolution diagnostics |
 | `SpmScavenger.java` | P4 registration + compat lifecycle |
 | `MoveHolderClassifier.java` | `VILLAGE_WORK` pin |
 
 ## Concerns
 
-1. **Runtime witness deferred** — mixin hook observation and multi-mob commit races need live SPM + village fields.
-2. **`VillageHarvestAdmission` self-exclusion** — continuation observation filters running `VILLAGE_WORK`; without this, `MandatoryOwnership` would deny the episode while it runs. Documented in class javadoc; not runtime-proven.
+1. **Runtime witness deferred** — mixin hook observation, pathfinding in village fields, and multi-mob commit races need live SPM + village fields.
+2. **Path approach heuristic** — uses adjacent air cells with solid floor; not full collision-shape approach policy from gather.
 3. **Farmland support** — uses `FarmBlock` below crop (public API); not full `canSurvive` (protected).
 
 ## Self-review vs brief
 
-- Two predicates split: **YES**
-- Gen-1 crops include wheat: **YES**
-- No `ForagePolicy` / SPM compile imports in crop package: **YES** (structural test)
-- No second `MandatoryOwnership` publisher: **YES**
-- Single `getDrops` at COMMIT only: **YES** (structural test)
-- Held-seed rule for wheat/beetroot: **YES** (`HarvestCandidatePolicyTest`)
+- R1-1 through R1-5 implemented per review; task-56 not started.
+- No Minecraft runtime launched.
+- Behavioral harness is primary transaction evidence; structural tests retained as wiring guards.

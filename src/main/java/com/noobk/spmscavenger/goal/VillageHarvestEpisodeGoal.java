@@ -1,11 +1,14 @@
 package com.noobk.spmscavenger.goal;
 
 import com.noobk.spmscavenger.PlayerMobs;
-import com.noobk.spmscavenger.village.crop.CropHarvestTransaction;
-import com.noobk.spmscavenger.village.crop.CropReplantSemantics;
-import com.noobk.spmscavenger.village.crop.HarvestCandidatePolicy;
-import com.noobk.spmscavenger.village.crop.ManagedCropDomainPolicy;
 import com.noobk.spmscavenger.village.VillageHarvestAdmission;
+import com.noobk.spmscavenger.village.crop.CropHarvestTransaction;
+import com.noobk.spmscavenger.village.crop.HarvestCandidatePolicy;
+import com.noobk.spmscavenger.village.crop.HarvestCropTargetSelector;
+import com.noobk.spmscavenger.village.crop.HarvestCropTargetSelector.HarvestTarget;
+import com.noobk.spmscavenger.village.crop.HarvestTargetBackoff;
+import com.noobk.spmscavenger.village.crop.ManagedCropDomainContext;
+import com.noobk.spmscavenger.village.crop.ManagedCropDomainPolicy;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -15,6 +18,7 @@ import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.pathfinder.Path;
 
 import java.util.EnumSet;
 
@@ -27,7 +31,6 @@ public final class VillageHarvestEpisodeGoal extends Goal {
     private static final int PATH_TIMEOUT_TICKS = 100;
     private static final int EMPTY_SCAN_COOLDOWN = 40;
     private static final int POST_VISIT_COOLDOWN = 20;
-    private static final int SCAN_RADIUS = 8;
     private static final double REACH_DISTANCE_SQR = 4.0;
 
     private enum Phase {
@@ -37,12 +40,14 @@ public final class VillageHarvestEpisodeGoal extends Goal {
     private final Mob mob;
     private final GoalSelector selector;
     private final double moveSpeed;
+    private final HarvestTargetBackoff targetBackoff = new HarvestTargetBackoff();
 
     private Phase phase = Phase.IDLE;
     private int phaseTicks;
     private int scanCooldown;
     private BlockPos targetPos;
     private BlockState committedMatureState;
+    private Path acceptedPath;
 
     public VillageHarvestEpisodeGoal(Mob mob, GoalSelector selector, double moveSpeed) {
         this.mob = mob;
@@ -66,17 +71,26 @@ public final class VillageHarvestEpisodeGoal extends Goal {
         if (mob.getTarget() != null) {
             return false;
         }
-        if (!VillageHarvestAdmission.permits(mob, selector, false)) {
+        if (!VillageHarvestAdmission.permits(mob, selector, null)) {
             return false;
         }
         Container backpack = PlayerMobs.backpack(mob);
-        BlockPos found = findClosestHarvestCandidate(level, backpack);
-        if (found == null) {
+        ManagedCropDomainContext domain = ManagedCropDomainContext.capture(mob, level);
+        HarvestCropTargetSelector.SelectionResult selection = HarvestCropTargetSelector.select(
+                mob,
+                level,
+                backpack,
+                domain,
+                targetBackoff,
+                level.getGameTime());
+        HarvestTarget target = selection.target();
+        if (target == null) {
             scanCooldown = EMPTY_SCAN_COOLDOWN;
             return false;
         }
-        targetPos = found;
-        committedMatureState = level.getBlockState(found);
+        targetPos = target.cropPos();
+        committedMatureState = target.matureState();
+        acceptedPath = target.path();
         return true;
     }
 
@@ -91,7 +105,10 @@ public final class VillageHarvestEpisodeGoal extends Goal {
         if (!mob.isAlive() || mob.isDeadOrDying() || mob.getTarget() != null) {
             return false;
         }
-        if (!VillageHarvestAdmission.permits(mob, selector, true)) {
+        if (!level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+            return false;
+        }
+        if (!VillageHarvestAdmission.permits(mob, selector, this)) {
             return false;
         }
         Container backpack = PlayerMobs.backpack(mob);
@@ -106,11 +123,15 @@ public final class VillageHarvestEpisodeGoal extends Goal {
     public void start() {
         phase = Phase.PATHING;
         phaseTicks = 0;
-        mob.getNavigation().moveTo(
-                targetPos.getX() + 0.5,
-                targetPos.getY(),
-                targetPos.getZ() + 0.5,
-                moveSpeed);
+        if (acceptedPath != null) {
+            mob.getNavigation().moveTo(acceptedPath, moveSpeed);
+        } else {
+            mob.getNavigation().moveTo(
+                    targetPos.getX() + 0.5,
+                    targetPos.getY(),
+                    targetPos.getZ() + 0.5,
+                    moveSpeed);
+        }
     }
 
     @Override
@@ -118,6 +139,7 @@ public final class VillageHarvestEpisodeGoal extends Goal {
         mob.getNavigation().stop();
         targetPos = null;
         committedMatureState = null;
+        acceptedPath = null;
         phase = Phase.IDLE;
         phaseTicks = 0;
         scanCooldown = POST_VISIT_COOLDOWN;
@@ -155,6 +177,7 @@ public final class VillageHarvestEpisodeGoal extends Goal {
             phase = Phase.WINDUP;
             phaseTicks = 0;
         } else if (phaseTicks > PATH_TIMEOUT_TICKS) {
+            targetBackoff.recordFailure(targetPos, level.getGameTime());
             stop();
         }
     }
@@ -166,8 +189,8 @@ public final class VillageHarvestEpisodeGoal extends Goal {
         if (phaseTicks < HARVEST_WINDUP_TICKS) {
             return;
         }
-        boolean admission = VillageHarvestAdmission.permits(mob, selector, true);
-        CropHarvestTransaction.CommitResult result = CropHarvestTransaction.commit(
+        boolean admission = VillageHarvestAdmission.permits(mob, selector, this);
+        CropHarvestTransaction.commit(
                 level,
                 mob,
                 PlayerMobs.backpack(mob),
@@ -175,33 +198,5 @@ public final class VillageHarvestEpisodeGoal extends Goal {
                 committedMatureState,
                 admission);
         stop();
-    }
-
-    private BlockPos findClosestHarvestCandidate(ServerLevel level, Container backpack) {
-        BlockPos mobPos = mob.blockPosition();
-        BlockPos closest = null;
-        double closestDistSq = Double.MAX_VALUE;
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        for (int dx = -SCAN_RADIUS; dx <= SCAN_RADIUS; dx++) {
-            for (int dy = -SCAN_RADIUS; dy <= SCAN_RADIUS; dy++) {
-                for (int dz = -SCAN_RADIUS; dz <= SCAN_RADIUS; dz++) {
-                    cursor.set(mobPos.getX() + dx, mobPos.getY() + dy, mobPos.getZ() + dz);
-                    if (!level.isLoaded(cursor)) {
-                        continue;
-                    }
-                    boolean managed = ManagedCropDomainPolicy.isManagedCell(mob, level, cursor);
-                    BlockState state = level.getBlockState(cursor);
-                    if (!HarvestCandidatePolicy.isHarvestCandidate(managed, state, backpack)) {
-                        continue;
-                    }
-                    double distSq = mobPos.distSqr(cursor);
-                    if (distSq < closestDistSq) {
-                        closestDistSq = distSq;
-                        closest = cursor.immutable();
-                    }
-                }
-            }
-        }
-        return closest;
     }
 }

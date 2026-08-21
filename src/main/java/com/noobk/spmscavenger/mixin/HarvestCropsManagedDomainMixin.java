@@ -33,6 +33,7 @@ public abstract class HarvestCropsManagedDomainMixin {
         Mob mob = OptionalGoalMobResolver.resolve(this, "managed crop veto");
         BlockPos target = OptionalHarvestCropTargetResolver.resolveTarget(this).orElse(null);
         if (mob == null || target == null || !(mob.level() instanceof ServerLevel level)) {
+            HarvestCropGuardCompatibility.recordTargetResolutionFailed();
             return;
         }
         if (HarvestCropVetoPolicy.shouldVeto(mob, level, target)) {
@@ -51,6 +52,8 @@ public abstract class HarvestCropsManagedDomainMixin {
         Mob mob = OptionalGoalMobResolver.resolve(this, "managed crop veto");
         BlockPos target = OptionalHarvestCropTargetResolver.resolveTarget(this).orElse(null);
         if (mob == null || target == null || !(mob.level() instanceof ServerLevel level)) {
+            HarvestCropGuardCompatibility.recordTargetResolutionFailed();
+            cir.setReturnValue(false);
             return;
         }
         if (HarvestCropVetoPolicy.shouldVeto(mob, level, target)) {

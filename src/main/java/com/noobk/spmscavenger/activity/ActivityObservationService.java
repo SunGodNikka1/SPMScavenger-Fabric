@@ -42,6 +42,49 @@ public final class ActivityObservationService {
         return summarize(active, externalRestState(mob));
     }
 
+    /**
+     * Scheduler observation that skips exactly one running goal instance (task-55 R1-3).
+     */
+    public static Observation observeExcluding(
+            GoalSelector selector,
+            Goal excludedGoal,
+            Mob mob,
+            @Nullable MiningProjectSavedData store,
+            long now) {
+        EnumSet<ActivityClass> active = EnumSet.noneOf(ActivityClass.class);
+        for (WrappedGoal wrapped : selector.getAvailableGoals()) {
+            if (!wrapped.isRunning()) {
+                continue;
+            }
+            Goal goal = wrapped.getGoal();
+            if (goal == excludedGoal) {
+                continue;
+            }
+            active.add(MoveHolderClassifier.activityClass(goal, mob, store, mob.getUUID(), now));
+        }
+        return summarize(active, externalRestState(mob));
+    }
+
+    /**
+     * Deterministic test seam for exact-goal exclusion without a live selector.
+     */
+    public static Observation observeRunningGoalsExcluding(
+            Iterable<? extends Goal> runningGoals,
+            Goal excludedGoal,
+            @Nullable Mob mob,
+            @Nullable MiningProjectSavedData store,
+            UUID mobId,
+            long now) {
+        EnumSet<ActivityClass> active = EnumSet.noneOf(ActivityClass.class);
+        for (Goal goal : runningGoals) {
+            if (goal == excludedGoal) {
+                continue;
+            }
+            active.add(MoveHolderClassifier.activityClass(goal, mob, store, mobId, now));
+        }
+        return summarize(active, externalRestState(mob));
+    }
+
     private static boolean externalRestState(@Nullable Mob mob) {
         if (mob == null) {
             return false;
