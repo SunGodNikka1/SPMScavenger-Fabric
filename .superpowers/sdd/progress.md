@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **V3-C STATIC ACCEPT** — task-55 implementation; runtime VR-T3a–c/k/l/m `UNVERIFIED` | `task-55-report.md`; `task-55-brief.md` |
+| **V3 Village Work** | **V3-C STATIC ACCEPT** — task-55 closed; **task-56 Gate 0 COMPLETE (G0-1 OUTCOME B → impl HOLD)** | `task-55-report.md`; `task-56-gate0-report.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -87,5 +87,7 @@ Task 53: complete with concerns (V3-A — VillageScenarioProfile + PlayerMobVill
 Task 54: complete / STATIC-BEHAVIORAL ACCEPT (V3-B + R1/R1.2 repair — 1435 tests, 0 failures; owner/share invariant + replacement + stale-placement unit-confirmed; runtime VR-T3g–i UNVERIFIED — deferred to batched V3 campaign)
 
 Task 55: STATIC-BEHAVIORAL ACCEPT (V3-C + R1 + closure CLOSE-1/2 — fail-open crop continuation, probe-budget backoff only on concrete failures; 1478 tests, 0 failures; runtime VR-T3 deferred to batched V3 campaign)
+
+Task 56 Gate 0: COMPLETE (G0-1 OUTCOME B — vanilla breeding uses HOME HAS_SPACE/take(), not totalBeds−villagers; G0-2 anchor invalidation locked; G0-3 minimal facts model; G0-4–7 scheduler/cache/V3-E contract pinned) — **implementation HOLD** until D-VR-083 reconciled; artifact `task-56-gate0-report.md`
 
 No commits unless user requests. No Minecraft launches unless separately approved.
