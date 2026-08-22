@@ -45,13 +45,17 @@
 | Illager `RaiderTargetsPlayerMobMixin` | v0.86.0 audit | **PASS** — raid-victim posture unchanged |
 | V3 executor band **P4** / compost **P5** vs host P3 deliberate work | `SpmScavenger.java` + v0.86.0 priority table | **PASS** — semantic ordering unchanged |
 
-**Target-lifecycle semantic (v0.89.0 delta — compatibility caution only):** SPM v0.89.0 refines how a
-host goal's **selected target** is retained, invalidated, and released across ticks/episodes
-(distinct from Scavenger `IntentLifecycle` / `TaskLifecycle`). The delta review found **no change**
-that invalidates shipped V3 admission, veto, mandatory-ownership, or trade-interlock contracts.
-Task-59 must **witness** target invalidation/hand-off in the batched VR-T3 campaign (especially
-VR-T3b/c/j) as **compatibility evidence/caution** — **not** as a new V3 feature, mixin, or repair
-slice.
+**Target-lifecycle semantic (v0.89.0 delta — compatibility caution only):** SPM v0.89.0 gives
+**existing** target acquisition/loss transitions additional social/reincarnation semantics — e.g.
+acquiring a player target can mark that PlayerMob as having initiated the fight; the **falling edge**
+of `getTarget()` can count as an escape under certain conditions; those events feed
+reincarnation/self-defense/restraint scoring. Upstream explicitly reads the escape path from the
+falling edge of the same `getTarget()`, **not** by replacing the target-selection/retention
+mechanism. The reviewed delta does **not** materially change the host target-selection/retention
+mechanism relied upon by V3 admission, veto, mandatory-ownership, or trade-interlock contracts.
+Task-59 should still **witness** target invalidation/hand-off in the batched VR-T3 campaign
+(especially VR-T3b/c/j) as **compatibility evidence/caution** — **not** as a new V3 feature, mixin,
+or repair slice.
 
 **Provenance rule:** statements tagged `historical provenance — audit v0.86.0` remain accurate for
 when they were recorded. Load-bearing host facts for Task-59 carry **`REVALIDATED v0.89.0`** in the
@@ -7822,7 +7826,8 @@ Task-58 implementation/static closure **not reopened**.
 | 0.86→0.89 host-delta review | **PASS** for V3-sensitive assumptions (table in Host baseline section) |
 | Historical v0.86.0 `CODE_CONFIRMED` / `SOURCE_CONFIRMED` | **Preserved** as historical provenance — not rewritten |
 | Load-bearing Task-59 host facts | Marked **REVALIDATED v0.89.0** inline + delta table |
-| Target-lifecycle semantic (v0.89.0) | Recorded as **compatibility evidence/caution** for Task-59 VR-T3 witness — **not** a V3 feature or repair |
+| Target-lifecycle semantic (v0.89.0) | Existing `getTarget()` acquire/loss edges gain social/reincarnation semantics — **not** a new retention mechanism; Task-59 witness only |
 
-**Frontier after:** Host-baseline **doc sync CLOSED**. **Integration sync OPEN** (runtime matrix pin).
-Task-58 **CLOSED**. Six prior RFC blockers **CLOSED**. Task-59 **HOLD**.
+**Frontier after:** Host-baseline **doc sync CLOSED** (wording defect corrected 2026-08-22).
+**Integration sync OPEN** (runtime matrix pin). Task-58 **CLOSED**. Six prior RFC blockers **CLOSED**.
+Task-59 **HOLD**.
