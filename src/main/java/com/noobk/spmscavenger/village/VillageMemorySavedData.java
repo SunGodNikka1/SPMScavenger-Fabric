@@ -153,10 +153,16 @@ public final class VillageMemorySavedData extends SavedData {
         if (observation == null || !observation.isSettlement()) {
             return Optional.empty();
         }
-        KnownVillage village = memoryOf(mob).remember(
+        MobVillageMemory memory = memoryOf(mob);
+        KnownVillage existing = memory.at(observation.anchor()).orElse(null);
+        BlockPos oldAnchor = existing != null ? existing.anchor() : null;
+        KnownVillage village = memory.remember(
                 observation.anchor(),
                 tick,
                 ObservationQuality.of(observation.coverage(), observation.admittedPoiCount()));
+        if (oldAnchor != null && !oldAnchor.equals(village.anchor())) {
+            com.noobk.spmscavenger.village.work.VillageWorkFactsService.onAnchorSuperseded(level, oldAnchor);
+        }
         SettlementRelationshipService.onVillageRecorded(level, mob, village, tick, mobPos);
         setDirty();
         return Optional.of(village);

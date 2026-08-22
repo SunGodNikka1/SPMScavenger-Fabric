@@ -202,6 +202,7 @@ public class SpmScavenger implements ModInitializer {
                     com.noobk.spmscavenger.village.storage.StorageGuardCompatibility.shutdownServerState();
                     com.noobk.spmscavenger.village.crop.HarvestCropGuardCompatibility.shutdownServerState();
                     VillagePerceptionScheduler.shutdown(server);
+                    com.noobk.spmscavenger.village.work.VillageWorkFactsService.shutdown(server);
                 });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {

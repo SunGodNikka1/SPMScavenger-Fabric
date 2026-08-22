@@ -1,8 +1,6 @@
 # Task-56 Gate 0 report — read-only source audit (V3-D `VillageWorkFacts`)
 
-**Status:** `GATE_0_AUDIT_COMPLETE` — G0-2…G0-7 **PASS**; G0-1 **OUTCOME B (semantic mismatch)** →
-**implementation HOLD** until **D-VR-083** reconciles `eligibleBedCount` / `freePopulationCapacity` vs
-vanilla breeding bed truth.
+**Status:** `GATE_0_PASS` — D-VR-083-A1 (**R2 vanilla vacancy**) adopted; implementation **AUTHORIZED**.
 
 **Audit date:** 2026-08-21  
 **Target project:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`  
@@ -18,7 +16,7 @@ vanilla breeding bed truth.
 
 | Gate | Verdict | Locked decision |
 | --- | --- | --- |
-| **G0-1 — `eligibleBedCount` / bed layers** | **OUTCOME B** | Vanilla breeding bed gate = **`currentFreeHomeCapacity`** (`PoiManager.Occupancy.HAS_SPACE` on `PoiTypes.HOME`), **not** `totalUsableHomeCapacity − villagerCount`. **Do not** define `eligibleBedCount` as free-bed count and then subtract villagers (double-count). **Implementation HOLD** until D-VR-083 reconciled. |
+| **G0-1 — `eligibleBedCount` / bed layers** | **RESOLVED (D-VR-083-A1)** | **`currentFreeHomeCapacity`** (`HAS_SPACE`) is population-support candidate signal; **`eligibleBedCount` / subtraction deleted**. |
 | **G0-2 — `SettlementIdentity` anchor lifecycle** | **PASS** | Anchor replacement A→B: **B canonical**; invalidate cache + pending work for **A**; **no** count migration; **no** proximity merge; sharing only on **exact** `SettlementIdentity`. |
 | **G0-3 — Workstation facts** | **PASS** | **No** workstation/support fields in task-56 — no immediate consumer; ship minimal `VillageWorkFacts` (identity, counts, observedAtTick, completeness, freshness). |
 | **G0-4 — Scheduler reuse** | **PASS** | Second consumer on existing `VillagePerceptionScheduler` budget; work-fact dedup key **`(dimension, SettlementIdentity)`**; village-memory perception keeps **`(dimension, mobId)`**. |
@@ -394,9 +392,8 @@ breeding commands / bed claim / Brain mutation (D-VR-078).
 | Item | State |
 | --- | --- |
 | Gate 0 audit | **COMPLETE** |
-| Task-56 implementation | **HOLD** — reconcile **D-VR-083** (`eligibleBedCount` / `freePopulationCapacity` vs vanilla `HAS_SPACE` gate) before `PopulationCapacityPolicy` + V3-E-facing predicate |
-| Permitted next step (user authorization) | D-VR-083 amendment **or** task-56 implementation limited to facts/cache/observation kernel **without** locked subtraction policy |
-| Task-57 | **NOT STARTED** |
+| Task-56 implementation | **AUTHORIZED** — D-VR-083-A1 synchronized |
+| Task-57 | **NOT STARTED** — breeder-local 48-block reachability revalidation deferred |
 
 **Suggested D-VR-083 amendment question (one line):** Should V3-E population food support track
 **headroom** (`totalUsableHomeCapacity − villagerCount`), **vanilla vacancy** (`currentFreeHomeCapacity`),

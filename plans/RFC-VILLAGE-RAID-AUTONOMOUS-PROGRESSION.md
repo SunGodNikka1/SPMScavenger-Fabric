@@ -4606,7 +4606,7 @@ User): `D-VR-082` → `D-VR-082-A1`, `D-VR-079` → `D-VR-079-A1`, plus new `D-V
 | **D-VR-080** | `VillageScenarioProfile` is **one cross-dimension policy per mob** — not stored in `MobVillageMemory` / `VillageMemorySavedData`. Default `NEUTRAL`; `VILLAGE_ALLY` only via explicit config-at-spawn or operator command; HOME/HIGH never auto-promote; existing worlds migrate to `NEUTRAL`. New store must register in `PerMobSavedData.forgetAll()`. |
 | **D-VR-081** | Storage permission keyed by **`GlobalPos`**; **preserve** on chunk unload, mob dimension change, and server restart; **delete** on explicit revoke, container destroyed/replaced, mob permanent removal. Double chests canonicalize to one logical container key. Continuous ally guard on `RaidContainersGoal`. |
 | **D-VR-082** | V3 executor goals at **priority 4**. `VillageWorkAdmission` blocks when **any live mandatory owner** exists (not merely `MaterialDemand`). Optional `VillageWorkSelector` chooses among V3 intents — **not** a parallel `VillageWorkDirector`; subordinate to village orchestration (`VillageInteractionDirector` when shipped). |
-| **D-VR-083** | **Budget contract `LOCKED`**; numeric constants **`PROVISIONAL` / `UNVERIFIED`** until profiling. Population food support when `freePopulationCapacity = max(0, eligibleBeds − villagerCount) > 0` (and `villagerCount ≥ 2`), not `villagers − beds > 0`. |
+| **D-VR-083** | **Budget contract `LOCKED`**; numeric constants **`PROVISIONAL` / `UNVERIFIED`** until profiling. Population food support candidate when `adultVillagerCount ≥ 2` **and** `currentFreeHomeCapacity > 0` on **FRESH + COMPLETE** facts (**D-VR-083-A1** — vanilla vacancy, not `totalBeds − villagers`). |
 
 | **D-VR-084** | **NEW.** `MandatoryOwnership` — one shared discretionary-permission authority with two inputs (running-activity truth + **published** pending claims) and two consumers (`DiscretionaryActivityDirector`, `VillageWorkAdmission`). Demand never creates authority; a claim does, and **a claim may never be refreshed by the continued existence of the same demand**. |
 | **D-VR-082-A1** | **AMENDS D-VR-082.** Admission **consumes** `DiscretionaryEligibility` rather than re-deriving mandatory truth from a five-source list. `VILLAGE_TRADE` joins `blocksDiscretionaryChoice`. New `ActivityClass.VILLAGE_WORK` blocks a fresh discretionary selection while running. Priority 4 is **shared with `PlaceTorchGoal`**, and the `MAINTENANCE`/`VILLAGE_WORK` blocking asymmetry is deliberate. |
@@ -6590,12 +6590,25 @@ for village-work banding.
   spatial radius; cap **candidate count** per evaluation; **back off** after empty/blocked search (never
   scan every tick); **reuse** `VillagePerceptionScheduler` / existing village perception where
   applicable (no second world scanner for V3-D).
-- **Population food support eligibility (gen-1):**
+- **Population food support eligibility (gen-1) — amended by D-VR-083-A1 (User, 2026-08-21):**
 
 ```text
-freePopulationCapacity = max(0, eligibleBedCount - villagerCount)
-food support eligible  iff villagerCount >= 2 AND freePopulationCapacity > 0
+Task-56 factual layers (settlement-bound, loaded-only):
+    adultVillagerCount
+    totalUsableHomeCapacity
+    claimedHomeCount
+    currentFreeHomeCapacity
+
+population-support candidate (task-57 revalidates before commit):
+    facts == FRESH + COMPLETE
+    AND adultVillagerCount >= 2
+    AND currentFreeHomeCapacity > 0
 ```
+
+  Settlement-wide `currentFreeHomeCapacity > 0` is a **candidate** fact, not proof breeding succeeds.
+  Vanilla birth still requires a vacant HOME within 48 blocks of the breeder plus path reachability —
+  task-57 owns that revalidation. **Deleted authority:** `freePopulationCapacity =
+  max(0, eligibleBedCount - villagerCount)` and the term **`eligibleBedCount`** (ambiguous).
 
   V3 still does **not** command breeding, claim beds, or mutate villager Brain state (D-VR-078).
 - **Disposable surplus** gates (compost / population / gift) run **after** survival, progression
@@ -6616,12 +6629,24 @@ does query `PoiManager` for `#acquirable_job_site + home + meeting`, so the *sca
 scanner is needed; the **retained facts** do not. Therefore:
 
 - the sequence gains the edge **`V3-D → V3-E`** (it read `V3-A → V3-C/D/E` as siblings);
-- V3-D widens the bounded village-work facts to carry job-site/restock facts, **villager count**, and
-  **free/eligible HOME capacity**;
-- **`eligibleBedCount` is defined from the relevant HOME POI availability/occupancy truth — not from
-  "a bed block was observed". A bed with no free ticket is not free population capacity.
+- V3-D widens the bounded village-work facts to carry **adult villager count** and the three HOME
+  capacity layers (`totalUsableHomeCapacity`, `claimedHomeCount`, `currentFreeHomeCapacity`);
+- **`currentFreeHomeCapacity`** uses `PoiManager.Occupancy.HAS_SPACE` on `PoiTypes.HOME` — vanilla's
+  breeding ticket truth. Diagnostic layers do not authorize support; only vacancy on FRESH+COMPLETE facts.
 
-No second scanner, and no change to the locked predicate itself.
+No second scanner. **Superseded predicate (do not implement):** `freePopulationCapacity =
+max(0, eligibleBedCount - villagerCount)`.
+
+### D-VR-083-A1: Population-support vacancy authority (`User`, 2026-08-21)
+
+**Status:** `LOCKED` — amends D-VR-083 population-support candidate after task-56 Gate 0.
+
+**Accepted:** vanilla vacancy (`currentFreeHomeCapacity > 0`) is the population-support candidate
+signal; subtraction headroom is **rejected** (R1/R3). Task-56 observes settlement-wide vacancy;
+task-57 revalidates breeder-local 48-block reachability before food commit.
+
+**Rejected:** preserving `eligibleBedCount` / `freePopulationCapacity` subtraction as authority;
+conjunctive subtraction **and** vacancy (R3) for gen-1.
 
 ### D-VR-084: `MandatoryOwnership` — one claim-based discretionary-permission authority (`Agent_Claude` + `User`, 2026-08-19)
 

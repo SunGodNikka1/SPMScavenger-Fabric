@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.village;
 
 import com.noobk.spmscavenger.PlayerMobs;
+import com.noobk.spmscavenger.village.work.VillageWorkFactsService;
 import com.noobk.spmscavenger.ScavengerConfig;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -26,8 +27,10 @@ final class VillagePerceptionService {
         }
         VillagePerception.Observation observation =
                 VillagePerception.observe(level, mob.blockPosition());
-        return VillageMemorySavedData.get(level).record(
+        Optional<KnownVillage> remembered = VillageMemorySavedData.get(level).record(
                 level, mobId, observation, tick, mob.blockPosition());
+        remembered.ifPresent(ignored -> VillageWorkFactsService.scheduleForMob(level, mobId));
+        return remembered;
     }
 
     private VillagePerceptionService() {}

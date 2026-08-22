@@ -111,7 +111,12 @@ public final class VillagePerceptionScheduler {
     }
 
     public void onServerTick(MinecraftServer server) {
-        serviceUpTo(VillagePerceptionTuning.GLOBAL_QUERY_BUDGET_PER_TICK, server::getLevel);
+        int budget = VillagePerceptionTuning.GLOBAL_QUERY_BUDGET_PER_TICK;
+        int used = serviceUpTo(budget, server::getLevel);
+        int remaining = budget - used;
+        if (remaining > 0) {
+            com.noobk.spmscavenger.village.work.VillageWorkFactsService.drainBudget(server, remaining);
+        }
     }
 
     /** Test hook — drains pending work without a full {@link MinecraftServer}. */
