@@ -132,12 +132,13 @@ Require in addition to T57 table:
 
 ## Authorization recommendation
 
-**Authorize task-57 / Implement V3-E** after brief **v1.2** incorporates:
+**Authorize task-57 / Implement V3-E** — brief **v1.2** incorporates all peer-review amendments (User, 2026-08-21):
 
-1. `mobGriefing` admission deny + test row  
-2. Survival reserve acceptance criterion (tuning + AV-1 label in report)  
-3. Self-review table fix (Gate 0 PASS)  
-4. Optional: PD-57-6 greet interlock; PD-57-7 saturated-villager skip  
+1. `mobGriefing` hard authority gate + T57-13 — **LOCKED**
+2. `MIN_SURVIVAL_NUTRITION_RESERVE = 12` nutrition pool — **LOCKED**
+3. PD-57-6 greet interlock (exact villager) — **LOCKED**
+4. PD-57-7 recipient food-need (`wantsMoreFood() && !canBreed()`) + T57-14 — **LOCKED**
+5. PlaceTorch **KNOWN RUNTIME QUESTION** — out of task-57 scope
 
 No Minecraft launch required to begin implementation. Runtime VR-T3e/j remains batched V3 campaign.
 
@@ -145,8 +146,15 @@ No Minecraft launch required to begin implementation. Runtime VR-T3e/j remains b
 
 ---
 
+## v1.2 amendment record (User, 2026-08-21)
+
+Supersedes “minor amendments pending” from initial review. See `task-57-brief.md` v1.2 revision history.
+
+---
+
 ## Contribution
 
 | Agent | Date | Change |
 | --- | --- | --- |
+| Agent_Cursor | 2026-08-21 | User **v1.2 final locks** incorporated into `task-57-brief.md`: `mobGriefing` authority (T57-13); `MIN_SURVIVAL_NUTRITION_RESERVE=12`; PD-57-6/7; PlaceTorch runtime question; T57-14. |
 | Agent_Cursor | 2026-08-21 | MRFC-1 peer review of task-57 brief v1.1 + gate0. Verdict: **ACCEPT WITH MINOR AMENDMENTS**; implementation **READY** after brief v1.2 nits; **NOT AUTHORIZED** in this review. |

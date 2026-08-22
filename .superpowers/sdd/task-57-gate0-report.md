@@ -287,8 +287,10 @@ PopulationFoodExpendabilityPolicy.disposableFoodPoints(item, backpack, mob, cfg)
 ```
 
 **Concern:** Survival reserve for PlayerMob food is **not** yet quantified in Scavenger Java —
-implementation must pin a conservative reserve (document in `PopulationFoodTuning`) or delegate to a
-future shared `SurvivalNutritionReserve` helper. **Does not block Gate 0.**
+implementation must pin **`MIN_SURVIVAL_NUTRITION_RESERVE = 12`** (PlayerMob nutrition points, global
+edible backpack pool) per **brief v1.2** — not item counts; **`reserve == 0` forbidden** as unknown
+fallback. AV-1: shape **DESIGN_LOCKED**; `12` source **INFERRED** (SPM oracle); static tests
+**CONFIRMED** after ship; runtime **UNVERIFIED**.
 
 **Hard rule preserved:** population support never spends items already reserved by another consumer.
 

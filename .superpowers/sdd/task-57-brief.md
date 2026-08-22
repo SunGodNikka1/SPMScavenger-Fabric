@@ -9,7 +9,7 @@ mutation.
 
 | Gate | Status | User phrase to authorize |
 | --- | --- | --- |
-| **Brief design** | **v1.1 — G0-A/G0-B locked** | **BEGIN task-57 / V3-E — BRIEF DESIGN ONLY** (User, 2026-08-21) |
+| **Brief design** | **v1.2 — final locks** (User, 2026-08-21) | **BEGIN task-57 / V3-E — BRIEF DESIGN ONLY** |
 | **Gate 0 — read-only source audit** | **PASS** — see `task-57-gate0-report.md` (User authorized 2026-08-21) | **authorize task-57 gate 0** |
 | **Full implementation** | **NOT AUTHORIZED** | **authorize task-57** / **Implement V3-E** |
 
@@ -17,6 +17,9 @@ mutation.
 
 - v1 — initial brief (User accepted 2026-08-21)
 - v1.1 — **G0-A** dual reachability + **G0-B** commit/ACK separation locked after Gate 0 authorization
+- v1.2 — **final locks:** `mobGriefing` authority gate; `MIN_SURVIVAL_NUTRITION_RESERVE = 12`;
+  PD-57-6 greet interlock; PD-57-7 recipient food-need invariant; PlaceTorch runtime question;
+  Gate 0 self-review drift fix (User, 2026-08-21)
 
 **Target:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`
 
@@ -68,6 +71,10 @@ launch · task-58 · commit · push.
 | Mandatory ownership hard-block | D-VR-084 | pending/running claim ⇒ episode cannot start or continue |
 | Facts are evidence only | task-56 structural contract | task-57 reads facts; **must not** write counts, freshness, or completeness back into cache/SavedData |
 | Deleted subtraction authority | D-VR-083-A1 | **no** `eligibleBedCount`, **no** `freePopulationCapacity` |
+| **`mobGriefing` authority** | **v1.2 LOCKED** | Hard gate at `canUse`, `canContinueToUse`, `HANDOFF_PREPARE`, `COMMIT` — not optimization |
+| **Survival nutrition reserve** | **v1.2 LOCKED** | `MIN_SURVIVAL_NUTRITION_RESERVE = 12` PlayerMob nutrition points (not `FOOD_POINTS`) |
+| **Recipient food-need invariant** | **v1.2 LOCKED** | `wantsMoreFood() && !canBreed()` at SELECT + `HANDOFF_PREPARE` |
+| **Exact-villager interlocks** | **v1.2 LOCKED** | SOCIAL binding + trade claim block handoff to **that** villager only — not global village work |
 
 **Hard rule:** `VillageWorkAdmission` **must not** import `village.work` or read `VillageWorkFacts`.
 Candidacy is evaluated inside the population-food executor path only.
@@ -206,7 +213,7 @@ utility. Do not reuse mob hunger classification as villager food classification.
 One pure policy class. Authority order (highest protection wins):
 
 ```text
-1. survival reserve
+1. survival nutrition reserve (MIN_SURVIVAL_NUTRITION_RESERVE — see below)
 2. progression / mandatory material reserve
 3. crop replant reserve (managed harvest episode bank)
 4. active mandatory-owner requirements
@@ -215,8 +222,37 @@ One pure policy class. Authority order (highest protection wins):
 only remainder → village-disposable breeding food
 ```
 
-**Research mandate (Gate 0 + implementation):** reuse existing expendability/reserve authorities rather
-than re-deriving every reserve independently.
+#### `MIN_SURVIVAL_NUTRITION_RESERVE` (**v1.2 LOCKED**)
+
+```text
+MIN_SURVIVAL_NUTRITION_RESERVE = 12   // PlayerMob / player food nutrition points
+```
+
+**Units are deliberately not villager food points.** Player survival authority and villager transfer
+sizing use different vanilla scales:
+
+| Authority | Unit | Gen-1 constants |
+| --- | --- | --- |
+| **Player survival** | PlayerMob **nutrition** (edible item `FoodProperties`) | remaining backpack nutrition ≥ **12** after any proposed debit |
+| **Villager transfer sizing** | `Villager.FOOD_POINTS` | bread=4, carrot/potato/beetroot=1 |
+
+**Policy shape (locked):** consider the **entire edible backpack pool** globally. A breeding-food unit
+may leave only when the **remaining** backpack still satisfies the 12-nutrition reserve. Do **not**
+pin gen-1 reserves as “keep N carrots” or “keep N bread” — food types differ in PlayerMob nutrition.
+
+**Forbidden fallback:** `reserve == 0` when calculation is unknown or unimplemented.
+
+**AV-1 labels for task-57 report:**
+
+| Claim | Label |
+| --- | --- |
+| Reserve shape (nutrition pool, global edible backpack) | **DESIGN_LOCKED** |
+| `12` nutrition source (SPM `ForagePolicy.HEAL_BUFFER_NUTRITION` oracle) | **INFERRED** |
+| Static implementation + tests | **CONFIRMED** (after ship) |
+| Runtime adequacy | **UNVERIFIED** until batched V3 campaign |
+
+**Research mandate (Gate 0 + implementation):** reuse existing expendability/reserve authorities where
+orthogonal; survival nutrition reserve is **new** Scavenger authority (Gate 0: no existing pin).
 
 | Existing policy | Likely reuse |
 | --- | --- |
@@ -277,17 +313,51 @@ Recipient **must** be:
 
 **Forbidden:** baby villagers, dead/removed entities, out-of-settlement adults.
 
-### Willingness / food-deficit signal (Gate 0 decision)
+### Recipient food-need invariant (**v1.2 LOCKED — PD-57-7**)
 
-Gate 0 must determine whether vanilla exposes a **safe, read-only** willingness or food-inventory fact
-that improves recipient choice without Brain mutation or invasive mixin coupling.
+Gate 0 established read-only APIs (`CONFIRMED` — `task-57-gate0-report.md` G0-8):
 
-| Outcome | Gen-1 selection rule |
+- `wantsMoreFood()` → inventory food points **< 12**
+- `canBreed()` → `foodLevel + inventory food points >= 12` && adult && not sleeping
+
+**Baseline recipient food need (authority, not ranking hint):**
+
+```text
+wantsMoreFood() == true
+AND canBreed() == false
+```
+
+| Signal | Meaning for population food |
 | --- | --- |
-| **Clean read-only signal exists** | May use as secondary ranking key only — never as sole gate |
-| **No clean signal** | Do **not** fake precision; use deterministic structural ranking |
+| `!wantsMoreFood()` | inventory already ≥ 12 food points → **extra food unnecessary** |
+| `canBreed()` | total breeding food authority already sufficient → **extra food unnecessary** |
 
-### Gen-1 deterministic ranking (fallback / baseline)
+**Re-check at `HANDOFF_PREPARE`.** Failure → **ABORT**, **0 transfer**.
+
+`hasExcessFood()` may remain **diagnostic / ranking** only; `!wantsMoreFood()` already excludes
+saturated inventory. No separate authority rule required.
+
+### Exact-villager occupancy interlocks (**v1.2 LOCKED**)
+
+Do **not** globally suppress population work when any greet or trade exists. Suppress handoff to
+**the same villager** when that mob already occupies them socially or in trade:
+
+```text
+population candidate villager V
+
+SocialExecutionBindingRegistry.binding(mobId)
+    subjectId == V.uuid
+    AND phase in {ADMITTED, RUNNING}
+→ V unavailable for population handoff (Alice remains eligible)
+
+TradeSessionClaimWindow.claims(mob, V, tick)
+→ population cannot handoff to V
+```
+
+Registry already carries `subjectId` and `Phase` (`SocialExecutionBindingRegistry.Binding` —
+`CONFIRMED` `src`). No new social authority type.
+
+### Gen-1 deterministic ranking (among food-need-eligible adults)
 
 ```text
 eligible adult villager
@@ -382,9 +452,12 @@ Dropping / transferring food is the **irreversible commit**. Immediately before 
 
 | Check | Abort if fail |
 | --- | --- |
+| `RULE_MOBGRIEFING` true (`v1.2` — villager pickup requires `canEntityGrief`) | yes |
 | `VillageWorkAdmission` permits | yes |
 | no combat target / shelter takeover / mandatory claim | yes |
 | recipient still valid (alive, adult, loaded, in bounds) | yes |
+| recipient food-need: `wantsMoreFood() && !canBreed()` | yes |
+| recipient not blocked by SOCIAL binding or trade claim (exact villager) | yes |
 | same `SettlementIdentity` still current for mob memory | yes |
 | facts still `FRESH + COMPLETE` | yes |
 | `PopulationSupportVacancyPolicy` still candidate | yes |
@@ -443,12 +516,31 @@ with **`COMMITTED_UNCONFIRMED`** semantics only — never claim delivery without
 identify the smallest mechanical primitive that can throw/drop an item without entering SOCIAL
 taxonomy.
 
-**Trade interlock:** evaluate whether `TradeSessionClaimWindow` must suppress population food toward
-the same villager during an active trade session (mirror greet interlock pattern).
+**Trade interlock (`LOCKED` — Gate 0 + v1.2):** when `TradeSessionClaimWindow.claims(mobId, V, tick)`,
+population handoff to **V** is forbidden. Other villagers remain eligible.
+
+**Greet / SOCIAL interlock (`LOCKED` — PD-57-6):** when
+`SocialExecutionBindingRegistry.binding(mobId)` is live with `subjectId == V`, population handoff to
+**V** is forbidden. Do not suppress population work globally.
 
 ---
 
-## 7. Pickup semantics
+## 7. Pickup semantics and `mobGriefing` authority (**v1.2 LOCKED**)
+
+Vanilla villager item pickup is gated by `canEntityGrief` (Gate 0 G0-2 — `CONFIRMED`). Committing food
+with `mobGriefing == false` is **predictably useless** — this is a **hard authority gate**, not an
+optimization.
+
+**Required at all four checkpoints:**
+
+| Checkpoint | `mobGriefing == false` |
+| --- | --- |
+| `canUse` | episode does not start |
+| `canContinueToUse` | episode stops (abort path) |
+| `HANDOFF_PREPARE` | **ABORT** — 0 backpack debit, 0 `ItemEntity` |
+| `COMMIT` | **ABORT** — 0 backpack debit, 0 `ItemEntity` |
+
+Mirror `VillageHarvestEpisodeGoal` griefing checks in admission (`VillageHarvestEpisodeGoal.java`).
 
 Gate 0 **must** pin how villagers acquire dropped breeding food:
 
@@ -485,12 +577,15 @@ Document chosen semantics in task-57 report with `CONFIRMED` / `INFERRED` / `UNV
 
 | Interrupt | Behavior |
 | --- | --- |
+| **`mobGriefing == false`** | **abort** (0 transfer) — re-check every tick + HANDOFF_PREPARE |
 | combat target acquired | abort |
 | shelter / mandatory safety takeover | abort |
 | mandatory pending or running claim appears | abort |
 | profile no longer `VILLAGE_ALLY` | abort |
 | facts become `STALE` or `INCOMPLETE` | abort |
 | recipient invalid | abort |
+| recipient food-sufficient (`!wantsMoreFood()` or `canBreed()`) | abort |
+| recipient SOCIAL/trade occupied (exact villager) | abort |
 | inventory reserve change removes disposable surplus | abort |
 | breeder-local vacancy disappears | abort |
 | path timeout / unreachable | abort |
@@ -501,8 +596,9 @@ Episode enters **ACK_WAIT** then `DONE`. No rollback. Terminal outcome drives co
 
 ### Admission continuation
 
-`canContinueToUse` must re-check `PopulationFoodSupportAdmission` (profile + mandatory + combat) each
-tick while pathing — mirror `VillageHarvestEpisodeGoal.canContinueToUse`.
+`canUse` and `canContinueToUse` must enforce **`RULE_MOBGRIEFING`** and re-check
+`PopulationFoodSupportAdmission` (profile + mandatory + combat) each tick while pathing — mirror
+`VillageHarvestEpisodeGoal.canContinueToUse`.
 
 Use `ActivityObservationService.observeExcluding(selector, this, ...)` when admission must not
 count the running episode as blocking itself (task-55 R1-3 pattern).
@@ -538,6 +634,20 @@ Harvest already pins `VillageHarvestEpisodeGoal → VILLAGE_WORK`. Population go
 Both harvest and population register at priority **4** (D-VR-082). Whichever passes `canUse` first in
 the selector ordering wins for that tick. Brief requires **explicit test** that the loser does not
 start while the winner is active (T57-10).
+
+### `PlaceTorchGoal` P4 contention — **KNOWN RUNTIME QUESTION** (v1.2)
+
+`PlaceTorchGoal` also shares priority **4** with `MOVE|LOOK` (`SpmScavenger.java`) — **pre-existing**
+policy contention, **not** a task-57 correctness defect.
+
+```text
+KNOWN RUNTIME QUESTION:
+  persistent PlaceTorch demand may delay village work
+```
+
+**Do not repair** PlaceTorch arbitration in task-57. Only change P4 ordering or add a `VillageWorkSelector`
+if the **batched VR-T3 campaign** demonstrates village-work starvation. Avoid inventing a V3 director for
+a theoretical scheduler problem.
 
 ---
 
@@ -586,6 +696,8 @@ Mapped to RFC **VR-T3e** (population food) and **VR-T3j** (mandatory authority).
 | **T57-10** | crop `VILLAGE_WORK` already running | population does not start | concurrent P4 village work | VR-T3j |
 | **T57-11** | recipient invalid immediately before `COMMIT` | zero transfer | commit to invalid target | VR-T3e |
 | **T57-12** | multiple eligible villagers | deterministic selection; bounded path probes | random recipient; unbounded enumeration | VR-T3e |
+| **T57-13** | `mobGriefing=false` | population episode does not start; zero transfer | commit with griefing off | VR-T3e |
+| **T57-14** | recipient `!wantsMoreFood()` or `canBreed()` at handoff | zero transfer | food to food-sufficient villager | VR-T3e |
 
 ### Negative controls (implementation phase)
 
@@ -659,15 +771,17 @@ existing task-56 scheduler; it **must not** fabricate or persist population coun
 
 ---
 
-## Open product decisions (resolve in Gate 0 or brief v1.1)
+## Resolved product decisions (v1.2)
 
-| ID | Question | Brief lean |
+| ID | Decision | Status |
 | --- | --- | --- |
-| **PD-57-1** | Handoff success = pickup proof vs item-entity spawn | **G0-B LOCKED:** ACK_WAIT + `DELIVERED_ACK` vs `COMMITTED_UNCONFIRMED` |
-| **PD-57-2** | Food-value “meaningful progress” budget formula | derive from vanilla threshold, cap in tuning |
-| **PD-57-3** | Post-delivery cooldown scope (settlement vs recipient) | both — exact ticks provisional |
-| **PD-57-4** | Trade session interlock with same villager | likely yes — Gate 0 confirms |
-| **PD-57-5** | Read-only willingness signal | use only if Gate 0 finds clean API |
+| **PD-57-1** | Handoff success = ACK_WAIT + inventory delta vs spawn-only | **LOCKED** (G0-B) |
+| **PD-57-2** | Food-value meaningful-progress budget | **PROVISIONAL** tuning |
+| **PD-57-3** | Post-delivery cooldown scope | **PROVISIONAL** — settlement + recipient |
+| **PD-57-4** | Trade session interlock — exact villager via `TradeSessionClaimWindow` | **LOCKED** |
+| **PD-57-5** | Read-only willingness APIs | **LOCKED** — used for PD-57-7 authority, not sole ranking |
+| **PD-57-6** | Greet interlock — exact villager via `SocialExecutionBindingRegistry` | **LOCKED** |
+| **PD-57-7** | Recipient food need: `wantsMoreFood() && !canBreed()` | **LOCKED** — authority at SELECT + HANDOFF_PREPARE |
 
 ---
 
@@ -676,12 +790,16 @@ existing task-56 scheduler; it **must not** fabricate or persist population coun
 | Requirement | Brief status |
 | --- | --- |
 | Brief design only — no production Java | **DONE** (this document) |
-| Gate 0 not run | **DONE** |
+| Gate 0 audit | **DONE** — `GATE_0_PASS` (`task-57-gate0-report.md`) |
 | No Minecraft launch | **DONE** |
 | No task-58 | **DONE** |
 | Inherit D-VR-083-A1 / 078 / 082-A1 / 084 without reopening | **DONE** |
 | Episode architecture as specified | **DONE** |
 | Food semantics + expendability policy | **DONE** |
+| `MIN_SURVIVAL_NUTRITION_RESERVE = 12` (v1.2) | **DONE** |
+| `mobGriefing` hard authority gate (v1.2) | **DONE** |
+| Recipient food-need invariant (v1.2) | **DONE** |
+| Exact-villager SOCIAL/trade interlocks (v1.2) | **DONE** |
 | Transfer quantity — no magic 3/6 lock | **DONE** |
 | Recipient selection rules | **DONE** |
 | Vacant HOME — no `take()` probe | **DONE** |
@@ -690,9 +808,10 @@ existing task-56 scheduler; it **must not** fabricate or persist population coun
 | Pickup semantics | **DONE** |
 | Interruption rules | **DONE** |
 | Minimum V3 arbitration | **DONE** |
+| PlaceTorch runtime question documented (v1.2) | **DONE** |
 | Anti-loop contract | **DONE** |
-| T57-1…T57-12 scenarios | **DONE** |
-| Gate 0 proposal | **DONE** |
+| T57-1…T57-14 scenarios | **DONE** |
+| Gate 0 evidence incorporated | **DONE** |
 
-**Status:** `BRIEF v1.1` — Gate 0 **PASS** (`task-57-gate0-report.md`)  
-**Implementation:** `HOLD`
+**Status:** `BRIEF v1.2` — Gate 0 **PASS** (`task-57-gate0-report.md`)  
+**Implementation:** `HOLD` — awaits **authorize task-57**
