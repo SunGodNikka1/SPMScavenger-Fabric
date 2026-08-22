@@ -19,13 +19,11 @@ import java.util.function.Consumer;
 public final class BreederLocalHomeProof {
 
     /**
-     * Lazy vacant-HOME enumeration with an explicit path-probe budget per recipient.
-     *
-     * @return {@code false} when {@link PopulationFoodTuning#MAX_HOME_PROBES_PER_RECIPIENT} is exceeded
+     * Lazy vacant-HOME enumeration for injectable budget tests.
      */
     @FunctionalInterface
     public interface VacantHomeCandidateSource {
-        boolean enumerate(Consumer<PoiRecord> visitor);
+        void enumerate(Consumer<PoiRecord> visitor);
     }
 
     private BreederLocalHomeProof() {}
@@ -47,15 +45,9 @@ public final class BreederLocalHomeProof {
                             PopulationFoodTuning.BREEDER_LOCAL_RADIUS,
                             PoiManager.Occupancy.HAS_SPACE)
                     .iterator();
-            int examined = 0;
             while (iterator.hasNext()) {
-                examined++;
-                if (examined > PopulationFoodTuning.MAX_HOME_PROBES_PER_RECIPIENT) {
-                    return false;
-                }
                 visitor.accept(iterator.next());
             }
-            return true;
         };
     }
 
@@ -70,18 +62,56 @@ public final class BreederLocalHomeProof {
         return path != null && path.canReach();
     }
 
+    /**
+     * Existential HOME proof — at most {@link PopulationFoodTuning#MAX_HOME_PROBES_PER_RECIPIENT}
+     * path probes; the first reachable vacant HOME succeeds even when more HOME records exist.
+     */
     static boolean anyReachableVacantHome(
             Villager villager,
             VacantHomeCandidateSource vacantHomes) {
         if (villager == null || vacantHomes == null) {
             return false;
         }
+        int[] probes = {0};
         boolean[] found = {false};
-        boolean withinBudget = vacantHomes.enumerate(record -> {
-            if (!found[0] && canReach(villager, record.getPos(), record.getPoiType())) {
+        vacantHomes.enumerate(record -> {
+            if (found[0]) {
+                return;
+            }
+            if (probes[0] >= PopulationFoodTuning.MAX_HOME_PROBES_PER_RECIPIENT) {
+                return;
+            }
+            probes[0]++;
+            if (canReach(villager, record.getPos(), record.getPoiType())) {
                 found[0] = true;
             }
         });
-        return withinBudget && found[0];
+        return found[0];
+    }
+
+    /**
+     * Test seam — same probe budget without requiring a live {@link Villager} navigation graph.
+     */
+    static boolean anyReachableVacantHome(
+            VacantHomeCandidateSource vacantHomes,
+            java.util.function.IntPredicate reachableOnProbeIndex) {
+        if (vacantHomes == null || reachableOnProbeIndex == null) {
+            return false;
+        }
+        int[] probes = {0};
+        boolean[] found = {false};
+        vacantHomes.enumerate(record -> {
+            if (found[0]) {
+                return;
+            }
+            if (probes[0] >= PopulationFoodTuning.MAX_HOME_PROBES_PER_RECIPIENT) {
+                return;
+            }
+            probes[0]++;
+            if (reachableOnProbeIndex.test(probes[0])) {
+                found[0] = true;
+            }
+        });
+        return found[0];
     }
 }

@@ -14,7 +14,6 @@ import com.noobk.spmscavenger.village.work.VillageWorkFactsService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.npc.Villager;
@@ -35,9 +34,8 @@ import java.util.function.Predicate;
 public final class PopulationFoodRecipientSelector {
 
     /**
-     * Bounded adult-villager enumeration for expensive HOME/path probes.
-     *
-     * @return {@code false} when {@link PopulationFoodTuning#MAX_RECIPIENT_CANDIDATES} is exceeded
+     * Deterministic adult-villager enumeration; at most
+     * {@link PopulationFoodTuning#MAX_RECIPIENT_CANDIDATES} nearest adults are inspected.
      */
     @FunctionalInterface
     public interface VillagerRecipientCandidateSource {
@@ -173,20 +171,15 @@ public final class PopulationFoodRecipientSelector {
         return visitor -> {
             double radius = VillagePerception.VILLAGE_QUERY_RADIUS;
             AABB box = mob.getBoundingBox().inflate(radius, radius, radius);
-            List<Villager> matches = new ArrayList<>();
-            level.getEntities(
-                    EntityType.VILLAGER,
+            List<Villager> matches = level.getEntitiesOfClass(
+                    Villager.class,
                     box,
-                    villager -> isEligibleAdult(villager, anchor),
-                    matches,
-                    PopulationFoodTuning.MAX_RECIPIENT_CANDIDATES + 1);
-            if (matches.size() > PopulationFoodTuning.MAX_RECIPIENT_CANDIDATES) {
-                return false;
-            }
+                    villager -> isEligibleAdult(villager, anchor));
             matches.sort(Comparator.comparingDouble((Villager villager) -> mob.distanceToSqr(villager))
                     .thenComparing(villager -> villager.getUUID().toString()));
-            for (Villager villager : matches) {
-                if (!visitor.test(villager)) {
+            int limit = Math.min(matches.size(), PopulationFoodTuning.MAX_RECIPIENT_CANDIDATES);
+            for (int i = 0; i < limit; i++) {
+                if (!visitor.test(matches.get(i))) {
                     return false;
                 }
             }

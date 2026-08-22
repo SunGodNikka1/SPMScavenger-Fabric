@@ -39,8 +39,23 @@ class PopulationFoodRecipientProbeBudgetTest {
     }
 
     @Test
-    void close57_1_villagerSourceFailsClosedWhenOverCap() {
-        PopulationFoodRecipientSelector.VillagerRecipientCandidateSource overCap = visitor -> false;
-        assertFalse(overCap.enumerate(villager -> true));
+    void close57_1_largeSettlementStillInspectsNearestCap() {
+        AtomicInteger inspected = new AtomicInteger();
+        PopulationFoodRecipientSelector.VillagerRecipientCandidateSource nineAdults = visitor -> {
+            int limit = Math.min(9, PopulationFoodTuning.MAX_RECIPIENT_CANDIDATES);
+            for (int i = 0; i < limit; i++) {
+                inspected.incrementAndGet();
+                if (!visitor.test(null)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        assertTrue(nineAdults.enumerate(villager -> true));
+        assertEquals(
+                PopulationFoodTuning.MAX_RECIPIENT_CANDIDATES,
+                inspected.get(),
+                "settlements larger than the cap must still inspect the nearest K adults");
     }
 }

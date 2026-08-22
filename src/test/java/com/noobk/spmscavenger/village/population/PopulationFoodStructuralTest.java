@@ -81,20 +81,22 @@ class PopulationFoodStructuralTest {
     }
 
     @Test
-    void mustHappen_recipientSelectorUsesBoundedEnumerationSeams() throws IOException {
+    void mustHappen_recipientSelectorInspectsAtMostNearestCap() throws IOException {
         String body = Files.readString(Path.of(
                 "src/main/java/com/noobk/spmscavenger/village/population/PopulationFoodRecipientSelector.java"));
         assertTrue(body.contains("VillagerRecipientCandidateSource"));
-        assertTrue(body.contains("MAX_RECIPIENT_CANDIDATES + 1"));
-        assertFalse(body.contains("getEntitiesOfClass("),
-                "must use bounded ServerLevel#getEntities maxResults seam");
+        assertTrue(body.contains("Math.min(matches.size(), PopulationFoodTuning.MAX_RECIPIENT_CANDIDATES)"));
+        assertFalse(body.contains("MAX_RECIPIENT_CANDIDATES + 1"),
+                "cap must limit inspection work, not reject settlements larger than K");
     }
 
     @Test
-    void mustHappen_homeProofUsesBoundedVacantHomeSource() throws IOException {
+    void mustHappen_homeProofIsExistentialWithProbeCap() throws IOException {
         String body = Files.readString(Path.of(
                 "src/main/java/com/noobk/spmscavenger/village/population/BreederLocalHomeProof.java"));
         assertTrue(body.contains("VacantHomeCandidateSource"));
         assertTrue(body.contains("MAX_HOME_PROBES_PER_RECIPIENT"));
+        assertFalse(body.contains("withinBudget && found"),
+                "reachable HOME proof must not be invalidated by unexamined records");
     }
 }

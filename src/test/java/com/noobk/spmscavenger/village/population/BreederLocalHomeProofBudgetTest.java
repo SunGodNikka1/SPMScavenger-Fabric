@@ -12,29 +12,40 @@ import java.util.concurrent.atomic.AtomicInteger;
 class BreederLocalHomeProofBudgetTest {
 
     @Test
-    void close57_1_homeEnumerationStopsAtPerRecipientBudget() {
-        AtomicInteger visits = new AtomicInteger();
-        BreederLocalHomeProof.VacantHomeCandidateSource overCap = visitor -> {
-            for (int examined = 1; examined <= PopulationFoodTuning.MAX_HOME_PROBES_PER_RECIPIENT + 4;
-                    examined++) {
-                if (examined > PopulationFoodTuning.MAX_HOME_PROBES_PER_RECIPIENT) {
-                    return false;
-                }
-                visits.incrementAndGet();
+    void close57_1_homeProbeBudgetCapsWorkWhenNoReachableHome() {
+        AtomicInteger maxProbe = new AtomicInteger();
+        BreederLocalHomeProof.VacantHomeCandidateSource manyHomes = visitor -> {
+            for (int i = 0; i < PopulationFoodTuning.MAX_HOME_PROBES_PER_RECIPIENT + 4; i++) {
+                visitor.accept(null);
             }
-            return true;
         };
 
-        assertFalse(overCap.enumerate(record -> { }));
+        assertFalse(BreederLocalHomeProof.anyReachableVacantHome(
+                manyHomes, probe -> {
+                    maxProbe.set(Math.max(maxProbe.get(), probe));
+                    return false;
+                }));
         assertEquals(
                 PopulationFoodTuning.MAX_HOME_PROBES_PER_RECIPIENT,
-                visits.get(),
-                "HOME enumeration must not path-probe beyond the per-recipient budget");
+                maxProbe.get(),
+                "must not path-probe beyond the per-recipient budget when none succeed");
     }
 
     @Test
-    void close57_1_withinBudgetEnumerationCompletes() {
-        BreederLocalHomeProof.VacantHomeCandidateSource within = visitor -> true;
-        assertTrue(within.enumerate(record -> { }));
+    void close57_1_firstReachableHomeWinsDespiteMoreHomesExisting() {
+        AtomicInteger maxProbe = new AtomicInteger();
+        BreederLocalHomeProof.VacantHomeCandidateSource manyHomes = visitor -> {
+            for (int i = 0; i < PopulationFoodTuning.MAX_HOME_PROBES_PER_RECIPIENT + 4; i++) {
+                visitor.accept(null);
+            }
+        };
+
+        assertTrue(BreederLocalHomeProof.anyReachableVacantHome(
+                manyHomes, probe -> {
+                    maxProbe.set(Math.max(maxProbe.get(), probe));
+                    return probe == 1;
+                }),
+                "existential proof must not be invalidated by unexamined HOME records");
+        assertEquals(1, maxProbe.get(), "must short-circuit after the first reachable HOME");
     }
 }

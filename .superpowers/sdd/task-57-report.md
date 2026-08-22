@@ -43,7 +43,8 @@ no SOCIAL/familiarity credit, no `VillageWorkSelector`, no task-58 work.
 
 | ID | Fix | Evidence |
 | --- | --- | --- |
-| **CLOSE-57-1** | Two-level probe budget: `VillagerRecipientCandidateSource` (`getEntities` max `MAX+1`, expensive HOME/path cap `MAX_RECIPIENT_CANDIDATES`) + `VacantHomeCandidateSource` (`MAX_HOME_PROBES_PER_RECIPIENT` per recipient) | `BreederLocalHomeProofBudgetTest`, `PopulationFoodRecipientProbeBudgetTest`, structural seams |
+| **CLOSE-57-1** | Two-level probe budget: nearest-`K` villager inspection (not fail-closed on `>K` adults); existential HOME proof with per-recipient probe cap (first reachable wins) | `BreederLocalHomeProofBudgetTest`, `PopulationFoodRecipientProbeBudgetTest`, structural seams |
+| **CLOSE-57-1R** | Repair: `>K` adults inspect nearest `K` only; HOME `∃` proof not invalidated by unexamined records | same + `firstReachableHomeWinsDespiteMoreHomesExisting` |
 | **CLOSE-57-2** | `handoffPreflight` re-reads `MobVillageMemory`, exact-anchor remembrance, `VillageWorkFactsService.peek` — **no** `plan.facts()` fallback | `PopulationFoodHandoffPreflightTest` (supersede, stale cache, vacancy loss, negative control) |
 | **CLOSE-57-3** | `withinHandoffDistance` — `mob.distanceToSqr(recipient) < REACH_DISTANCE_SQR` at COMMIT preflight | `PopulationFoodHandoffPreflightTest.close57_3_*` |
 
