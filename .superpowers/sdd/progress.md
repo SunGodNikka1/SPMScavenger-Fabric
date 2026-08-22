@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **V3-E CLOSED** — STATIC-BEHAVIORAL ACCEPT; runtime VR-T3e/j deferred to batched V3 campaign | `task-57-report.md` |
+| **V3 Village Work** | **V3-E CLOSED** — STATIC-BEHAVIORAL ACCEPT; **V3-F brief v1 AUTHORIZED** (task-58); runtime VR-T3 deferred | `task-58-brief.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -94,5 +94,7 @@ Task 57: CLOSED / STATIC-BEHAVIORAL ACCEPT (V3-E population food — CLOSE-57-1/
 Task 57: Gate 0 PASS — `task-57-gate0-report.md`
 Task 57: peer review ACCEPT — `task-57-peer-review.md`
 Task 57: brief v1.2 LOCKED — `task-57-brief.md`
+
+Task 58: brief v1 AUTHORIZED — `task-58-brief.md` (V3-F unified ComposterWorkFacts + CompostGoal; Gate 0 NOT AUTHORIZED; implementation NOT AUTHORIZED)
 
 No commits unless user requests. No Minecraft launches unless separately approved.
