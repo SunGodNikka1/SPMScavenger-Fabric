@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **V3-E brief v1.2 LOCKED** — peer review satisfied; implementation **NOT AUTHORIZED** | `task-57-brief.md` v1.2 |
+| **V3 Village Work** | **V3-E implementation DONE_WITH_CONCERNS** — static/behavioral accept pending closure review; runtime VR-T3e/j deferred | `task-57-report.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -90,8 +90,9 @@ Task 55: STATIC-BEHAVIORAL ACCEPT (V3-C + R1 + closure CLOSE-1/2 — fail-open c
 
 Task 56: STATIC-BEHAVIORAL ACCEPT (V3-D + CLOSE-56-1/2 — anchor supersede cancelPending + real enumeration caps; 1499 tests, 0 failures; runtime VR-T3e/f UNVERIFIED) — `task-56-report.md`
 
-Task 57: Gate 0 PASS (V3-E — population food brief v1.1 + G0-A/B; implementation NOT AUTHORIZED) — `task-57-gate0-report.md`
-Task 57: peer review ACCEPT with minor amendments (MRFC-1 — `task-57-peer-review.md`; implementation NOT AUTHORIZED)
-Task 57: brief v1.2 final locks (mobGriefing, nutrition reserve 12, PD-57-6/7, T57-13/14) — `task-57-brief.md`; implementation NOT AUTHORIZED
+Task 57: DONE_WITH_CONCERNS (V3-E population food — goal/admission/selector/handoff + 28 tests; 1527 total, 0 failures; bounded closure review pending; runtime VR-T3e/j UNVERIFIED) — `task-57-report.md`
+Task 57: Gate 0 PASS — `task-57-gate0-report.md`
+Task 57: peer review ACCEPT — `task-57-peer-review.md`
+Task 57: brief v1.2 LOCKED — `task-57-brief.md`
 
 No commits unless user requests. No Minecraft launches unless separately approved.

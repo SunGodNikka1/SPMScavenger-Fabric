@@ -18,6 +18,7 @@ import com.noobk.spmscavenger.goal.VillagePerceptionObserver;
 import com.noobk.spmscavenger.village.VillagePerceptionScheduler;
 import com.noobk.spmscavenger.goal.EnvironmentalEscapeGoal;
 import com.noobk.spmscavenger.goal.PlaceTorchGoal;
+import com.noobk.spmscavenger.goal.PopulationFoodSupportGoal;
 import com.noobk.spmscavenger.goal.VillageHarvestEpisodeGoal;
 import com.noobk.spmscavenger.goal.SeekShelterGoal;
 import com.noobk.spmscavenger.goal.SmeltAtFurnaceGoal;
@@ -137,6 +138,7 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.opinion.SocialGreetClaimWindow.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.release(mob.getUUID());
+                com.noobk.spmscavenger.village.population.PopulationFoodEpisodeCooldown.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.clear(mob.getUUID());
                 // D-VR-084 / RET-1: the pending-claim store is runtime-only; unload (chunk or
                 // dimension) releases the claim so no claim outlives its owner's presence. The
@@ -197,6 +199,7 @@ public class SpmScavenger implements ModInitializer {
                     com.noobk.spmscavenger.opinion.SocialGreetClaimWindow.shutdownServerState();
                     com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.shutdownServerState();
                     com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.shutdownServerState();
+                    com.noobk.spmscavenger.village.population.PopulationFoodEpisodeCooldown.shutdownServerState();
                     com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.shutdownServerState();
                     com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.shutdownServerState();
                     com.noobk.spmscavenger.village.storage.StorageGuardCompatibility.shutdownServerState();
@@ -213,6 +216,7 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.opinion.SocialGreetClaimWindow.release(mob.getUUID());
                 com.noobk.spmscavenger.opinion.SocialExecutionBindingRegistry.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.TradeSessionClaimWindow.release(mob.getUUID());
+                com.noobk.spmscavenger.village.population.PopulationFoodEpisodeCooldown.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.clear(mob.getUUID());
                 com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.release(
                         mob.getUUID(),
@@ -258,6 +262,7 @@ public class SpmScavenger implements ModInitializer {
         selector.addGoal(2, shelterGoal);
         selector.addGoal(4, new PlaceTorchGoal(mob, 1.0));
         selector.addGoal(4, new VillageHarvestEpisodeGoal(mob, selector, 0.9));
+        selector.addGoal(4, new PopulationFoodSupportGoal(mob, selector, 0.9));
         CampfireGoal campfireGoal = new CampfireGoal(mob, 0.9);
         selector.addGoal(7, campfireGoal);
         selector.addGoal(PassiveExpressionGoal.PRIORITY, new PassiveExpressionGoal(mob));
