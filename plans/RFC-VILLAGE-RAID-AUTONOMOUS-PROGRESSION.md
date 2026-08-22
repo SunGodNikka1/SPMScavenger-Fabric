@@ -5,13 +5,14 @@
 | Field | Value |
 | --- | --- |
 | **Project root** | `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric` |
-| **Host platform** | Social Player Mobs (`playermob`) v0.86.0 |
+| **Host platform** | Social Player Mobs (`playermob`) **v0.89.0** (canonical baseline) |
+| **Host baseline sync** | **Doc: CLOSED** (2026-08-22) · **Integration: OPEN** — runtime matrix must pin `playermob` 0.89.0 before Task-59; not a V3 design slice |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `RFC_DESIGN_WORK_ARTIFACT_ONLY` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
 | **Status** | Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). Shipped V3-D1 = population/HOME facts only; V3-F = `ComposterWorkFacts` + `CompostGoal` @ P5. Runtime VR-T3a–m **UNVERIFIED**. |
-| **Nearest frontier** | **Task-59 / V3-G integration and closure — NEXT but HOLD** until separately authorized. Reopen V3-F only if integration/runtime evidence falsifies a locked invariant. |
-| **Last update** | 2026-08-22 (`User` RFC review + `Agent_Cursor` — Task-58 closure sync; reserve-authority reconciliation; VR-T3f exclusion from V3-G closure; Task-59 Gate-0 disposition) |
+| **Nearest frontier** | **Task-59 / V3-G — NEXT but HOLD** until host-baseline **integration** sync (pin `playermob` 0.89.0) and separate authorization. Reopen V3-F only if integration/runtime evidence falsifies a locked invariant. |
+| **Last update** | 2026-08-22 (`User` + `Agent_Cursor` — SPM v0.89.0 host-baseline/provenance sync; 0.86→0.89 V3-sensitive delta **PASS**) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -25,13 +26,45 @@
 | `RaiderTargetsPlayerMobMixin` | Illagers target `PlayerMobEntity` | PlayerMob is **raid victim**, not vanilla raid initiator |
 | Village companion spawn | `WorldGenRegionMixin` | Social spawn flavour; **not** economic integration |
 
+### Host baseline and provenance (`LOCKED` 2026-08-22)
+
+| Field | Value |
+| --- | --- |
+| **Canonical host baseline** | SPM **`playermob` v0.89.0** |
+| **Historical audit pin** | SPM v0.86.0 (`4b80b5e849`) — retained as **historical provenance** where cited below; not rewritten |
+| **0.86→0.89 host-delta review** | **PASS** for V3-sensitive assumptions (see table) |
+| **Task-59 integration gate** | Approved runtime matrix must load **`playermob` 0.89.0** — doc sync alone does not authorize Task-59 |
+
+**V3-sensitive assumptions — delta review (`PASS` v0.89.0):**
+
+| Assumption | Historical source | Revalidated v0.89.0 |
+| --- | --- | --- |
+| Host `HarvestCropsGoal` @ **P6**, `wantsFood()`-gated, no replant, `destroyBlock` | `CODE_CONFIRMED` v0.86.0 (`D-VR-079-A1`) | **PASS** — managed-crop veto contract unchanged |
+| `RaidContainersGoal` @ **P3** | `CODE_CONFIRMED` v0.86.0 (`PlayerMobEntity#registerGoals`) | **PASS** — storage-guard / VR-T3g–i contract unchanged |
+| `FriendlyGreetGoal` @ **P1**, MOVE+LOOK, nearest `GREET` | `SOURCE_CONFIRMED` v0.86.0 (`D-VR-067`) | **PASS** — trade greet interlock contract unchanged |
+| Illager `RaiderTargetsPlayerMobMixin` | v0.86.0 audit | **PASS** — raid-victim posture unchanged |
+| V3 executor band **P4** / compost **P5** vs host P3 deliberate work | `SpmScavenger.java` + v0.86.0 priority table | **PASS** — semantic ordering unchanged |
+
+**Target-lifecycle semantic (v0.89.0 delta — compatibility caution only):** SPM v0.89.0 refines how a
+host goal's **selected target** is retained, invalidated, and released across ticks/episodes
+(distinct from Scavenger `IntentLifecycle` / `TaskLifecycle`). The delta review found **no change**
+that invalidates shipped V3 admission, veto, mandatory-ownership, or trade-interlock contracts.
+Task-59 must **witness** target invalidation/hand-off in the batched VR-T3 campaign (especially
+VR-T3b/c/j) as **compatibility evidence/caution** — **not** as a new V3 feature, mixin, or repair
+slice.
+
+**Provenance rule:** statements tagged `historical provenance — audit v0.86.0` remain accurate for
+when they were recorded. Load-bearing host facts for Task-59 carry **`REVALIDATED v0.89.0`** in the
+delta table above or inline where cited.
+
 ---
 
 ## Executive Summary
 
 **Player-interaction parity with a human player for village/raid content is `PARTIAL` at best today and `NOT PRACTICAL` for full economic + raid-initiation parity without substantial new systems.**
 
-Social Player Mobs (`CONFIRMED` — source audit v0.86.0):
+Social Player Mobs (canonical baseline **v0.89.0**; many early audits are **historical provenance —
+audit v0.86.0**):
 
 - **Can** fight illagers when engaged; use bows, shields, TNT, crystals; flee; eat; loot containers; greet villagers; sleep in beds; open doors; use commanded fake-player item use.
 - **Can now** perceive and remember bounded loaded village POIs and autonomously execute demand-owned vanilla/Trade Everything trade chains through the shipped V1/V2 systems (`RUNTIME_CONFIRMED` only for the recorded VR-T1/VR-T2/V2-TE scenarios).
@@ -42,7 +75,7 @@ Social Player Mobs (`CONFIRMED` — source audit v0.86.0):
   Omen`, trigger or lead raid defense as a first-class citizen, ring bells tactically, cure zombie
   villagers, assign workstations, expose canonical read-only **broad** workstation awareness (V3-D2
   deferred), or extract READY composter bone meal (V3-F gen-1 is input-only).
-- **Actively conflicts** with “good villager citizen” play: `RaidContainersGoal` loots village chests at priority 3 (`CONFIRMED` — `PlayerMobEntity#registerGoals`).
+- **Actively conflicts** with “good villager citizen” play: `RaidContainersGoal` loots village chests at priority 3 (`CODE_CONFIRMED` v0.86.0 — **REVALIDATED v0.89.0**).
 
 **Mineflayer comparison:** Mineflayer achieves **scripted** parity for trading, pathing, and combat via plugins (`mineflayer-villager`, `mineflayer-pathfinder`). SPM achieves **reactive** combat and **scavenging** without a planner. Neither equals a human’s full menu/GUI literacy out of the box.
 
@@ -843,7 +876,7 @@ with `getTradingPlayer() != null` is temporarily unavailable.
 
 **Trade vs greet (`MUST NOT` repeat VR-T1.5c) — `D-VR-067` is mandatory, not defensive plumbing:**
 
-`SOURCE_CONFIRMED` (SPM v0.86.0): `FriendlyGreetGoal` owns **MOVE + LOOK**, actively searches for
+`SOURCE_CONFIRMED` (historical provenance — audit **v0.86.0**; **REVALIDATED v0.89.0**): `FriendlyGreetGoal` owns **MOVE + LOOK**, actively searches for
 `Reaction.GREET` targets; villagers are classified **VILLAGERS**; friendly PlayerMobs resolve
 villagers to **GREET**. Real collision sequence:
 
@@ -2141,8 +2174,8 @@ and seam ordering). Read this topic together with *V2-E contract amendments and 
 
 | Fact | Value | Label |
 | --- | --- | --- |
-| `FriendlyGreetGoal` priority / flags | **1**, MOVE+LOOK | `CODE_CONFIRMED` (repo-recorded; **re-verify from the pinned jar at implementation**) |
-| `RaidContainersGoal` priority | **3** | `CODE_CONFIRMED` (`PlayerMobEntity#registerGoals`) |
+| `FriendlyGreetGoal` priority / flags | **1**, MOVE+LOOK | `CODE_CONFIRMED` v0.86.0 — **REVALIDATED v0.89.0** |
+| `RaidContainersGoal` priority | **3** | `CODE_CONFIRMED` v0.86.0 — **REVALIDATED v0.89.0** |
 | SPM combat / flee | preempt at **0–2** | `CODE_CONFIRMED` |
 | Addon shelter goal | **2**, MOVE | `CODE_CONFIRMED` (`SpmScavenger.java:214`) |
 | Addon P3 band | craft-torches · gather · smelt · descent · tunnel, all MOVE+LOOK | `CODE_CONFIRMED` (`SpmScavenger.java:221–281`) |
@@ -4978,7 +5011,7 @@ another actor has already restored/changed the position.
 | Command/emergency/combat | Existing higher authority (combat P0–2 where registered) | commonly MOVE/LOOK | Yes before interaction; same server-tick commit is not split between Java statements | Crop candidate/path discarded; post-mutation repair only if exceptional failure occurred | Mob stops village travel and responds immediately; later re-resolves world truth |
 | Mandatory Gather/Smelt/Craft/Trade | Deliberate-work band **priority 3** | MOVE/LOOK as applicable | Yes; `VillageWorkAdmission` refuses while **any live mandatory owner** exists — running **or** claimed-pending, read from shared `MandatoryOwnership` (`D-VR-082-A1`, `D-VR-084`) | Mandatory consumer survives; V3 candidate disposable | Mob continues progression instead of village work |
 | V3 discretionary village work | **Priority 4**, **shared with `PlaceTorchGoal`** (`D-VR-082-A1`); semantically below mandatory work | MOVE/LOOK executor-specific; classifies `VILLAGE_WORK` | Peer discretionary work cannot steal a committed interaction (equal priority supplies this); running `VILLAGE_WORK` blocks a *fresh* discretionary selection | Candidate/path disposable before mutation; crop episode owns exceptional repair | One visible bounded job, then re-resolve |
-| Host `HarvestCropsGoal` (stock SPM) | **Priority 6**, `wantsFood()`-gated | MOVE/LOOK | Yes — and *would* destroy a managed crop precisely while V3 is refused for hunger | none | Vetoed inside the managed crop domain only; unchanged in the wilderness (`D-VR-079-A1`) |
+| Host `HarvestCropsGoal` (stock SPM) | **Priority 6**, `wantsFood()`-gated | MOVE/LOOK | Yes — and *would* destroy a managed crop precisely while V3 is refused for hunger | none | Vetoed inside the managed crop domain only; unchanged in the wilderness (`D-VR-079-A1`; host facts **REVALIDATED v0.89.0**) |
 | Storage guard | Continuous policy (`D-VR-081`), not a competing goal | none | Vetoes host loot admission/continuation regardless of activity | Permission survives unload/restart until revoked or container gone | Ally never opens/continues denied container |
 
 Semantic ordering is **locked** (`D-VR-082`, amended `D-VR-082-A1`): urgent > mandatory pending/running > committed cleanup >
@@ -7382,7 +7415,7 @@ oracle; leaving `VILLAGE_TRADE` out of the blocking set because the flags happen
 
 #### (1) The mixin-scope table was wrong for crops
 
-`CODE_CONFIRMED` against pinned SPM v0.86.0: `PlayerMobEntity` registers `HarvestCropsGoal` at
+`CODE_CONFIRMED` against pinned SPM v0.86.0 (**REVALIDATED v0.89.0**): `PlayerMobEntity` registers `HarvestCropsGoal` at
 priority **6** with `MOVE|LOOK`; `canUse` is gated on `mob.wantsFood()`; the harvest banks edible
 drops, calls `mob.dropAtLocation(drop)` for everything else, and then
 `serverLevel.destroyBlock(targetPos, /* dropBlock */ false, mob)`. **It never replants.**
@@ -7772,5 +7805,24 @@ Task-58 implementation/static closure **not reopened**.
 | Pre-Gate-0 Task-58 prose | Seeds pinned (wheat/beetroot); input-only; P5 implemented; Gate 0 PASS |
 | Task-59 Gate 0 ambiguity | Explicit disposition: **Gate 0 not required**; runtime launch separately authorized |
 
-**Frontier after:** **Task-59 / V3-G — NEXT but HOLD** until separate authorization. Re-authorize only
-after reviewer confirms lock-readiness.
+**Frontier after:** **Task-59 / V3-G — NEXT but HOLD** until host-baseline **integration** sync (pin
+`playermob` 0.89.0 in runtime matrix) and separate authorization.
+
+### Contribution — User + `Agent_Cursor` (SPM v0.89.0 host-baseline sync, 2026-08-22)
+
+**Agent:** `User` (verdict) · `Agent_Cursor` (RFC artifact) · **Mode:** `RFC_DESIGN_WORK_ARTIFACT_ONLY`
+
+**Trigger:** Concrete stale baseline — canonical host still read v0.86.0 after Task-58 closure sync.
+
+**Bounded change (doc only):**
+
+| Item | Outcome |
+| --- | --- |
+| Canonical host baseline | **`playermob` v0.89.0** in identity header |
+| 0.86→0.89 host-delta review | **PASS** for V3-sensitive assumptions (table in Host baseline section) |
+| Historical v0.86.0 `CODE_CONFIRMED` / `SOURCE_CONFIRMED` | **Preserved** as historical provenance — not rewritten |
+| Load-bearing Task-59 host facts | Marked **REVALIDATED v0.89.0** inline + delta table |
+| Target-lifecycle semantic (v0.89.0) | Recorded as **compatibility evidence/caution** for Task-59 VR-T3 witness — **not** a V3 feature or repair |
+
+**Frontier after:** Host-baseline **doc sync CLOSED**. **Integration sync OPEN** (runtime matrix pin).
+Task-58 **CLOSED**. Six prior RFC blockers **CLOSED**. Task-59 **HOLD**.
