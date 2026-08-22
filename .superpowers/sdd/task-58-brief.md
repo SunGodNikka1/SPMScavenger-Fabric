@@ -10,14 +10,17 @@ workstation awareness, **not** bone-meal demand, **not** compostable acquisition
 
 | Gate | Status | User phrase to authorize |
 | --- | --- | --- |
-| **Brief design** | **v1 — AUTHORIZED** (User, 2026-08-22) | **BEGIN task-58 / V3-F — BRIEF DESIGN ONLY** |
-| **Gate 0 — read-only source audit** | **NOT AUTHORIZED** | **authorize task-58 gate 0** |
+| **Brief design** | **v1.1 — G0 locks** (Gate 0 PASS 2026-08-22) | **BEGIN task-58 / V3-F — BRIEF DESIGN ONLY** |
+| **Gate 0 — read-only source audit** | **PASS** — see `task-58-gate0-report.md` (User authorized 2026-08-22) | **authorize task-58 gate 0** |
 | **Full implementation** | **NOT AUTHORIZED** | **authorize task-58** / **Implement V3-F** |
 
 **Brief revision history:**
 
 - v1 — initial brief from RFC locks `D58-1…D58-12`, `D-VR-085-A2`, `D-VR-086-A2`, `D-VR-087-A1`+`TX1`
   (User authorized brief design 2026-08-22)
+- v1.1 — **G0 locks:** `insertItem` commit primitive; `getValue > 0` mechanical check; seed-only gen-1
+  expendability; `CompostReserveModel` replant reserve = 1; P5 registration; input-only bone meal
+  (Gate 0 PASS 2026-08-22)
 
 **Target:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`
 
@@ -527,10 +530,9 @@ incorrectly (task-55 / task-56 / task-57 discipline).
 
 ---
 
-## Gate 0 proposal — **NOT AUTHORIZED**
+## Gate 0 — **COMPLETE (`GATE_0_PASS`)**
 
-Gate 0 is a **separate** read-only audit. Implementation **HOLD** until Gate 0 **PASS** and separate
-implementation authorization.
+See **`task-58-gate0-report.md`** for full evidence. Summary:
 
 | # | Gate 0 must answer |
 | --- | --- |
@@ -545,7 +547,11 @@ implementation authorization.
 | **G0-9** | Commit atomicity: one unit cannot be lost/duplicated if composter changes SELECT→COMMIT |
 | **G0-10** | READY ownership: lock gen-1 **input-only** unless stronger policy proven |
 
-Deliverable: `task-58-gate0-report.md` with `GATE_0_PASS` or `GATE_0_FAIL` per gate.
+**G0 locks incorporated into v1.1:** `ComposterBlock.insertItem` + mirror shrink; mechanical
+`getValue(stack) > 0`; gen-1 expendability = wheat/beetroot seed surplus after replant reserve 1;
+extend `VillageWorkFactsService.refreshNow`; priority **5**; no `extractProduce`.
+
+Implementation remains **HOLD** until **authorize task-58**.
 
 ---
 
@@ -629,7 +635,7 @@ invalidation/refresh hooks.
 | Requirement | Brief status |
 | --- | --- |
 | Brief design only — no production Java | **DONE** (this document) |
-| Gate 0 audit | **NOT AUTHORIZED** — checklist defined |
+| Gate 0 audit | **DONE** — `GATE_0_PASS` (`task-58-gate0-report.md`) |
 | No Minecraft launch | **DONE** |
 | Inherit `D58-1…12` without reopening | **DONE** |
 | `ComposterWorkFacts` + opportunistic executor unified | **DONE** |
@@ -642,8 +648,7 @@ invalidation/refresh hooks.
 | Deliverables + verification plan | **DONE** |
 | Task-57 DO NOT REOPEN | **DONE** |
 
-**Status:** `BRIEF v1` — **AUTHORIZED** (User, 2026-08-22)  
-**Gate 0:** `HOLD` — awaits **authorize task-58 gate 0**  
+**Status:** `BRIEF v1.1` — Gate 0 **PASS** (`task-58-gate0-report.md`)  
 **Implementation:** `HOLD` — awaits **authorize task-58**
 
 **Report path (implementation phase):** `.superpowers/sdd/task-58-report.md`
