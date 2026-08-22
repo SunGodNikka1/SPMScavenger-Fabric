@@ -143,9 +143,6 @@ public final class HarvestCropTargetSelector {
                     pathProbes);
         }
 
-        for (int i = 0; i < shortlistSize; i++) {
-            backoff.recordFailure(candidates.get(i).pos(), gameTime);
-        }
         return new SelectionResult(null, pathProbes);
     }
 

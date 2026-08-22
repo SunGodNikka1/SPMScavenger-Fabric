@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.village.crop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -159,6 +160,59 @@ class HarvestCropTargetSelectorTest {
         assertNull(result.target());
         assertEquals(HarvestCropTargetSelector.MAX_PATH_PROBES, probes.get());
         assertEquals(HarvestCropTargetSelector.MAX_PATH_PROBES, result.pathProbesUsed());
+    }
+
+    @Test
+    void unprobedCandidatesRemainEligibleOnNextScan() {
+        CropBlock carrots = (CropBlock) Blocks.CARROTS;
+        BlockState mature = carrots.getStateForAge(carrots.getMaxAge());
+        BlockPos first = new BlockPos(5, 64, 0);
+        BlockPos second = new BlockPos(5, 64, 3);
+        BlockPos third = new BlockPos(5, 64, 6);
+        BlockPos fourth = new BlockPos(5, 64, 9);
+
+        MapCropWorld world = new MapCropWorld();
+        for (BlockPos crop : List.of(first, second, third, fourth)) {
+            world.putFarmlandAndCrop(crop, mature);
+            world.putSolid(crop.west().below());
+        }
+
+        HarvestTargetBackoff backoff = new HarvestTargetBackoff();
+        long now = 100L;
+        AtomicInteger probes = new AtomicInteger();
+
+        HarvestCropTargetSelector.SelectionResult scanOne = HarvestCropTargetSelector.selectAt(
+                new BlockPos(0, 64, 0),
+                null,
+                world,
+                new SimpleContainer(9),
+                alwaysManaged(),
+                backoff,
+                now,
+                (mob, approaches) -> {
+                    probes.incrementAndGet();
+                    return null;
+                });
+
+        assertNull(scanOne.target());
+        assertEquals(HarvestCropTargetSelector.MAX_PATH_PROBES, scanOne.pathProbesUsed());
+        assertTrue(backoff.isActive(first, now + 1));
+        assertTrue(backoff.isActive(second, now + 1));
+        assertTrue(backoff.isActive(third, now + 1));
+        assertFalse(backoff.isActive(fourth, now + 1));
+
+        HarvestCropTargetSelector.SelectionResult scanTwo = HarvestCropTargetSelector.selectAt(
+                new BlockPos(4, 64, 9),
+                null,
+                world,
+                new SimpleContainer(9),
+                alwaysManaged(),
+                backoff,
+                now + 1,
+                (mob, approaches) -> null);
+
+        assertNotNull(scanTwo.target());
+        assertEquals(fourth, scanTwo.target().cropPos());
     }
 
     private static ManagedCropDomainContext alwaysManaged() {

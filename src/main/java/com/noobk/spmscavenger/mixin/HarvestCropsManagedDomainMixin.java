@@ -53,7 +53,6 @@ public abstract class HarvestCropsManagedDomainMixin {
         BlockPos target = OptionalHarvestCropTargetResolver.resolveTarget(this).orElse(null);
         if (mob == null || target == null || !(mob.level() instanceof ServerLevel level)) {
             HarvestCropGuardCompatibility.recordTargetResolutionFailed();
-            cir.setReturnValue(false);
             return;
         }
         if (HarvestCropVetoPolicy.shouldVeto(mob, level, target)) {

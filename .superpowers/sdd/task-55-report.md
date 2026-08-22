@@ -1,6 +1,6 @@
 # Task 55 report: V3-C committed harvest→replant episode
 
-**Status:** `DONE_WITH_CONCERNS` (R1 repair complete)  
+**Status:** `STATIC-BEHAVIORAL ACCEPT` (closure repair complete)  
 **Slice:** D-VR-079 / D-VR-079-A1 / D-VR-083 (budget contract)  
 **Brief:** `.superpowers/sdd/task-55-brief.md` v2.1  
 **Gate 0:** `.superpowers/sdd/task-55-gate0-report.md` — PASS  
@@ -17,6 +17,10 @@ F8 backpack banking via `ContainerMerge.insert` remainder semantics, and `VILLAG
 compatibility diagnostics parity with task-54, and behavioral transaction harness sharing the
 production commit kernel.
 
+**Closure repair (CLOSE-1/2):** crop continuation mixin fail-open on unresolved compatibility
+evidence; selector backoff limited to concretely failed positions only (no unprobed shortlist
+marking).
+
 ## User implementation locks (applied)
 
 | Lock | Implementation |
@@ -31,7 +35,7 @@ production commit kernel.
 | Command | CWD | Result |
 | --- | --- | --- |
 | `.\gradlew.bat compileJava` | `Projects/SPMScavenger-1.21.1-Fabric` | **PASS** `CONFIRMED` |
-| `.\gradlew.bat test` | `Projects/SPMScavenger-1.21.1-Fabric` | **1475 tests, 0 failures** `CONFIRMED` |
+| `.\gradlew.bat test` | `Projects/SPMScavenger-1.21.1-Fabric` | **1478 tests, 0 failures** `CONFIRMED` |
 
 ### Behavioral proof (R1-5 primary evidence)
 
@@ -51,6 +55,9 @@ production commit kernel.
 | All inaccessible → backoff, no admission target | `HarvestCropTargetSelectorTest.allInaccessibleYieldsNoTargetAndBacksOff` | `CONFIRMED` |
 | Backoff active / expires | `HarvestCropTargetSelectorTest.backoffSkipsCropUntilExpiry` | `CONFIRMED` |
 | Path probes hard-bounded | `HarvestCropTargetSelectorTest.pathProbesAreHardBounded` | `CONFIRMED` |
+| Unprobed crops not backed off; eligible next scan | `HarvestCropTargetSelectorTest.unprobedCandidatesRemainEligibleOnNextScan` | `CONFIRMED` |
+| Continuation fail-open on unresolved target | `HarvestCropsManagedDomainMixinContinuationTest.unresolvedContinuationDoesNotForceHostFalse` | `CONFIRMED` |
+| Positive managed domain still vetoes continuation | `HarvestCropsManagedDomainMixinContinuationTest.positiveManagedDomainStillVetoesContinuation` | `CONFIRMED` |
 | Exact-self observation exclusion | `ActivityObservationServiceExclusionTest` (4 cases) | `CONFIRMED` |
 | Crop guard compat session lifecycle | `HarvestCropGuardCompatibilityTest` (4 cases) | `CONFIRMED` |
 
@@ -85,6 +92,8 @@ production commit kernel.
 | R1-3 | `ActivityObservationService.observeExcluding` (exact goal instance); removed class-wide `VILLAGE_WORK` filter from admission |
 | R1-4 | `HarvestCropGuardCompatibility` — proactive host shape probe, warmup WARN, `recordTargetResolutionFailed` on unresolved host target |
 | R1-5 | `CropHarvestTransaction.Operations` + `commitKernel` shared by production `ServerLevel` adapter and behavioral tests |
+| CLOSE-1 | `HarvestCropsManagedDomainMixin` continuation — record diagnostic, leave host result unchanged when mob/target/level unresolved |
+| CLOSE-2 | Removed blanket shortlist backoff; backoff only on concrete failure (no approach, path fail, travel timeout) |
 
 ## Deliverables
 
@@ -111,9 +120,13 @@ production commit kernel.
 
 ## Concerns
 
-1. **Runtime witness deferred** — mixin hook observation, pathfinding in village fields, and multi-mob commit races need live SPM + village fields.
+1. **Runtime witness deferred** — mixin hook observation, pathfinding in village fields, and multi-mob commit races need live SPM + village fields (batched V3 campaign VR-T3).
 2. **Path approach heuristic** — uses adjacent air cells with solid floor; not full collision-shape approach policy from gather.
 3. **Farmland support** — uses `FarmBlock` below crop (public API); not full `canSurvive` (protected).
+
+## Acceptance
+
+**task-55 / V3-C — STATIC-BEHAVIORAL ACCEPT** (closure CLOSE-1/2 green). Runtime VR-T3 remains deferred.
 
 ## Self-review vs brief
 

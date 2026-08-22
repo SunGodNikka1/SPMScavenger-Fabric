@@ -86,6 +86,6 @@ Task 53: complete with concerns (V3-A — VillageScenarioProfile + PlayerMobVill
 
 Task 54: complete / STATIC-BEHAVIORAL ACCEPT (V3-B + R1/R1.2 repair — 1435 tests, 0 failures; owner/share invariant + replacement + stale-placement unit-confirmed; runtime VR-T3g–i UNVERIFIED — deferred to batched V3 campaign)
 
-Task 55: complete with concerns (V3-C + R1 repair — reachability-aware harvest selection, commit-time mobGriefing/loaded revalidation, exact-self activity exclusion, crop-guard compat diagnostics, behavioral transaction harness; 1475 total tests, 0 failures; runtime VR-T3 UNVERIFIED)
+Task 55: STATIC-BEHAVIORAL ACCEPT (V3-C + R1 + closure CLOSE-1/2 — fail-open crop continuation, probe-budget backoff only on concrete failures; 1478 tests, 0 failures; runtime VR-T3 deferred to batched V3 campaign)
 
 No commits unless user requests. No Minecraft launches unless separately approved.
