@@ -16,7 +16,6 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
 
@@ -29,6 +28,19 @@ import java.util.Optional;
  * Deterministic composter ranking from cached facts + mob position (task-58).
  */
 public final class CompostTargetSelector {
+
+    /**
+     * Cheap eligibility before any path probe — loaded, settlement-bound, mechanical input capacity.
+     */
+    @FunctionalInterface
+    public interface CheapComposterFilter {
+        boolean admits(BlockPos pos, BlockPos anchor);
+    }
+
+    @FunctionalInterface
+    interface PathProbe {
+        Path probe(BlockPos pos);
+    }
 
     private CompostTargetSelector() {}
 
@@ -90,44 +102,88 @@ public final class CompostTargetSelector {
                 .ifPresent(facts -> out.add(new SettlementCandidate(identity, facts)));
     }
 
+    /**
+     * Rank eligible composters by distance then stable {@link BlockPos} order, then cap probe budget.
+     * Raw fact list order must not determine which positions receive path probes (CLOSE-58-2).
+     */
+    static List<BlockPos> rankedProbeOrder(
+            List<BlockPos> rawPositions,
+            Vec3 mobPosition,
+            BlockPos anchor,
+            CheapComposterFilter filter) {
+        List<RankedPosition> eligible = new ArrayList<>();
+        for (BlockPos pos : rawPositions) {
+            if (!filter.admits(pos, anchor)) {
+                continue;
+            }
+            eligible.add(new RankedPosition(pos, mobPosition.distanceToSqr(Vec3.atCenterOf(pos))));
+        }
+        eligible.sort(Comparator.comparingDouble(RankedPosition::distanceSq)
+                .thenComparing(candidate -> candidate.pos().toShortString()));
+        return eligible.stream()
+                .limit(CompostTuning.MAX_COMPOSTER_CANDIDATES)
+                .map(RankedPosition::pos)
+                .toList();
+    }
+
+    static Optional<BlockPos> selectReachableComposter(
+            List<BlockPos> probeOrder,
+            PathProbe pathProbe) {
+        int probes = 0;
+        for (BlockPos pos : probeOrder) {
+            probes++;
+            if (probes > CompostTuning.MAX_COMPOSTER_CANDIDATES) {
+                break;
+            }
+            Path path = pathProbe.probe(pos);
+            if (path != null && path.canReach()) {
+                return Optional.of(pos);
+            }
+        }
+        return Optional.empty();
+    }
+
+    static int countPathProbes(List<BlockPos> probeOrder, PathProbe pathProbe) {
+        int probes = 0;
+        for (BlockPos pos : probeOrder) {
+            if (probes >= CompostTuning.MAX_COMPOSTER_CANDIDATES) {
+                break;
+            }
+            probes++;
+            pathProbe.probe(pos);
+        }
+        return probes;
+    }
+
     static Optional<CompostDeliveryPlan> selectInSettlement(
             ServerLevel level,
             Mob mob,
             SettlementIdentity identity,
             ComposterWorkFacts facts,
             CompostExpendabilityPolicy.InsertionOffer delivery) {
-        List<ComposterCandidate> candidates = new ArrayList<>();
-        int[] probes = {0};
-        for (BlockPos pos : facts.composterPositions()) {
-            if (probes[0] >= CompostTuning.MAX_COMPOSTER_CANDIDATES) {
-                break;
-            }
-            if (!level.isLoaded(pos)) {
-                continue;
-            }
-            if (!SettlementBoundsPolicy.within(pos, identity.anchor())) {
-                continue;
-            }
-            BlockState state = level.getBlockState(pos);
-            if (!CompostMechanicalEligibility.canAcceptInput(state)) {
-                continue;
-            }
-            probes[0]++;
-            Path path = pathToComposter(mob, pos);
-            if (path == null || !path.canReach()) {
-                continue;
-            }
-            candidates.add(new ComposterCandidate(pos, path, mob.distanceToSqr(Vec3.atCenterOf(pos))));
-        }
-        if (candidates.isEmpty()) {
+        BlockPos anchor = identity.anchor();
+        Vec3 mobPosition = mob.position();
+        List<BlockPos> probeOrder = rankedProbeOrder(
+                facts.composterPositions(),
+                mobPosition,
+                anchor,
+                (pos, settlementAnchor) -> level.isLoaded(pos)
+                        && SettlementBoundsPolicy.within(pos, settlementAnchor)
+                        && CompostMechanicalEligibility.canAcceptInput(level.getBlockState(pos)));
+
+        Optional<BlockPos> chosen = selectReachableComposter(
+                probeOrder,
+                pos -> pathToComposter(mob, pos));
+        if (chosen.isEmpty()) {
             return Optional.empty();
         }
-        ComposterCandidate best = candidates.stream()
-                .min(Comparator.comparingDouble(ComposterCandidate::distanceSq)
-                        .thenComparing(candidate -> candidate.pos().toShortString()))
-                .orElseThrow();
+        BlockPos composterPos = chosen.get();
+        Path path = pathToComposter(mob, composterPos);
+        if (path == null || !path.canReach()) {
+            return Optional.empty();
+        }
         return Optional.of(new CompostDeliveryPlan(
-                identity, facts, best.pos(), best.path(), delivery));
+                identity, facts, composterPos, path, delivery));
     }
 
     private static Path pathToComposter(Mob mob, BlockPos pos) {
@@ -135,5 +191,5 @@ public final class CompostTargetSelector {
         return navigation.createPath(pos.getX(), pos.getY(), pos.getZ(), 2);
     }
 
-    private record ComposterCandidate(BlockPos pos, Path path, double distanceSq) {}
+    private record RankedPosition(BlockPos pos, double distanceSq) {}
 }

@@ -10,11 +10,15 @@ import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.Comparator;
 import java.util.Optional;
 
 /**
  * Composes protection layers for one-unit compost insertion (task-58 / D-VR-086-A2).
+ *
+ * <p>{@link CompostReserveModel} is the explicit gen-1 authority for wheat/beetroot seed surplus.
+ * {@link com.noobk.spmscavenger.village.trade.SellReserveModel#reservedUnits} returning empty does
+ * not authorize compost spend by itself, but it also must not veto items explicitly modelled by
+ * {@link CompostReserveModel}. Unknown-to-compost materials remain fail-closed.
  */
 public final class CompostExpendabilityPolicy {
 
@@ -73,6 +77,8 @@ public final class CompostExpendabilityPolicy {
             }
         }
         if (cfg != null && SellReserveModel.modelled(stack, backpack, cfg)) {
+            // Sell-reserve applies only to materials it models (logs/planks/sticks). Seeds are
+            // unmodelled for sell and must fall through to CompostReserveModel — never vetoed here.
             var reserved = SellReserveModel.reservedUnits(stack, backpack, cfg);
             if (reserved.isEmpty()) {
                 return Optional.empty();
@@ -120,11 +126,12 @@ public final class CompostExpendabilityPolicy {
         return true;
     }
 
-    private static int compareOffers(InsertionOffer left, InsertionOffer right, Container backpack) {
-        return Comparator.<InsertionOffer>comparingInt(
-                        offer -> CompostReserveModel.disposableUnits(offer.item(), backpack))
-                .reversed()
-                .thenComparingInt(InsertionOffer::slot)
-                .compare(left, right);
+    static int compareOffers(InsertionOffer left, InsertionOffer right, Container backpack) {
+        int surplusLeft = CompostReserveModel.disposableUnits(left.item(), backpack);
+        int surplusRight = CompostReserveModel.disposableUnits(right.item(), backpack);
+        if (surplusLeft != surplusRight) {
+            return Integer.compare(surplusLeft, surplusRight);
+        }
+        return Integer.compare(right.slot(), left.slot());
     }
 }

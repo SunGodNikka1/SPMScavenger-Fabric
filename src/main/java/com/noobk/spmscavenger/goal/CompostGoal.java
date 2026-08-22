@@ -188,9 +188,7 @@ public final class CompostGoal extends Goal {
             return;
         }
         committed = true;
-        terminalOutcome = result.levelAfter() > result.levelBefore()
-                ? CompostTerminalOutcome.COMMITTED
-                : CompostTerminalOutcome.COMMITTED_NO_LEVEL_CHANGE;
+        terminalOutcome = CompostTerminalOutcome.fromCommitResult(result);
         mob.swing(InteractionHand.MAIN_HAND);
         stop();
     }

@@ -7,6 +7,9 @@ import net.minecraft.world.item.Items;
 
 /**
  * Gen-1 primary compost spend authority — wheat/beetroot seed surplus after replant reserve.
+ *
+ * <p>{@link com.noobk.spmscavenger.village.trade.SellReserveModel} empty for seeds is correct
+ * fail-closed for <em>sell</em> funding only; compost spend for supported seeds is owned here.
  */
 public final class CompostReserveModel {
 
