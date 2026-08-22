@@ -8,10 +8,10 @@
 | **Host platform** | Social Player Mobs (`playermob`) v0.86.0 |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `WORKING_FROM_PLAN` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE positive path CLOSED**; **V3 pre-lock LOCKED** (`D-VR-080…083`); **task-52 DONE**; **task-53 (V3-A) IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT (2026-08-20)** |
-| **Status** | `V3-A CLOSED (static)` — **task-53 IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT** (1386 tests). **task-52 (D-VR-084) IMPLEMENTED**. V3-B (task-54) **NOT IMPLEMENTATION-AUTHORIZED**. Runtime witness deferred. |
-| **Nearest frontier** | **Authorize task-54 implementation (V3-B)** — Gate 0 closed; hooks locked. Full implementation **NOT authorized**. |
-| **Last update** | 2026-08-20 (task-54 Gate 0 CLOSED — `ServerLevel.onBlockStateChange` lifecycle; SPM RETURN/HEAD guard; ally fail-closed on unresolved target) |
+| **Mode** | `RFC_DESIGN_WORK_ARTIFACT_ONLY` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E **CLOSED (static)**; **D-VR-085-R1 / D-VR-086-A1 / D-VR-087-A1+TX1 LOCKED** (2026-08-22); V3-D2 + V3-F **brief-ready, not authorized** |
+| **Status** | Tasks 52–57 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1543 tests** at V3-E closure). Canonical workstation awareness is **partial** (task-56 = population/HOME only). Compost design decisions are **locked**; implementation is **NOT AUTHORIZED**. Runtime VR-T3a–m **UNVERIFIED**. |
+| **Nearest frontier** | **BEGIN task-58 / V3-D2 — BRIEF DESIGN ONLY** (shared `PoiTypes.FARMER` workstation evidence per `D-VR-085-R1` + `D-VR-085-A1`). Then task-59 / V3-F brief after D2 Gate 0. No Gate 0 or implementation without separate authorization. |
+| **Last update** | 2026-08-22 (`Agent_Cursor` — `Work the RFC`: lock D-VR-085-R1 Option A, D-VR-086-A1 reserve bridge, D-VR-087-A1+TX1; task-58/59 sequence; V3-D2 facts model) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -35,7 +35,12 @@ Social Player Mobs (`CONFIRMED` — source audit v0.86.0):
 
 - **Can** fight illagers when engaged; use bows, shields, TNT, crystals; flee; eat; loot containers; greet villagers; sleep in beds; open doors; use commanded fake-player item use.
 - **Can now** perceive and remember bounded loaded village POIs and autonomously execute demand-owned vanilla/Trade Everything trade chains through the shipped V1/V2 systems (`RUNTIME_CONFIRMED` only for the recorded VR-T1/VR-T2/V2-TE scenarios).
-- **Still cannot** autonomously consume reputation/discounts, operate `MerchantMenu`, acquire `Bad Omen`, trigger or lead raid defense as a first-class citizen, ring bells tactically, cure zombie villagers, assign workstations, or perform V3 village work.
+- **Can now in production code** enforce ally storage safety, run a committed managed
+  harvest→replant episode, observe bounded population/HOME facts, and deliver bounded population
+  food through tasks 52–57 (`STATIC-BEHAVIORAL ACCEPT`; live V3 behavior remains `UNVERIFIED`).
+- **Still cannot** autonomously consume reputation/discounts, operate `MerchantMenu`, acquire `Bad
+  Omen`, trigger or lead raid defense as a first-class citizen, ring bells tactically, cure zombie
+  villagers, assign workstations, expose canonical read-only workstation awareness, or compost.
 - **Actively conflicts** with “good villager citizen” play: `RaidContainersGoal` loots village chests at priority 3 (`CONFIRMED` — `PlayerMobEntity#registerGoals`).
 
 **Mineflayer comparison:** Mineflayer achieves **scripted** parity for trading, pathing, and combat via plugins (`mineflayer-villager`, `mineflayer-pathfinder`). SPM achieves **reactive** combat and **scavenging** without a planner. Neither equals a human’s full menu/GUI literacy out of the box.
@@ -684,10 +689,9 @@ Minecraft launch.
 
 **Historical frontier (SUPERSEDED):** this section originally pointed to V2 Trading / task-47.
 V2 is now **CLOSED — VR-T2 RUNTIME PASS**. Task-52 (shared `MandatoryOwnership` / `V2-DEF-002`
-repair, `D-VR-084`) is **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT + R1** (2026-08-20). The canonical
-current frontier is **authorize task-53 — V3-A** (`D-VR-080/081/083` `LOCKED`,
-`D-VR-079-A1`/`082-A1`/`084` amended; V3-A `DEPENDENCY-READY / NOT YET IMPLEMENTATION-AUTHORIZED`).
-in `Topic: Phased implementation plan`.
+repair, `D-VR-084`) is **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT + R1** (2026-08-20). Tasks 53–57
+subsequently delivered V3-A/B/C/D1/E static slices. The canonical frontier is now the contested
+V3-D2/F architecture in `Topic: Phased implementation plan`; no task brief is ready or authorized.
 
 ### V2 implementation contract (`IMPLEMENTED + CLOSED` — historical contract retained)
 
@@ -4505,18 +4509,20 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social | **IMPLEMENTED + RUNTIME CLOSED** — task-46 / 1.11.0 (A–D) | VR-T1.5a–c **CLOSED** (2026-08-15) |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | `KnownVillager` held until V4+ consumer; other work moved to V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains**, relationship credit, finished-output projection, optional Trade Everything source | **IMPLEMENTED + CLOSED** — VR-T2 vanilla path and V2-TE positive path runtime-confirmed to recorded scope | **VR-T2 PASS**; **VR-T2k PASS (`V2-DEF-003c-R1`)**. VR-T2l, V2-I, and profiling are **DEFERRED / NON-BLOCKING** |
-| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | **ARCHITECTURE LOCKED + AMENDED / HOLD — not implementation-authorized.** `D-VR-078/080/081/083` stand; `D-VR-079-A1`, `D-VR-082-A1`, `D-VR-084` amend. **task-52 (D-VR-084 `MandatoryOwnership`) IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT (2026-08-20)**; V3-A is **DEPENDENCY-READY / NOT YET IMPLEMENTATION-AUTHORIZED** (no longer blocked on task-52) | VR-T3a–m below; every included capability has a closure row |
+| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | A/B/C/E and D1 are **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (tasks 52–57; 1543 tests). D2+F design **LOCKED** (tasks 58–59 assigned, not authorized). G blocked on 58–59 + batched runtime. | VR-T3a–m below; runtime **UNVERIFIED** until batched campaign |
 | **V4** | Factual site utility + **Place opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**), known traders, utility-driven home promotion and return preference beyond shipped V1.5 return | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
 | **V6** | Player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup, **zombie-villager curing** | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup; curing scenarios to be defined in V6 |
 | **V7** | Advanced community: rescue, repair, transport, settlement projects, group coop, founding through world truth + ordinary perception, repair/build golem | **NOT PRACTICAL** gen-1 | Deferred |
 
-### Canonical V3 implementation contract (`PROPOSED`; RFC synchronization only)
+### Canonical V3 implementation contract (A/B/C/E + D1 static-accepted; D2/F contested)
 
-**Status:** scope, ownership direction, task boundaries, and scenario surface are synchronized.
-Implementation remains unauthorized. V3 is not yet `LOCKED` because profile acquisition/default,
-positive storage-classification evidence, numeric authority placement, and bounded-work budgets are
-unresolved product/architecture decisions.
+**Status:** tasks 52–57 are shipped and statically accepted. Runtime VR-T3 rows remain
+**UNVERIFIED**. The label “V3-D closed” was too broad: task-56 shipped **D1 population/HOME facts**
+and explicitly shipped no workstation fields, while canonical V3 still includes read-only
+workstation awareness. **V3-D2 workstation evidence and V3-F composting are therefore the remaining
+design surface before V3-G.** `D-VR-085…087` are contested by pinned-source review below, not ready
+to become a task brief.
 
 #### Exact scope and disposition
 
@@ -4525,14 +4531,14 @@ unresolved product/architecture decisions.
 | Crop harvesting/replanting | **IN** | One committed harvest→replant episode (`D-VR-079`); no loosely related second goal | V3-C; VR-T3a–c/k |
 | Composting | **IN** | Disposable surplus only; no independent seed appetite; loaded known composter | V3-F; VR-T3d |
 | Population food | **IN** | Support by offering disposable food; no breeding command, bed claim, or Brain mutation | V3-E; VR-T3e |
-| Workstation awareness | **IN, READ-ONLY** | Reuse bounded VillagePerception facts; no place/break/claim/reassign and no second scanner | V3-D; VR-T3f |
+| Workstation awareness | **IN, READ-ONLY** | Shared bounded POI evidence with provenance/age/completeness; executor revalidates block truth; no place/break/claim/reassign and no independent block scanner | V3-D2; VR-T3f |
 | Ally/public storage interaction | **IN, SAFETY GATE** | `D-VR-017`; continuous admission + continuation guard; explicit permission only | V3-A/B; VR-T3g–i |
 | Zombie-villager curing | **DEFERRED TO V6** | Weakness/apple execution and player-credit/relationship bridge are not Village Work | V6; not a VR-T3 closure item |
 
 #### Shared authority and lifecycle
 
 V3 does not create another activity brain. Existing urgent authority and live mandatory progression
-remain above discretionary village work. The planned V3-A admission seam must consume the same
+remain above discretionary village work. The implemented V3-A admission seam consumes the same
 authoritative pending/running work truth used by progression; observing that no executor is active is
 not evidence that mandatory work is idle.
 
@@ -4556,21 +4562,148 @@ familiarity, an active loot goal, or absence of a V3 work candidate.
 
 | Task | Dependencies | Objective | Must happen | Must not happen | Scenarios | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| **V3-A — authority/profile contract** | V1.5 relationship; D-VR-080/**082-A1**/**084**; **V2-DEF-002 repair (task-52, IMPLEMENTED)** | Cross-dimension `VillageScenarioProfile` policy store + `VillageWorkAdmission` that **consumes** the shared discretionary-permission seam + optional `VillageWorkSelector` among V3 intents | Profile explicit, inspectable, cross-dimension consistent; admission refuses through the **same** authority `DiscretionaryActivityDirector` consumes | Profile in dimension-local village memory; HOME/HIGH → ally; `MaterialDemand` alone defines mandatory; **a village-local reconstruction of "mandatory work exists"** | VR-T3j | **DEPENDENCY-READY / NOT YET IMPLEMENTATION-AUTHORIZED** — **task-53**; the shared `MandatoryOwnership` seam (task-52) is implemented, so V3-A is no longer blocked; `VillageWorkAdmission` is a second **consumer** of that seam, not a second publisher |
-| **V3-B — minimum StorageOwnership + host guard** | V3-A; D-VR-012/017/081 | `GlobalPos`-keyed permission registry + classifier; continuous `RaidContainersGoal` guard | Ally uses only mob-owned/shared storage; permissions survive unload/restart | Evict grants on chunk unload/dimension change; naked `BlockPos`; ambiguous double-chest halves | VR-T3g–i | **LOCK-CLEAN** — after V3-A |
-| **V3-C — committed crop episode** | V3-A; pinned host `HarvestCropsGoal` mechanics; **D-VR-079-A1** | One target-bound committed episode over the **managed crop domain**, plus a continuous host-harvest veto inside that domain and direct banking of the episode's own replant-capable drops | Managed mature crop ends replanted or in mandatory bounded repair; episode banks its own replant drops; host destructive harvest cannot bypass the contract inside the domain | Successful managed harvest routinely leaves farmland barren after preemption; **planting supply depends on floor-item pickup**; **veto fires when the domain cannot be positively established** | VR-T3a–c/k, **VR-T3l/m** | **AMENDED — PROPOSED** |
-| **V3-D — workstation awareness** | V3-A; existing `VillagePerception` scheduler/budget | Add bounded loaded job-site/restock facts without another scanner | Facts invalidate when POI/villager state changes and never load chunks | Workstation facts authorize trade, placement, claiming, or mandatory displacement | VR-T3f | **PROPOSED** |
-| **V3-E — population food support** | V3-A; **V3-D** (villager count + HOME capacity facts); disposable-resource policy; existing gift/drop seam | Offer bounded food surplus when population evidence requests support | Revalidate population, target, inventory reserve, and path at handoff | Consume personal/progression reserve; command breeding; loop gifts with no deficit | VR-T3e/j | **PROPOSED** |
-| **V3-F — composting** | V3-A; V3-C reserve ownership; bounded workstation/container fact | Convert only disposable compostable surplus at a loaded known composter | Replant/population/progression reserves survive; interaction terminates on full/invalid composter | Scan/operate every tick; consume reserved seeds; create ownerless bone-meal appetite | VR-T3d/j | **PROPOSED** |
-| **V3-G — integration and closure** | V3-A…F | Static/build gates plus temporary `spm_vr` V3 presets and approved runtime matrix | Every VR-T3 row records must/must-not evidence and semantic-drift review | Replant + one chest row close the whole phase; compile is called behavior proof | VR-T3a–k | **BLOCKED on A/B and separate runtime approval** |
+| **V3-A — authority/profile contract** | V1.5 relationship; D-VR-080/**082-A1**/**084**; **V2-DEF-002 repair (task-52, IMPLEMENTED)** | Cross-dimension `VillageScenarioProfile` policy store + `VillageWorkAdmission` that **consumes** the shared discretionary-permission seam + optional `VillageWorkSelector` among V3 intents | Profile explicit, inspectable, cross-dimension consistent; admission refuses through the **same** authority `DiscretionaryActivityDirector` consumes | Profile in dimension-local village memory; HOME/HIGH → ally; `MaterialDemand` alone defines mandatory; **a village-local reconstruction of "mandatory work exists"** | VR-T3j | **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT** — **task-53** (1386 tests) |
+| **V3-B — minimum StorageOwnership + host guard** | V3-A; D-VR-012/017/081 | `GlobalPos`-keyed permission registry + classifier; continuous `RaidContainersGoal` guard | Ally uses only mob-owned/shared storage; permissions survive unload/restart | Evict grants on chunk unload/dimension change; naked `BlockPos`; ambiguous double-chest halves | VR-T3g–i | **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT** — **task-54** (1435 tests) |
+| **V3-C — committed crop episode** | V3-A; pinned host `HarvestCropsGoal` mechanics; **D-VR-079-A1** | One target-bound committed episode over the **managed crop domain**, plus a continuous host-harvest veto inside that domain and direct banking of the episode's own replant-capable drops | Managed mature crop ends replanted or in mandatory bounded repair; episode banks its own replant drops; host destructive harvest cannot bypass the contract inside the domain | Successful managed harvest routinely leaves farmland barren after preemption; **planting supply depends on floor-item pickup**; **veto fires when the domain cannot be positively established** | VR-T3a–c/k, **VR-T3l/m** | **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT** — **task-55** (1478 tests) |
+| **V3-D1 — population/HOME facts** | V3-A; existing `VillagePerception` scheduler/budget | Settlement-bound adult-villager and HOME-capacity evidence | Facts invalidate on anchor supersede, remain bounded, and never load chunks | Facts become permission or mutate POIs | VR-T3e foundation | **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT** — **task-56** (1499 tests) |
+| **V3-D2 — read-only workstation evidence** | V3-D1; **D-VR-085-R1** + **D-VR-085-A1** | Expose bounded loaded `PoiTypes.FARMER` workstation evidence through one shared factual owner; first consumer is V3-F composter selection | `VillageWorkstationFacts` carries source, observation tick, completeness and invalidation; executor revalidates live block | Executor-local cubic block scan; awareness grants interaction permission | VR-T3f/d | **LOCKED DESIGN / task-58 — NOT AUTHORIZED** |
+| **V3-E — population food support** | V3-A; **V3-D1** (villager count + HOME capacity facts); disposable-resource policy; existing gift/drop seam | Offer bounded food surplus when population evidence requests support | Revalidate population, target, inventory reserve, and path at handoff | Consume personal/progression reserve; command breeding; loop gifts with no deficit | VR-T3e/j | **CLOSED / STATIC-BEHAVIORAL ACCEPT** — **task-57** (1543 tests; **DO NOT REOPEN** unless runtime falsifies locked invariant) |
+| **V3-F — composting** | V3-A; V3-C/E; **V3-D2**; **D-VR-086-A1** + **D-VR-087-A1** + **D-VR-087-TX1** | Spend one actually disposable compostable in one vanilla insertion attempt | Replant/population/progression reserves survive; both level-advance and no-advance attempts terminate; ready composter is left for vanilla extraction | Double debit; treat unchanged level as failure; scan every tick; consume unmodelled stock; claim insertion produced bone meal | VR-T3d/j | **LOCKED DESIGN / task-59 — NOT AUTHORIZED** |
+| **V3-G — integration and closure** | V3-A…F | Static/build gates plus temporary `spm_vr` V3 presets and approved runtime matrix | Every VR-T3 row records must/must-not evidence and semantic-drift review | Replant + one chest row close the whole phase; compile is called behavior proof | VR-T3a–m | **BLOCKED on V3-D2 + V3-F + separate runtime approval** |
 
-No V3 task is implementation-authorized by this synchronization pass.
+Tasks 52–57 are complete (static). **V3-D2 (task-58) and V3-F (task-59)** are design-locked and
+brief-ready; implementation is **NOT AUTHORIZED**. V3-G remains blocked.
 
-**Dependency sequence (amended):** `V2-DEF-002 repair / D-VR-084 → V3-A`; `V3-A → V3-B` (ally
-safety first); `V3-A → V3-C/D`; **`V3-D → V3-E`** (the locked population predicate has no fact
-source without it — D-VR-083 correction); `V3-C + V3-D →
-V3-F`; `V3-A…F → V3-G`. Independent implementation may reorder C/D/E only after V3-A is locked,
-but V3-B must land before any behavior is described as ally-safe.
+**Dependency sequence (amended):** `V2-DEF-002 repair / D-VR-084 → V3-A`; `V3-A → V3-B/C/D1`;
+`V3-D1 → V3-E`; **`V3-D1 → V3-D2`**; **`V3-D2 + V3-C + V3-E → V3-F`**;
+`V3-A…F → V3-G`. Option B (executor-local POI query without D2) is **rejected** — see
+`D-VR-085-R1`.
+
+**Recommended task sequence (`LOCKED` 2026-08-22):**
+
+```text
+task-58 = V3-D2 shared workstation evidence (D-VR-085-R1 + D-VR-085-A1)
+task-59 = V3-F compost executor (D-VR-086-A1 + D-VR-087-A1 + D-VR-087-TX1)
+task-60 = V3-G integration/runtime closure (blocked on 58–59 + batched runtime)
+```
+
+Combining D2+F into one task is **rejected** — workstation evidence closes VR-T3f independently and
+prevents V3-F from owning a second discovery brain.
+
+#### Candidate V3-F implementation contract (`LOCKED DESIGN`; tasks 58–59 sequence assigned)
+
+**Frontier:** **BEGIN task-58 brief** (V3-D2) is the nearest step. V3-F brief follows D2 Gate 0.
+`D-VR-085-R1`, `D-VR-086-A1`, and `D-VR-087-A1`+`TX1` are **locked** (2026-08-22). Gate 0 and
+implementation remain **NOT AUTHORIZED**.
+
+**Evidence baseline (`CODE_CONFIRMED` unless noted):**
+
+| Probe | Result |
+| --- | --- |
+| Compost executor in `src/main/java` | **NOT FOUND** — no `ComposterBlock` / `CompostGoal` references |
+| `VillageWorkFacts` fields | Population/HOME capacity only — **no composter positions** (`VillageWorkFacts.java`) |
+| Composter as villager POI | **CONFIRMED** — pinned `PoiTypes.java:110` registers `Blocks.COMPOSTER` as `PoiTypes.FARMER`; `VillagerProfession.java:35–40` binds Farmer to it. Task-56 merely does not observe it yet. |
+| Vanilla insertion | **CONFIRMED** — pinned `ComposterBlock.insertItem`: when `LEVEL < 7` and item is compostable, `addItem(...)` is attempted and the supplied stack is then shrunk by exactly one even when the probabilistic level roll fails |
+| Vanilla production/extraction | **CONFIRMED** — level 7 schedules a 20-tick transition to level 8; bone meal is created only by separate `extractProduce(...)`, not by insertion |
+| Existing reserve APIs | **PARTIAL** — population-food and survival nutrition are quantified; sell protection is largely logs/planks/sticks; crop feasibility is not yet one general per-stack compost-disposable quantity |
+| P4 registration order (`SpmScavenger.java`) | `PlaceTorchGoal` → `VillageHarvestEpisodeGoal` → `PopulationFoodSupportGoal` — compost must register **after** both village-work siblings |
+| Profile gate | `VillageWorkAdmission` permits **`VILLAGE_ALLY` only** (`VillageWorkAdmission.java:40`) |
+| Bounded enumeration lesson (task-57) | **bounded K sample → deterministic ordering within returned sample** — not globally nearest K |
+
+**Depends on (CLOSED / STATIC-BEHAVIORAL ACCEPT):** task-52 (`MandatoryOwnership`) · task-53
+(`VillageWorkAdmission`, `VILLAGE_WORK`) · task-54 (storage guard — orthogonal) · task-55
+(`HarvestCropTargetSelector`, `CropReplantSemantics`, replant reserve) · task-56 (settlement anchor +
+bounds — read-only) · task-57 (`PopulationFoodExpendabilityPolicy`, episode shape, `mobGriefing`
+gate).
+
+**Candidate deliverable after decision:** priority-4 `VillageCompostEpisodeGoal` (name provisional)
++ `CompostExpendabilityPolicy` + a target selector consuming either shared D2 evidence or the
+explicitly selected local-POI alternative + admission wrapper + episode cooldown (RET-1).
+
+```text
+  Village-work observation owner                       VillageCompostEpisodeGoal (P4)
+  ┌──────────────────────────────┐                    ┌──────────────────────────────┐
+  │ bounded loaded FARMER POIs   │  aged evidence     │ VillageWorkAdmission         │
+  │ source/tick/completeness     │ ─────────────────► │ CompostExpendabilityPolicy   │
+  │ invalidation + anchor scope  │                    │ CompostTargetSelector        │
+  └──────────────────────────────┘                    │ live block revalidation      │
+            ▲                                         └──────────────┬───────────────┘
+            │ one shared workstation fact owner                      │ one insertion attempt
+            │                                                        ▼
+            │                                         vanilla consumes one eligible item;
+            │                                         level advancement is probabilistic
+```
+
+**Candidate episode shape (`D-VR-087-A1` — mirrors task-57 economy):**
+
+```text
+PATHING → PREPARE → COMMIT (one vanilla insertion attempt) → cooldown
+```
+
+- `mobGriefing` hard gate at `canUse`, `canContinueToUse`, and `COMMIT` (task-57 precedent).
+- **One composter, one compostable item (count 1)** per episode — no multi-stack drain loop.
+- Revalidate at `PREPARE`/`COMMIT`: block still `ComposterBlock`, `LEVEL < 7`, still loaded + within
+  settlement bounds, the same item remains disposable, mandatory claim still absent.
+- **One mutation owner:** vanilla `insertItem(...)` shrinks the supplied stack. The adapter must not
+  independently debit the same unit. Gate 0 must pin whether the call receives the live owned slot
+  or uses an atomic project-owned transaction; double consumption fails V3-F.
+- **Probabilistic result:** consuming one eligible item while level remains unchanged is vanilla
+  success, not a retryable failure. The episode terminates and backs off either way.
+- **Bone meal:** insertion does not create it. Level 7 becomes ready level 8 after a scheduled tick;
+  separate extraction creates the item. Gen-1 does not extract, path to, or create demand for it.
+
+**P4 contention:** compost registers **after** harvest and population-food goals so higher-priority
+village-work siblings win equal-tick `canUse()` races. `PlaceTorchGoal` co-tenancy remains a
+documented `RUNTIME_QUESTION` (task-57); not reopened in V3-F unless new evidence demands it.
+
+**Gate 0 state:** pinned source has resolved POI identity, `COMPOSTABLES`, `LEVEL`, probabilistic
+insertion, stack shrink, scheduled readiness and extraction semantics. Still mandatory before a
+brief can lock: map an atomic inventory/block transaction with exactly one debit; define a shared
+per-stack disposable quantity across survival, progression/trade, replant and population needs;
+and choose the shared D2 fact owner or explicitly accept the local-POI duplication.
+
+**Must happen (static acceptance):** with proven disposable surplus and a reachable level `< 7`
+composter, exactly one eligible unit is consumed in one insertion attempt; both level-advanced and
+level-unchanged outcomes terminate; all higher reserves survive.
+
+**Must not happen:** double debit; unchanged level treated as failure/retry; reserved or unmodelled
+stock composted; bone meal attributed to insertion; unloaded/unknown target used; independent cubic
+block scan or per-tick discovery without backoff.
+
+**Authorization ladder (architecture locked 2026-08-22):**
+
+| Gate | User phrase | Status |
+| --- | --- | --- |
+| Architecture | **Work the RFC** — `D-VR-085-R1`, `D-VR-086-A1`, `D-VR-087-A1`+`TX1` | **DONE** |
+| Brief design — D2 | **BEGIN task-58 / V3-D2 — BRIEF DESIGN ONLY** | **NEXT** |
+| Brief design — F | **BEGIN task-59 / V3-F — BRIEF DESIGN ONLY** (after D2 Gate 0) | blocked on D2 brief |
+| Gate 0 / implementation | Separate authorization per task | **NOT READY** |
+
+**Out of scope for the compost executor:** `VillageWorkSelector` general arbitration · bone-meal
+extraction/application goal · V3-G runtime datapack · PlaceTorch contention fix. Shared read-only
+workstation evidence belongs to V3-D2 if Option A is selected, not to the executor itself.
+
+#### V3-F — MAIBS behavioural prediction (pre-implementation; `UNVERIFIED`)
+
+| Time | Predicted observable | Failure / falsifier |
+| --- | --- | --- |
+| `T0` | Ally holds wheat surplus after replant + nutrition reserves; bounded scan finds loaded composter within settlement bounds | Compost admits with only seeds in backpack; scan loads chunks or runs every tick |
+| `T+10` | Mob paths to one composter while no mandatory owner active | Mandatory gather/trade still running but compost wins; harvest episode preempted incorrectly |
+| `T+60` | At reach, exactly one eligible unit is consumed; level may advance or remain unchanged; episode terminates in both cases | Double debit; unchanged level causes immediate retry/orbit; reserve broken |
+| `T+200` | Episode ends; cooldown prevents immediate re-insert; reserves re-evaluated | Endless compost loop with no surplus; bone meal registered as new demand |
+| `T+1200` | Composting remains rare; a level-8 composter may remain ready until a vanilla farmer/player extracts it | Compost starves crop/population work; insertion is falsely credited with producing bone meal |
+
+**Strongest objection:** P4 `PlaceTorchGoal` may win equal-priority races and delay compost
+indefinitely — acceptable for gen-1 (compost is lowest village-work priority); document in VR-T3d
+notes, do not fix torch contention in the compost task without product decision.
+
+**Alternatives considered for target discovery (`D-VR-085-R1`):**
+
+| Option | Benefit | Failure | Disposition |
+| --- | --- | --- | --- |
+| **A — shared D2 `PoiTypes.FARMER` evidence; executor revalidates live block** | One factual workstation owner; closes canonical workstation-awareness scope; bounded/provenanced evidence | Cache age/completeness surface | **`LOCKED` (`D-VR-085-R1`)** |
+| **B — executor-local bounded `PoiTypes.FARMER` query** | Smaller slice | Duplicates discovery; leaves D2 open | **REJECTED** |
+| **C — executor-local cubic block scan** | Direct block truth | Ignores POI; volumetric cost | **REJECTED** |
 
 #### V3 scenario parity and closure matrix
 
@@ -4579,15 +4712,14 @@ but V3-B must land before any behavior is described as ally-safe.
 | **VR-T3a** | Managed mature crop, seed available, reachable farmland | Mob paths, harvests, and leaves the same managed position replanted in one committed episode | A visible successful harvest ends as bare farmland | `UNVERIFIED` — V3-C |
 | **VR-T3b** | Combat/command/shelter interruption before interaction | No world mutation occurs; retained candidate is discarded/revalidated after interruption | Old path/target resumes blindly; crop removed before authority permits commit | `UNVERIFIED` — V3-C |
 | **VR-T3c** | Seed/support/crop changes before commit or replant write fails | Preflight aborts without harvest; if failure follows mutation, mandatory bounded repair/reacquisition owns cleanup | Discretionary explore/trade starts while managed farmland remains an owned repair gap | `UNVERIFIED` — V3-C |
-| **VR-T3d** | Surplus compostables and loaded known composter | Bounded interaction consumes only disposable surplus and terminates/revalidates | Replant/population/progression reserve is composted; unknown/unloaded composter is used | `UNVERIFIED` — V3-F |
-| **VR-T3e** | Population food deficit and eligible villager | Disposable food is delivered once, then deficit/target/inventory are re-resolved | Direct breeding command, bed claim, reserve violation, or endless gifting | `UNVERIFIED` — V3-E |
-| **VR-T3f** | Workstation claimed/unclaimed, villager sleeps/restocks, POI unloads | Read-only fact updates through bounded perception and invalidates stale availability | Chunk load, second scanner, workstation mutation, or awareness becoming trade permission | `UNVERIFIED` — V3-D |
+| **VR-T3d** | Proven disposable compostable and loaded known composter at level `< 7` | Exactly one unit is consumed; both advanced and unchanged levels terminate/back off; later level-8 readiness remains vanilla world truth | Double debit; unchanged level loops; higher reserve is composted; insertion is claimed to produce bone meal | `UNVERIFIED` — V3-F (contested/unassigned) |
+| **VR-T3e** | Population food deficit and eligible villager | Disposable food is delivered once, then deficit/target/inventory are re-resolved | Direct breeding command, bed claim, reserve violation, or endless gifting | `UNVERIFIED` runtime — V3-E **STATIC-BEHAVIORAL ACCEPT** (task-57) |
+| **VR-T3f** | Farmer workstation claimed/unclaimed, villager sleeps/restocks, POI unloads | Shared bounded `PoiTypes.FARMER` evidence records provenance/age/completeness and invalidates stale availability; consumer revalidates live block | Chunk load, parallel block scanner, workstation mutation, or awareness becoming trade permission | `UNVERIFIED` — V3-D2 (contested/unassigned) |
 | **VR-T3g** | `VILLAGE_ALLY` + `VILLAGE_PUBLIC` container | Host `RaidContainersGoal` cannot admit or continue looting it | HOME/HIGH alone is used as permission; container opens/continues looting | `UNVERIFIED` — V3-A/B; supersedes old VR-T1.5d wording |
 | **VR-T3h** | `VILLAGE_ALLY` + `UNKNOWN` ownership | Fail closed and leave container untouched | Missing evidence is interpreted as public access or permission | `UNVERIFIED` — V3-B |
 | **VR-T3i** | Explicit mob-owned/shared storage and non-ally control | Explicitly permitted ally access may proceed; non-ally host behavior remains unchanged | Blanket goal strip or ally denial despite positive permission | `UNVERIFIED` — V3-B |
 | **VR-T3j** | Live/pending mandatory progression while village work is available | Mandatory work retains authority; village work waits and later re-resolves | Idle observation or Opinion preference displaces pending mandatory work | `UNVERIFIED` — V3-A/E/F |
 | **VR-T3k** | Two mobs select one crop; first changes it | First commits; second detects invalidation and reacquires/abandons without mutation | Double break/replant, stale target loop, or persistent global crop reservation | `UNVERIFIED` — V3-C |
-
 | **VR-T3l** | Managed-domain crop, mob hungry (`wantsFood()`), V3 admission refused | Host `HarvestCropsGoal` is vetoed at that position; the field stays planted; the mob's own food behaviour (`HuntForFoodGoal`, foraging) is unaffected | Host destructive harvest runs inside the managed domain; or the veto extends to wilderness crops and suppresses stock SPM food behaviour | `UNVERIFIED` — V3-C (D-VR-079-A1) |
 | **VR-T3m** | Repeated managed harvest episodes over many cycles | Replant stock is sustained by the episode's **own** banked drops; a crop whose pinned drops cannot guarantee a planting item pauses managed harvest instead of draining the reserve | Planting supply is recovered via floor-item pickup; a field is harvested down to a barren state because the reserve ran out mid-episode | `UNVERIFIED` — V3-C (F8) |
 
@@ -4607,26 +4739,28 @@ User): `D-VR-082` → `D-VR-082-A1`, `D-VR-079` → `D-VR-079-A1`, plus new `D-V
 | **D-VR-081** | Storage permission keyed by **`GlobalPos`**; **preserve** on chunk unload, mob dimension change, and server restart; **delete** on explicit revoke, container destroyed/replaced, mob permanent removal. Double chests canonicalize to one logical container key. Continuous ally guard on `RaidContainersGoal`. |
 | **D-VR-082** | V3 executor goals at **priority 4**. `VillageWorkAdmission` blocks when **any live mandatory owner** exists (not merely `MaterialDemand`). Optional `VillageWorkSelector` chooses among V3 intents — **not** a parallel `VillageWorkDirector`; subordinate to village orchestration (`VillageInteractionDirector` when shipped). |
 | **D-VR-083** | **Budget contract `LOCKED`**; numeric constants **`PROVISIONAL` / `UNVERIFIED`** until profiling. Population food support candidate when `adultVillagerCount ≥ 2` **and** `currentFreeHomeCapacity > 0` on **FRESH + COMPLETE** facts (**D-VR-083-A1** — vanilla vacancy, not `totalBeds − villagers`). |
-
 | **D-VR-084** | **NEW.** `MandatoryOwnership` — one shared discretionary-permission authority with two inputs (running-activity truth + **published** pending claims) and two consumers (`DiscretionaryActivityDirector`, `VillageWorkAdmission`). Demand never creates authority; a claim does, and **a claim may never be refreshed by the continued existence of the same demand**. |
 | **D-VR-082-A1** | **AMENDS D-VR-082.** Admission **consumes** `DiscretionaryEligibility` rather than re-deriving mandatory truth from a five-source list. `VILLAGE_TRADE` joins `blocksDiscretionaryChoice`. New `ActivityClass.VILLAGE_WORK` blocks a fresh discretionary selection while running. Priority 4 is **shared with `PlaceTorchGoal`**, and the `MAINTENANCE`/`VILLAGE_WORK` blocking asymmetry is deliberate. |
 | **D-VR-079-A1** | **AMENDS D-VR-079.** Defines the **managed crop domain** without `SettlementRelationship`; requires a continuous host-`HarvestCropsGoal` veto inside it that **fails toward stock** when the domain cannot be positively established; requires the episode to bank its own replant-capable drops (F8), with crop-specific reserve accounting. |
 
-**Phase architecture lock:** V3 mechanism design is **LOCKED** through D-VR-078/080/081/083 and
-**amended** through D-VR-079-A1 / D-VR-082-A1 / D-VR-084. The shared `MandatoryOwnership` authority
-(D-VR-084) — the V3-A admission seam — is **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT** as task-52
-(2026-08-20), including the `V2-DEF-002` repair. **V3-A is therefore `DEPENDENCY-READY / NOT YET
-IMPLEMENTATION-AUTHORIZED`**: its seam dependency is satisfied, only the implementation authorization
-is missing. This does not reopen V2 as a phase; the shared-authority repair was recorded as the
-V3-A prerequisite that task-52 discharged.
+**Phase architecture status:** shared authority and V3-A/B/C/D1/E are **IMPLEMENTED /
+STATIC-BEHAVIORAL ACCEPT** in tasks 52–57. This does not reopen V2 as a phase. Canonical V3 remains
+open because D2 workstation awareness and F composting are unresolved, and G runtime closure is
+unverified. `D-VR-085…087` were not covered by the earlier lock and are contested below.
 
-**Task renumbering (User, 2026-08-19).** `task-52` was never authorized or created, so the numbering
-is repurposed rather than shifted. The shared authority repair is **not** an internal subtask of
-V3-A — D-VR-084 now has two consumers and deserves its own boundary and acceptance report:
+**Task numbering history (User, 2026-08-19; synchronized 2026-08-21).** The shared authority repair
+remained its own task because it has two consumers. Tasks 52–57 are completed static slices:
 
 ```text
-task-52 = MandatoryOwnership / V2-DEF-002 repair   (IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT + R1, 2026-08-20)
-task-53 = V3-A        task-54 = V3-B        ... V3-C/D/E/F/G follow
+task-52 = MandatoryOwnership / V2-DEF-002 repair
+task-53 = V3-A profile + admission
+task-54 = V3-B storage ownership/guard
+task-55 = V3-C committed crop episode
+task-56 = V3-D1 population/HOME facts (not workstation awareness)
+task-57 = V3-E population food support
+task-58 = V3-D2 shared workstation evidence (LOCKED assignment — not authorized)
+task-59 = V3-F compost executor (LOCKED assignment — not authorized)
+task-60 = V3-G integration/runtime closure (blocked)
 ```
 
 **Runtime sequencing (User, 2026-08-19).** D-VR-084 gets **automated behavioural acceptance now and
@@ -4635,12 +4769,11 @@ change, but "unit tests cannot show a mob stopped wandering" implies a *stronger
 model*, not an immediate launch:
 
 ```text
-D-VR-084 architecture LOCKED
-        -> implement shared MandatoryOwnership + repair V2-DEF-002   (task-52 — DONE, 2026-08-20)
-        -> automated behavioural / static acceptance                  (DONE — 1357 tests)
-        -> V3-A (task-53)                                            (DEPENDENCY-READY / NOT YET IMPLEMENTATION-AUTHORIZED)
-        -> V3-B/C/D/E/F
-        -> ONE later batched runtime campaign, including the D-VR-084 witness   (runtime witness stays DEFERRED)
+tasks 52–57 static acceptance
+        -> D-VR-085-R1 / D-VR-086-A1 / D-VR-087-A1+TX1 LOCKED (2026-08-22)
+        -> task-58 V3-D2 shared workstation evidence (brief next)
+        -> task-59 V3-F compost executor
+        -> ONE later batched runtime campaign, including D-VR-084 witness
 ```
 
 ### Legacy phase map (superseded)
@@ -4699,20 +4832,19 @@ level lane receives the global query slot;
 stable memory rather than repeated new identities. Runtime query counts and anchor sequences are
 required evidence; code/static tests cannot confirm this timeline.
 
-### V3 — Village Work behavioral prediction (`D-VR-078/079`; pre-implementation)
+### V3 — Village Work behavioral prediction (`D-VR-078/079`; synchronized after tasks 52–57)
 
-**Evidence baseline.** `CODE_CONFIRMED`: pinned SPM `HarvestCropsGoal` is priority 6, MOVE+LOOK,
-admits only while `wantsFood()`, removes the ripe crop, banks edible drops, and spills non-food drops
-such as seeds. `CODE_CONFIRMED`: addon/host production currently has no `VillageScenarioProfile` or
-`StorageOwnership` authority (three negative probes recorded in `D-VR-017`). Therefore every V3
-mechanism below is `PROPOSED`; physical behavior is `UNVERIFIED` until implementation plus approved
-runtime evidence.
+**Evidence baseline.** The original pre-implementation prediction is retained below as the MAIBS
+contract. `CODE_CONFIRMED`: tasks 52–57 now implement shared mandatory ownership, ally profile and
+admission, storage safety, committed harvest→replant, population/HOME facts, and population food.
+Task-56 does **not** implement workstation evidence. V3-F is contested. All physical behavior and
+performance claims remain `UNVERIFIED` until an approved runtime campaign.
 
 | Layer | Result |
 | --- | --- |
 | Intended behavior | An ally performs bounded village work without displacing urgent/mandatory activity, degrading managed fields, stealing uncertain storage, or inventing permission from Opinion/attachment |
-| Current mechanism | Host can harvest food crops but cannot replant; village perception/relationship and V2 mandatory trade exist; V3 profile/storage/work executors do not |
-| Planned mechanism | V3-A admission **consuming shared `MandatoryOwnership`** (`D-VR-084`); V3-B continuous safety guard; V3-C committed harvest→replant episode **+ managed-domain host veto + own-drop banking** (`D-VR-079-A1`); V3-D bounded read-only facts **incl. villager count / HOME capacity**; V3-E/F disposable-surplus work |
+| Current mechanism | V3-A/B/C/D1/E **shipped (static)**; V3-D2 absent; V3-F contested; runtime witness batched |
+| Planned mechanism | Resolve shared workstation evidence, then implement a vanilla-correct one-attempt compost episode; close only through scenario parity and batched runtime |
 | Predicted player-visible behavior | During genuine idle windows the mob performs one legible village job, finishes or safely invalidates it, then re-resolves; combat/commands/mandatory progression remain visibly dominant |
 | Failure boundary | Any post-harvest bare managed farmland, UNKNOWN-container opening, mandatory-work displacement, stale workstation path, or surplus loop fails the design |
 | Confidence | Architecture direction `DOCUMENTATION_CONFIRMED`; behavior/performance `UNVERIFIED` |
@@ -4757,9 +4889,9 @@ discretionary village work. V3 goals at priority **4** sit below gather/craft/sm
 
 | Time | Expected physical loop | Re-evaluation / invalidation |
 | --- | --- | --- |
-| `T0` | No urgent/mandatory owner; bounded facts expose one crop/workstation/food/composter candidate | Profile, permission, reserves, loaded target, path preconditions checked |
+| `T0` | No urgent/mandatory owner; bounded facts expose one crop/food candidate; future shared D2 may expose a workstation candidate | Profile, permission, reserves, evidence age/completeness, loaded target and path preconditions checked |
 | `T+10` | Mob begins path; player sees one intelligible job target | Combat/command/mandatory demand cancels path with no world mutation |
-| `T+60` | At reach, crop episode revalidates and commits harvest→replant, or support/food/compost action revalidates once | Moved villager, changed crop, lost reserve, stale POI, full/invalid composter aborts cleanly |
+| `T+60` | At reach, crop or food episode revalidates once; future compost consumes one eligible unit even if its probabilistic level roll does not advance | Moved villager, changed crop, lost reserve, stale POI, full/invalid composter aborts cleanly; unchanged level must not loop |
 | `T+200` | Job terminates; authority and needs are re-resolved before another village action | No remembered Path, stale entity, or “work because work happened” appetite survives |
 | `T+1200` | Repeated work remains bounded by real deficits/surplus and perception cadence | Empty/blocked scans back off; multiple mobs lose stale candidates rather than duplicate mutation |
 
@@ -4781,6 +4913,9 @@ discretionary village work. V3 goals at priority **4** sit below gather/craft/sm
 | Two mobs path to one crop; second arrives after first replants and tries to harvest age 0 | `RUNTIME_QUESTION`, bounded by arrival revalidation | VR-T3k: observe second abandon/reacquire without breaking replacement |
 | Repeated population changes cause approach→abort cycles near villagers | `RUNTIME_QUESTION` | VR-T3e multi-mob run: measure retries and require bounded backoff/no food loss |
 | Composter/workstation perception dominates scans at 50+ mobs | `RUNTIME_QUESTION` | Profile query counts/tick cost at 1/10/50/100 mobs before any performance claim |
+| Low-chance compostable is consumed but the level does not rise | `ACCEPTABLE_STEPPING_STONE` only for one attempt plus cooldown; this is vanilla semantics | VR-T3d: exactly one debit and termination, not rollback or immediate retry |
+| Composter reaches level 8 and remains ready because gen-1 does not extract | `ACCEPTABLE_STEPPING_STONE`, bounded visible world state | VR-T3d: farmer/player may extract; SPM creates no phantom bone-meal demand |
+| Two mobs select one composter and insert sequentially | `RUNTIME_QUESTION` | VR-T3d multi-mob: each COMMIT revalidates level/reserve; no double debit or stale loop |
 | Managed crop is harvested, combat fires, field remains bare while mob fights/explores | `ARCHITECTURE_DEFECT` | VR-T3b/c must make this impossible in the normal path and retain bounded repair after exceptional failure |
 | Ally opens UNKNOWN container because classifier returned no row | `ARCHITECTURE_DEFECT` | VR-T3h must prove UNKNOWN denial in admission and continuation |
 
@@ -4792,17 +4927,10 @@ observable and revalidated.
 creates ally/storage permission; UNKNOWN permits loot; village work suppresses pending mandatory
 progression; awareness scans load chunks or run unbounded every tick.
 
-**MAIBS-1 result (revised 2026-08-19):** `UNVERIFIED — PRE-IMPLEMENTATION HOLD`. The four original
-hold items — profile acquisition, positive storage classification, numeric admission placement, and
-scan/backoff budgets — are now pinned by `D-VR-080…083`. The hold **persists for different reasons**,
-surfaced by a code-evidenced review (`Agent_Claude` + User):
-
-1. admission must consume shared `MandatoryOwnership` (`D-VR-084`), which subsumes the still-`OPEN`
-   `V2-DEF-002` pending-owner defect — now a V3-A prerequisite;
-2. every V3 executor needs an `ActivityClass` pin or it reads `UNKNOWN_ACTIVE` and silently
-   suppresses all Opinion discretionary work (`D-VR-082-A1`);
-3. the managed crop domain needs a host-goal veto that the mixin-scope table said was unnecessary,
-   and the replant loop does not close without own-drop banking (`D-VR-079-A1`, F8).
+**MAIBS-1 result (synchronized 2026-08-21):** tasks 52–57 have statically discharged the original
+architecture holds. Runtime remains `UNVERIFIED`. V3 cannot lock/close yet because shared workstation
+evidence versus local POI discovery is undecided, compost reserve quantity and transaction ownership
+are not pinned, and the runtime scenario family has not executed.
 
 VR-T3a–m are the falsifying runtime family; no runtime launch is authorized by this RFC pass.
 
@@ -5041,7 +5169,7 @@ registering TRADE before feasibility exists; a dedicated P3 trade goal that igno
 **Accepted:** `ShelterThreatPolicy.NEARBY_HOSTILE` (Raider as `Enemy`) ejects coward EVACUATE — no parallel raid threat system gen-1.
 **Rejected:** Disabling shelter override during raids globally (would trap mobs in beds while pillagers kill villagers).
 
-### D-VR-017: `VillageScenarioProfile` gates ally behaviour (`LOCKED`, implementation absent)
+### D-VR-017: `VillageScenarioProfile` gates ally behaviour (`LOCKED`, implemented/static accepted)
 
 **Status:** `LOCKED` for authority semantics (User synchronization directive, 2026-08-19);
 production wiring per **D-VR-080** (profile store) and **D-VR-081** (permission registry).
@@ -5063,13 +5191,12 @@ AND ownership in {VILLAGE_PUBLIC, FOREIGN, UNKNOWN}
     → refuse admission / continuation (fail closed)
 ```
 
-**Production truth (`CODE_CONFIRMED` by three negative probes, 2026-08-19):** no
-`VillageScenarioProfile`, `VILLAGE_ALLY`, `StorageOwnership`, or `VILLAGE_PUBLIC` production authority
-exists in addon `src/main`, pinned SPM `src/main`, or the production mixin configuration. The RFC is
-defining V3-A/B work, not claiming shipped capability.
-
-**Still open before V3 implementation:** production wiring per **D-VR-080** (profile store) and
-**D-VR-081** (permission registry). Predicate semantics above remain **LOCKED**.
+**Production truth (`CODE_CONFIRMED`, synchronized 2026-08-21):** task-53 shipped
+`VillageScenarioProfile`, cross-dimension `PlayerMobVillagePolicySavedData`, operator profile commands,
+and `VillageWorkAdmission`; task-54 shipped `StorageOwnership`, its permission registry/policy, and the
+continuous `RaidContainersAllyStorageMixin` guard. The 2026-08-19 three-probe absence finding is
+preserved as historical pre-implementation evidence and is **SUPERSEDED** by those implementations.
+Runtime VR-T3g–i remains `UNVERIFIED`; static acceptance is not runtime proof.
 
 **Rejected:** per-mob hardcoded village UUID allowlists; HOME/HIGH as ally permission; treating
 missing ownership evidence as public or permitted; globally stripping `RaidContainersGoal`; storing
@@ -6475,7 +6602,8 @@ silently leaving curing owned by two phases; treating deferred V2 verification a
 
 ### D-VR-079: Managed harvesting is one committed harvest→replant episode (`User` + `Agent_Codex`, 2026-08-19)
 
-**Status:** `LOCKED` architecture direction; V3-C implementation remains unauthorized.
+**Status:** `LOCKED` architecture direction + **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** in
+task-55; runtime VR-T3a–c/k/l/m remains `UNVERIFIED`.
 
 **Accepted:** candidate, crop/seed representation, held-seed reserve, target position, world
 preconditions, harvest mutation, replant mutation, exceptional repair, invalidation, and completion
@@ -6647,6 +6775,175 @@ task-57 revalidates breeder-local 48-block reachability before food commit.
 
 **Rejected:** preserving `eligibleBedCount` / `freePopulationCapacity` subtraction as authority;
 conjunctive subtraction **and** vacancy (R3) for gen-1.
+
+### D-VR-085: Composter target discovery — executor-local bounded block scan (`Agent_Cursor`, 2026-08-21)
+
+**Status:** **`CONTESTED / LOCK NOT RECOMMENDED`**. The original proposal is preserved, but its
+premise was falsified by pinned 1.21.1 source: `PoiTypes.java:110` registers every composter block
+state as `PoiTypes.FARMER`; `VillagerProfession.FARMER` consumes that POI. “Not a job-site POI” was
+an inference from task-56's HOME-only kernel, not negative evidence about Minecraft.
+
+**Still valid from the proposal:** loaded-only scope, finite candidate/path budgets, deterministic
+ordering only within the returned bounded sample, empty/blocked backoff, and live COMMIT
+revalidation. Those constraints apply whichever discovery owner wins.
+
+**Superseded portion:** the executor-local **cubic block scan** and categorical rejection of POI
+discovery are rejected by `D-VR-085-R1` below. This records the correction without rewriting the
+historical proposal.
+
+### D-VR-085-R1: One workstation-fact owner versus local POI discovery (`Agent_Codex`, 2026-08-21; **LOCKED** `Agent_Cursor`, 2026-08-22)
+
+**Status:** **`LOCKED` — Option A** (shared V3-D2 workstation evidence). Option C remains **REJECTED**.
+Option B is **rejected** unless task-58 Gate 0 proves Option A requires new persistent SavedData or
+material scan amplification (**switch condition not met** — see evidence below).
+
+| Option | Safety/fit | Cost/failure mode | Disposition |
+| --- | --- | --- | --- |
+| **A — shared V3-D2 workstation evidence** | Existing village-work observation owner queries bounded loaded `PoiTypes.FARMER`; publishes source, observation tick, completeness and invalidation; executor revalidates live block | Cache age/completeness surface — **already paid for** by task-56/57 | **`LOCKED`** |
+| **B — executor-local bounded POI query** | Fresh POI evidence and smaller slice | Duplicates discovery ownership; leaves V3-D2 unclosed | **REJECTED** |
+| **C — executor-local cubic block scan** | Direct block-state lookup | Ignores POI truth, volumetric cost | **REJECTED** |
+
+**Lock evidence (`CODE_CONFIRMED` — shipped tasks 52–57):**
+
+1. `VillageWorkObservationKernel` already implements lazy `HomePoiCandidateSource` with bounded
+   enumeration and `INCOMPLETE` on budget exceed (task-56 CLOSE-56-2).
+2. `VillageWorkFactsCache` + `VillageWorkFactsScheduler` + `FreshnessPolicy` + anchor supersede
+   invalidation are production-shipped — **transient server cache only**, no SavedData.
+3. `PoiTypes.FARMER` registers `Blocks.COMPOSTER` (`PoiTypes.java:113`); task-56 kernel omitted
+   FARMER POIs by scope, not because Minecraft lacks them.
+
+**Switch condition (Codex objection) falsified:** Option A does **not** require new persistent state;
+it extends the existing observation owner. Bounded FARMER enumeration reuses the same kernel/scheduler
+contract as HOME.
+
+### D-VR-085-A1: `VillageWorkstationFacts` companion record (`Agent_Cursor`, 2026-08-22)
+
+**Status:** **`LOCKED` (architecture)** — implementation detail for task-58 brief/Gate 0.
+
+**Accepted:** publish a **companion** transient record keyed by `SettlementIdentity`, refreshed on the
+**same scheduler budget** as `VillageWorkFacts`, without mutating population/HOME fields:
+
+```text
+VillageWorkstationFacts
+    identity: SettlementIdentity
+    farmerWorkstationCount: int          // bounded loaded PoiTypes.FARMER in settlement bounds
+    observedAtTick: long
+    completeness: WorkFactsCompleteness // INCOMPLETE when FARMER budget exceeded
+    freshness: WorkFactsFreshness
+```
+
+**Enumeration:** lazy `FarmerPoiCandidateSource` iterator over `getInRange(FARMER, anchor, radius, ANY)`
+with `MAX_FARMER_POIS_PER_OBSERVATION` cap (task-56 CLOSE-56-2 pattern). **No `.toList()`.**
+
+**Consumer rule:** V3-F reads workstation facts for **candidate discovery only**; at COMMIT it
+revalidates live `ComposterBlock` state (`LEVEL < 7`, still loaded, settlement bounds, `mobGriefing`).
+
+**Rejected:** stuffing workstation counts into `VillageWorkFacts` population record (blurs D1/D2
+layers); executor-local cubic scan; extending `KnownVillage` persistence.
+
+### D-VR-086: Compost expendability reserve ladder (`Agent_Cursor`, 2026-08-21)
+
+**Status:** **`SUPERSEDED IN PART`** by **`D-VR-086-A1`** (locked 2026-08-22). Priority order below
+remains authoritative; quantified owner is now specified.
+
+**Accepted — reserve order (compost runs last among disposable-surplus gates):**
+
+```text
+1. Player survival nutrition reserve (MIN_SURVIVAL_NUTRITION_RESERVE = 12 — task-57)
+2. Progression / trade / fuel protection (FuelExpendability, SellExpendabilityPolicy craft reserves — compose, SPM-2)
+3. Managed-crop replant material (HarvestCandidatePolicy / CropReplantSemantics per supported crop)
+4. Population-food disposable pool (PopulationFoodExpendabilityPolicy)
+5. Compostable surplus only if still spare AND ComposterBlock accepts the item
+```
+
+**Required before lock:** ~~define one conservative quantity authority~~ **SATISFIED** by
+`D-VR-086-A1`.
+
+| Option | Benefit | Failure mode | Disposition |
+| --- | --- | --- | --- |
+| **A — shared disposable-quantity view** | Composes canonical owners | — | **`LOCKED` as `D-VR-086-A1`** |
+| **B — compost-local composition** | Smaller slice | Duplicate brain | **REJECTED** |
+
+**Rejected:** tag-only `c:compostables` allowlist without reserve composition; independent seed
+appetite for composting.
+
+### D-VR-086-A1: `CompostExpendabilityPolicy` composes canonical reserve owners (`Agent_Cursor`, 2026-08-22)
+
+**Status:** **`LOCKED` (architecture)** — task-59 implements; Gate 0 pins per-item `ComposterBlock.getValue`.
+
+**Accepted:** one pure `CompostExpendabilityPolicy.disposableUnits(slot, backpack, hands, cfg)` that
+**composes** existing authorities — never re-derives recipes or trade math:
+
+```text
+for held stack S at slot i:
+  0. reject if not ComposterBlock-eligible (Gate 0: getValue(S) > 0)
+  1. FuelExpendability-style held/main/offhand/damageable/never_fuel veto
+  2. PlayerNutritionReserve — keep MIN_SURVIVAL_NUTRITION_RESERVE (= 12, task-57)
+  3. SellReserveModel.reservedUnits when modelled (logs/planks/sticks) — refuse if empty
+  4. CropReplantReserve — min 1 planting item per supported crop kind when feasibility requires inventory seed
+     (HarvestCandidatePolicy / CropReplantSemantics plantingItem)
+  5. PopulationFoodExpendabilityPolicy — if S is villager breeding food, subtract food already earmarked
+     via disposableVillagerFoodValue(backpack, hands) for population support
+  6. remainder for slot S = compost-disposable count (cap 1 per episode at executor)
+```
+
+**UNKNOWN at any layer → refuse** (same posture as `SellReserveModel` empty = refuse).
+
+**Rejected:** compost-local reimplementation of trade/crop/population reserves; tag-only allowlist;
+independent seed appetite.
+
+**Gate 0 still required:** pin `ComposterBlock.getValue` / `COMPOSTABLES` tag for gen-1 item set;
+quantify `CropReplantReserve` helper (new small pure class in `village/crop/` or `village/population/`).
+
+### D-VR-087: Compost episode shape and bone-meal disposition (`Agent_Cursor`, 2026-08-21)
+
+**Status:** **`CONTESTED / SUPERSEDED IN PART`** by pinned `ComposterBlock` semantics. The bounded
+P4 episode, one-unit cap, `mobGriefing` gates, interruption exits, and no bone-meal appetite survive.
+The claim that COMMIT produces/pops bone meal does not: insertion only attempts a probabilistic level
+increase and consumes the supplied unit; level 7 later ticks to 8; separate extraction creates bone
+meal.
+
+### D-VR-087-A1: Vanilla-owned one-attempt compost transaction (`Agent_Codex`, 2026-08-21; **LOCKED** `Agent_Cursor`, 2026-08-22)
+
+**Status:** **`LOCKED`**. Transaction debit owner pinned by **`D-VR-087-TX1`**.
+
+**Proposed:** `PATHING → PREPARE → COMMIT → cooldown`; one target and one insertion attempt.
+At COMMIT, revalidate all authority and target facts, then let exactly one layer own inventory debit.
+Because vanilla `insertItem(...)` shrinks its supplied stack after every eligible attempt, an
+unchanged level is a completed vanilla attempt—not failure—and must not trigger immediate retry.
+Gen-1 leaves level-8 extraction to vanilla farmers/players and creates no bone-meal demand.
+
+**Rejected:** pre-debit plus vanilla shrink; “level did not rise” rollback/retry; crediting insertion
+with bone-meal production; multi-stack drain; bone-meal extraction/application in the first slice.
+
+### D-VR-087-TX1: Single debit owner — vanilla `insertItem` shrink (`Agent_Cursor`, 2026-08-22)
+
+**Status:** **`LOCKED` (architecture)** — task-59 Gate 0 confirms slot wiring.
+
+**Evidence (`CONFIRMED` — `ComposterBlock.java:273–278`):**
+
+```text
+insertItem(...):
+  if level < 7 && getValue(stack) > 0:
+      addItem(...)          // probabilistic level advance
+      stack.shrink(1)       // ALWAYS when eligible — even if level unchanged
+```
+
+**Accepted commit pattern (mirrors task-57 handoff discipline):**
+
+```text
+1. PREPARE: CompostExpendabilityPolicy authorizes exactly 1 unit from slot S
+2. COMMIT: copy stack from backpack slot S (or single-item view)
+3. ComposterBlock.insertItem(mob, state, level, copy, pos)
+4. If copy.count decreased: mirror removal into backpack slot S (same count delta)
+5. NEVER call shrink/removeItem on backpack before insertItem succeeds eligibility
+```
+
+**Must not happen:** independent `backpack.removeItem` before insert; second shrink; retry on
+unchanged level.
+
+**Episode outcome:** `COMMIT_DONE` (level may or may not advance) → cooldown — no ACK phase
+(compost success is immediate world truth unlike villager pickup).
 
 ### D-VR-084: `MandatoryOwnership` — one claim-based discretionary-permission authority (`Agent_Claude` + `User`, 2026-08-19)
 
@@ -6933,7 +7230,8 @@ oracle; leaving `VILLAGE_TRADE` out of the blocking set because the flags happen
 
 ### D-VR-079-A1: amendment — managed crop domain, host veto, and the replant loop (`Agent_Claude` + `User`, 2026-08-19)
 
-**Status:** `LOCKED`. Amends `D-VR-079`; the committed-episode architecture itself is unchanged.
+**Status:** `LOCKED` + **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** in task-55. Amends
+`D-VR-079`; the committed-episode architecture itself is unchanged. Runtime remains `UNVERIFIED`.
 
 #### (1) The mixin-scope table was wrong for crops
 
@@ -7136,3 +7434,138 @@ the batched V3 campaign. This dated contribution record is preserved as history.
 runtime session was **rejected** — a real shipped-behaviour change calls for a stronger automated
 acceptance model, not an immediate launch. No Java, test, mixin, Gradle, config, datapack, runtime,
 commit, or push action belongs to this contribution.
+
+### Contribution — Agent_Cursor (V3-F design frontier, 2026-08-21)
+
+**Agent:** `Agent_Cursor` · **Trigger:** `Work the RFC` (`RFC_DESIGN_WORK_ARTIFACT_ONLY`)
+**Contribution type:** design contract + proposed decisions — **RFC artifact only**
+
+**Frontier before:** V3-E **CLOSED / STATIC-BEHAVIORAL ACCEPT** (task-57; 1543 tests). RFC identity
+header and V3 task table still described V3-B as the authorization frontier and V3-A…E as
+`PROPOSED` / not implementation-authorized.
+
+**Action:** code-evidenced V3-F (task-58) design pass against shipped tasks 52–57:
+
+| # | Finding | Outcome |
+| --- | --- | --- |
+| F1 | No compost executor or `ComposterBlock` usage in production | V3-F is greenfield; depends on closed siblings |
+| F2 | `VillageWorkFacts` carries population/HOME only — not composter positions | **HISTORICAL PROPOSAL, SUPERSEDED BELOW:** reject extending V3-D; select local scan |
+| F3 | Composters are not villager job-site POIs in task-56 kernel | **FALSIFIED BELOW:** the kernel omitted FARMER POIs, but Minecraft registers composters as them |
+| F4 | Reserve ladder must compose replant (V3-C) + population food (V3-E) before compost | Ordering survives; “lock-ready” status **SUPERSEDED** because no shared quantified reserve exists |
+| F5 | Bone-meal pop must not invent progression appetite | No-appetite boundary survives; pop-at-COMMIT claim **FALSIFIED** |
+| F6 | P4 registration order: harvest → population before compost | Historical task-58 proposal; numbering is now unassigned pending D2/F split |
+| F7 | Bounded-sample terminology from task-57 CLOSE-57-1 applies to composter candidate scan | recorded in `D-VR-085` |
+
+**Proposals added:** `D-VR-085` (target discovery), `D-VR-086` (expendability ladder), `D-VR-087`
+(episode + bone meal); canonical V3-F implementation contract; MAIBS V3-F table; V3 task table
+synced to tasks 52–57 **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT**.
+
+**Frontier after:** **BEGIN task-58 / V3-F — BRIEF DESIGN ONLY** is the nearest step. Gate 0 and
+implementation remain **NOT AUTHORIZED**. V3-G and batched runtime VR-T3 campaign remain blocked on
+V3-F + explicit launch approval. Task-57 **DO NOT REOPEN** unless runtime falsifies a locked invariant.
+
+**Authorization question (single):** Say **BEGIN task-58 / V3-F — BRIEF DESIGN ONLY** to author the
+task-58 brief from this contract, or **authorize task-58 gate 0** to run the read-only source audit
+first.
+
+**Correction:** this contribution's F2/F3 conclusions and frontier are **SUPERSEDED** by the
+code-evidenced peer challenge below. They are retained to preserve proposal history, not as current
+authority.
+
+### Contribution — Agent_Codex (V3-F peer challenge / Work the RFC, 2026-08-21)
+
+**Agent:** `Agent_Codex` · **Mode:** `RFC_DESIGN_WORK_ARTIFACT_ONLY`
+**Contribution type:** research + challenge + architecture correction + MAIBS — RFC artifact only
+
+**Frontier before:** task-58 compost brief was presented as ready around an executor-local cubic
+block scan, with shared workstation facts rejected and COMMIT described as potentially popping bone
+meal.
+
+**Evidence (`CODE_CONFIRMED` unless labelled):** pinned Mojmap source artifact
+`minecraft-merged-1425f5a1b7-1.21.1-loom.mappings.1_21_1.layered+hash.2198-v2-sources.jar` shows:
+
+1. `PoiTypes.java:110` registers `Blocks.COMPOSTER` as `PoiTypes.FARMER`, and
+   `VillagerProfession.java:35–40` binds Farmer to that POI.
+2. `ComposterBlock.insertItem:262–268` attempts `addItem(...)` and shrinks the supplied stack by one
+   whenever the item is eligible and level is below 7. `addItem:293–306` may leave the level
+   unchanged because advancement is probabilistic.
+3. Level 7 schedules a 20-tick transition to level 8; `extractProduce:273–282` is the separate
+   operation that creates bone meal. Insertion does not.
+4. Task-56 delivered population/HOME facts, not the RFC's workstation-awareness capability. Three
+   scoped negative probes found no workstation/job-site/restock/FARMER-POI symbol in (a)
+   `village/work` production, (b) `village/work` tests, or (c) production goals.
+5. Existing survival/population policies quantify only their own reserves; sell protection is
+   narrow and crop candidacy does not expose one universal per-stack compost-disposable quantity.
+
+**Challenge result:** F3 was incorrect, not merely unverified. Absence from a HOME-only observation
+kernel did not prove absence from Minecraft's POI registry. The proposed scan would create a second
+workstation interpreter beside the canonical V3-D scope. The transaction text also risked double
+debit and mistaking a valid unchanged-level attempt for failure.
+
+**Alternatives:** A = shared bounded D2 `PoiTypes.FARMER` evidence with live executor revalidation
+(recommended); B = executor-local bounded FARMER-POI query (smaller, but leaves D2 open); C = cubic
+block scan (rejected). Strongest objection to A is disproportionate cache lifecycle for one consumer;
+switch to B only if Gate 0 proves that cost, while retaining POI truth and bounded discovery.
+
+**Decision transitions:** `D-VR-085` → **CONTESTED** and partly superseded by `D-VR-085-R1`;
+`D-VR-086` → **CONTESTED** pending a quantified shared reserve owner; `D-VR-087` → **CONTESTED /
+SUPERSEDED IN PART** by vanilla-correct `D-VR-087-A1`. No earlier locked V3 authority was removed.
+
+**MAIBS additions:** a low-probability compostable may be consumed with no level rise; level 8 may
+remain ready until a farmer/player extracts; two mobs may sequentially converge; P4 torch contention
+may starve the lowest village-work activity. These are now explicit acceptance/runtime questions.
+
+**Frontier after:** decide shared D2 evidence versus local bounded POI query, decide whether D2 and F
+are separate tasks (recommended: D2 first, F second), and pin the reserve/transaction owners. No task
+brief, implementation, build, or runtime is authorized by this RFC pass.
+
+*(Superseded 2026-08-22 by contribution below — decisions are now **LOCKED**.)*
+
+### Contribution — Agent_Cursor (`Work the RFC`, 2026-08-22)
+
+**Agent:** `Agent_Cursor` · **Mode:** `RFC_DESIGN_WORK_ARTIFACT_ONLY`
+**Contribution type:** architecture lock + task assignment + evidence — **RFC artifact only**
+
+**Frontier before:** `D-VR-085-R1`, `D-VR-086`, and `D-VR-087-A1` were **CONTESTED** after
+`Agent_Codex` peer challenge. Task numbering unassigned. V3-E closed at 1543 tests.
+
+**Evidence (`CODE_CONFIRMED` — shipped production):**
+
+| Probe | Result |
+| --- | --- |
+| `VillageWorkObservationKernel` lazy HOME iterator + budget cap | task-56 CLOSE-56-2 pattern reusable for FARMER |
+| Transient `VillageWorkFactsCache` + scheduler + anchor invalidation | no SavedData — falsifies Codex switch-to-B condition |
+| `PopulationFoodExpendabilityPolicy` + `PlayerNutritionReserve` | task-57 quantified survival + breeding-food pools |
+| `PopulationFoodExpendabilityPolicy.disposableVillagerFoodValue` | public compose point for compost layer 5 |
+| `ComposterBlock.insertItem` shrink-on-eligible | `D-VR-087-TX1` single-debit owner |
+| `PopulationFoodSupportGoal` at P4 after harvest | registration order precedent for compost |
+
+**Decision transitions (LOCKED):**
+
+| ID | Transition |
+| --- | --- |
+| **D-VR-085-R1** | Option **A LOCKED**; B rejected; C rejected |
+| **D-VR-085-A1** | **NEW LOCKED** — `VillageWorkstationFacts` companion record + `FarmerPoiCandidateSource` |
+| **D-VR-086-A1** | **NEW LOCKED** — `CompostExpendabilityPolicy` composes canonical reserve owners |
+| **D-VR-087-A1** | **LOCKED** |
+| **D-VR-087-TX1** | **NEW LOCKED** — vanilla `insertItem` owns shrink; mirror delta to backpack |
+
+**Task assignment (LOCKED — not authorization):**
+
+```text
+task-58 = V3-D2 shared workstation evidence
+task-59 = V3-F compost executor
+task-60 = V3-G integration/runtime closure
+```
+
+**Strongest remaining objection:** P4 `PlaceTorchGoal` may starve lowest-priority village work —
+**RUNTIME_QUESTION**; out of task-58/59 scope (task-57 precedent).
+
+**MAIBS note:** compost COMMIT has no villager-style ACK_WAIT — unchanged composter level after
+eligible insert is **vanilla success**, not failure; episode must still terminate and backoff.
+
+**Frontier after:** **BEGIN task-58 / V3-D2 — BRIEF DESIGN ONLY**. Gate 0 and implementation
+**NOT AUTHORIZED**. Task-57 **DO NOT REOPEN**.
+
+**Authorization question (single):** Say **BEGIN task-58 / V3-D2 — BRIEF DESIGN ONLY** to author
+`task-58-brief.md` from `D-VR-085-R1` + `D-VR-085-A1`.
