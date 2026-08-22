@@ -7708,7 +7708,7 @@ task-60 = V3-G integration/runtime closure
 **MAIBS note:** compost COMMIT has no villager-style ACK_WAIT — unchanged composter level after
 eligible insert is **vanilla success**, not failure; episode must still terminate and backoff.
 
-**Frontier after:** **BEGIN task-58 / V3-D2 — BRIEF DESIGN ONLY**. Gate 0 and implementation
+**Frontier after:** **BEGIN task-58 / V3-F — BRIEF DESIGN ONLY**. Gate 0 and implementation
 **NOT AUTHORIZED**. Task-57 **DO NOT REOPEN**.
 
 **Authorization question (single):** Say **BEGIN task-58 / V3-F — BRIEF DESIGN ONLY** to author
