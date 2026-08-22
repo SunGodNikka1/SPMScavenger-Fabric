@@ -35,12 +35,15 @@ class VillageWorkFactsStructuralTest {
     }
 
     @Test
-    void mustHappen_observationKernelFiltersLoadedChunks() throws IOException {
-        String body = source("village/work/VillageWorkObservationKernel.java");
-        assertTrue(body.contains("withinPerception"),
-                "HOME POI rows must pass withinPerception");
-        assertTrue(body.contains("SettlementBoundsPolicy.within"),
-                "counts must be settlement-bound to anchor");
+    void mustHappen_observationKernelUsesBoundedEnumerationSeams() throws IOException {
+        String body = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/village/work/VillageWorkObservationKernel.java"));
+        assertFalse(body.contains(".toList()"),
+                "HOME POI query must stay lazy — no materializing toList()");
+        assertTrue(body.contains("MAX_VILLAGERS_PER_OBSERVATION + 1"),
+                "villager query must use bounded ServerLevel#getEntities maxResults seam");
+        assertTrue(body.contains("HomePoiCandidateSource"),
+                "HOME enumeration must be injectable for budget tests");
     }
 
     @Test

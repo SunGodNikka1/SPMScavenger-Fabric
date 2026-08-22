@@ -12,6 +12,11 @@ import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.phys.AABB;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.function.Consumer;
+
 /**
  * Pure loaded-only counting kernel for one settlement anchor (testable without scheduler).
  */
@@ -24,10 +29,51 @@ public final class VillageWorkObservationKernel {
             int currentFreeHomeCapacity,
             WorkFactsCompleteness completeness) {}
 
-    private VillageWorkObservationKernel() {}
+    /**
+     * Lazy HOME POI enumeration with an explicit candidate budget.
+     *
+     * @return {@code false} when {@link VillageWorkTuning#MAX_HOME_POIS_PER_OBSERVATION} is exceeded
+     */
+    @FunctionalInterface
+    public interface HomePoiCandidateSource {
+        boolean enumerate(Consumer<PoiRecord> visitor);
+    }
+
+    /**
+     * Bounded adult-villager enumeration with an explicit match budget.
+     *
+     * @return {@code false} when {@link VillageWorkTuning#MAX_VILLAGERS_PER_OBSERVATION} is exceeded
+     */
+    @FunctionalInterface
+    public interface AdultVillagerCandidateSource {
+        boolean enumerate(Consumer<Villager> visitor);
+    }
+
+    @FunctionalInterface
+    interface SettlementEvidenceBounds {
+        boolean admits(ServerLevel level, BlockPos pos, BlockPos anchor);
+    }
+
+    private static final SettlementEvidenceBounds PRODUCTION_BOUNDS = (level, pos, anchor) ->
+            VillagePerception.withinPerception(level, pos) && SettlementBoundsPolicy.within(pos, anchor);
 
     public static Counts observe(ServerLevel level, BlockPos anchor) {
         if (level == null || anchor == null) {
+            return incomplete();
+        }
+        return observe(
+                level,
+                anchor,
+                homePoiSource(level, anchor),
+                adultVillagerSource(level, anchor));
+    }
+
+    static Counts observe(
+            ServerLevel level,
+            BlockPos anchor,
+            HomePoiCandidateSource homePois,
+            AdultVillagerCandidateSource villagers) {
+        if (level == null || anchor == null || homePois == null || villagers == null) {
             return incomplete();
         }
         PerceptionCoverage coverage =
@@ -35,53 +81,103 @@ public final class VillageWorkObservationKernel {
         if (!coverage.isFull()) {
             return incomplete();
         }
+        return countSettlementEvidence(level, anchor, homePois, villagers, PRODUCTION_BOUNDS);
+    }
 
-        int total = 0;
-        int claimed = 0;
-        int free = 0;
-        int poiSeen = 0;
+    static Counts countSettlementEvidence(
+            ServerLevel level,
+            BlockPos anchor,
+            HomePoiCandidateSource homePois,
+            AdultVillagerCandidateSource villagers) {
+        return countSettlementEvidence(level, anchor, homePois, villagers, PRODUCTION_BOUNDS);
+    }
 
-        for (PoiRecord record : level.getPoiManager()
-                .getInRange(
-                        holder -> holder.is(PoiTypes.HOME),
-                        anchor,
-                        VillageWorkTuning.OBSERVATION_RADIUS,
-                        PoiManager.Occupancy.ANY)
-                .toList()) {
-            poiSeen++;
-            if (poiSeen > VillageWorkTuning.MAX_HOME_POIS_PER_OBSERVATION) {
-                return incomplete();
-            }
+    static Counts countSettlementEvidence(
+            ServerLevel level,
+            BlockPos anchor,
+            HomePoiCandidateSource homePois,
+            AdultVillagerCandidateSource villagers,
+            SettlementEvidenceBounds bounds) {
+        if (anchor == null || homePois == null || villagers == null || bounds == null) {
+            return incomplete();
+        }
+        int[] total = {0};
+        int[] claimed = {0};
+        int[] free = {0};
+        boolean poisWithinBudget = homePois.enumerate(record -> {
             BlockPos pos = record.getPos();
-            if (!VillagePerception.withinPerception(level, pos)
-                    || !SettlementBoundsPolicy.within(pos, anchor)) {
-                continue;
+            if (!bounds.admits(level, pos, anchor)) {
+                return;
             }
-            total++;
+            total[0]++;
             if (record.isOccupied()) {
-                claimed++;
+                claimed[0]++;
             }
             if (record.hasSpace()) {
-                free++;
+                free[0]++;
             }
+        });
+        if (!poisWithinBudget) {
+            return incomplete();
         }
 
-        int adults = 0;
-        double radius = VillageWorkTuning.OBSERVATION_RADIUS;
-        AABB box = new AABB(anchor).inflate(radius, radius, radius);
-        for (Villager villager : level.getEntities(EntityType.VILLAGER, box, VillageWorkObservationKernel::countsAsAdult)) {
-            BlockPos feet = villager.blockPosition();
-            if (!VillagePerception.withinPerception(level, feet)
-                    || !SettlementBoundsPolicy.within(feet, anchor)) {
-                continue;
-            }
-            adults++;
-            if (adults > VillageWorkTuning.MAX_VILLAGERS_PER_OBSERVATION) {
-                return incomplete();
-            }
+        int[] adults = {0};
+        boolean villagersWithinBudget = villagers.enumerate(villager -> adults[0]++);
+        if (!villagersWithinBudget) {
+            return incomplete();
         }
 
-        return new Counts(adults, total, claimed, free, WorkFactsCompleteness.COMPLETE);
+        return new Counts(adults[0], total[0], claimed[0], free[0], WorkFactsCompleteness.COMPLETE);
+    }
+
+    private VillageWorkObservationKernel() {}
+
+    static HomePoiCandidateSource homePoiSource(ServerLevel level, BlockPos anchor) {
+        return visitor -> {
+            int examined = 0;
+            Iterator<PoiRecord> iterator = level.getPoiManager()
+                    .getInRange(
+                            holder -> holder.is(PoiTypes.HOME),
+                            anchor,
+                            VillageWorkTuning.OBSERVATION_RADIUS,
+                            PoiManager.Occupancy.ANY)
+                    .iterator();
+            while (iterator.hasNext()) {
+                examined++;
+                if (examined > VillageWorkTuning.MAX_HOME_POIS_PER_OBSERVATION) {
+                    return false;
+                }
+                visitor.accept(iterator.next());
+            }
+            return true;
+        };
+    }
+
+    /**
+     * Uses {@link ServerLevel#getEntities(EntityTypeTest, AABB, Predicate, List, int)} with
+     * {@code maxResults = MAX + 1} so matching enumeration aborts without collecting every villager.
+     */
+    static AdultVillagerCandidateSource adultVillagerSource(ServerLevel level, BlockPos anchor) {
+        return visitor -> {
+            double radius = VillageWorkTuning.OBSERVATION_RADIUS;
+            AABB box = new AABB(anchor).inflate(radius, radius, radius);
+            List<Villager> matches = new ArrayList<>();
+            level.getEntities(
+                    EntityType.VILLAGER,
+                    box,
+                    villager -> countsAsAdult(villager)
+                            && VillagePerception.withinPerception(level, villager.blockPosition())
+                            && SettlementBoundsPolicy.within(villager.blockPosition(), anchor),
+                    matches,
+                    VillageWorkTuning.MAX_VILLAGERS_PER_OBSERVATION + 1);
+            if (matches.size() > VillageWorkTuning.MAX_VILLAGERS_PER_OBSERVATION) {
+                return false;
+            }
+            for (Villager villager : matches) {
+                visitor.accept(villager);
+            }
+            return true;
+        };
     }
 
     private static boolean countsAsAdult(Villager villager) {

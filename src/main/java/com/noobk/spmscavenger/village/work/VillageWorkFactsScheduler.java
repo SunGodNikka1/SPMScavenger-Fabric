@@ -19,6 +19,11 @@ import java.util.WeakHashMap;
  */
 public final class VillageWorkFactsScheduler {
 
+    @FunctionalInterface
+    interface RefreshExecutor {
+        void refresh(ServerLevel level, SettlementIdentity identity, long tick);
+    }
+
     private static final Map<MinecraftServer, VillageWorkFactsScheduler> BY_SERVER = new WeakHashMap<>();
 
     private final Map<ResourceKey<Level>, Deque<SettlementIdentity>> lanes = new HashMap<>();
@@ -50,10 +55,41 @@ public final class VillageWorkFactsScheduler {
         return true;
     }
 
+    /**
+     * Drop a stale pending refresh for an exact {@link SettlementIdentity}.
+     *
+     * <p>Removes the identity from the dedup set and its dimension queue, retiring an empty lane.
+     */
+    public boolean cancelPending(ResourceKey<Level> dimension, SettlementIdentity identity) {
+        if (dimension == null || identity == null) {
+            return false;
+        }
+        PendingKey key = new PendingKey(dimension, identity);
+        if (!pending.remove(key)) {
+            return false;
+        }
+        Deque<SettlementIdentity> lane = lanes.get(dimension);
+        if (lane != null) {
+            lane.removeIf(identity::equals);
+            if (lane.isEmpty()) {
+                lanes.remove(dimension);
+            }
+        }
+        return true;
+    }
+
     int serviceUpTo(
             int budget,
             java.util.function.Function<ResourceKey<Level>, ServerLevel> levelLookup,
             long tick) {
+        return serviceUpTo(budget, levelLookup, tick, VillageWorkFactsService::refreshNow);
+    }
+
+    int serviceUpTo(
+            int budget,
+            java.util.function.Function<ResourceKey<Level>, ServerLevel> levelLookup,
+            long tick,
+            RefreshExecutor executor) {
         int serviced = 0;
         for (int i = 0; i < budget && !pending.isEmpty(); i++) {
             ResourceKey<Level> dimension = nextLaneWithWork();
@@ -67,9 +103,7 @@ public final class VillageWorkFactsScheduler {
             SettlementIdentity identity = lane.pollFirst();
             pending.remove(new PendingKey(dimension, identity));
             ServerLevel level = levelLookup.apply(dimension);
-            if (level != null) {
-                VillageWorkFactsService.refreshNow(level, identity, tick);
-            }
+            executor.refresh(level, identity, tick);
             serviced++;
             if (lane.isEmpty()) {
                 lanes.remove(dimension);

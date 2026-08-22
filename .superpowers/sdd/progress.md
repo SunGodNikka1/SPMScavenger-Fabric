@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **V3-D IMPLEMENTED** — task-56 facts/cache/scheduler; task-57 not started | `task-56-gate0-report.md` |
+| **V3 Village Work** | **V3-D STATIC-BEHAVIORAL ACCEPT** — task-56 + CLOSE-56-1/2; task-57 not started | `task-56-report.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -88,6 +88,6 @@ Task 54: complete / STATIC-BEHAVIORAL ACCEPT (V3-B + R1/R1.2 repair — 1435 tes
 
 Task 55: STATIC-BEHAVIORAL ACCEPT (V3-C + R1 + closure CLOSE-1/2 — fail-open crop continuation, probe-budget backoff only on concrete failures; 1478 tests, 0 failures; runtime VR-T3 deferred to batched V3 campaign)
 
-Task 56: DONE (V3-D — VillageWorkFacts + D-VR-083-A1 vacancy policy; 1495 tests, 0 failures; runtime VR-T3e/f UNVERIFIED) — `task-56-report.md`
+Task 56: STATIC-BEHAVIORAL ACCEPT (V3-D + CLOSE-56-1/2 — anchor supersede cancelPending + real enumeration caps; 1499 tests, 0 failures; runtime VR-T3e/f UNVERIFIED) — `task-56-report.md`
 
 No commits unless user requests. No Minecraft launches unless separately approved.

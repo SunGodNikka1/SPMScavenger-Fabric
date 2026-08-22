@@ -30,6 +30,7 @@ public final class VillageWorkFactsService {
         }
         SettlementIdentity stale = SettlementIdentity.of(level.dimension(), oldAnchor);
         VillageWorkFactsCache.forServer(level.getServer()).invalidate(stale);
+        VillageWorkFactsScheduler.forServer(level.getServer()).cancelPending(level.dimension(), stale);
         VillageWorkFactsDiagnostics.recordAnchorInvalidation();
     }
 
@@ -57,6 +58,9 @@ public final class VillageWorkFactsService {
     }
 
     public static void refreshNow(ServerLevel level, SettlementIdentity identity, long tick) {
+        if (level == null || identity == null) {
+            return;
+        }
         VillageWorkFacts facts = VillageWorkObservationService.observe(level, identity, tick);
         VillageWorkFactsCache.forServer(level.getServer()).put(facts);
         if (facts.completeness() == WorkFactsCompleteness.COMPLETE) {

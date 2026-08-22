@@ -1,6 +1,6 @@
 # Task-56 report — V3-D transient village-work facts (`VillageWorkFacts`)
 
-**Status:** `DONE` — static behavioral accept; runtime VR-T3e/f **UNVERIFIED** (deferred to task-57 / V3 campaign).
+**Status:** `STATIC-BEHAVIORAL ACCEPT` — task-56 / V3-D closure (CLOSE-56-1/2); runtime VR-T3e/f **UNVERIFIED** (deferred to task-57 / V3 campaign).
 
 **Target:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`  
 **Brief:** `task-56-brief.md` v1 + **D-VR-083-A1** amendment (User, 2026-08-21)  
@@ -14,7 +14,19 @@ Implemented transient, settlement-bound **`VillageWorkFacts`** with three HOME c
 **`PopulationSupportVacancyPolicy`** (D-VR-083-A1). Deleted **`eligibleBedCount`** /
 **`freePopulationCapacity`** subtraction authority. Shared **`VillagePerceptionScheduler`** budget
 with work-fact refresh deduped by **`SettlementIdentity`**. Anchor supersede invalidates stale cache
-entries without count migration.
+entries, cancels stale pending refresh for the superseded identity, and does not migrate counts or
+proximity-merge identities.
+
+**Closure repairs (2026-08-21):**
+
+- **CLOSE-56-1** — `VillageWorkFactsScheduler.cancelPending` removes an exact
+  `SettlementIdentity` from the dedup set and its dimension queue (empty lane retired). Wired from
+  `VillageWorkFactsService.onAnchorSuperseded` after cache invalidation. `serviceUpTo` always
+  invokes the refresh executor (test seam); production `refreshNow` no-ops on null level.
+- **CLOSE-56-2** — `VillageWorkObservationKernel` uses lazy HOME POI iteration (no `.toList()`) and
+  bounded `ServerLevel#getEntities(..., maxResults = MAX + 1)` for adult villagers. Injectable
+  `HomePoiCandidateSource` / `AdultVillagerCandidateSource` seams prove enumeration stops at the
+  evidence budget; over-budget → `INCOMPLETE` → no population-support candidacy.
 
 ---
 
@@ -51,10 +63,16 @@ Task-57 owns breeder-local 48-block `HAS_SPACE` + reachability revalidation befo
 
 | Command | CWD | Result |
 | --- | --- | --- |
-| `.\gradlew.bat compileJava` | `SPMScavenger-1.21.1-Fabric` | **PASS** (`CONFIRMED`) |
-| `.\gradlew.bat test` | `SPMScavenger-1.21.1-Fabric` | **PASS** — 1495 tests, 0 failures (`CONFIRMED`) |
+| `.\gradlew.bat compileJava` | `SPMScavenger-1.21.1-Fabric` | **PASS** (`CONFIRMED`, closure re-run) |
+| `.\gradlew.bat test` | `SPMScavenger-1.21.1-Fabric` | **PASS** — 1499 tests, 0 failures (`CONFIRMED`, closure re-run) |
 
-New tests: `village/work/*Test.java` (policy, freshness, cache, scheduler, structural).
+New / closure tests:
+
+| Test | Proves |
+| --- | --- |
+| `VillageWorkFactsSchedulerTest.close56_1_anchorSupersedeCancelsStalePendingIdentity` | enqueue A → supersede/cancel A → enqueue B → drain → A refreshes 0×, B 1×, A cache empty |
+| `VillageWorkObservationKernelBudgetTest.close56_2_*` (3) | HOME/villager providers visited ≤ budget; over-cap → `INCOMPLETE` + no population-support candidacy |
+| `VillageWorkFactsStructuralTest.mustHappen_observationKernelUsesBoundedEnumerationSeams` | no `.toList()`; `MAX_VILLAGERS + 1` seam; injectable HOME source |
 
 ---
 
@@ -68,7 +86,8 @@ New tests: `village/work/*Test.java` (policy, freshness, cache, scheduler, struc
 | No `eligibleBedCount` / subtraction | **DONE** — structural test |
 | `VillageWorkAdmission` unchanged | **DONE** — structural test |
 | Scheduler budget sharing | **DONE** — remaining budget after perception drain |
-| Anchor supersede invalidation | **DONE** — `VillageMemorySavedData.record` |
+| Anchor supersede invalidation + cancel pending | **DONE** — `onAnchorSuperseded` + `cancelPending` (CLOSE-56-1) |
+| Candidate caps bound enumeration work | **DONE** — lazy HOME iterator + bounded `getEntities` (CLOSE-56-2) |
 | No workstation fields | **DONE** |
 | No P4 executor / task-57 | **DONE** |
 
