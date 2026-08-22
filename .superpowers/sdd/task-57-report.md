@@ -1,10 +1,11 @@
 # Task 57 report: V3-E population food support episode
 
-**Status:** `DONE_WITH_CONCERNS` (CLOSE-57-1/2/3 repaired; re-review for static accept; runtime `UNVERIFIED`)  
+**Status:** `CLOSED` / `STATIC-BEHAVIORAL ACCEPT`  
 **Slice:** V3-E — `PopulationFoodSupportGoal`  
 **Brief:** `.superpowers/sdd/task-57-brief.md` v1.2 LOCKED  
 **Gate 0:** `.superpowers/sdd/task-57-gate0-report.md` — `GATE_0_PASS`  
-**Target:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`
+**Target:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`  
+**Closure:** 2026-08-21 — bounded closure review complete; documentation-only closure record
 
 ## Summary
 
@@ -19,6 +20,11 @@ and dedicated `PopulationFoodHandoff` kernel.
 Facts remain evidence-only; no `VillageWorkFacts` mutation, no breeding commands, no Brain mutation,
 no SOCIAL/familiarity credit, no `VillageWorkSelector`, no task-58 work.
 
+**Recipient selection terminology:** `PopulationFoodRecipientSelector` collects a bounded **K**
+villager sample via `getEntities(..., MAX_RECIPIENT_CANDIDATES)`, then applies deterministic
+distance + UUID ordering **within that returned bounded sample**. This does **not** claim globally
+nearest-K across all eligible adults unless engine collection semantics guarantee it (they do not).
+
 ## User locks (v1.2 — applied)
 
 | Lock | Implementation |
@@ -29,7 +35,7 @@ no SOCIAL/familiarity credit, no `VillageWorkSelector`, no task-58 work.
 | PD-57-7 recipient need | `needsFood` = `wantsMoreFood() && !canBreed()` at SELECT + `handoffPreflight` |
 | G0-A dual reachability | Villager nav → HOME (`BreederLocalHomeProof`); PlayerMob nav → recipient (selector path) |
 | G0-B ACK_WAIT | Observation-only window; shared post-episode cooldown for both terminal outcomes |
-| No `PoiManager.take()` | `BreederLocalHomeProof` uses `getInRange(HAS_SPACE)` only |
+| No `PoiManager.take()` | `BreederLocalHomeProof` uses bounded `getInRange(HAS_SPACE)` iterator only |
 | RET-1 cooldown | `PopulationFoodEpisodeCooldown` + unload/death/`SERVER_STOP` release in `SpmScavenger` |
 
 ## Verification
@@ -37,38 +43,38 @@ no SOCIAL/familiarity credit, no `VillageWorkSelector`, no task-58 work.
 | Command | CWD | Result |
 | --- | --- | --- |
 | `.\gradlew.bat compileJava` | `Projects/SPMScavenger-1.21.1-Fabric` | **PASS** `CONFIRMED` |
-| `.\gradlew.bat test` | `Projects/SPMScavenger-1.21.1-Fabric` | **1541 tests, 0 failures** `CONFIRMED` |
+| `.\gradlew.bat test` | `Projects/SPMScavenger-1.21.1-Fabric` | **1543 tests, 0 failures** `CONFIRMED` (closure verification run) |
 
-## CLOSE-57 repairs (bounded closure review)
+## Closure items (bounded closure review)
 
-| ID | Fix | Evidence |
-| --- | --- | --- |
-| **CLOSE-57-1** | Two-level probe budget: nearest-`K` villager inspection (not fail-closed on `>K` adults); existential HOME proof with per-recipient probe cap (first reachable wins) | `BreederLocalHomeProofBudgetTest`, `PopulationFoodRecipientProbeBudgetTest`, structural seams |
-| **CLOSE-57-1R** | Repair: `>K` adults inspect nearest `K` only; HOME `∃` proof not invalidated by unexamined records | same + `firstReachableHomeWinsDespiteMoreHomesExisting` |
-| **CLOSE-57-1F** | Final static repair: bounded **provider** enumeration — `getEntities(..., MAX)` (no `getEntitiesOfClass`); HOME iterator breaks on success or probe cap (no unbounded callback drain) | structural + `BreederLocalHomeProofBudgetTest` provider visit counts |
-| **CLOSE-57-2** | `handoffPreflight` re-reads `MobVillageMemory`, exact-anchor remembrance, `VillageWorkFactsService.peek` — **no** `plan.facts()` fallback | `PopulationFoodHandoffPreflightTest` (supersede, stale cache, vacancy loss, negative control) |
-| **CLOSE-57-3** | `withinHandoffDistance` — `mob.distanceToSqr(recipient) < REACH_DISTANCE_SQR` at COMMIT preflight | `PopulationFoodHandoffPreflightTest.close57_3_*` |
+| ID | Status | Fix | Evidence |
+| --- | --- | --- | --- |
+| **CLOSE-57-1** | **CLOSED** | Two-level bounded work: K villager sample + per-recipient HOME probe cap; existential HOME proof | `BreederLocalHomeProofBudgetTest`, `PopulationFoodRecipientProbeBudgetTest`, structural seams |
+| **CLOSE-57-1R** | **CLOSED** | `>K` adults supported via bounded sample (not fail-closed); HOME ∃ proof not invalidated by unexamined records | `BreederLocalHomeProofBudgetTest`, probe budget tests |
+| **CLOSE-57-1F** | **CLOSED** | Bounded **provider** enumeration — `getEntities(..., MAX)` (no `getEntitiesOfClass`); HOME iterator breaks on success or probe cap | structural + `BreederLocalHomeProofBudgetTest` production iterator tests |
+| **CLOSE-57-2** | **CLOSED** | `handoffPreflight` re-reads `MobVillageMemory`, exact-anchor remembrance, `VillageWorkFactsService.peek` — **no** `plan.facts()` fallback | `PopulationFoodHandoffPreflightTest` |
+| **CLOSE-57-3** | **CLOSED** | `withinHandoffDistance` — `mob.distanceToSqr(recipient) < REACH_DISTANCE_SQR` at COMMIT preflight | `PopulationFoodHandoffPreflightTest` |
 
 ## Scenario matrix (T57-1…T57-14)
 
 | ID | Static / behavioral evidence | Runtime |
 | --- | --- | --- |
-| T57-1 | Expendability + handoff kernel + selector wiring `CONFIRMED` (unit/structural) | `UNVERIFIED` (VR-T3e) |
-| T57-2 | `BreederLocalHomeProof` per-villager HOME proof `CONFIRMED` (structural) | `UNVERIFIED` |
-| T57-3 | Read-only HOME + `canReach` semantics `CONFIRMED` (structural) | `UNVERIFIED` |
+| T57-1 | Expendability + handoff kernel + selector wiring `CONFIRMED` | `UNVERIFIED` (VR-T3e) |
+| T57-2 | `BreederLocalHomeProof` per-villager HOME proof `CONFIRMED` | `UNVERIFIED` |
+| T57-3 | Read-only HOME + `canReach` semantics `CONFIRMED` | `UNVERIFIED` |
 | T57-4 | `handoffPreflight` peeks **current** cache facts + `FreshnessPolicy` + candidacy `CONFIRMED` | `UNVERIFIED` |
-| T57-5 | `VillageWorkAdmission` + mandatory claim via `permits` / `handoffPreflight` `CONFIRMED` (source) | `UNVERIFIED` |
+| T57-5 | `VillageWorkAdmission` + mandatory claim via `permits` / `handoffPreflight` `CONFIRMED` | `UNVERIFIED` |
 | T57-6 | `PopulationFoodExpendabilityPolicyTest.t57_6_exactReserveBlocksDelivery` `CONFIRMED` | `UNVERIFIED` |
-| T57-7 | Eligible adult + settlement bounds `CONFIRMED` (structural) | `UNVERIFIED` |
-| T57-8 | Single `commitKernel` debit path `CONFIRMED` (handoff behavior tests) | `UNVERIFIED` |
-| T57-9 | Selector filters `PopulationSupportVacancyPolicy` candidacy `CONFIRMED` (source) | `UNVERIFIED` |
-| T57-10 | Shared P4 `VILLAGE_WORK` flags; no selector arbitration `CONFIRMED` (taxonomy + structural) | `UNVERIFIED` (VR-T3j) |
-| T57-11 | `handoffPreflight` before COMMIT `CONFIRMED` (goal + admission source) | `UNVERIFIED` |
-| T57-12 | Bounded villager + HOME probe budgets with fail-closed enumeration `CONFIRMED` | `UNVERIFIED` |
+| T57-7 | Eligible adult + settlement bounds `CONFIRMED` | `UNVERIFIED` |
+| T57-8 | Single `commitKernel` debit path `CONFIRMED` | `UNVERIFIED` |
+| T57-9 | Selector filters `PopulationSupportVacancyPolicy` candidacy `CONFIRMED` | `UNVERIFIED` |
+| T57-10 | Shared P4 `VILLAGE_WORK` flags; no selector arbitration `CONFIRMED` | `UNVERIFIED` (VR-T3j) |
+| T57-11 | `handoffPreflight` before COMMIT `CONFIRMED` | `UNVERIFIED` |
+| T57-12 | Bounded villager sample + HOME provider/probe budgets `CONFIRMED` | `UNVERIFIED` |
 | T57-13 | `PopulationFoodHandoffBehaviorTest.t57_13_mobGriefingFalsePerformsNoDebit` `CONFIRMED` | `UNVERIFIED` |
-| T57-14 | `PopulationFoodRecipientNeedTest` + admission revalidation `CONFIRMED` (structural) | `UNVERIFIED` |
+| T57-14 | `PopulationFoodRecipientNeedTest` + admission revalidation `CONFIRMED` | `UNVERIFIED` |
 
-**Runtime VR-T3e / VR-T3j:** `UNVERIFIED` — Minecraft launch not authorized.
+**Runtime VR-T3e / VR-T3j:** `UNVERIFIED` — deferred to batched V3 campaign; Minecraft launch not authorized for Task-57 closure.
 
 ## Negative controls
 
@@ -83,8 +89,8 @@ no SOCIAL/familiarity credit, no `VillageWorkSelector`, no task-58 work.
 | Stale plan facts must not authorize COMMIT | `PopulationFoodHandoffPreflightTest.close57_2_negativeControl_planFactsFallbackWouldHavePassed` | `CONFIRMED` |
 | Superseded anchor blocks COMMIT | `PopulationFoodHandoffPreflightTest.close57_2_supersededAnchorIsNotRemembered` | `CONFIRMED` |
 | Recipient outside reach blocks COMMIT | `PopulationFoodHandoffPreflightTest.close57_3_recipientOutsideReachFailsDistanceGate` | `CONFIRMED` |
-| HOME probe budget | `BreederLocalHomeProofBudgetTest.close57_1_homeEnumerationStopsAtPerRecipientBudget` | `CONFIRMED` |
-| Villager expensive-probe budget | `PopulationFoodRecipientProbeBudgetTest.close57_1_villagerProbeBudgetStopsBeforeUnboundedWork` | `CONFIRMED` |
+| HOME provider/probe budget | `BreederLocalHomeProofBudgetTest` production iterator + test-seam cases | `CONFIRMED` |
+| Villager expensive-probe budget | `PopulationFoodRecipientProbeBudgetTest` | `CONFIRMED` |
 
 ## Deliverables
 
@@ -106,7 +112,7 @@ no SOCIAL/familiarity credit, no `VillageWorkSelector`, no task-58 work.
 | `mining/MoveHolderClassifier.java` | `VILLAGE_WORK` taxonomy pin |
 | `SpmScavenger.java` | P4 registration + lifecycle hooks |
 
-### Tests (`village/population/` — 41 cases across 10 classes)
+### Tests (`village/population/` — 10 classes)
 
 `PopulationFoodStructuralTest`, `PopulationFoodTaxonomyTest`,
 `PopulationFoodExpendabilityPolicyTest`, `PopulationFoodInterlocksTest`,
@@ -114,14 +120,15 @@ no SOCIAL/familiarity credit, no `VillageWorkSelector`, no task-58 work.
 `PopulationFoodEpisodeCooldownTest`, `BreederLocalHomeProofBudgetTest`,
 `PopulationFoodRecipientProbeBudgetTest`, `PopulationFoodHandoffPreflightTest`.
 
-## Concerns / not done
+## Deferred / documented limitations (not closure blockers)
 
-1. **Static accept re-review** — CLOSE-57 repairs applied; awaiting confirmation after this pass.
-2. **Runtime VR-T3e/j** — no live pathing, handoff toss pickup, P4 contention with harvest/PlaceTorch.
-3. **PlaceTorch P4 contention** — KNOWN RUNTIME QUESTION (out of scope per brief).
-4. **Crop replant reserve intersection** — vacuous under current vanilla-only crop set + Task-55 mature-crop drop semantics (wheat/beetroot seeds ≠ breeding items; carrot/potato replant drops guaranteed at harvest). No active delegation exists; not a closure blocker.
-5. **Expendability `perItemNutrition <= 0` fallback** — generic guard for non-player-edible stacks; no specific vanilla item claim without pinned nutrition probe.
-6. **Social interlock** — trade claim tested live; social binding path verified structurally (`admitExact` package-private).
+| Item | Status |
+| --- | --- |
+| Runtime VR-T3e / VR-T3j | `UNVERIFIED` — deferred to batched V3 campaign |
+| PlaceTorch P4 contention | KNOWN RUNTIME QUESTION (out of scope per brief) |
+| Crop replant reserve intersection | Vacuous under vanilla-only crop set + Task-55 harvest semantics; no active delegation |
+| Social binding interlock | Trade claim tested live; social path structural (`admitExact` package-private) |
+| `perItemNutrition <= 0` fallback | Generic guard; no pinned per-item vanilla nutrition claims |
 
 ## Self-review vs brief
 

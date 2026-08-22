@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **V3-E implementation DONE_WITH_CONCERNS** — static/behavioral accept pending closure review; runtime VR-T3e/j deferred | `task-57-report.md` |
+| **V3 Village Work** | **V3-E CLOSED** — STATIC-BEHAVIORAL ACCEPT; runtime VR-T3e/j deferred to batched V3 campaign | `task-57-report.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -90,7 +90,7 @@ Task 55: STATIC-BEHAVIORAL ACCEPT (V3-C + R1 + closure CLOSE-1/2 — fail-open c
 
 Task 56: STATIC-BEHAVIORAL ACCEPT (V3-D + CLOSE-56-1/2 — anchor supersede cancelPending + real enumeration caps; 1499 tests, 0 failures; runtime VR-T3e/f UNVERIFIED) — `task-56-report.md`
 
-Task 57: DONE_WITH_CONCERNS (V3-E — CLOSE-57-1F provider enumeration bounded; 1541 tests; static re-review pending; runtime UNVERIFIED) — `task-57-report.md`
+Task 57: CLOSED / STATIC-BEHAVIORAL ACCEPT (V3-E population food — CLOSE-57-1/1R/1F + CLOSE-57-2 + CLOSE-57-3; 1543 tests, 0 failures; runtime VR-T3e/j UNVERIFIED deferred to batched V3 campaign) — `task-57-report.md`
 Task 57: Gate 0 PASS — `task-57-gate0-report.md`
 Task 57: peer review ACCEPT — `task-57-peer-review.md`
 Task 57: brief v1.2 LOCKED — `task-57-brief.md`
