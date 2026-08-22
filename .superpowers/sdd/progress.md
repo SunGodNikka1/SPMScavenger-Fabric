@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **V3-F CLOSED** — STATIC-BEHAVIORAL ACCEPT (task-58); VR-T3d runtime deferred | `task-58-report.md` |
+| **V3 Village Work** | **V3-F CLOSED** (task-58); **V3-G OPEN / AUTHORIZED** (task-59); runtime campaign **NOT YET AUTHORIZED** | `task-58-report.md` |
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -98,5 +98,7 @@ Task 57: brief v1.2 LOCKED — `task-57-brief.md`
 Task 58: brief v1.1 — `task-58-brief.md` (V3-F unified ComposterWorkFacts + CompostGoal)
 Task 58: Gate 0 PASS — `task-58-gate0-report.md`
 Task 58: complete — V3-F STATIC-BEHAVIORAL ACCEPT (`task-58-report.md`, CLOSE-58-1…3)
+
+Task 59: OPEN / AUTHORIZED — V3-G integration and closure; runtime campaign NOT YET AUTHORIZED
 
 No commits unless user requests. No Minecraft launches unless separately approved.

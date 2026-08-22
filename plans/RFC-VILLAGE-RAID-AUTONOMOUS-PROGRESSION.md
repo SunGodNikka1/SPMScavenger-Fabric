@@ -6,13 +6,13 @@
 | --- | --- |
 | **Project root** | `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric` |
 | **Host platform** | Social Player Mobs (`playermob`) **v0.89.0** (canonical baseline) |
-| **Host baseline sync** | **Doc: CLOSED** (2026-08-22) · **Integration: OPEN** — runtime matrix must pin `playermob` 0.89.0 before Task-59; not a V3 design slice |
+| **Host baseline sync** | **CLOSED** (2026-08-22) — doc + authorization; runtime matrix pin is a Task-59 deliverable before launch |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `RFC_DESIGN_WORK_ARTIFACT_ONLY` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
-| **Status** | Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). Shipped V3-D1 = population/HOME facts only; V3-F = `ComposterWorkFacts` + `CompostGoal` @ P5. Runtime VR-T3a–m **UNVERIFIED**. |
-| **Nearest frontier** | **Task-59 / V3-G — NEXT but HOLD** until host-baseline **integration** sync (pin `playermob` 0.89.0) and separate authorization. Reopen V3-F only if integration/runtime evidence falsifies a locked invariant. |
-| **Last update** | 2026-08-22 (`User` + `Agent_Cursor` — SPM v0.89.0 host-baseline/provenance sync; 0.86→0.89 V3-sensitive delta **PASS**) |
+| **Status** | Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G OPEN / AUTHORIZED**. Runtime VR-T3 campaign **NOT YET AUTHORIZED**. |
+| **Nearest frontier** | **Task-59 / V3-G integration and closure — OPEN / AUTHORIZED**. Minecraft runtime campaign **NOT YET AUTHORIZED**. Reopen V3-F only if integration/runtime evidence falsifies a locked invariant. |
+| **Last update** | 2026-08-22 (`User` — Task-59 authorization; runtime campaign withheld) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -33,7 +33,7 @@
 | **Canonical host baseline** | SPM **`playermob` v0.89.0** |
 | **Historical audit pin** | SPM v0.86.0 (`4b80b5e849`) — retained as **historical provenance** where cited below; not rewritten |
 | **0.86→0.89 host-delta review** | **PASS** for V3-sensitive assumptions (see table) |
-| **Task-59 integration gate** | Approved runtime matrix must load **`playermob` 0.89.0** — doc sync alone does not authorize Task-59 |
+| **Task-59 integration gate** | **`playermob` 0.89.0** pinned in approved runtime matrix — Task-59 deliverable before runtime launch |
 
 **V3-sensitive assumptions — delta review (`PASS` v0.89.0):**
 
@@ -728,8 +728,9 @@ Minecraft launch.
 **Historical frontier (SUPERSEDED):** this section originally pointed to V2 Trading / task-47.
 V2 is now **CLOSED — VR-T2 RUNTIME PASS**. Task-52 (shared `MandatoryOwnership` / `V2-DEF-002`
 repair, `D-VR-084`) is **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT + R1** (2026-08-20). Tasks 53–57
-subsequently delivered V3-A/B/C/D1/E static slices; **task-58/V3-F CLOSED** (2026-08-22). The
-canonical frontier is **Task-59 / V3-G — NEXT but HOLD** until separately authorized.
+subsequently delivered V3-A/B/C/D1/E/F static slices; **task-58/V3-F CLOSED** (2026-08-22). The
+canonical frontier is **Task-59 / V3-G — OPEN / AUTHORIZED**; Minecraft runtime campaign **NOT YET
+AUTHORIZED**.
 
 ### V2 implementation contract (`IMPLEMENTED + CLOSED` — historical contract retained)
 
@@ -4547,7 +4548,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social | **IMPLEMENTED + RUNTIME CLOSED** — task-46 / 1.11.0 (A–D) | VR-T1.5a–c **CLOSED** (2026-08-15) |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | `KnownVillager` held until V4+ consumer; other work moved to V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains**, relationship credit, finished-output projection, optional Trade Everything source | **IMPLEMENTED + CLOSED** — VR-T2 vanilla path and V2-TE positive path runtime-confirmed to recorded scope | **VR-T2 PASS**; **VR-T2k PASS (`V2-DEF-003c-R1`)**. VR-T2l, V2-I, and profiling are **DEFERRED / NON-BLOCKING** |
-| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | A/B/C/D1/E/F **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (tasks 52–58; 1589 tests). Broad V3-D2 workstation awareness **DEFERRED**. V3-G **NEXT but HOLD**. | VR-T3a–m below; runtime **UNVERIFIED** until batched campaign |
+| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | A/B/C/D1/E/F **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (tasks 52–58; 1589 tests). Broad V3-D2 workstation awareness **DEFERRED**. **V3-G OPEN / AUTHORIZED** (task-59). | VR-T3a–m below; runtime **UNVERIFIED** until batched campaign (**launch NOT AUTHORIZED**) |
 | **V4** | Factual site utility + **Place opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**), known traders, utility-driven home promotion and return preference beyond shipped V1.5 return | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
 | **V6** | Player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup, **zombie-villager curing** | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup; curing scenarios to be defined in V6 |
@@ -4633,10 +4634,10 @@ familiarity, an active loot goal, or absence of a V3 work candidate.
 | **V3-D2 — read-only workstation evidence (broad)** | V3-D1 | Generic bounded loaded `PoiTypes.FARMER` workstation evidence for future consumers | Provenance/age/completeness; executor revalidates live block | Becomes gen-1 V3-F prerequisite; executor-local scan | VR-T3f | **DEFERRED** — not required for V3-F gen-1 |
 | **V3-E — population food support** | V3-A; **V3-D1** (villager count + HOME capacity facts); disposable-resource policy; existing gift/drop seam | Offer bounded food surplus when population evidence requests support | Revalidate population, target, inventory reserve, and path at handoff | Consume personal/progression reserve; command breeding; loop gifts with no deficit | VR-T3e/j | **CLOSED / STATIC-BEHAVIORAL ACCEPT** — **task-57** (1543 tests; **DO NOT REOPEN** unless runtime falsifies locked invariant) |
 | **V3-F — composting** | V3-A; V3-C/E; **D-VR-085-A2** + **D-VR-086-A2** + **D-VR-087-A1** + **D-VR-087-TX1**; **`D58-1…D58-12`** | Opportunistic: spend one explicitly disposable compostable at one loaded known composter in one vanilla attempt | Replant/population/progression reserves survive; one attempt terminates; READY output not extracted gen-1 | Double debit; scan every tick; manufactured seed/bone-meal demand; unmodelled stock composted | VR-T3d/j | **CLOSED / STATIC-BEHAVIORAL ACCEPT** — **task-58** (1589 tests; Gate 0 PASS; **DO NOT REOPEN** unless runtime falsifies locked invariant) |
-| **V3-G — integration and closure** | V3-A…F | Static/build gates plus temporary `spm_vr` V3 presets and approved runtime matrix | **Applicable** VR-T3 rows record must/must-not evidence and semantic-drift review (see closure rule) | Replant + one chest row close the whole phase; compile is called behavior proof; **VR-T3f pulled in via closure wording** | VR-T3a–m (**VR-T3f non-applicable** while V3-D2 deferred) | **NEXT FRONTIER — HOLD** until separate Task-59 authorization |
+| **V3-G — integration and closure** | V3-A…F | Static/build gates plus temporary `spm_vr` V3 presets and approved runtime matrix | **Applicable** VR-T3 rows record must/must-not evidence and semantic-drift review (see closure rule) | Replant + one chest row close the whole phase; compile is called behavior proof; **VR-T3f pulled in via closure wording** | VR-T3a–m (**VR-T3f non-applicable** while V3-D2 deferred) | **OPEN / AUTHORIZED** — **task-59**; runtime campaign **NOT YET AUTHORIZED** |
 
-Tasks 52–58 are complete (static). **V3-G (task-59)** is the canonical next slice but **HOLD**
-until separately authorized.
+Tasks 52–58 are complete (static). **V3-G (task-59)** is **OPEN / AUTHORIZED**. Minecraft runtime
+campaign **NOT YET AUTHORIZED**.
 
 **Dependency sequence (amended 2026-08-22):** `V2-DEF-002 repair / D-VR-084 → V3-A`; `V3-A → V3-B/C/D1`;
 `V3-D1 → V3-E`; **`V3-D1 + V3-C + V3-E → V3-F`**; `V3-A…F → V3-G`. Broad V3-D2 is **not** on the
@@ -4647,7 +4648,7 @@ V3-F critical path. Executor-local POI query (Option B) and cubic block scan (Op
 
 ```text
 task-58 = V3-F composting (ComposterWorkFacts + CompostGoal + reserve/transaction policies) — CLOSED
-task-59 = V3-G integration/runtime closure — NEXT but HOLD
+task-59 = V3-G integration/runtime closure — OPEN / AUTHORIZED (runtime launch NOT AUTHORIZED)
 ```
 
 Splitting composter facts into a separate “V3-D2 task” before V3-F is **rejected** — the facts are a
@@ -4820,6 +4821,10 @@ requires static/build regression pass, temporary `spm_vr` preset manifest, appro
 document, and **explicit runtime-launch approval per AGENTS.md**. No additional read-only source-audit
 gate unless a new subsystem is introduced (none planned for current V3-G scope).
 
+**Task-59 runtime authorization (`LOCKED` 2026-08-22):** Task-59 implementation/integration work is
+**AUTHORIZED**. The batched Minecraft VR-T3 runtime campaign is **NOT YET AUTHORIZED** — separate
+explicit launch approval required per AGENTS.md Gate 6.
+
 **Out of scope for task-58:** `VillageWorkSelector` · broad V3-D2 workstation framework · bone-meal
 extraction/application goal · V3-G runtime datapack · `MandatoryOwnership` publisher · PlaceTorch
 contention fix (document as `RUNTIME_QUESTION`).
@@ -4901,7 +4906,7 @@ task-55 = V3-C committed crop episode
 task-56 = V3-D1 population/HOME facts (not workstation/composter positions)
 task-57 = V3-E population food support
 task-58 = V3-F composting (ComposterWorkFacts + CompostGoal) — CLOSED
-task-59 = V3-G integration/runtime closure — NEXT but HOLD
+task-59 = V3-G integration/runtime closure — OPEN / AUTHORIZED
 ```
 
 **Runtime sequencing (User, 2026-08-19; amended 2026-08-22).** D-VR-084 gets **automated behavioural
@@ -4909,7 +4914,8 @@ acceptance now and no dedicated Minecraft session**:
 
 ```text
 tasks 52–58 static acceptance (DONE)
-        -> ONE batched runtime campaign (task-59 / V3-G), including D-VR-084 witness + VR-T3d
+        -> task-59 / V3-G integration (AUTHORIZED; runtime launch NOT AUTHORIZED)
+        -> ONE batched runtime campaign when separately approved, including D-VR-084 witness + VR-T3d
         -> VR-T3f remains deferred with broad V3-D2 (non-applicable to V3-G closure)
 ```
 
@@ -7829,5 +7835,18 @@ Task-58 implementation/static closure **not reopened**.
 | Target-lifecycle semantic (v0.89.0) | Existing `getTarget()` acquire/loss edges gain social/reincarnation semantics — **not** a new retention mechanism; Task-59 witness only |
 
 **Frontier after:** Host-baseline **doc sync CLOSED** (wording defect corrected 2026-08-22).
-**Integration sync OPEN** (runtime matrix pin). Task-58 **CLOSED**. Six prior RFC blockers **CLOSED**.
-Task-59 **HOLD**.
+Task-58 **CLOSED**. Six prior RFC blockers **CLOSED**. Task-59 **OPEN / AUTHORIZED**. Runtime
+campaign **NOT YET AUTHORIZED**.
+
+### Contribution — User (`Task-59` authorization, 2026-08-22)
+
+**Agent:** `User` · **Mode:** authorization record only
+
+| Item | Status |
+| --- | --- |
+| Task-58 / V3-F | **CLOSED** |
+| Task-59 / V3-G | **OPEN / AUTHORIZED** |
+| Minecraft runtime campaign | **NOT YET AUTHORIZED** |
+
+**Frontier after:** Begin Task-59 integration work (static/build gates, `spm_vr` presets, runtime
+matrix document). Do not launch Minecraft without separate runtime approval.
