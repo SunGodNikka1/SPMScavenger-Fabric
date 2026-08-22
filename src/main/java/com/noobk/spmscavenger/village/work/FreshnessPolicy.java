@@ -24,4 +24,15 @@ public final class FreshnessPolicy {
         }
         return facts.withFreshness(next, currentTick);
     }
+
+    public static ComposterWorkFacts apply(ComposterWorkFacts facts, long currentTick) {
+        if (facts.completeness() != WorkFactsCompleteness.COMPLETE) {
+            return facts;
+        }
+        WorkFactsFreshness next = classify(facts.observedAtTick(), currentTick);
+        if (next == facts.freshness()) {
+            return facts;
+        }
+        return facts.withFreshness(next);
+    }
 }

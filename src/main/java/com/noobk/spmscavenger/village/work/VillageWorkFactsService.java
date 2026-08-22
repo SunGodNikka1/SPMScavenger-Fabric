@@ -22,6 +22,7 @@ public final class VillageWorkFactsService {
     public static void shutdown(MinecraftServer server) {
         VillageWorkFactsCache.shutdown(server);
         VillageWorkFactsScheduler.shutdown(server);
+        ComposterWorkFactsService.shutdown(server);
     }
 
     public static void onAnchorSuperseded(ServerLevel level, BlockPos oldAnchor) {
@@ -30,6 +31,7 @@ public final class VillageWorkFactsService {
         }
         SettlementIdentity stale = SettlementIdentity.of(level.dimension(), oldAnchor);
         VillageWorkFactsCache.forServer(level.getServer()).invalidate(stale);
+        ComposterWorkFactsService.invalidate(level, stale);
         VillageWorkFactsScheduler.forServer(level.getServer()).cancelPending(level.dimension(), stale);
         VillageWorkFactsDiagnostics.recordAnchorInvalidation();
     }
@@ -63,6 +65,7 @@ public final class VillageWorkFactsService {
         }
         VillageWorkFacts facts = VillageWorkObservationService.observe(level, identity, tick);
         VillageWorkFactsCache.forServer(level.getServer()).put(facts);
+        ComposterWorkFactsService.refreshNow(level, identity, tick);
         if (facts.completeness() == WorkFactsCompleteness.COMPLETE) {
             VillageWorkFactsDiagnostics.recordCompleteObservation();
         } else {

@@ -5,6 +5,7 @@ import com.noobk.spmscavenger.goal.AnticsGoal;
 import com.noobk.spmscavenger.goal.CampfireGoal;
 import com.noobk.spmscavenger.goal.ControlledDescentGoal;
 import com.noobk.spmscavenger.goal.CraftTorchesGoal;
+import com.noobk.spmscavenger.goal.CompostGoal;
 import com.noobk.spmscavenger.goal.EnvironmentalEscapeGoal;
 import com.noobk.spmscavenger.goal.ExplorationActivityGoal;
 import com.noobk.spmscavenger.goal.ExploringGoal;
@@ -101,7 +102,8 @@ public final class MoveHolderClassifier {
             return ActivityClass.MAINTENANCE;
         }
         if (VillageHarvestEpisodeGoal.class.isAssignableFrom(goalType)
-                || PopulationFoodSupportGoal.class.isAssignableFrom(goalType)) {
+                || PopulationFoodSupportGoal.class.isAssignableFrom(goalType)
+                || CompostGoal.class.isAssignableFrom(goalType)) {
             return ActivityClass.VILLAGE_WORK;
         }
         if (CampfireGoal.class.isAssignableFrom(goalType)) {

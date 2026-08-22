@@ -23,5 +23,8 @@ public final class VillageWorkTuning {
     /** Abort as INCOMPLETE when more villager entities would be counted. */
     public static final int MAX_VILLAGERS_PER_OBSERVATION = 64;
 
+    /** Abort as INCOMPLETE when more composter POI records would be scanned (V3-F). */
+    public static final int MAX_COMPOSTERS_PER_OBSERVATION = 128;
+
     private VillageWorkTuning() {}
 }
