@@ -17,10 +17,12 @@ class PopulationFoodStructuralTest {
     }
 
     @Test
-    void mustHappen_admissionDoesNotReadWorkFacts() throws IOException {
+    void mustHappen_handoffPreflightPeeksCurrentFactsNotPlanCapture() throws IOException {
         String body = source("village/PopulationFoodSupportAdmission.java");
-        assertFalse(body.contains("VillageWorkFactsService"),
-                "admission must not schedule or peek facts — goal/selector owns evidence reads");
+        assertTrue(body.contains("VillageWorkFactsService.peek(level, plan.settlement())"));
+        assertFalse(body.contains("plan.facts()"));
+        assertFalse(body.contains("VillageWorkFactsService.schedule"),
+                "admission must not schedule observation — selector owns refresh requests");
     }
 
     @Test
@@ -79,11 +81,20 @@ class PopulationFoodStructuralTest {
     }
 
     @Test
-    void mustHappen_recipientSelectorBoundsEnumeration() throws IOException {
+    void mustHappen_recipientSelectorUsesBoundedEnumerationSeams() throws IOException {
         String body = Files.readString(Path.of(
                 "src/main/java/com/noobk/spmscavenger/village/population/PopulationFoodRecipientSelector.java"));
-        assertTrue(body.contains("MAX_RECIPIENT_CANDIDATES"));
-        assertFalse(body.contains("getEntitiesOfClass(Villager.class, level.getEntitiesOfClass"),
-                "must not enumerate entire dimension");
+        assertTrue(body.contains("VillagerRecipientCandidateSource"));
+        assertTrue(body.contains("MAX_RECIPIENT_CANDIDATES + 1"));
+        assertFalse(body.contains("getEntitiesOfClass("),
+                "must use bounded ServerLevel#getEntities maxResults seam");
+    }
+
+    @Test
+    void mustHappen_homeProofUsesBoundedVacantHomeSource() throws IOException {
+        String body = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/village/population/BreederLocalHomeProof.java"));
+        assertTrue(body.contains("VacantHomeCandidateSource"));
+        assertTrue(body.contains("MAX_HOME_PROBES_PER_RECIPIENT"));
     }
 }

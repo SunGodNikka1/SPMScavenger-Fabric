@@ -7,9 +7,14 @@ import com.noobk.spmscavenger.village.population.PopulationFoodExpendabilityPoli
 import com.noobk.spmscavenger.village.population.PopulationFoodInterlocks;
 import com.noobk.spmscavenger.village.population.PopulationFoodRecipientSelector;
 import com.noobk.spmscavenger.village.population.PopulationFoodDeliveryPlan;
+import com.noobk.spmscavenger.village.population.PopulationFoodTuning;
 import com.noobk.spmscavenger.village.work.PopulationSupportVacancyPolicy;
 import com.noobk.spmscavenger.village.work.FreshnessPolicy;
+import com.noobk.spmscavenger.village.work.SettlementIdentity;
 import com.noobk.spmscavenger.village.work.VillageWorkFacts;
+import com.noobk.spmscavenger.village.work.VillageWorkFactsService;
+import com.noobk.spmscavenger.village.work.WorkFactsCompleteness;
+import com.noobk.spmscavenger.village.work.WorkFactsFreshness;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -17,6 +22,8 @@ import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.level.GameRules;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.Optional;
 
 /**
  * Admission wiring for {@link com.noobk.spmscavenger.goal.PopulationFoodSupportGoal}.
@@ -54,6 +61,45 @@ public final class PopulationFoodSupportAdmission {
     }
 
     /**
+     * Whether the mob still remembers the exact settlement anchor from the plan (CLOSE-57-2).
+     */
+    public static boolean settlementStillRemembered(MobVillageMemory memory, SettlementIdentity settlement) {
+        if (memory == null || settlement == null) {
+            return false;
+        }
+        return memory.villages().stream()
+                .anyMatch(village -> village.anchor().equals(settlement.anchor()));
+    }
+
+    /**
+     * Current cache evidence for handoff — never falls back to plan-captured facts (CLOSE-57-2).
+     */
+    public static boolean currentSettlementEvidence(
+            MobVillageMemory memory,
+            SettlementIdentity settlement,
+            Optional<VillageWorkFacts> peeked,
+            long gameTime) {
+        if (!settlementStillRemembered(memory, settlement) || peeked.isEmpty()) {
+            return false;
+        }
+        VillageWorkFacts facts = FreshnessPolicy.apply(peeked.get(), gameTime);
+        if (facts.completeness() != WorkFactsCompleteness.COMPLETE
+                || facts.freshness() != WorkFactsFreshness.FRESH) {
+            return false;
+        }
+        return PopulationSupportVacancyPolicy.isPopulationSupportCandidate(facts);
+    }
+
+    /**
+     * Route/interaction distance gate immediately before COMMIT (CLOSE-57-3).
+     */
+    public static boolean withinHandoffDistance(Mob mob, Villager recipient) {
+        return mob != null
+                && recipient != null
+                && mob.distanceToSqr(recipient) < PopulationFoodTuning.REACH_DISTANCE_SQR;
+    }
+
+    /**
      * Full handoff preflight — must pass before backpack debit (task-57 §5).
      */
     public static boolean handoffPreflight(
@@ -67,6 +113,9 @@ public final class PopulationFoodSupportAdmission {
             return false;
         }
         Villager recipient = plan.recipient();
+        if (!withinHandoffDistance(mob, recipient)) {
+            return false;
+        }
         if (!PopulationFoodRecipientSelector.isEligibleAdult(
                 recipient, plan.settlement().anchor())) {
             return false;
@@ -77,8 +126,15 @@ public final class PopulationFoodSupportAdmission {
         if (PopulationFoodInterlocks.blocksHandoff(mob.getUUID(), recipient.getUUID(), gameTime)) {
             return false;
         }
-        VillageWorkFacts facts = FreshnessPolicy.apply(plan.facts(), gameTime);
-        if (!PopulationSupportVacancyPolicy.isPopulationSupportCandidate(facts)) {
+        Optional<MobVillageMemory> memory = VillageMemorySavedData.get(level).peek(mob.getUUID());
+        if (memory.isEmpty()) {
+            return false;
+        }
+        if (!currentSettlementEvidence(
+                memory.get(),
+                plan.settlement(),
+                VillageWorkFactsService.peek(level, plan.settlement()),
+                gameTime)) {
             return false;
         }
         if (!com.noobk.spmscavenger.village.population.BreederLocalHomeProof.hasReachableVacantHome(

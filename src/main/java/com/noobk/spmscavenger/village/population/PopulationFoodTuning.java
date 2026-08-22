@@ -26,8 +26,11 @@ public final class PopulationFoodTuning {
 
     public static final int TOSS_PICK_UP_DELAY = 10;
 
-    /** Bounded recipient enumeration for path probes. */
+    /** Bounded recipient enumeration for expensive HOME/path probes. */
     public static final int MAX_RECIPIENT_CANDIDATES = 8;
+
+    /** Max villager-navigation HOME path creations per recipient probe. */
+    public static final int MAX_HOME_PROBES_PER_RECIPIENT = 8;
 
     private PopulationFoodTuning() {}
 }

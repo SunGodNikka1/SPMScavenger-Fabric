@@ -5,6 +5,7 @@ import com.noobk.spmscavenger.village.KnownVillage;
 import com.noobk.spmscavenger.village.MobVillageMemory;
 import com.noobk.spmscavenger.village.SettlementBoundsPolicy;
 import com.noobk.spmscavenger.village.VillageMemorySavedData;
+import com.noobk.spmscavenger.village.VillagePerception;
 import com.noobk.spmscavenger.village.work.FreshnessPolicy;
 import com.noobk.spmscavenger.village.work.PopulationSupportVacancyPolicy;
 import com.noobk.spmscavenger.village.work.SettlementIdentity;
@@ -13,22 +14,35 @@ import com.noobk.spmscavenger.village.work.VillageWorkFactsService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.pathfinder.Path;
+import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 /**
  * Deterministic adult villager ranking for population food (task-57 §3).
  */
 public final class PopulationFoodRecipientSelector {
+
+    /**
+     * Bounded adult-villager enumeration for expensive HOME/path probes.
+     *
+     * @return {@code false} when {@link PopulationFoodTuning#MAX_RECIPIENT_CANDIDATES} is exceeded
+     */
+    @FunctionalInterface
+    public interface VillagerRecipientCandidateSource {
+        boolean enumerate(Predicate<Villager> visitor);
+    }
 
     private PopulationFoodRecipientSelector() {}
 
@@ -49,7 +63,15 @@ public final class PopulationFoodRecipientSelector {
         List<SettlementCandidate> settlements = candidateSettlements(level, memory.get(), gameTime);
         for (SettlementCandidate candidate : settlements) {
             Optional<PopulationFoodDeliveryPlan> plan = selectInSettlement(
-                    level, mob, candidate.identity(), candidate.facts(), backpack, mainHand, offHand, gameTime);
+                    level,
+                    mob,
+                    candidate.identity(),
+                    candidate.facts(),
+                    backpack,
+                    mainHand,
+                    offHand,
+                    gameTime,
+                    villagerSource(level, mob, candidate.identity().anchor()));
             if (plan.isPresent()) {
                 return plan;
             }
@@ -84,7 +106,7 @@ public final class PopulationFoodRecipientSelector {
                 .ifPresent(facts -> out.add(new SettlementCandidate(identity, facts)));
     }
 
-    private static Optional<PopulationFoodDeliveryPlan> selectInSettlement(
+    static Optional<PopulationFoodDeliveryPlan> selectInSettlement(
             ServerLevel level,
             Mob mob,
             SettlementIdentity identity,
@@ -92,34 +114,34 @@ public final class PopulationFoodRecipientSelector {
             Container backpack,
             ItemStack mainHand,
             ItemStack offHand,
-            long gameTime) {
+            long gameTime,
+            VillagerRecipientCandidateSource villagers) {
         BlockPos anchor = identity.anchor();
         List<VillagerCandidate> candidates = new ArrayList<>();
-        List<Villager> villagers = level.getEntitiesOfClass(
-                Villager.class,
-                mob.getBoundingBox().inflate(
-                        com.noobk.spmscavenger.village.VillagePerception.VILLAGE_QUERY_RADIUS),
-                villager -> isEligibleAdult(villager, anchor));
-        int examined = 0;
-        for (Villager villager : villagers) {
-            if (examined >= PopulationFoodTuning.MAX_RECIPIENT_CANDIDATES) {
-                break;
+        int[] expensiveProbes = {0};
+        boolean enumerationComplete = villagers.enumerate(villager -> {
+            if (expensiveProbes[0] >= PopulationFoodTuning.MAX_RECIPIENT_CANDIDATES) {
+                return false;
             }
             if (!needsFood(villager)) {
-                continue;
+                return true;
             }
             if (PopulationFoodInterlocks.blocksHandoff(mob.getUUID(), villager.getUUID(), gameTime)) {
-                continue;
+                return true;
             }
+            expensiveProbes[0]++;
             if (!BreederLocalHomeProof.hasReachableVacantHome(level, villager)) {
-                continue;
+                return true;
             }
             Path path = pathToRecipient(mob, villager);
             if (path == null || !path.canReach()) {
-                continue;
+                return true;
             }
-            examined++;
             candidates.add(new VillagerCandidate(villager, path));
+            return true;
+        });
+        if (candidates.isEmpty() && !enumerationComplete) {
+            return Optional.empty();
         }
         if (candidates.isEmpty()) {
             return Optional.empty();
@@ -144,6 +166,32 @@ public final class PopulationFoodRecipientSelector {
                 best.villager(),
                 best.path(),
                 delivery.get()));
+    }
+
+    static VillagerRecipientCandidateSource villagerSource(
+            ServerLevel level, Mob mob, BlockPos anchor) {
+        return visitor -> {
+            double radius = VillagePerception.VILLAGE_QUERY_RADIUS;
+            AABB box = mob.getBoundingBox().inflate(radius, radius, radius);
+            List<Villager> matches = new ArrayList<>();
+            level.getEntities(
+                    EntityType.VILLAGER,
+                    box,
+                    villager -> isEligibleAdult(villager, anchor),
+                    matches,
+                    PopulationFoodTuning.MAX_RECIPIENT_CANDIDATES + 1);
+            if (matches.size() > PopulationFoodTuning.MAX_RECIPIENT_CANDIDATES) {
+                return false;
+            }
+            matches.sort(Comparator.comparingDouble((Villager villager) -> mob.distanceToSqr(villager))
+                    .thenComparing(villager -> villager.getUUID().toString()));
+            for (Villager villager : matches) {
+                if (!visitor.test(villager)) {
+                    return false;
+                }
+            }
+            return true;
+        };
     }
 
     public static boolean isEligibleAdult(Villager villager, BlockPos anchor) {

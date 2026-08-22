@@ -10,10 +10,23 @@ import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.level.pathfinder.Path;
 
+import java.util.Iterator;
+import java.util.function.Consumer;
+
 /**
  * Read-only breeder-local vacant HOME proof (G0-A-B / G0-3). Never calls {@link PoiManager#take}.
  */
 public final class BreederLocalHomeProof {
+
+    /**
+     * Lazy vacant-HOME enumeration with an explicit path-probe budget per recipient.
+     *
+     * @return {@code false} when {@link PopulationFoodTuning#MAX_HOME_PROBES_PER_RECIPIENT} is exceeded
+     */
+    @FunctionalInterface
+    public interface VacantHomeCandidateSource {
+        boolean enumerate(Consumer<PoiRecord> visitor);
+    }
 
     private BreederLocalHomeProof() {}
 
@@ -22,13 +35,28 @@ public final class BreederLocalHomeProof {
             return false;
         }
         BlockPos center = villager.blockPosition();
-        return level.getPoiManager()
-                .getInRange(
-                        holder -> holder.is(PoiTypes.HOME),
-                        center,
-                        PopulationFoodTuning.BREEDER_LOCAL_RADIUS,
-                        PoiManager.Occupancy.HAS_SPACE)
-                .anyMatch(record -> canReach(villager, record.getPos(), record.getPoiType()));
+        return anyReachableVacantHome(villager, vacantHomeSource(level, center));
+    }
+
+    static VacantHomeCandidateSource vacantHomeSource(ServerLevel level, BlockPos center) {
+        return visitor -> {
+            Iterator<PoiRecord> iterator = level.getPoiManager()
+                    .getInRange(
+                            holder -> holder.is(PoiTypes.HOME),
+                            center,
+                            PopulationFoodTuning.BREEDER_LOCAL_RADIUS,
+                            PoiManager.Occupancy.HAS_SPACE)
+                    .iterator();
+            int examined = 0;
+            while (iterator.hasNext()) {
+                examined++;
+                if (examined > PopulationFoodTuning.MAX_HOME_PROBES_PER_RECIPIENT) {
+                    return false;
+                }
+                visitor.accept(iterator.next());
+            }
+            return true;
+        };
     }
 
     /**
@@ -42,14 +70,18 @@ public final class BreederLocalHomeProof {
         return path != null && path.canReach();
     }
 
-    /** Package-visible for tests that inject a POI stream without {@code take()}. */
     static boolean anyReachableVacantHome(
             Villager villager,
-            java.util.stream.Stream<PoiRecord> vacantHomeRecords) {
-        if (villager == null || vacantHomeRecords == null) {
+            VacantHomeCandidateSource vacantHomes) {
+        if (villager == null || vacantHomes == null) {
             return false;
         }
-        return vacantHomeRecords.anyMatch(record ->
-                canReach(villager, record.getPos(), record.getPoiType()));
+        boolean[] found = {false};
+        boolean withinBudget = vacantHomes.enumerate(record -> {
+            if (!found[0] && canReach(villager, record.getPos(), record.getPoiType())) {
+                found[0] = true;
+            }
+        });
+        return withinBudget && found[0];
     }
 }
