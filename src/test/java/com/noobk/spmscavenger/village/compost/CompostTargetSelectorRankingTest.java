@@ -2,12 +2,20 @@ package com.noobk.spmscavenger.village.compost;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.pathfinder.Node;
+import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -17,6 +25,12 @@ class CompostTargetSelectorRankingTest {
 
     private static final BlockPos ANCHOR = new BlockPos(0, 64, 0);
     private static final Vec3 MOB_POS = new Vec3(0.5, 64.0, 0.5);
+
+    @BeforeAll
+    static void bootstrap() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
 
     @Test
     void close58_2_nearestLateInRawOrderRanksFirstForProbe() {
@@ -78,5 +92,90 @@ class CompostTargetSelectorRankingTest {
                 raw, MOB_POS, ANCHOR, (pos, anchor) -> true);
         assertEquals(near, ranked.getFirst(),
                 "ranking must override raw enumeration order before path probes");
+    }
+
+    @Test
+    void close58_2_firstReachableCandidateUsesExactlyOnePathProbe() {
+        BlockPos target = new BlockPos(1, 64, 0);
+        Path path = reachablePath(target);
+        AtomicInteger probes = new AtomicInteger();
+        var chosen = CompostTargetSelector.selectReachableComposter(
+                List.of(target),
+                pos -> {
+                    probes.incrementAndGet();
+                    return path;
+                });
+        assertTrue(chosen.isPresent());
+        assertEquals(1, probes.get());
+        assertSame(path, chosen.get().path());
+    }
+
+    @Test
+    void close58_2_kthReachableCandidateUsesExactlyKPathProbes() {
+        int k = CompostTuning.MAX_COMPOSTER_CANDIDATES;
+        List<BlockPos> order = new ArrayList<>();
+        for (int i = 0; i < k; i++) {
+            order.add(new BlockPos((i + 1) * 2, 64, 0));
+        }
+        BlockPos reachablePos = order.get(k - 1);
+        Path path = reachablePath(reachablePos);
+        AtomicInteger probes = new AtomicInteger();
+        var chosen = CompostTargetSelector.selectReachableComposter(
+                order,
+                pos -> {
+                    probes.incrementAndGet();
+                    return pos.equals(reachablePos) ? path : null;
+                });
+        assertTrue(chosen.isPresent());
+        assertEquals(k, probes.get());
+        assertEquals(reachablePos, chosen.get().pos());
+        assertSame(path, chosen.get().path());
+    }
+
+    @Test
+    void close58_2_noReachableCandidateUsesAtMostKPathProbes() {
+        int k = CompostTuning.MAX_COMPOSTER_CANDIDATES;
+        List<BlockPos> order = new ArrayList<>();
+        for (int i = 0; i < k + 3; i++) {
+            order.add(new BlockPos(i + 10, 64, 0));
+        }
+        AtomicInteger probes = new AtomicInteger();
+        var chosen = CompostTargetSelector.selectReachableComposter(
+                order,
+                pos -> {
+                    probes.incrementAndGet();
+                    return null;
+                });
+        assertTrue(chosen.isEmpty());
+        assertEquals(k, probes.get());
+    }
+
+    @Test
+    void close58_2_negativeControl_doublePathComputationWouldExceedBudgetOnSuccess() {
+        BlockPos target = new BlockPos(1, 64, 0);
+        Path path = reachablePath(target);
+        AtomicInteger probes = new AtomicInteger();
+        CompostTargetSelector.selectReachableComposter(
+                List.of(target),
+                pos -> {
+                    probes.incrementAndGet();
+                    return path;
+                });
+        assertEquals(1, probes.get(),
+                "a second pathToComposter on success would make this 2 and violate CLOSE-58-2");
+    }
+
+    @Test
+    void close58_2_selectInSettlementReusesSuccessfulProbePath() throws IOException {
+        String body = Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/noobk/spmscavenger/village/compost/CompostTargetSelector.java"));
+        assertTrue(body.contains("reachable.path()"));
+        assertFalse(body.contains("path = pathToComposter(mob, composterPos)"),
+                "selectInSettlement must not recompute path after bounded probe success");
+    }
+
+    private static Path reachablePath(BlockPos target) {
+        Node node = new Node(target.getX(), target.getY(), target.getZ());
+        return new Path(List.of(node), target, true);
     }
 }

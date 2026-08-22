@@ -5,7 +5,7 @@
 **Brief:** `.superpowers/sdd/task-58-brief.md` v1.1  
 **Gate 0:** `.superpowers/sdd/task-58-gate0-report.md` — `GATE_0_PASS`  
 **Target:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`  
-**Closure:** 2026-08-22 — CLOSE-58-1…3 static repair complete
+**Closure:** 2026-08-22 — CLOSE-58-1…3 static repair complete; CLOSE-58-2 probe reuse regression repaired same day
 
 ## Summary
 
@@ -20,7 +20,7 @@ Static closure repairs (CLOSE-58-1…3) landed in the same session:
 | Close item | Repair |
 | --- | --- |
 | **CLOSE-58-1** | `CompostExpendabilityPolicy` ranking — highest surplus, then lowest slot |
-| **CLOSE-58-2** | `CompostTargetSelector.rankedProbeOrder` — rank before path probes |
+| **CLOSE-58-2** | `CompostTargetSelector.rankedProbeOrder` — rank before path probes; `ReachableComposter` preserves successful `Path` (no second `pathToComposter` on selection) |
 | **CLOSE-58-3** | `CompostScenarioEvidenceTest` — T58-2,4,5,7,8,9,11,15 |
 
 ## Reserve wording (locked)
@@ -34,7 +34,7 @@ explicitly modelled by `CompostReserveModel`. Unknown-to-compost materials remai
 | Command | CWD | Result |
 | --- | --- | --- |
 | `.\gradlew.bat compileJava` | `Projects/SPMScavenger-1.21.1-Fabric` | **CONFIRMED** — success |
-| `.\gradlew.bat test` | `Projects/SPMScavenger-1.21.1-Fabric` | **CONFIRMED** — 1584 tests, 0 failures |
+| `.\gradlew.bat test` | `Projects/SPMScavenger-1.21.1-Fabric` | **CONFIRMED** — 1589 tests, 0 failures |
 
 ## Scenario coverage (static)
 
@@ -57,7 +57,7 @@ explicitly modelled by `CompostReserveModel`. Unknown-to-compost materials remai
 | T58-15 | `CompostScenarioEvidenceTest.t58_15_*` |
 | T58-16 | `CompostTransactionStructuralTest.t58_16_*` |
 | CLOSE-58-1 | `CompostExpendabilityPolicyTest.close58_1_*` |
-| CLOSE-58-2 | `CompostTargetSelectorRankingTest` |
+| CLOSE-58-2 | `CompostTargetSelectorRankingTest` — rank order + bounded probe counts on `selectReachableComposter` success seam |
 
 ## Architecture verdict (closure review)
 
@@ -69,7 +69,7 @@ explicitly modelled by `CompostReserveModel`. Unknown-to-compost materials remai
 | P5 / taxonomy wiring | ACCEPTED |
 | Reserve domain | ACCEPTED |
 | CLOSE-58-1 ranking | REPAIRED |
-| CLOSE-58-2 target order | REPAIRED |
+| CLOSE-58-2 target order | REPAIRED (probe reuse regression fixed) |
 | CLOSE-58-3 scenario proof | COMPLETE |
 
 ## UNVERIFIED (deferred)

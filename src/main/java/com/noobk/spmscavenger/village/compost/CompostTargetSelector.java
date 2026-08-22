@@ -42,6 +42,9 @@ public final class CompostTargetSelector {
         Path probe(BlockPos pos);
     }
 
+    /** Successful bounded path probe — preserves the {@link Path} for plan binding (CLOSE-58-2). */
+    record ReachableComposter(BlockPos pos, Path path) {}
+
     private CompostTargetSelector() {}
 
     public static Optional<CompostDeliveryPlan> select(ServerLevel level, Mob mob, long gameTime) {
@@ -126,7 +129,7 @@ public final class CompostTargetSelector {
                 .toList();
     }
 
-    static Optional<BlockPos> selectReachableComposter(
+    static Optional<ReachableComposter> selectReachableComposter(
             List<BlockPos> probeOrder,
             PathProbe pathProbe) {
         int probes = 0;
@@ -137,7 +140,7 @@ public final class CompostTargetSelector {
             }
             Path path = pathProbe.probe(pos);
             if (path != null && path.canReach()) {
-                return Optional.of(pos);
+                return Optional.of(new ReachableComposter(pos, path));
             }
         }
         return Optional.empty();
@@ -171,19 +174,15 @@ public final class CompostTargetSelector {
                         && SettlementBoundsPolicy.within(pos, settlementAnchor)
                         && CompostMechanicalEligibility.canAcceptInput(level.getBlockState(pos)));
 
-        Optional<BlockPos> chosen = selectReachableComposter(
+        Optional<ReachableComposter> chosen = selectReachableComposter(
                 probeOrder,
                 pos -> pathToComposter(mob, pos));
         if (chosen.isEmpty()) {
             return Optional.empty();
         }
-        BlockPos composterPos = chosen.get();
-        Path path = pathToComposter(mob, composterPos);
-        if (path == null || !path.canReach()) {
-            return Optional.empty();
-        }
+        ReachableComposter reachable = chosen.get();
         return Optional.of(new CompostDeliveryPlan(
-                identity, facts, composterPos, path, delivery));
+                identity, facts, reachable.pos(), reachable.path(), delivery));
     }
 
     private static Path pathToComposter(Mob mob, BlockPos pos) {
