@@ -14,6 +14,7 @@ import com.noobk.spmscavenger.village.work.VillageWorkFactsService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.npc.Villager;
@@ -25,7 +26,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.function.Predicate;
 
 /**
@@ -171,15 +171,17 @@ public final class PopulationFoodRecipientSelector {
         return visitor -> {
             double radius = VillagePerception.VILLAGE_QUERY_RADIUS;
             AABB box = mob.getBoundingBox().inflate(radius, radius, radius);
-            List<Villager> matches = level.getEntitiesOfClass(
-                    Villager.class,
+            List<Villager> matches = new ArrayList<>();
+            level.getEntities(
+                    EntityType.VILLAGER,
                     box,
-                    villager -> isEligibleAdult(villager, anchor));
+                    villager -> isEligibleAdult(villager, anchor),
+                    matches,
+                    PopulationFoodTuning.MAX_RECIPIENT_CANDIDATES);
             matches.sort(Comparator.comparingDouble((Villager villager) -> mob.distanceToSqr(villager))
                     .thenComparing(villager -> villager.getUUID().toString()));
-            int limit = Math.min(matches.size(), PopulationFoodTuning.MAX_RECIPIENT_CANDIDATES);
-            for (int i = 0; i < limit; i++) {
-                if (!visitor.test(matches.get(i))) {
+            for (Villager villager : matches) {
+                if (!visitor.test(villager)) {
                     return false;
                 }
             }

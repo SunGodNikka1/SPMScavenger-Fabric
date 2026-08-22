@@ -90,7 +90,7 @@ Task 55: STATIC-BEHAVIORAL ACCEPT (V3-C + R1 + closure CLOSE-1/2 — fail-open c
 
 Task 56: STATIC-BEHAVIORAL ACCEPT (V3-D + CLOSE-56-1/2 — anchor supersede cancelPending + real enumeration caps; 1499 tests, 0 failures; runtime VR-T3e/f UNVERIFIED) — `task-56-report.md`
 
-Task 57: DONE_WITH_CONCERNS (V3-E — CLOSE-57-1R semantics repair; 1541 tests, 0 failures; static re-review pending; runtime VR-T3e/j UNVERIFIED) — `task-57-report.md`
+Task 57: DONE_WITH_CONCERNS (V3-E — CLOSE-57-1F provider enumeration bounded; 1541 tests; static re-review pending; runtime UNVERIFIED) — `task-57-report.md`
 Task 57: Gate 0 PASS — `task-57-gate0-report.md`
 Task 57: peer review ACCEPT — `task-57-peer-review.md`
 Task 57: brief v1.2 LOCKED — `task-57-brief.md`

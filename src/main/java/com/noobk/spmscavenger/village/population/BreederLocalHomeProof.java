@@ -11,7 +11,7 @@ import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.level.pathfinder.Path;
 
 import java.util.Iterator;
-import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Read-only breeder-local vacant HOME proof (G0-A-B / G0-3). Never calls {@link PoiManager#take}.
@@ -20,10 +20,12 @@ public final class BreederLocalHomeProof {
 
     /**
      * Lazy vacant-HOME enumeration for injectable budget tests.
+     *
+     * <p>{@code false} from the visitor stops the provider immediately.
      */
     @FunctionalInterface
     public interface VacantHomeCandidateSource {
-        void enumerate(Consumer<PoiRecord> visitor);
+        void enumerate(Predicate<PoiRecord> visitor);
     }
 
     private BreederLocalHomeProof() {}
@@ -33,22 +35,25 @@ public final class BreederLocalHomeProof {
             return false;
         }
         BlockPos center = villager.blockPosition();
-        return anyReachableVacantHome(villager, vacantHomeSource(level, center));
-    }
-
-    static VacantHomeCandidateSource vacantHomeSource(ServerLevel level, BlockPos center) {
-        return visitor -> {
-            Iterator<PoiRecord> iterator = level.getPoiManager()
-                    .getInRange(
-                            holder -> holder.is(PoiTypes.HOME),
-                            center,
-                            PopulationFoodTuning.BREEDER_LOCAL_RADIUS,
-                            PoiManager.Occupancy.HAS_SPACE)
-                    .iterator();
-            while (iterator.hasNext()) {
-                visitor.accept(iterator.next());
+        Iterator<PoiRecord> iterator = level.getPoiManager()
+                .getInRange(
+                        holder -> holder.is(PoiTypes.HOME),
+                        center,
+                        PopulationFoodTuning.BREEDER_LOCAL_RADIUS,
+                        PoiManager.Occupancy.HAS_SPACE)
+                .iterator();
+        int probes = 0;
+        while (iterator.hasNext()) {
+            if (probes >= PopulationFoodTuning.MAX_HOME_PROBES_PER_RECIPIENT) {
+                break;
             }
-        };
+            PoiRecord record = iterator.next();
+            probes++;
+            if (canReach(villager, record.getPos(), record.getPoiType())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -63,34 +68,7 @@ public final class BreederLocalHomeProof {
     }
 
     /**
-     * Existential HOME proof — at most {@link PopulationFoodTuning#MAX_HOME_PROBES_PER_RECIPIENT}
-     * path probes; the first reachable vacant HOME succeeds even when more HOME records exist.
-     */
-    static boolean anyReachableVacantHome(
-            Villager villager,
-            VacantHomeCandidateSource vacantHomes) {
-        if (villager == null || vacantHomes == null) {
-            return false;
-        }
-        int[] probes = {0};
-        boolean[] found = {false};
-        vacantHomes.enumerate(record -> {
-            if (found[0]) {
-                return;
-            }
-            if (probes[0] >= PopulationFoodTuning.MAX_HOME_PROBES_PER_RECIPIENT) {
-                return;
-            }
-            probes[0]++;
-            if (canReach(villager, record.getPos(), record.getPoiType())) {
-                found[0] = true;
-            }
-        });
-        return found[0];
-    }
-
-    /**
-     * Test seam — same probe budget without requiring a live {@link Villager} navigation graph.
+     * Test seam — existential proof with bounded provider + probe work.
      */
     static boolean anyReachableVacantHome(
             VacantHomeCandidateSource vacantHomes,
@@ -102,15 +80,17 @@ public final class BreederLocalHomeProof {
         boolean[] found = {false};
         vacantHomes.enumerate(record -> {
             if (found[0]) {
-                return;
+                return false;
             }
             if (probes[0] >= PopulationFoodTuning.MAX_HOME_PROBES_PER_RECIPIENT) {
-                return;
+                return false;
             }
             probes[0]++;
             if (reachableOnProbeIndex.test(probes[0])) {
                 found[0] = true;
+                return false;
             }
+            return true;
         });
         return found[0];
     }
