@@ -9,9 +9,14 @@ mutation.
 
 | Gate | Status | User phrase to authorize |
 | --- | --- | --- |
-| **Brief design** | **v1 — for review** | **BEGIN task-57 / V3-E — BRIEF DESIGN ONLY** (User, 2026-08-21) |
-| **Gate 0 — read-only source audit** | **NOT AUTHORIZED** | **authorize task-57 gate 0** |
+| **Brief design** | **v1.1 — G0-A/G0-B locked** | **BEGIN task-57 / V3-E — BRIEF DESIGN ONLY** (User, 2026-08-21) |
+| **Gate 0 — read-only source audit** | **PASS** — see `task-57-gate0-report.md` (User authorized 2026-08-21) | **authorize task-57 gate 0** |
 | **Full implementation** | **NOT AUTHORIZED** | **authorize task-57** / **Implement V3-E** |
+
+**Brief revision history:**
+
+- v1 — initial brief (User accepted 2026-08-21)
+- v1.1 — **G0-A** dual reachability + **G0-B** commit/ACK separation locked after Gate 0 authorization
 
 **Target:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`
 
@@ -117,14 +122,23 @@ HANDOFF PREPARE
     fresh/complete facts
     recipient truth
     inventory/disposable surplus
-    HOME + HAS_SPACE + reachability
+    HOME + HAS_SPACE + reachability (B: villager→HOME, A: mob→recipient)
         │
         ▼
 COMMIT
   transfer exactly one bounded delivery
+  (item irreversibly leaves backpack)
         │
         ▼
-stop — episode DONE
+ACK_WAIT
+  observe only — inventory / item-entity absorption
+  never transfer again; never rollback
+        │
+        ▼
+terminal: DELIVERED_ACK | COMMITTED_UNCONFIRMED
+        │
+        ▼
+DONE — episode ends
         │
         ▼
 later attempt must re-resolve everything
@@ -136,10 +150,11 @@ later attempt must re-resolve everything
 | --- | --- | --- |
 | `IDLE` | scan cooldown / not running | none |
 | `SELECT` | bind settlement, facts, recipient, food choice, route | none |
-| `PATHING` | navigate toward recipient | movement only |
+| `PATHING` | navigate toward recipient (**PlayerMob→recipient path A**) | movement only |
 | `HANDOFF_PREPARE` | final preflight (tick-aligned with harvest WINDUP pattern) | none |
-| `COMMIT` | irreversible transfer | **one** bounded delivery |
-| `DONE` | `stop()` clears bindings; post-visit cooldown | none |
+| `COMMIT` | irreversible transfer — **one** bounded delivery | backpack debit + item entity |
+| `ACK_WAIT` | bounded post-commit observation only (**G0-B**) | none |
+| `DONE` | `stop()` clears bindings; outcome-specific cooldown | none |
 
 **Mirror task-55 pattern:** `VillageHarvestEpisodeGoal` uses `PATHING → WINDUP` with admission
 re-check at windup tick 1 and commit at windup end (`VillageHarvestEpisodeGoal.java`). Population
@@ -323,11 +338,40 @@ to test vacancy. Claiming a bed ticket to probe existence is **forbidden**.
    path if approximation is used).
 4. Document false-positive / false-negative risk of any approximation.
 
-### Reachability (Gate 0 pins)
+### Reachability — two independent proofs (**G0-A LOCKED**)
 
-Gate 0 must cite the same reachability check vanilla breeding uses (path to bed POI block, bed
-position, or interaction point — **not** guessed). Brief default: navigation path exists to a
-candidate vacant HOME associated with the recipient within 48 blocks; exact API deferred to Gate 0.
+Task-57 has **two path proofs that must not be collapsed**:
+
+| ID | Question | Pathfinder owner | When evaluated |
+| --- | --- | --- | --- |
+| **B** | Can this villager reach a breeder-local vacant HOME? | **`chosen Villager.getNavigation()`** — `VillagerMakeLove.canReach` semantics | SELECT + HANDOFF_PREPARE |
+| **A** | Can PlayerMob physically deliver food? | **PlayerMob navigation** → recipient | SELECT + PATHING + HANDOFF_PREPARE |
+
+```text
+recipient candidate
+    ↓
+villager-local HOME proof (B)
+    HOME + HAS_SPACE within 48 of recipient
+    recipient→HOME: villager nav path.canReach()
+    ↓
+PlayerMob path (A)
+    PlayerMob→recipient: mob nav path / interaction distance
+    ↓
+handoff
+```
+
+**Architecture defect:** proving B because PlayerMob can path to the bed block, or substituting A for B.
+
+Gate 0 pins B to:
+
+```text
+villager.getNavigation().createPath(bedPos, poiType.validRange()) != null
+    && path.canReach()
+```
+
+(same as `VillagerMakeLove.java` — see `task-57-gate0-report.md` G0-A).
+
+### Read-only HOME enumeration (Gate 0 **PASS**)
 
 ---
 
@@ -354,8 +398,26 @@ Dropping / transferring food is the **irreversible commit**. Immediately before 
 **No staged inventory debit** survives across scheduler ticks. Backpack mutation happens only inside
 `COMMIT` after final preflight (same discipline as `CropHarvestTransaction.commit`).
 
-**After irreversible handoff:** do not attempt rollback of a world item the villager may already own
-or pick up. Episode ends; future attempts re-resolve.
+**After irreversible handoff:** do not attempt rollback. Episode enters **ACK_WAIT**, then `DONE` with
+a terminal outcome (see §G0-B).
+
+### G0-B — Commit vs delivery acknowledgment (**LOCKED**)
+
+| Phase | Meaning |
+| --- | --- |
+| **COMMIT** | Backpack debit + spawn/throw item — **irreversible** |
+| **ACK_WAIT** | Observe only (inventory food-point delta vs pre-commit snapshot; item entity absorbed). **Never** transfer again. **Never** rollback. |
+| **DELIVERED_ACK** | ACK observed within bounded window — safe to treat as villager received food |
+| **COMMITTED_UNCONFIRMED** | Commit happened but receipt unproved — label **OFFERED** / **HANDOFF_COMMITTED**, not "received" |
+
+**Anti-loop:** `COMMITTED_UNCONFIRMED` uses **same or longer** cooldown as `DELIVERED_ACK` — must not
+immediately re-offer (VR-T3e).
+
+Provisional: `ACK_WAIT_TICKS` ≥ `tossPickUpDelay + margin` (Gate 0: pickUpDelay **10**; suggest **40**
+ticks total — `PROVISIONAL`).
+
+If ACK cannot be implemented cheaply (implementation regression only), fall back to immediate `DONE`
+with **`COMMITTED_UNCONFIRMED`** semantics only — never claim delivery without observation.
 
 ---
 
@@ -435,7 +497,7 @@ Document chosen semantics in task-57 report with `CONFIRMED` / `INFERRED` / `UNV
 
 ### After `COMMIT`
 
-Episode `DONE`. No rollback. Future candidacy requires full re-resolution.
+Episode enters **ACK_WAIT** then `DONE`. No rollback. Terminal outcome drives cooldown (§G0-B).
 
 ### Admission continuation
 
@@ -484,10 +546,12 @@ start while the winner is active (T57-10).
 **Locked:**
 
 ```text
-one successful delivery → episode ends
-→ per-settlement and/or per-recipient bounded re-evaluation window
+one terminal handoff per episode → DONE
+→ cooldown keyed to outcome (DELIVERED_ACK vs COMMITTED_UNCONFIRMED)
 → no immediate gift loop
 ```
+
+**G0-B:** unconfirmed offer (`COMMITTED_UNCONFIRMED`) **must not** immediately trigger another drop.
 
 **Provisional cooldown constants** live in `VillageWorkTuning` — **`PROVISIONAL`** until Gate 0 /
 brief revision explains the failure mode each cooldown prevents (VR-T3e “endless gifting”, approach→abort
@@ -530,62 +594,23 @@ incorrectly (task-55 / task-56 discipline).
 
 ---
 
-## Gate 0 proposal (read-only — **NOT AUTHORIZED** by this brief)
+## Gate 0 proposal — **COMPLETE (`GATE_0_PASS`)**
 
-Gate 0 executes only after **authorize task-57 gate 0**. If any stop condition triggers,
-implementation remains **HOLD**.
+See **`task-57-gate0-report.md`** for full evidence. Summary:
 
-### G0-1 — Vanilla breeding food values and thresholds
-
-- Source-pin 1.21.1 `Villager`, willingness / food inventory, breeding food acceptance.
-- Compare bread, carrots, potatoes, beetroots — food points, not stack size guesses.
-- Output: food-value table + recommended gen-1 item set or tag.
-
-### G0-2 — Villager pickup and inventory semantics
-
-- How ground items enter villager inventory; delays; `mobGriefing`; full inventory behavior.
-- Output: recommended handoff success definition (§7).
-
-### G0-3 — Read-only HOME + `HAS_SPACE` enumeration
-
-- Cite `PoiManager.getInRange` / `PoiRecord.hasSpace()` usage in breeding path.
-- Prove non-mutating probe exists OR design approximation with explicit semantic boundary.
-- **STOP** if only exact probe is `take()` — design alternative before implementation.
-
-### G0-4 — Vanilla reachability for breeding
-
-- Cite `VillagerMakeLove` / path logic used before breeding.
-- Map to Scavenger navigation proof (pathfinder, interaction range).
-
-### G0-5 — SPM gift/greet/drop machinery
-
-- Inspect pinned `FriendlyGreetGoal` and any item-throw primitive.
-- Decision: reusable mechanical primitive vs dedicated handoff — with social-credit isolation proof.
-
-### G0-6 — Expendability authority inventory
-
-- Map survival, progression, replant, mandatory, trade, fuel/sell reserves touching food items.
-- Output: delegation graph for `PopulationFoodExpendabilityPolicy`.
-
-### G0-7 — Scheduler / priority interaction
-
-- Confirm `VILLAGE_WORK` mutual exclusion between harvest and population goals via
-  `ActivityObservationService` + admission.
-- Document selector registration order in `SpmScavenger.java` if tie-breaking matters.
-
-### G0-8 — Willingness / deficit read-only signal (optional)
-
-- If vanilla exposes safe read: document API and limits.
-- If not: record `NOT FOUND` (three probes) and lock structural recipient ranking.
-
-### Gate 0 stop conditions
-
-| Condition | Action |
+| Gate | Result |
 | --- | --- |
-| Only mutating `PoiManager.take()` proves local vacancy | **HOLD** — design read-only probe first |
-| No villager food pickup path exists for mob-spawned items | **HOLD** — revise handoff mechanism |
-| Expendability cannot be expressed without double-spend across consumers | **HOLD** — design reserve delegation |
-| Handoff success cannot be defined stronger than “item entity existed” | **PASS WITH CONCERNS** — document `UNVERIFIED` runtime gap for VR-T3e campaign |
+| G0-1 Food points | bread=4, carrot/potato/beetroot=1; breeding ≥12 total |
+| G0-2 Pickup | mobGriefing + pickUpDelay + `wantsToPickUp` |
+| G0-3 Read-only HOME | `getInRange(HAS_SPACE)` — no `take()` |
+| **G0-A** Dual reachability | Villager nav → HOME; PlayerMob nav → recipient |
+| G0-5 SPM toss | Reuse physics; dedicated handoff primitive |
+| G0-6 Expendability | New food policy; food unmodelled in `SellReserveModel` |
+| G0-7 P4 exclusion | Shared MOVE\|LOOK flags |
+| G0-8 Willingness | `wantsMoreFood()` / `canBreed()` public |
+| **G0-B** ACK phase | **ACK_WAIT** recommended |
+
+Implementation remains **HOLD** until **authorize task-57**.
 
 ---
 
@@ -638,7 +663,7 @@ existing task-56 scheduler; it **must not** fabricate or persist population coun
 
 | ID | Question | Brief lean |
 | --- | --- | --- |
-| **PD-57-1** | Handoff success = pickup proof vs item-entity spawn | strongest practical per Gate 0 |
+| **PD-57-1** | Handoff success = pickup proof vs item-entity spawn | **G0-B LOCKED:** ACK_WAIT + `DELIVERED_ACK` vs `COMMITTED_UNCONFIRMED` |
 | **PD-57-2** | Food-value “meaningful progress” budget formula | derive from vanilla threshold, cap in tuning |
 | **PD-57-3** | Post-delivery cooldown scope (settlement vs recipient) | both — exact ticks provisional |
 | **PD-57-4** | Trade session interlock with same villager | likely yes — Gate 0 confirms |
@@ -669,5 +694,5 @@ existing task-56 scheduler; it **must not** fabricate or persist population coun
 | T57-1…T57-12 scenarios | **DONE** |
 | Gate 0 proposal | **DONE** |
 
-**Status:** `BRIEF v1 — FOR REVIEW`  
+**Status:** `BRIEF v1.1` — Gate 0 **PASS** (`task-57-gate0-report.md`)  
 **Implementation:** `HOLD`
