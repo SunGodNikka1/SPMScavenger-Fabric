@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **V3-F CLOSED** (task-58); **V3-G prep DONE** (task-59); runtime campaign **NOT AUTHORIZED** | `task-58-report.md`, `task-59-report.md` |
+| **V3 Village Work** | **V3-F CLOSED** (task-58); **V3-G pre-launch fixtures DONE** (task-59); runtime campaign **NOT AUTHORIZED** | `task-58-report.md`, `task-59-prelaunch-report.md` |
 
 **Task-59 authorization scope (2026-08-22):**
 
@@ -16,9 +16,10 @@
 | --- | --- |
 | Static/build work | **AUTHORIZED** |
 | `spm_vr` preset + runtime matrix preparation | **AUTHORIZED** |
+| Pre-launch fixture sub-slice (`spm_vr` bodies, structural test, env pin) | **DONE** (2026-08-22) |
 | Minecraft / `runClient` / batched VR-T3 execution | **NOT AUTHORIZED** |
 
-**Checkpoint before runtime launch:** Task-59 static/integration result + completed runtime matrix.
+**Checkpoint before runtime launch:** `task-59-prelaunch-report.md` + matrix + executable fixtures.
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
