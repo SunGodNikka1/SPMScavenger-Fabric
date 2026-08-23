@@ -9,10 +9,10 @@
 | **Host baseline sync** | **CLOSED** (2026-08-22) — doc + authorization; runtime matrix pin is a Task-59 deliverable before launch |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `RFC_DESIGN_WORK_ARTIFACT_ONLY` — **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
-| **Status** | Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G OPEN / AUTHORIZED**. Runtime VR-T3 campaign **NOT YET AUTHORIZED**. |
-| **Nearest frontier** | **Task-59 / V3-G integration and closure — OPEN / AUTHORIZED**. Minecraft runtime campaign **NOT YET AUTHORIZED**. Reopen V3-F only if integration/runtime evidence falsifies a locked invariant. |
-| **Last update** | 2026-08-22 (`User` — Task-59 authorization; runtime campaign withheld) |
+| **Mode** | `PLANNING` — runtime-validation preparation for **V2-TE-W2** only; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
+| **Status** | **V2-TE-W2 automatic fixture `LOCK RECOMMENDED / NOT AUTHORIZED`**. Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G OPEN / AUTHORIZED**. All Minecraft runtime campaigns **NOT YET AUTHORIZED**. |
+| **Nearest frontier** | User-selected compatibility side frontier: authorize **V2-TE-W2** fixture implementation after reviewing `D-VR-TE-W2-1`; global phase frontier remains **Task-59 / V3-G OPEN / AUTHORIZED** and is not blocked by W2. Minecraft runtime remains separately unauthorized. |
+| **Last update** | 2026-08-23 (`Agent_Codex` — V2-TE-W2 reproducible runtime fixture prepared in RFC only) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -2778,6 +2778,269 @@ more than one armed mob, or retained entity/world/container/Q2 references after 
 witness armed versus unarmed; any real-inventory block change before the existing commit; Q2 reference
 inequality at executor entry; more than one sale for a one-use funding plan; or any retained live
 reference after lifecycle abort fails the instrumentation itself before the currency witness is read.
+
+##### V2-TE-W2 — automatic emerald-block witness fixture (`Agent_Codex`, 2026-08-23)
+
+**Status:** `LOCK RECOMMENDED / IMPLEMENTATION NOT AUTHORIZED / RUNTIME NOT AUTHORIZED`.
+Compatibility maintenance only; independent of Task-59/V3-G. This section prepares the fixture
+contract and does not modify Java, tests, build files, datapacks, configuration, or a Minecraft
+world.
+
+**Frontier before:** the passive tracker and `start/status/report/stop/reset` commands were
+`CODE_CONFIRMED`, but a human still had to reproduce the exact PlayerMob inventory, route-exhaustion
+environment, compatible merchant, and vanilla purchase board. Three scoped absence probes:
+
+1. `NOT FOUND` — no `TeCurrencyWitnessFixture` type under `src/main` or `src/test`;
+2. `NOT FOUND` — no `prepare` or `run` literal in `TeCurrencyWitnessCommands`;
+3. `NOT FOUND` — no V2-TE/currency witness fixture under `test-datapacks/`.
+
+**Pinned current mechanisms (`CODE_CONFIRMED`):** `TeCurrencyWitnessTracker.preflight/arm` requires
+one PlayerMob, TE 0.8.0, separately ACTIVE currency capability, HEALTHY quote bridge, the iron-pickaxe
+consumer, STONE pick tier, four enchanted witness sticks, and zero starting emerald denominations.
+`GatherResourcesGoal.findTarget` scans the configured horizontal `gatherSearchRadius` and `dy=-4…4`;
+only that production scan may publish `RouteExhaustionEvidence`. `TradeEverythingTradeSource` quotes
+the authorized input against `villager.getOffers()` and never inserts the synthetic quote into the
+board. The generic adapter receives the exact Q2 object and remains the sole transaction owner.
+
+###### D-VR-TE-W2-1 — fixture mutates inputs; production decides; tracker observes
+
+**Status:** `LOCK RECOMMENDED`.
+
+```text
+/spmscavenger debug te witness run <mob>
+          │
+          ▼
+TeCurrencyWitnessFixture.prepare
+  validate disposable empty target
+  validate in-place environment
+  create fixture-owned input + vanilla merchant board
+          │
+          ▼
+existing TeCurrencyWitnessTracker.preflight
+          │ pass
+          ▼
+existing TeCurrencyWitnessTracker.arm
+          │
+          ▼
+normal Gather → handoff → TradeWithVillagerGoal → TE Q1/Q2
+          → VillagerTradeAdapter staged transaction
+          │
+          ▼
+passive tracker report
+```
+
+| Layer | May do | Must not do |
+| --- | --- | --- |
+| `TeCurrencyWitnessFixture` | validate, create declared test inputs, spawn/tag one fixture villager, install one fixture-owned **vanilla** board, clean up its own state | publish/clear route evidence, call TE quotation, create a TE synthetic offer, select/authorize a route or trade, call an executor, award emerald blocks/pickaxe |
+| Production V2/V2-TE | scan, publish route exhaustion, discover/rank/requote, authorize funding, path, transact, notify | consume fixture assertions as permission or bypass normal admission |
+| `TeCurrencyWitnessTracker` | observe existing seams, retain bounded evidence, compare exact Q2 reference, report | mutate fixture/world/inventory, quote, normalize, debit, commit, or force progress |
+
+The fixture-owned **vanilla** board is declared synthetic setup, not evidence of natural Toolsmith
+trade generation. The runtime claim is narrower: Scavenger composes a real TE 0.8.0 quote with a
+normal vanilla-board purchase and applies TE denomination semantics atomically. “No board insertion”
+continues to mean the detached **TE synthetic Q2 object** is never inserted; it does not forbid a
+temporary test villager from owning an explicitly prepared vanilla board.
+
+###### Selected fixture form — bounded in-place operator fixture
+
+**Option A — in-place operator fixture with safe refusal (`RECOMMENDED`):** use the existing
+permission-2 command tree. Require a disposable PlayerMob with empty backpack and hands. Inspect the
+actual configured Gather scan volume and nearby merchant population; refuse rather than edit terrain,
+delete unrelated entities, or teleport the target. Prepare the exact inventory and one tagged fixture
+villager within trade discovery range.
+
+**Option B — isolated high-altitude arena:** build a temporary platform, teleport the mob, and restore
+position/world afterward. This is more automatic but has materially larger overwrite, fall, chunk,
+navigation, and crash-recovery risks. Reject for W2 unless repeated Option-A environmental refusals
+make the in-place contract unusable.
+
+**Option C — datapack + command hybrid:** strong for reusable geometry, but adds installation/reload
+steps and no longer satisfies the desired one-command operator experience. Switch to it if Java-side
+world construction becomes necessary; do not hide those mutations inside `run`.
+
+**Option D — GameTest:** highest automation, but it is still a separately approved Minecraft runtime
+and optional-mod/entity bootstrap may not reproduce the normal server GoalSelector path. Defer until
+the exact 0.8.0 witness is accepted or repeated compatibility releases justify a maintained suite.
+
+**Strongest objection to A:** it can refuse in a dense village/cave and therefore is not a universal
+world constructor. That is intentional fail-safe behavior. The command automates every precise
+fixture input while preserving the existing world; it does not gain permission to destroy or move
+unrelated state merely to avoid one clear setup error.
+
+###### Exact prepare contract
+
+`prepare <mob>` and `run <mob>` must use one fixture implementation. `run` is exactly
+`prepare -> existing strict preflight -> arm`; it grants no extra production authority.
+
+**Pre-mutation refusal gates:**
+
+- no active fixture or witness session;
+- target is a living Social PlayerMob with non-null `InventoryCarrier` identity;
+- target backpack, main hand, and offhand are empty — W2 does not risk a real mob's possessions or
+  require crash-sensitive restoration of arbitrary items;
+- TE installed metadata is exactly `0.8.0`; currency capability ACTIVE; quote bridge HEALTHY;
+- no existing fixture tag/merchant; no unrelated Villager within the production 16-block discovery
+  radius;
+- no `IRON_ORE` or `DEEPSLATE_IRON_ORE` exists in the exact production scan prism:
+  configured horizontal radius and `dy=-4…4`; the fixture only validates this fact and never
+  publishes exhaustion or clears ore;
+- target has no combat target, is not sleeping, and stands in loaded/ticking server space;
+- no pre-existing route-exhaustion entry for the target/consumer. Refuse and report it; do not clear
+  production evidence as test setup.
+
+**Declared mutations after all refusal gates pass:**
+
+1. put one exact stack of four `minecraft:stick` with `minecraft:unbreaking` level 8 in the
+   backpack; put one ordinary stone pickaxe in main hand; leave offhand empty and every other
+   backpack slot empty;
+2. spawn one adult, tagged, custom-named fixture Villager at a reachable point within the normal
+   16-block market radius; set Toolsmith presentation and a fixture-owned vanilla board containing
+   exactly `10 emerald -> 1 iron_pickaxe` with bounded uses;
+3. keep the merchant stationary without changing trade legality. `NoAI` is acceptable only if a
+   unit/source gate proves production availability predicates do not reject it and the runtime probe
+   confirms the normal executor can reach/use it; otherwise use a bounded physical pen;
+4. record UUIDs, exact container identity, starting empty-state proof, fixture item fingerprints,
+   merchant UUID/tag, board fingerprint, position, configured radii, and every mutation under stable
+   prefix `[spmscavenger/v2te-fixture]`;
+5. rerun the existing tracker preflight from resulting production state. Any disagreement rolls back
+   fixture-owned mutations and returns `REFUSED`, never a partially armed session.
+
+The fixture does **not** pre-quote the enchanted stick. The expected upstream quote remains a runtime
+fact. `UNBREAKING VIII -> 10 emerald blocks` is therefore `UNVERIFIED` against the exact installed
+artifact/config until production Q1 records it. A different/absent quote is `INCOMPLETE` with actual
+Q1 evidence, not a fixture-generated substitute.
+
+###### Operator surface and lifecycle
+
+```text
+/spmscavenger debug te witness prepare <mob>
+/spmscavenger debug te witness run <mob>
+/spmscavenger debug te witness start <mob>     # retained for expert/manual setup
+/spmscavenger debug te witness status
+/spmscavenger debug te witness report
+/spmscavenger debug te witness stop
+/spmscavenger debug te witness reset
+```
+
+- `status/report` distinguish fixture preparation from tracker state and list the next expected
+  **production** event.
+- `stop` marks an armed tracker `INCOMPLETE`, releases tracker live references, then cleans only
+  fixture-owned state when cleanup is safe.
+- `reset` performs the same cleanup and removes immutable report state; it does not erase recorded
+  RFC/log evidence.
+- cleanup may clear the target container/hands only when every remaining stack matches the declared
+  W2 allowlist (witness sticks, emerald/blocks, stone pick, iron pick). Any foreign stack makes
+  cleanup refuse that inventory mutation and print exact recovery instructions. The tagged fixture
+  villager may still be removed independently.
+- unload/death/dimension change aborts the witness, removes the fixture villager when its server
+  level is available, and releases live references. Server stop releases all in-memory references;
+  no test fixture state is persisted or resurrected.
+- fixture state is one bounded session, keyed by target UUID + exact container identity; retain
+  UUIDs/fingerprints rather than entity/world references wherever possible.
+
+###### MAIBS behavioral prediction
+
+**Gate:** `PASS — BEHAVIORALLY_PLAUSIBLE` for fixture implementation. Runtime compatibility remains
+`UNVERIFIED`.
+
+| Layer | Prediction | Confidence |
+| --- | --- | --- |
+| Intended | one command creates the inputs and merchant needed for the real autonomous block-currency chain | RFC decision |
+| Implemented mechanism today | passive tracker plus production Gather/Trade/transaction seams exist; automatic fixture does not | `CODE_CONFIRMED` + three `NOT FOUND` probes |
+| Predicted player-visible behavior | command prints mutation manifest and ARMED; mob briefly scans, yields after its own empty iron scan, walks to fixture merchant, sells one stick for physical blocks, then buys the iron pickaxe | `BEHAVIORALLY_PLAUSIBLE / RUNTIME UNVERIFIED` |
+| Hidden behavior | exact Q2 identity and real/staged/final denomination snapshots advance through existing hooks | `CODE_CONFIRMED` instrumentation; exact artifact runtime `UNVERIFIED` |
+
+```text
+T0       run: refusal gates -> prepare -> preflight -> ARMED
+T+10     iron-pickaxe demand observed; Gather owns/probes RAW_IRON
+T+60…200 production empty scan publishes exhaustion; Gather yields; trade discovers market
+T+200…600 TE Q1/Q2 -> one SELL -> physical blocks -> vanilla BUY -> staged normalization -> PASS
+T+1200   if no terminal result: INCOMPLETE with last state and named missing production event
+```
+
+| Activity | Priority/authority | Interruption effect | Retained state |
+| --- | --- | --- | --- |
+| fixture | operator command only; no Goal/flags | completes atomically before arming or rolls back | one bounded fixture session |
+| Gather | existing deliberate-work P3 | emergency/player/combat may preempt; later re-scan owns exhaustion | existing production state only |
+| Trade | existing deliberate-work P3 | interruption forces normal revalidation/reacquisition | existing bounded chain + tracker evidence |
+| tracker | no Goal/flags/tick | observes last completed seam; never holds MOVE/LOOK | bounded report evidence |
+
+**Predicted weird/failure cases:**
+
+1. another villager enters the 16-block radius after prepare — `RUNTIME_QUESTION`; production may
+   rank it, so report `INCOMPLETE: fixture merchant not selected`, never force selection;
+2. TE config/source produces a non-block or differently sized quote — `RUNTIME_QUESTION`; preserve
+   actual Q1, stop short of currency PASS, and do not locally reconstruct 10 blocks;
+3. combat interrupts after payout — `ACCEPTABLE_STEPPING_STONE`; blocks remain physical and the
+   normal chain may reacquire before timeout;
+4. target picks up a foreign item and cleanup can no longer prove ownership —
+   `ACCEPTABLE_STEPPING_STONE`; refuse inventory clearing and give exact manual recovery output;
+5. fixture clears/publishes route evidence or calls the trade executor — `ARCHITECTURE_DEFECT` and
+   implementation blocker;
+6. stationary fixture villager is rejected solely because of the chosen immobilization method —
+   `RUNTIME_QUESTION`; switch from `NoAI` to a physical pen without changing its board.
+
+###### V2-TE-W2 scenario matrix
+
+| ID | Setup | Must happen | Must not happen | Evidence status |
+| --- | --- | --- | --- | --- |
+| W2-P1 | empty disposable PlayerMob, safe environment | `prepare` creates exact items + one tagged vanilla-board merchant and prints manifest | partial mutation on any failed gate | automated tests required; runtime `UNVERIFIED` |
+| W2-P2 | unsafe/non-empty target | command refuses before mutation with all failed facts | item loss, terrain edit, unrelated entity removal | automated tests required |
+| W2-R1 | `run <mob>` | compose prepare, existing preflight, arm once | force route evidence, quote, admission, or executor | structural + command tests required |
+| W2-R2 | production empty Gather scan | normal handoff eventually permits trade | fixture publishes/clears handoff evidence | runtime log witness required |
+| W2-TE1 | exact TE 0.8.0 artifact/config | production Q1/Q2 records one enchanted stick -> physical emerald blocks and exact Q2 identity | fixture calls quote or inserts TE offer | runtime tracker/log required |
+| W2-B1 | fixture vanilla 10-emerald pickaxe board | production admits block liquidity, breaks minimum two blocks in staging, leaves real inventory unchanged until commit, and returns correct change | premature conversion, duplicate notify, fake menu/player | runtime tracker/log required |
+| W2-L1 | stop/reset/unload/death/server stop | release tracker/fixture references and remove only proven fixture-owned state | persisted fixture or deletion of foreign items | tests; lifecycle runtime sample `UNVERIFIED` |
+| W2-X1 | accepted witness cleanup | removal task deletes fixture + tracker + hooks/commands, rebuilds, and preserves evidence docs | temporary diagnostics silently ship | post-witness build/package audit required |
+
+###### Static gates and negative controls before requesting runtime approval
+
+- pure prepare planner test: all refusal facts evaluated before any mutation; injected failure at
+  each mutation step restores the exact empty target and removes any spawned fixture merchant;
+- command parse test adds `prepare` and `run` while retaining current commands under permission 2;
+- fixture structural test forbids `RouteExhaustionEvidence.publish/remove`, `QuoteBridge.quote`,
+  `TradeEverythingTradeSource.offers/revalidate`, `TradeDemandGate.authorize`, navigation/Goal
+  registration, `VillagerTradeAdapter.perform*`, and direct award of emerald blocks/iron pickaxe;
+- tracker structural test remains unchanged and forbids inventory/transaction authority;
+- environmental tests pin actual configured radius and production `dy=-4…4`, refusing raw iron
+  without deleting it;
+- identity/cleanup tests prove wrong UUID/container no-op, foreign-item cleanup refusal, tagged
+  merchant-only removal, unload/death/dimension/server-stop release, and one-session bound;
+- negative controls must be executed in isolation: remove preflight-before-mutation ordering (rollback
+  test fails), permit route publication from fixture (structural test fails), change Q2 identity
+  comparison to semantics (tracker identity test fails), and allow foreign inventory clearing
+  (cleanup safety test fails).
+
+###### Task sequence and removal manifest
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| **V2-TE-W2.1** | implement `TeCurrencyWitnessFixture`; extend existing command with `prepare/run`; bounded fixture lifecycle only | `READY / NOT AUTHORIZED` |
+| **V2-TE-W2.2** | static/unit/structural/negative-control suite; semantic-drift review; clean build; new JAR SHA and package audit | blocked on W2.1 authorization |
+| **V2-TE-W2.3** | exact-artifact runtime launch and W2 matrix capture | separately unauthorized even after W2.2 |
+| **V2-TE-W2.4** | after accepted witness, remove fixture, tracker, commands, all passive hooks, lifecycle calls, and their temporary tests; rebuild and prove JAR absence | mandatory follow-up |
+
+**Removal manifest:** `TeCurrencyWitnessFixture`, `TeCurrencyWitnessTracker`,
+`TeCurrencyWitnessCommands`; their tests; every `TeCurrencyWitnessTracker.*` call in
+`TradeWithVillagerGoal` and `VillagerTradeAdapter`; witness cleanup calls in `SpmScavenger`; the
+temporary command branch in `VillageProfileCommands`; any fixture tag/constants. Preserve the real
+`compat/tradeeverything` implementation, `TradeEverythingCompat.install()`, and
+`SERVER_STARTED.register(TradeEverythingCompat::prewarm)`.
+
+**Artifact/approval gate:** W2.1 changes the JAR and supersedes the current
+`EAF091497A4710EA43C0BE79EA56B0D9259D640CB5FBB5927A3AC3C847C64683` witness approval candidate.
+After W2.2, return exact tests, mutation manifest, structural evidence, remapped JAR path/hash, zero
+packaged upstream TE classes, and exact runtime command. Do not launch until the User approves that
+new artifact.
+
+**Open runtime questions, not design blockers:** exact TE 0.8.0 quote amount for the prepared
+Unbreaking-VIII stack and board under installed config; whether `NoAI` retains normal executor
+legality; elapsed time from empty Gather scan to trade admission. Each is directly measured by W2,
+not answered by fixture inference.
+
+**Frontier after:** `D-VR-TE-W2-1` is `LOCK RECOMMENDED`; W2.1 is dependency-ready but not
+authorized. The next action is one concrete product boundary: authorize W2.1 implementation with
+the W2-P1/P2/R1/L1 static gates. Minecraft launch remains a later, separate decision.
 
 Do not fake a player session. Preserve one transaction owner and separate opportunity discovery:
 
@@ -7960,3 +8223,30 @@ campaign **NOT YET AUTHORIZED**.
 
 **Frontier after:** Begin Task-59 integration work (static/build gates, `spm_vr` presets, runtime
 matrix document). Do not launch Minecraft without separate runtime approval.
+
+### Contribution — `Agent_Codex` (Prepare Runtime Validation: V2-TE-W2, 2026-08-23)
+
+**Agent:** `Agent_Codex` · **Mode:** `PLANNING` · **Contribution type:**
+`RUNTIME FIXTURE DESIGN / CODE AUDIT / MAIBS / AV-1`
+
+**Reviewed:** the implemented passive tracker/commands, Gather publication boundary, TE quote source,
+transaction hooks, V2-DEF-004 matrix, prior Step-7A fixture evidence, and the canonical automatic
+runtime-fixture workflow.
+
+**Evidence:** current passive tracker/production seams are `CODE_CONFIRMED`; automatic fixture is
+absent by three recorded `NOT FOUND` probes. Exact TE 0.8.0 quote amount, stationary-villager
+legality, and elapsed autonomous convergence remain named runtime `UNVERIFIED` questions.
+
+**Alternatives:** bounded in-place command, isolated high-altitude arena, datapack hybrid, and
+GameTest compared. Recommended in-place safe refusal because it automates precise state without
+terrain overwrite, teleport rollback, or a second trade/route authority.
+
+**Decision/task transition:** added `D-VR-TE-W2-1` as `LOCK RECOMMENDED`; decomposed W2.1–W2.4;
+defined scenario parity, preflight/mutation/cleanup contract, negative controls, MAIBS timeline,
+artifact reapproval gate, and mandatory removal manifest. No implementation or runtime authority was
+inferred.
+
+**Frontier before:** manual fixture reproduction remained between the instrumented build and a
+reliable exact-artifact witness. **Frontier after:** W2.1 is dependency-ready but
+`NOT AUTHORIZED`; the next decision is authorization of fixture implementation only. Minecraft
+runtime remains separately unauthorized, and Task-59/V3-G remains independent.
