@@ -2641,7 +2641,7 @@ each execution attempt resolves a current live offer. It never persists `lastOff
 If a human is currently trading with that villager, automation defers until `getTradingPlayer()` is
 null so player-specific mutable `specialPriceDiff` cannot leak into a PlayerMob transaction.
 
-### Optional compatibility — Trade Everything v0.3.0 (`D-VR-068` / `D-VR-069`)
+### Optional compatibility — Trade Everything v0.3.0 → v0.8.0 (`D-VR-068` / `D-VR-069`)
 
 **Prerequisite:** VR-T2 **PASS** in a vanilla-only instance (`D-VR-069`). This section does **not**
 define the first proof.
@@ -2664,10 +2664,68 @@ not promoted into a relationship-learning result. The full defect and acceptance
 `docs/porting/KNOWN_DEFECTS.md`; the compact scenario result is in
 `docs/porting/TEST_MATRIX.md`.
 
-**Source-confirmed baseline:** [`bh679/tradeeverything-mc@fe305e6`](https://github.com/bh679/tradeeverything-mc/tree/fe305e663052c637dfeae2c9a8294c7748c611b0), Minecraft 1.21.1, Fabric mod id
-`tradeeverything`. `AbstractVillagerTradingMixin` prepends its synthetic offer only during
+**Source-confirmed baselines:** v0.3.0
+[`fe305e663052c637dfeae2c9a8294c7748c611b0`](https://github.com/bh679/tradeeverything-mc/tree/fe305e663052c637dfeae2c9a8294c7748c611b0)
+and v0.8.0
+[`a67795d598ceb3afa7adc3c33e98407cbc177b71`](https://github.com/bh679/tradeeverything-mc/tree/a67795d598ceb3afa7adc3c33e98407cbc177b71),
+Minecraft 1.21.1, Fabric mod id `tradeeverything`. The v0.8.0 Fabric artifact is Modrinth version
+`v0.8.0+fabric`, file `tradeeverything-fabric-0.8.0.jar`, SHA-512
+`330b578b0121050c19473ea2d69f034f2fa2127130f182ae33e5966026fc3e958a2e596ad06ab082a72f4b9890c4f6bad3a4a9c71c0f9afbe05f40fe14852f5e`;
+its packaged `fabric.mod.json` reports mod version `0.8.0`. `AbstractVillagerTradingMixin` prepends
+its synthetic offer only during
 `setTradingPlayer(player)` and removes it on `setTradingPlayer(null)`; the save redirect filters it
 from NBT. Therefore ordinary no-menu `villager.getOffers()` cannot discover it.
+
+#### V2-TE compatibility maintenance — emerald-block currency parity (2026-08-23)
+
+**Status:** implementation authorized; runtime linkage/execution against the exact v0.8.0 artifact
+remains `UNVERIFIED` until the separately approved runtime witness. Source/API compatibility is
+`CONFIRMED`: v0.8.0 retains the reflective `RecipeValues.ensureIndexed(MinecraftServer) -> void`
+and `OfferQuoter.quote(AbstractVillager, ItemStack, MerchantOffers) -> Optional<MerchantOffer>`
+shapes. Both v0.3.0 and v0.8.0 can select `EMERALD_BLOCK` for a high-value payout. Human payment
+normalization belongs to TE's separate `MerchantMenuMixin`, so quotation health and denomination
+capability are explicitly independent.
+
+**Decision:** retain `EmeraldDeficit` as the semantic base unit and introduce one shared
+`MerchantCurrencyPolicy` consumed by evaluation, funding, chain arithmetic, admission, affordability,
+and the sole staged transaction owner. Vanilla recognizes only loose emeralds. A separately
+version-validated TE currency provider recognizes emerald blocks as nine emerald units. The physical
+quote and result remain untouched; blocks normalize only inside the staged payment copy. Quote-bridge
+failure disables synthetic quotation but does not revoke a separately valid currency capability.
+Unknown/unvalidated TE versions fail closed for block denomination semantics.
+
+**Alternatives considered:** (A) shared generic policy plus narrow TE provider — **selected**, because
+the same emerald truth already has several production consumers; (B) TE-specific planner and debit
+patches — rejected because planning/execution can drift back into disagreement. Switch only if an
+upstream public currency API makes the project-owned denomination provider redundant.
+
+**MAIBS behavioral prediction — `PASS / BEHAVIORALLY_PLAUSIBLE`:** no goal priority, flags,
+navigation, market discovery, route arbitration, or scheduling changes. Over time the observable
+chain is `TE sale -> emerald blocks remain physical -> demand re-resolves shared liquidity -> BUY Q2
+revalidates -> minimum blocks break in the staged copy -> exact debit/output preflight -> one commit`.
+If revalidation, payment, or insertion fails, the real inventory retains its original loose/block
+denominations. Combat or another interruption before execution changes nothing because normalization
+has not reached the real container; reacquisition re-resolves from current inventory.
+
+Predicted weird/failure cases:
+
+- Quote bridge becomes unhealthy while validated TE currency remains active — **acceptable and
+  intended capability isolation**; no new synthetic quote appears, but existing blocks still fund
+  ordinary emerald trades.
+- TE is removed after blocks were acquired — **acceptable fail-closed compatibility boundary**;
+  blocks remain ordinary items and the chain waits for loose emerald funding rather than silently
+  exchanging them.
+- Payment normalizes successfully in staging but output insertion fails — **must not become an
+  architecture defect**; the staging array is discarded and the block remains physical.
+
+**Must happen:** one block funds nine emeralds; `4 emerald + 1 block` funds ten and leaves three;
+block-valued funding contributes nine units per block; both cost slots share one normalization;
+v0.8.0 single-item quote shapes remain opaque upstream authority. **Must not happen:** TE absent or
+unvalidated versions grant block liquidity; quote-bridge health controls currency authority; a failed
+transaction mutates denomination; Q1/Q2 identity, the exact Q2 object/marker, vanilla-only behavior,
+or no-menu execution changes. **Falsifying runtime witness:** with the exact pinned v0.8.0 Fabric JAR,
+observe a high-value TE sale yielding blocks followed by a normal emerald BUY, verify change and
+inventory atomically, then force/observe quote capability failure without currency revocation.
 
 Do not fake a player session. Preserve one transaction owner and separate opportunity discovery:
 

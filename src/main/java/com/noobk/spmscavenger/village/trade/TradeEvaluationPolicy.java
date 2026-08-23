@@ -104,7 +104,7 @@ public final class TradeEvaluationPolicy {
 
     /** BUY only: no emerald deficit supplied, so a SELL offer has no consumer and is rejected. */
     public static Result evaluate(WorkDemandPolicy.MaterialDemand demand, OfferSnapshot offer) {
-        return evaluate(demand, offer, null);
+        return evaluate(demand, offer, null, MerchantCurrencyPolicies.current());
     }
 
     /**
@@ -115,6 +115,14 @@ public final class TradeEvaluationPolicy {
             WorkDemandPolicy.MaterialDemand demand,
             OfferSnapshot offer,
             EmeraldDeficit emeraldDeficit) {
+        return evaluate(demand, offer, emeraldDeficit, MerchantCurrencyPolicies.current());
+    }
+
+    static Result evaluate(
+            WorkDemandPolicy.MaterialDemand demand,
+            OfferSnapshot offer,
+            EmeraldDeficit emeraldDeficit,
+            MerchantCurrencyPolicy currency) {
         if (demand == null || offer == null) {
             return Result.reject(TradeRejection.NOT_TRADEABLE);
         }
@@ -129,8 +137,8 @@ public final class TradeEvaluationPolicy {
         if (demand.materialKey().equals(resultKey)) {
             return buy(demand, offer);
         }
-        if (EMERALD.equals(resultKey)) {
-            return sell(demand, offer, emeraldDeficit);
+        if (currency.recognizesFundingOutput(offer.result())) {
+            return sell(demand, offer, emeraldDeficit, currency);
         }
         // Matches nothing this demand asked for. Its market value is not a reason.
         return Result.reject(TradeRejection.WRONG_MATERIAL);
@@ -167,6 +175,14 @@ public final class TradeEvaluationPolicy {
      */
     public static Result evaluateSell(
             EmeraldDeficit deficit, SellAuthorization authorization, OfferSnapshot offer) {
+        return evaluateSell(deficit, authorization, offer, MerchantCurrencyPolicies.current());
+    }
+
+    static Result evaluateSell(
+            EmeraldDeficit deficit,
+            SellAuthorization authorization,
+            OfferSnapshot offer,
+            MerchantCurrencyPolicy currency) {
         if (deficit == null) {
             return Result.reject(TradeRejection.NO_CONSUMER_FOR_PAYMENT);
         }
@@ -176,7 +192,7 @@ public final class TradeEvaluationPolicy {
         if (offer.outOfStock()) {
             return Result.reject(TradeRejection.OUT_OF_STOCK);
         }
-        if (!EMERALD.equals(keyOf(offer.result()))) {
+        if (!currency.recognizesFundingOutput(offer.result())) {
             return Result.reject(TradeRejection.WRONG_MATERIAL);
         }
         // Permission is the gate, and it is separate from desirability. An unauthorised material is
@@ -187,11 +203,14 @@ public final class TradeEvaluationPolicy {
         if (authorization == null || !authorization.permits(offer.costA())) {
             return Result.reject(TradeRejection.WRONG_MATERIAL);
         }
-        return sellAgainst(deficit, offer);
+        return sellAgainst(deficit, offer, currency);
     }
 
     private static Result sell(
-            WorkDemandPolicy.MaterialDemand demand, OfferSnapshot offer, EmeraldDeficit deficit) {
+            WorkDemandPolicy.MaterialDemand demand,
+            OfferSnapshot offer,
+            EmeraldDeficit deficit,
+            MerchantCurrencyPolicy currency) {
         if (deficit == null) {
             return Result.reject(TradeRejection.NO_CONSUMER_FOR_PAYMENT);
         }
@@ -200,11 +219,12 @@ public final class TradeEvaluationPolicy {
         if (!demand.materialKey().equals(keyOf(offer.costA()))) {
             return Result.reject(TradeRejection.WRONG_MATERIAL);
         }
-        return sellAgainst(deficit, offer);
+        return sellAgainst(deficit, offer, currency);
     }
 
-    private static Result sellAgainst(EmeraldDeficit deficit, OfferSnapshot offer) {
-        int contribution = Math.min(offer.result().getCount(), deficit.emeraldsNeeded());
+    private static Result sellAgainst(
+            EmeraldDeficit deficit, OfferSnapshot offer, MerchantCurrencyPolicy currency) {
+        int contribution = Math.min(currency.fundingUnits(offer.result()), deficit.emeraldsNeeded());
         if (contribution <= 0) {
             return Result.reject(TradeRejection.ZERO_CONTRIBUTION);
         }

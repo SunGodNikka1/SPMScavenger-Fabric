@@ -181,11 +181,16 @@ public final class VillagerTradeAdapter {
      * here would refuse every funding sale ever made.
      */
     public static boolean canAffordNonEmerald(Container backpack, OfferSnapshot offer) {
+        return canAffordNonEmerald(backpack, offer, MerchantCurrencyPolicies.current());
+    }
+
+    static boolean canAffordNonEmerald(
+            Container backpack, OfferSnapshot offer, MerchantCurrencyPolicy currency) {
         if (backpack == null || offer == null) {
             return false;
         }
         for (ItemStack cost : new ItemStack[] {offer.costA(), offer.costB()}) {
-            if (cost.isEmpty() || cost.is(net.minecraft.world.item.Items.EMERALD)) {
+            if (cost.isEmpty() || currency.isPaymentCost(cost)) {
                 continue;
             }
             // Step 5.5: exact, because the debit that eventually pays this is exact. Counting by
@@ -200,10 +205,18 @@ public final class VillagerTradeAdapter {
 
     /** Whether the backpack currently holds both costs. Does not mutate anything. */
     public static boolean canAfford(Container backpack, OfferSnapshot offer) {
+        return canAfford(backpack, offer, MerchantCurrencyPolicies.current());
+    }
+
+    static boolean canAfford(
+            Container backpack, OfferSnapshot offer, MerchantCurrencyPolicy currency) {
         if (backpack == null || offer == null || !offer.isTradeable()) {
             return false;
         }
         ItemStack[] staged = TradeTransaction.stage(backpack);
+        if (!currency.normalizeForPayment(staged, offer.costA(), offer.costB())) {
+            return false;
+        }
         return TradeTransaction.debit(staged, offer.costA())
                 && TradeTransaction.debit(staged, offer.costB());
     }
@@ -351,6 +364,14 @@ public final class VillagerTradeAdapter {
     public static TradeResult executeResolved(
             Container backpack, MerchantOffer live,
             java.util.function.Consumer<MerchantOffer> notify) {
+        return executeResolved(backpack, live, notify, MerchantCurrencyPolicies.current());
+    }
+
+    static TradeResult executeResolved(
+            Container backpack,
+            MerchantOffer live,
+            java.util.function.Consumer<MerchantOffer> notify,
+            MerchantCurrencyPolicy currency) {
         if (backpack == null || live == null) {
             return TradeResult.NO_VILLAGER;
         }
@@ -359,6 +380,11 @@ public final class VillagerTradeAdapter {
         }
 
         ItemStack[] staged = TradeTransaction.stage(backpack);
+        // Normalize both costs once, inside the same staged transaction. A provider may break the
+        // minimum necessary denomination here; any later failure discards the entire staged copy.
+        if (!currency.normalizeForPayment(staged, live.getCostA(), live.getCostB())) {
+            return TradeResult.CANNOT_AFFORD;
+        }
         if (!TradeTransaction.debit(staged, live.getCostA())) {
             return TradeResult.CANNOT_AFFORD;
         }

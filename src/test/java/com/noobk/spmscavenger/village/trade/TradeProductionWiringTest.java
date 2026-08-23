@@ -152,8 +152,11 @@ class TradeProductionWiringTest {
 
         assertTrue(registrar.contains("TradeEvaluationPolicy.evaluateSell("),
                 "funding SELL must be evaluated against an explicit authorization");
-        assertFalse(registrar.contains("evaluate(demand, offer, "),
-                "the 3-arg overload makes the demand double as the authorization");
+        assertTrue(registrar.contains("TradeEvaluationPolicy.evaluate(demand, offer, null, currency)"),
+                "BUY evaluation may carry shared currency truth but no deficit/authorization");
+        assertFalse(registrar.contains(
+                        "evaluate(demand, offer, evidence.externalEmeraldDeficit()"),
+                "the demand must not double as SELL authorization");
     }
 
     /**
@@ -194,7 +197,7 @@ class TradeProductionWiringTest {
     void mustHappen_theFundingPlannerDelegatesRankingToV2B() {
         String planner = source("village/trade/TradeFundingPlanner.java");
 
-        assertTrue(planner.contains("TradeEvaluationPolicy.evaluate(demand, offer)"),
+        assertTrue(planner.contains("TradeEvaluationPolicy.evaluate(demand, offer, null, currency)"),
                 "the planner must rank by V2-B rather than reimplement a ranking");
         assertFalse(planner.contains("best.result().getCount()"),
                 "dividing by the full result count is the rule that contradicted V2-B");

@@ -514,6 +514,31 @@ Runtime evidence: user-captured `[TE3] step-7A autonomous readout`, 2026-08-19. 
 `episodes=0` was also captured. It is a readout fact, not relationship-learning acceptance evidence
 for this scenario.
 
+#### V2-DEF-004 — TE emerald-block currency parity (CODE CONFIRMED; runtime UNVERIFIED)
+
+Compatibility maintenance only; independent of Task-59/V3-G. Source/API baseline: Trade Everything
+v0.8.0 commit `a67795d598ceb3afa7adc3c33e98407cbc177b71`, Fabric artifact SHA-512
+`330b578b0121050c19473ea2d69f034f2fa2127130f182ae33e5966026fc3e958a2e596ad06ab082a72f4b9890c4f6bad3a4a9c71c0f9afbe05f40fe14852f5e`.
+
+| Scenario | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| one block / 9-cost BUY | exact payment; no change | block stranded or over-converted | `MerchantCurrencyPolicyTest` `CODE_CONFIRMED` |
+| four loose + one block / 10-cost BUY | three loose emeralds remain | independent cost-slot conversion | `MerchantCurrencyPolicyTest` `CODE_CONFIRMED` |
+| one block / 8-cost BUY | one loose emerald remains | whole-block value lost | `MerchantCurrencyPolicyTest` `CODE_CONFIRMED` |
+| two emerald cost slots | normalize once against their combined ten-unit cost | each slot breaks a separate block | `MerchantCurrencyPolicyTest` `CODE_CONFIRMED` |
+| output cannot fit after staged normalization | real backpack retains the original block | staged loose emeralds commit or notifier fires | `MerchantCurrencyPolicyTest` `CODE_CONFIRMED` |
+| TE SELL returns two blocks | planner records 18 funding units; physical result remains two blocks | quote/result rewritten to loose emeralds | policy + transaction tests `CODE_CONFIRMED` |
+| TE absent / vanilla policy | block liquidity is zero and BUY refuses atomically | vanilla silently gains TE currency | `MerchantCurrencyPolicyTest` `CODE_CONFIRMED` |
+| quote bridge unhealthy | synthetic quotes fail closed; validated currency capability remains independent | `QuoteBridge.available()` revokes denomination | provider structural test `CODE_CONFIRMED`; runtime fault witness `UNVERIFIED` |
+| unsupported TE version | block capability does not activate | stable quote shape implicitly grants currency parity | provider version test `CODE_CONFIRMED` |
+| exact v0.8.0 artifact | reflective linkage plus autonomous high-value SELL→block→ordinary emerald BUY | fake player/menu, board insertion, price reconstruction, marker loss | runtime `UNVERIFIED` — requires explicit launch approval |
+
+Verification: focused currency tests and full `clean build` pass — **1614 tests, 0 failures, 0
+errors, 0 skipped**. Remapped `spmscavenger-1.11.0.jar` SHA-256
+`9C594FFFDA1FE4B406896FBAAFDDAD118F6D54BD0D8AE90D618FD8566BCC1554`; packaged upstream Trade
+Everything classes: zero. This confirms compilation, deterministic policy/transaction behavior, and
+packaging only; cross-mod runtime parity remains `UNVERIFIED`.
+
 ## D-VR-084 / task-52 — MandatoryOwnership pending-claim authority (2026-08-20, R1 2026-08-20)
 
 Canonical design: `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` D-VR-084; brief

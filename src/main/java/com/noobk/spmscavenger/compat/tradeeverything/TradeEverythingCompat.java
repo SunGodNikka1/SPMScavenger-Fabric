@@ -1,5 +1,6 @@
 package com.noobk.spmscavenger.compat.tradeeverything;
 
+import com.noobk.spmscavenger.village.trade.MerchantCurrencyPolicies;
 import com.noobk.spmscavenger.village.trade.TradeSources;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
@@ -50,10 +51,23 @@ public final class TradeEverythingCompat {
      * an upstream class, whether or not the mod is installed.
      */
     public static void install() {
-        if (!FabricLoader.getInstance().isModLoaded(MOD_ID)) {
+        var container = FabricLoader.getInstance().getModContainer(MOD_ID);
+        if (container.isEmpty()) {
             LOGGER.info("[spmscavenger] Trade Everything not installed - vanilla trade offers only");
             return;
         }
+        String version = container.get().getMetadata().getVersion().getFriendlyString();
+        if (TradeEverythingCurrencyProvider.supportsVersion(version)) {
+            MerchantCurrencyPolicies.installOptionalProvider(new TradeEverythingCurrencyProvider());
+            LOGGER.info("[spmscavenger] Trade Everything {} emerald-block currency enabled", version);
+        } else {
+            LOGGER.warn("[spmscavenger] Trade Everything {} currency behavior is not source-validated; "
+                    + "emerald blocks remain ordinary items", version);
+        }
+
+        // Quote capability is deliberately independent of currency capability. A later failure in
+        // RecipeValues/OfferQuoter disables synthetic opportunities only; it does not revoke a
+        // source-validated denomination contract supplied by the installed mod version.
         bridge = ReflectiveTradeEverythingBridge.tryResolve();
         if (!bridge.available()) {
             return;

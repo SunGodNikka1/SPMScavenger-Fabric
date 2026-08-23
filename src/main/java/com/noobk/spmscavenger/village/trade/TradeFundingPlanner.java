@@ -5,7 +5,6 @@ import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.village.trade.TradeEvaluationPolicy.EmeraldDeficit;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 import java.util.List;
 import java.util.OptionalInt;
@@ -104,6 +103,18 @@ public final class TradeFundingPlanner {
             ItemStack mainHand,
             ItemStack offHand,
             Function<ItemStack, OptionalInt> reservedUnits) {
+        return chooseFundingTarget(demand, offers, backpack, mainHand, offHand, reservedUnits,
+                MerchantCurrencyPolicies.current());
+    }
+
+    static FundingTarget chooseFundingTarget(
+            WorkDemandPolicy.MaterialDemand demand,
+            List<OfferSnapshot> offers,
+            Container backpack,
+            ItemStack mainHand,
+            ItemStack offHand,
+            Function<ItemStack, OptionalInt> reservedUnits,
+            MerchantCurrencyPolicy currency) {
         if (demand == null || offers == null || backpack == null) {
             return null;
         }
@@ -114,10 +125,11 @@ public final class TradeFundingPlanner {
         int bestIndex = Integer.MAX_VALUE;
 
         for (OfferSnapshot offer : offers) {
-            if (!fundable(offer, backpack)) {
+            if (!fundable(offer, backpack, currency)) {
                 continue;
             }
-            TradeEvaluationPolicy.Result result = TradeEvaluationPolicy.evaluate(demand, offer);
+            TradeEvaluationPolicy.Result result =
+                    TradeEvaluationPolicy.evaluate(demand, offer, null, currency);
             if (!result.viable()) {
                 continue;
             }
@@ -134,15 +146,16 @@ public final class TradeFundingPlanner {
             return null;
         }
 
-        int required = emeraldCost(best);
-        int shortfall = required - ScavengerCrafting.count(backpack, Items.EMERALD);
+        int required = emeraldCost(best, currency);
+        int shortfall = required - currency.liquidity(backpack);
         if (shortfall <= 0) {
             // No emerald appetite exists at all - the mob simply buys.
             return new FundingTarget(best, required, null, null);
         }
         EmeraldDeficit deficit = new EmeraldDeficit(demand.consumerKey(), shortfall);
         return new FundingTarget(best, required, deficit,
-                authorizeFunding(deficit, offers, best, backpack, mainHand, offHand, reservedUnits));
+                authorizeFunding(
+                        deficit, offers, best, backpack, mainHand, offHand, reservedUnits, currency));
     }
 
     /**
@@ -151,33 +164,28 @@ public final class TradeFundingPlanner {
      * <p>Emerald components are what the chain exists to acquire; everything else must already be in
      * hand, or funding it would be paying towards a purchase that cannot complete.
      */
-    private static boolean fundable(OfferSnapshot offer, Container backpack) {
+    private static boolean fundable(
+            OfferSnapshot offer, Container backpack, MerchantCurrencyPolicy currency) {
         if (!offer.isTradeable() || offer.outOfStock()) {
             return false;
         }
-        if (emeraldCost(offer) <= 0) {
+        if (emeraldCost(offer, currency) <= 0) {
             return false;
         }
-        return payableIfNotEmerald(offer.costA(), backpack)
-                && payableIfNotEmerald(offer.costB(), backpack);
+        return payableIfNotEmerald(offer.costA(), backpack, currency)
+                && payableIfNotEmerald(offer.costB(), backpack, currency);
     }
 
-    private static boolean payableIfNotEmerald(ItemStack cost, Container backpack) {
+    private static boolean payableIfNotEmerald(
+            ItemStack cost, Container backpack, MerchantCurrencyPolicy currency) {
         return cost.isEmpty()
-                || cost.is(Items.EMERALD)
+                || currency.isPaymentCost(cost)
                 || ScavengerCrafting.count(backpack, cost.getItem()) >= cost.getCount();
     }
 
     /** Emeralds this quote costs, across <b>both</b> slots. */
-    private static int emeraldCost(OfferSnapshot offer) {
-        int total = 0;
-        if (offer.costA().is(Items.EMERALD)) {
-            total += offer.costA().getCount();
-        }
-        if (offer.costB().is(Items.EMERALD)) {
-            total += offer.costB().getCount();
-        }
-        return total;
+    private static int emeraldCost(OfferSnapshot offer, MerchantCurrencyPolicy currency) {
+        return currency.paymentUnits(offer.costA()) + currency.paymentUnits(offer.costB());
     }
 
     /**
@@ -223,6 +231,19 @@ public final class TradeFundingPlanner {
             ItemStack mainHand,
             ItemStack offHand,
             Function<ItemStack, OptionalInt> reservedUnits) {
+        return authorizeFunding(deficit, sellOffers, buyQuote, backpack, mainHand, offHand,
+                reservedUnits, MerchantCurrencyPolicies.current());
+    }
+
+    static SellFundingLeg authorizeFunding(
+            EmeraldDeficit deficit,
+            List<OfferSnapshot> sellOffers,
+            OfferSnapshot buyQuote,
+            Container backpack,
+            ItemStack mainHand,
+            ItemStack offHand,
+            Function<ItemStack, OptionalInt> reservedUnits,
+            MerchantCurrencyPolicy currency) {
         if (deficit == null || sellOffers == null || backpack == null) {
             return null;
         }
@@ -233,12 +254,13 @@ public final class TradeFundingPlanner {
 
         for (OfferSnapshot offer : sellOffers) {
             SellFundingLeg leg = legFor(
-                    deficit, offer, buyQuote, backpack, mainHand, offHand, reservedUnits);
+                    deficit, offer, buyQuote, backpack, mainHand, offHand, reservedUnits, currency);
             if (leg == null) {
                 continue;
             }
             TradeEvaluationPolicy.Result evaluated =
-                    TradeEvaluationPolicy.evaluateSell(deficit, leg.authorization(), offer);
+                    TradeEvaluationPolicy.evaluateSell(
+                            deficit, leg.authorization(), offer, currency);
             if (!evaluated.viable()) {
                 continue;
             }
@@ -271,8 +293,10 @@ public final class TradeFundingPlanner {
             Container backpack,
             ItemStack mainHand,
             ItemStack offHand,
-            Function<ItemStack, OptionalInt> reservedUnits) {
-        if (!offer.isTradeable() || offer.outOfStock() || !offer.result().is(Items.EMERALD)) {
+            Function<ItemStack, OptionalInt> reservedUnits,
+            MerchantCurrencyPolicy currency) {
+        if (!offer.isTradeable() || offer.outOfStock()
+                || !currency.recognizesFundingOutput(offer.result())) {
             return null;
         }
         // Authorizing from costA while the transaction also debits costB would hand out permission
@@ -291,7 +315,7 @@ public final class TradeFundingPlanner {
         if (reserved.isEmpty()) {
             return null;
         }
-        int reserve = reserved.getAsInt() + owedToPurchase(buyQuote, wanted);
+        int reserve = reserved.getAsInt() + owedToPurchase(buyQuote, wanted, currency);
         int disposable = SellExpendabilityPolicy.disposableUnits(
                 wanted, held, reserve, mainHand, offHand);
         if (disposable < wanted.getCount()) {
@@ -315,18 +339,23 @@ public final class TradeFundingPlanner {
         return new SellFundingLeg(
                 offer,
                 new SellAuthorization(wanted, disposable, deficit.consumerKey()),
-                offer.result().getCount(),
+                currency.fundingUnits(offer.result()),
                 affordable);
     }
 
     /** Units of {@code material} the funded purchase still has to pay with. */
     public static int owedToPurchase(OfferSnapshot buyQuote, ItemStack material) {
+        return owedToPurchase(buyQuote, material, MerchantCurrencyPolicies.current());
+    }
+
+    static int owedToPurchase(
+            OfferSnapshot buyQuote, ItemStack material, MerchantCurrencyPolicy currency) {
         if (buyQuote == null || material.isEmpty()) {
             return 0;
         }
         int owed = 0;
         for (ItemStack cost : new ItemStack[] {buyQuote.costA(), buyQuote.costB()}) {
-            if (!cost.isEmpty() && !cost.is(Items.EMERALD)
+            if (!cost.isEmpty() && !currency.isPaymentCost(cost)
                     && ItemStack.isSameItemSameComponents(cost, material)) {
                 owed += cost.getCount();
             }

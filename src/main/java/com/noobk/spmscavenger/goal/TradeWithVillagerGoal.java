@@ -6,6 +6,7 @@ import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
 import com.noobk.spmscavenger.village.SettlementRelationshipService;
+import com.noobk.spmscavenger.village.trade.MerchantCurrencyPolicies;
 import com.noobk.spmscavenger.village.trade.OfferSnapshot;
 import com.noobk.spmscavenger.village.trade.RouteEvidence;
 import com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence;
@@ -476,7 +477,7 @@ public class TradeWithVillagerGoal extends Goal {
             return false;
         }
         int deficit = context.emeraldsRequired()
-                - ScavengerCrafting.count(backpack, net.minecraft.world.item.Items.EMERALD);
+                - MerchantCurrencyPolicies.current().liquidity(backpack);
         if (deficit <= 0) {
             // Emeralds arrived from somewhere else during the walk. Nothing left to fund.
             return false;
@@ -896,7 +897,7 @@ public class TradeWithVillagerGoal extends Goal {
     }
 
     private static boolean isFundingSell(OfferSnapshot offer) {
-        return offer.result().is(net.minecraft.world.item.Items.EMERALD);
+        return MerchantCurrencyPolicies.current().recognizesFundingOutput(offer.result());
     }
 
     /**
@@ -983,7 +984,7 @@ public class TradeWithVillagerGoal extends Goal {
         TradeChainPolicy.ChainOutcome outcome = TradeChainPolicy.evaluate(
                 chain,
                 TradeChainPolicy.factsFrom(funding, held,
-                        ScavengerCrafting.count(backpack, net.minecraft.world.item.Items.EMERALD)),
+                        MerchantCurrencyPolicies.current().liquidity(backpack)),
                 now);
 
         // Terminated chains are dropped rather than left standing: an expired or ownerless plan that
@@ -1102,7 +1103,10 @@ public class TradeWithVillagerGoal extends Goal {
         if (deficit == null || sellOffer == null || sellOffer.result().isEmpty()) {
             return 0;
         }
-        int perUse = Math.max(1, sellOffer.result().getCount());
+        int perUse = MerchantCurrencyPolicies.current().fundingUnits(sellOffer.result());
+        if (perUse <= 0) {
+            return 0;
+        }
         return (deficit.emeraldsNeeded() + perUse - 1) / perUse;
     }
 }

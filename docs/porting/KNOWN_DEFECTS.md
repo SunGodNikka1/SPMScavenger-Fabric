@@ -5,6 +5,49 @@ gate that closes it. A defect leaves this file only when its gate has evidence.
 
 ---
 
+## V2-DEF-004 — Trade Everything emerald-block payouts are stranded liquidity
+
+**Status:** REPAIRED — shared policy and atomic transaction gates `CODE_CONFIRMED`; exact
+Trade Everything v0.8.0 runtime witness `UNVERIFIED`. **Discovered:** v0.3.0 → v0.8.0 compatibility
+revalidation, 2026-08-23. **Applies to:** optional V2-TE only. **Severity:** bounded compatibility
+failure; a high-value funding sale can complete while the following emerald-priced purchase remains
+unfundable.
+
+### Defect
+
+Both source-confirmed Trade Everything versions can quote an `EMERALD_BLOCK` payout. Scavenger
+previously counted only loose emeralds, recognized only loose-emerald SELL results, and exact-debited
+the physical BUY cost. Its no-menu PlayerMob path cannot reach TE's human `MerchantMenuMixin` block
+conversion. Planning therefore saw zero funding and execution could not pay even if only the planner
+were patched.
+
+### Repair contract
+
+One shared `MerchantCurrencyPolicy` now owns liquidity, funding contribution, funding-output
+recognition, payment-cost interpretation, and staged normalization. Vanilla supports loose emeralds
+only. The separately version-validated TE currency provider supports `1 emerald block = 9 emerald
+units`; quotation bridge health is intentionally independent. Blocks remain physical until payment,
+both cost slots normalize once on the staged copy, and any later failure discards the conversion.
+
+Source/API evidence is pinned in the RFC's V2-TE section: v0.8.0 commit
+`a67795d598ceb3afa7adc3c33e98407cbc177b71`; Fabric artifact SHA-512
+`330b578b0121050c19473ea2d69f034f2fa2127130f182ae33e5966026fc3e958a2e596ad06ab082a72f4b9890c4f6bad3a4a9c71c0f9afbe05f40fe14852f5e`.
+The exact artifact's linkage and physical autonomous sell→block→buy chain remain runtime
+`UNVERIFIED` until separately launched.
+
+### Gate
+
+`MerchantCurrencyPolicyTest` and `TradeEverythingCurrencyProviderTest`: exact-nine, change,
+two-cost normalization, rollback on no-room, block funding contribution, denomination preservation,
+vanilla absence behavior, exact version fail-closed behavior, and quote/currency capability
+independence. Existing Q1/Q2, synthetic-marker, no-menu, route, and vanilla tests remain green.
+Full `clean build`: 1614 tests, zero failures/errors/skips; remapped JAR SHA-256
+`9C594FFFDA1FE4B406896FBAAFDDAD118F6D54BD0D8AE90D618FD8566BCC1554` and zero packaged upstream
+Trade Everything classes. These are code/build/package evidence, not runtime confirmation.
+
+**Task independence:** compatibility maintenance only. It is not Task-59/V3-G and does not gate the
+Village Work runtime campaign.
+
 ## V2-DEF-001 — a PlayerMob trade erases pending human-player trade reputation
 
 **Status:** REPAIRED — unit gate green, **runtime gossip check UNVERIFIED**. **Discovered:** P0-2 source review. **Repaired:** 2026-08-17. **Applies to:** shipped vanilla V2, not only

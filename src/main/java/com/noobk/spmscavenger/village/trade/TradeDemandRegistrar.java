@@ -101,6 +101,13 @@ public final class TradeDemandRegistrar {
      */
     public static AcquisitionDecision decide(
             WorkDemandPolicy.MaterialDemand demand, RouteEvidence evidence) {
+        return decide(demand, evidence, MerchantCurrencyPolicies.current());
+    }
+
+    static AcquisitionDecision decide(
+            WorkDemandPolicy.MaterialDemand demand,
+            RouteEvidence evidence,
+            MerchantCurrencyPolicy currency) {
         if (demand == null || evidence == null) {
             return existingWork(TradeBlockedReason.NO_OFFER_EVIDENCE);
         }
@@ -122,10 +129,11 @@ public final class TradeDemandRegistrar {
             // SELL asks "am I permitted to spend this material", which the demand cannot answer -
             // the legacy 3-arg overload made the demand double as the authorization, so the only
             // SELL that could fund an iron purchase was selling iron.
-            TradeEvaluationPolicy.Result result = isFundingSell(offer)
+            TradeEvaluationPolicy.Result result = isFundingSell(offer, currency)
                     ? TradeEvaluationPolicy.evaluateSell(
-                            evidence.externalEmeraldDeficit(), evidence.sellAuthorization(), offer)
-                    : TradeEvaluationPolicy.evaluate(demand, offer);
+                            evidence.externalEmeraldDeficit(), evidence.sellAuthorization(), offer,
+                            currency)
+                    : TradeEvaluationPolicy.evaluate(demand, offer, null, currency);
             result.evaluation().ifPresent(viable::add);
         }
         if (viable.isEmpty()) {
@@ -144,8 +152,9 @@ public final class TradeDemandRegistrar {
     }
 
     /** An offer that pays emeralds is a funding leg, whatever the mob happens to want. */
-    private static boolean isFundingSell(OfferSnapshot offer) {
-        return offer != null && offer.result().is(net.minecraft.world.item.Items.EMERALD);
+    private static boolean isFundingSell(
+            OfferSnapshot offer, MerchantCurrencyPolicy currency) {
+        return offer != null && currency.recognizesFundingOutput(offer.result());
     }
 
     private static AcquisitionDecision existingWork(TradeBlockedReason reason) {

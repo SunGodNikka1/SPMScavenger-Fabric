@@ -18,7 +18,8 @@ import java.util.Optional;
  *
  * <h2>Pinned shapes</h2>
  *
- * Verified against Trade Everything v0.3.0, commit {@code fe305e6}:
+ * Source-verified against Trade Everything v0.3.0 ({@code fe305e6}) and v0.8.0
+ * ({@code a67795d598ceb3afa7adc3c33e98407cbc177b71}):
  *
  * <pre>
  * games.brennan.tradeeverything.trade.RecipeValues#ensureIndexed(MinecraftServer)          -&gt; void
@@ -103,7 +104,8 @@ public final class ReflectiveTradeEverythingBridge implements QuoteBridge {
                 return refuse("OfferQuoter.quote returns "
                         + quoted.getReturnType().getName() + ", expected Optional");
             }
-            LOGGER.info("[spmscavenger] Trade Everything bridge ready (pinned v0.3.0 shapes found)");
+            LOGGER.info("[spmscavenger] Trade Everything quote bridge ready "
+                    + "(source-validated v0.3.0/v0.8.0 shapes found)");
             return new ReflectiveTradeEverythingBridge(indexed, quoted);
         } catch (ClassNotFoundException | NoSuchMethodException | LinkageError | RuntimeException e) {
             return refuse("pinned Trade Everything API not found: " + e);

@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.village.trade;
 
 import net.minecraft.world.Container;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -119,6 +120,49 @@ public final class TradeTransaction {
             }
         }
         return total;
+    }
+
+    /** Count by item identity, matching Minecraft inventory predicates used for denominations. */
+    public static int countItem(ItemStack[] staged, Item item) {
+        if (staged == null || item == null) {
+            return 0;
+        }
+        int total = 0;
+        for (ItemStack stack : staged) {
+            if (stack != null && stack.is(item)) {
+                total += stack.getCount();
+            }
+        }
+        return total;
+    }
+
+    /**
+     * Remove a denomination by item identity from staged slots.
+     *
+     * <p>Trade Everything's human currency hook uses an item predicate rather than component-exact
+     * matching. This mirrors that narrow behavior without weakening exact matching for ordinary
+     * MerchantOffer costs.
+     */
+    public static boolean debitItem(ItemStack[] staged, Item item, int amount) {
+        if (amount <= 0) {
+            return true;
+        }
+        if (countItem(staged, item) < amount) {
+            return false;
+        }
+        int remaining = amount;
+        for (int i = 0; i < staged.length && remaining > 0; i++) {
+            if (staged[i] == null || !staged[i].is(item)) {
+                continue;
+            }
+            int take = Math.min(remaining, staged[i].getCount());
+            staged[i].shrink(take);
+            if (staged[i].isEmpty()) {
+                staged[i] = ItemStack.EMPTY;
+            }
+            remaining -= take;
+        }
+        return remaining == 0;
     }
 
     private static boolean matches(ItemStack candidate, ItemStack sample) {
