@@ -12,12 +12,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 /**
- * Task-59 pre-launch — structural validation for {@code spm_vr} VR-T3 fixtures (no Minecraft boot).
+ * Task-59 pre-launch — structural and fixture-shape validation for {@code spm_vr} (no Minecraft boot).
  */
 class SpmVrDatapackStructureTest {
 
@@ -41,10 +42,17 @@ class SpmVrDatapackStructureTest {
             "crop_multi_cycle",
             "mandatory_ownership_witness");
 
-    private static final Set<String> LIB_FUNCTIONS = Set.of("reset", "setup_village_stub", "spawn_ally");
+    private static final Set<String> LIB_FUNCTIONS = Set.of(
+            "reset",
+            "setup_village_stub",
+            "spawn_ally",
+            "claim_village_beds",
+            "stage_interrupt_zombie");
 
     private static final Pattern BOUNDED_REPAIR = Pattern.compile(
             "bounded repair", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MATURE_CROP = Pattern.compile(
+            "\\[age=7\\]", Pattern.CASE_INSENSITIVE);
 
     @Test
     void packMcmetaExistsWithExpectedFormat() throws IOException {
@@ -91,17 +99,92 @@ class SpmVrDatapackStructureTest {
     }
 
     @Test
+    void settlementBootstrapEstablishesOccupiedVillageEvidence() throws IOException {
+        String setup = Files.readString(LIB_ROOT.resolve("setup_village_stub.mcfunction"),
+                StandardCharsets.UTF_8);
+        String claim = Files.readString(LIB_ROOT.resolve("claim_village_beds.mcfunction"),
+                StandardCharsets.UTF_8);
+
+        assertTrue(setup.contains("minecraft:bell"), "settlement needs meeting bell");
+        assertTrue(countOccurrences(setup, "minecraft:villager") >= 2,
+                "need >=2 adult villagers for population facts");
+        assertTrue(countOccurrences(setup, "_bed[part=head") >= 3,
+                "need >=3 HOME beds (2 claimed + spare vacancy)");
+        assertTrue(setup.contains("claim_village_beds"),
+                "bed claim must be scheduled — unclaimed beds are not settlements");
+        assertFalse(setup.contains("NoAI:1b"),
+                "NoAI villagers cannot reliably claim occupied HOME POI");
+        assertTrue(claim.contains("minecraft:home"),
+                "claim helper must assign villager HOME memory");
+        assertTrue(claim.contains("SleepingX"),
+                "claim helper must register sleeping/home occupation");
+    }
+
+    @Test
+    void populationFoodDeficitTargetsVillagerRecipient() throws IOException {
+        String body = readScenario("population_food_deficit");
+        assertTrue(body.contains("minecraft:villager"),
+                "VR-T3e recipient must be a villager");
+        assertTrue(body.contains("spm_vr.food_recipient"),
+                "mark villager food-recipient for observation");
+        assertTrue(body.contains("minecraft:bread"),
+                "subject must carry disposable breeding food");
+        assertFalse(body.contains("spm_vr.recipient"),
+                "must not use a second PlayerMob as recipient");
+        assertFalse(body.contains("tag=spm_vr.recipient"),
+                "must not tag a PlayerMob as population-food recipient");
+    }
+
+    @Test
+    void cropInterruptCombatStagesInterruptionAfterPathingWindow() throws IOException {
+        String body = readScenario("crop_interrupt_combat");
+        assertTrue(body.contains("schedule function spm_vr:_lib/stage_interrupt_zombie"),
+                "interrupt must be staged after PATHING can begin");
+        assertFalse(body.matches("(?s).*summon minecraft:zombie.*"),
+                "zombie must not spawn immediately in scenario body");
+        String stage = Files.readString(LIB_ROOT.resolve("stage_interrupt_zombie.mcfunction"),
+                StandardCharsets.UTF_8);
+        assertTrue(stage.contains("summon minecraft:zombie"),
+                "staged helper must spawn the interrupt hostile");
+    }
+
+    @Test
+    void cropMultiMobContendsForSingleMatureCrop() throws IOException {
+        String body = readScenario("crop_multi_mob");
+        assertEquals(1, countMatches(body, MATURE_CROP),
+                "VR-T3k must expose exactly one mature crop for contention");
+        assertTrue(countOccurrences(body, "playermob:player_mob") >= 2,
+                "VR-T3k needs two PlayerMobs");
+    }
+
+    @Test
+    void cropHungryVetoEstablishesWantsFoodAndAdmissionDenialShape() throws IOException {
+        String body = readScenario("crop_hungry_veto");
+        assertTrue(body.contains("carrots[age=7]"),
+                "host HarvestCropsGoal targets edible crops — not managed wheat alone");
+        assertTrue(body.contains("minecraft:air"),
+                "empty backpack establishes wantsFood()");
+        assertTrue(body.contains("oak_log"),
+                "gather demand establishes VillageWorkAdmission denial via mandatory claim");
+        assertFalse(body.toLowerCase().contains("minecraft:hunger"),
+                "Hunger effect does not drive SPM wantsFood()");
+        assertTrue(body.contains("spawn_ally"),
+                "must use production ally spawn with VILLAGE_ALLY profile seam");
+        assertTrue(Files.readString(LIB_ROOT.resolve("spawn_ally.mcfunction"), StandardCharsets.UTF_8)
+                        .contains("village_ally"),
+                "ally spawn must assign VILLAGE_ALLY profile");
+    }
+
+    @Test
     void storageGrantedPermitUsesProductionOwnCommand() throws IOException {
-        String body = Files.readString(
-                SCENARIO_ROOT.resolve("storage_granted_permit.mcfunction"), StandardCharsets.UTF_8);
+        String body = readScenario("storage_granted_permit");
         assertTrue(body.contains("spmscavenger village storage own"),
                 "storage_granted_permit must use explicit own grant seam");
     }
 
     @Test
     void mandatoryOwnershipWitnessDoesNotInjectAuthority() throws IOException {
-        String body = Files.readString(
-                SCENARIO_ROOT.resolve("mandatory_ownership_witness.mcfunction"), StandardCharsets.UTF_8);
+        String body = readScenario("mandatory_ownership_witness");
         assertFalse(body.toLowerCase().contains("mandatoryownership"),
                 "witness must not reference injected MandatoryOwnership API");
         assertFalse(body.contains("spmscavenger debug"),
@@ -126,5 +209,28 @@ class SpmVrDatapackStructureTest {
         assertEquals(Set.copyOf(PRESET_IDS), onDisk,
                 () -> "scenario folder must match manifest preset ids exactly; extra=" +
                         onDisk.stream().filter(id -> !PRESET_IDS.contains(id)).toList());
+    }
+
+    private static String readScenario(String id) throws IOException {
+        return Files.readString(SCENARIO_ROOT.resolve(id + ".mcfunction"), StandardCharsets.UTF_8);
+    }
+
+    private static int countOccurrences(String haystack, String needle) {
+        int count = 0;
+        int index = 0;
+        while ((index = haystack.indexOf(needle, index)) != -1) {
+            count++;
+            index += needle.length();
+        }
+        return count;
+    }
+
+    private static int countMatches(String haystack, Pattern pattern) {
+        Matcher matcher = pattern.matcher(haystack);
+        int count = 0;
+        while (matcher.find()) {
+            count++;
+        }
+        return count;
     }
 }

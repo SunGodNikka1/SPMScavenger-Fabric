@@ -66,4 +66,5 @@ Structural validation (no Minecraft): `SpmVrDatapackStructureTest`.
 
 | Date | Change |
 | --- | --- |
+| 2026-08-22 | Semantic fixture repair — occupied settlement bootstrap; VR-T3b/e/k/l preset fixes; structural regression tests |
 | 2026-08-22 | Initial environment pin — Task-59 pre-launch sub-slice |

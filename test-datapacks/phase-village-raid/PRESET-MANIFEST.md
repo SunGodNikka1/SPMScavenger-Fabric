@@ -50,7 +50,8 @@ Shared library: `spm_vr:_lib/reset`, `setup_village_stub`, `spawn_ally`.
 | --- | --- |
 | Dimension | overworld |
 | Mob profile | `VILLAGE_ALLY` via `/spmscavenger village profile set <mob> village_ally` |
-| Settlement | one anchored village within perception bounds (64² presence) |
+| Settlement | occupied village: bell + **3 HOME beds** (2 claimed, 1 spare); **≥2 adult villagers** |
+| Bootstrap | `setup_village_stub` + scheduled `claim_village_beds` (IS_OCCUPIED POI) |
 | `mobGriefing` | **true** (crop/compost rows require it) |
 | Host | `playermob` **0.89.0** (hash pinned) |
 
@@ -75,9 +76,9 @@ Shared library: `spm_vr:_lib/reset`, `setup_village_stub`, `spawn_ally`.
 | Field | Value |
 | --- | --- |
 | **VR-T3** | VR-T3b; target-edge witness |
-| **Purpose** | Interrupt crop episode before COMMIT (combat) |
-| **World** | Chains `crop_managed_single`; spawns zombie |
-| **Trigger** | Hostile during PATHING |
+| **Purpose** | Interrupt crop episode **after PATHING begins**, before COMMIT |
+| **World** | Chains `crop_managed_single` |
+| **Trigger** | `_lib/stage_interrupt_zombie` scheduled **120t** after preset load |
 | **Must observe** | Crop unchanged; mob later re-resolves |
 | **Falsifier** | Crop broken; stale path resumes without revalidation |
 | **Min window** | 600 ticks post-interrupt (matrix) |
@@ -110,11 +111,12 @@ Shared library: `spm_vr:_lib/reset`, `setup_village_stub`, `spawn_ally`.
 | Field | Value |
 | --- | --- |
 | **VR-T3** | VR-T3e |
-| **Purpose** | Population support candidacy + eligible villager |
-| **World** | Settlement stub + second ally recipient |
-| **Mob inventory** | disposable bread on subject |
-| **Must observe** | One delivery episode; no breeding command |
-| **Falsifier** | Reserve violation; endless gifting |
+| **Purpose** | PlayerMob → **adult villager** food delivery (V3-E) |
+| **World** | Occupied settlement (≥2 adult villagers, spare HOME from bootstrap) |
+| **Recipient** | `spm_vr.villager2` with cleared inventory + `spm_vr.food_recipient` tag |
+| **Mob inventory** | disposable bread on subject ally |
+| **Must observe** | One delivery episode to villager; no breeding command |
+| **Falsifier** | PlayerMob-to-PlayerMob gifting; reserve violation; endless gifting |
 | **Min window** | 1200 ticks — one handoff only (matrix) |
 
 ### `spm_vr:storage_public_deny` — VR-T3g
@@ -166,10 +168,10 @@ Shared library: `spm_vr:_lib/reset`, `setup_village_stub`, `spawn_ally`.
 | Field | Value |
 | --- | --- |
 | **VR-T3** | VR-T3k |
-| **Purpose** | Two ally mobs; one crop |
-| **World** | Two mature plots; two allies with seeds |
+| **Purpose** | Two ally mobs; **one** mature crop |
+| **World** | Single wheat age 7; two allies with seeds |
 | **Must observe** | First commits; second abandons/reacquires |
-| **Falsifier** | Double harvest |
+| **Falsifier** | Double harvest; split-crop bypass |
 | **Min window** | first COMMIT + second revalidation + 200 ticks (matrix) |
 
 ### `spm_vr:crop_hungry_veto` — VR-T3l
@@ -177,10 +179,10 @@ Shared library: `spm_vr:_lib/reset`, `setup_village_stub`, `spawn_ally`.
 | Field | Value |
 | --- | --- |
 | **VR-T3** | VR-T3l |
-| **Purpose** | Hungry mob; V3 admission refused; managed crop protected |
-| **World** | Managed crop; hunger effect on subject |
-| **Must observe** | Host `HarvestCropsGoal` vetoed; field stays planted |
-| **Falsifier** | Host strips crop in managed domain |
+| **Purpose** | `wantsFood()` + `VillageWorkAdmission` denied; host veto in managed domain |
+| **World** | Mature **carrots** (host food crop); empty ally backpack; oak logs for mandatory gather claim |
+| **Must observe** | Host `HarvestCropsGoal` vetoed; field stays planted; VILLAGE_ALLY preserved |
+| **Falsifier** | Hunger effect substitute; host strips managed carrots |
 | **Min window** | 800 ticks (matrix) |
 
 ### `spm_vr:crop_multi_cycle` — VR-T3m

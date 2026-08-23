@@ -1,8 +1,17 @@
-# Minimal settlement stub around executor (~ ~ ~). Perception may take several seconds.
+# Occupied settlement stub — VillagePerception requires VILLAGE + IS_OCCUPIED POI (claimed beds).
+# Three HOME beds: two claimed by adults, one spare for population-support vacancy.
 setblock ~ ~-1 ~ minecraft:grass_block
-fill ~-2 ~-1 ~-2 ~2 ~-1 ~2 minecraft:grass_block replace minecraft:air
+fill ~-8 ~-1 ~-2 ~2 ~-1 ~4 minecraft:grass_block replace minecraft:air
 setblock ~1 ~ ~ minecraft:bell
-setblock ~-1 ~ ~ minecraft:red_bed[part=head,facing=south]
-setblock ~-1 ~ ~1 minecraft:red_bed[part=foot,facing=south]
-summon minecraft:villager ~2 ~ ~ {Tags:["spm_vr.helper"],NoAI:1b,PersistenceRequired:1b}
+setblock ~-3 ~ ~1 minecraft:red_bed[part=head,facing=south]
+setblock ~-3 ~ ~2 minecraft:red_bed[part=foot,facing=south]
+setblock ~-5 ~ ~1 minecraft:blue_bed[part=head,facing=south]
+setblock ~-5 ~ ~2 minecraft:blue_bed[part=foot,facing=south]
+setblock ~-7 ~ ~1 minecraft:white_bed[part=head,facing=south]
+setblock ~-7 ~ ~2 minecraft:white_bed[part=foot,facing=south]
+summon minecraft:villager ~-3.5 ~1 ~1.5 {Tags:["spm_vr.helper","spm_vr.villager","spm_vr.villager1"],PersistenceRequired:1b,Age:0}
+summon minecraft:villager ~-5.5 ~1 ~1.5 {Tags:["spm_vr.helper","spm_vr.villager","spm_vr.villager2"],PersistenceRequired:1b,Age:0}
 gamerule mobGriefing true
+time set 18000
+schedule function spm_vr:_lib/claim_village_beds 20t
+schedule function spm_vr:_lib/claim_village_beds 60t
