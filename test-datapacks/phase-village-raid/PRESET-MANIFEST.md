@@ -50,8 +50,9 @@ Shared library: `spm_vr:_lib/reset`, `setup_village_stub`, `spawn_ally`.
 | --- | --- |
 | Dimension | overworld |
 | Mob profile | `VILLAGE_ALLY` via `/spmscavenger village profile set <mob> village_ally` |
-| Settlement | occupied village: bell + **3 HOME beds** (2 claimed, 1 spare); **≥2 adult villagers** |
-| Bootstrap | `setup_village_stub` + scheduled `claim_village_beds` (IS_OCCUPIED POI) |
+| Settlement | bell + **3 HOME beds**; **≥2 adult villagers** (vanilla AI); night + proximity nudge only |
+| Bootstrap | `setup_village_stub` + scheduled `claim_village_beds` (TP only — **no** HOME/sleep NBT injection) |
+| Runtime gate 0 | Settlement bootstrap preflight in `VR-T3-RUNTIME-MATRIX.md` — halt on `FIXTURE_FAILURE` |
 | `mobGriefing` | **true** (crop/compost rows require it) |
 | Host | `playermob` **0.89.0** (hash pinned) |
 

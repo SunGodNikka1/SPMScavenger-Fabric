@@ -1,5 +1,5 @@
-# Occupied settlement stub — VillagePerception requires VILLAGE + IS_OCCUPIED POI (claimed beds).
-# Three HOME beds: two claimed by adults, one spare for population-support vacancy.
+# Settlement bootstrap — VillagePerception needs VILLAGE + IS_OCCUPIED POI (PoiManager ticket state).
+# Three HOME beds: vanilla villager AI must acquire the first two via PoiManager.take(); one spare HOME.
 setblock ~ ~-1 ~ minecraft:grass_block
 fill ~-8 ~-1 ~-2 ~2 ~-1 ~4 minecraft:grass_block replace minecraft:air
 setblock ~1 ~ ~ minecraft:bell

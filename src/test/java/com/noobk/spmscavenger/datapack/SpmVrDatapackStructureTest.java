@@ -99,7 +99,7 @@ class SpmVrDatapackStructureTest {
     }
 
     @Test
-    void settlementBootstrapEstablishesOccupiedVillageEvidence() throws IOException {
+    void settlementBootstrapDoesNotFakeHomeOwnership() throws IOException {
         String setup = Files.readString(LIB_ROOT.resolve("setup_village_stub.mcfunction"),
                 StandardCharsets.UTF_8);
         String claim = Files.readString(LIB_ROOT.resolve("claim_village_beds.mcfunction"),
@@ -109,15 +109,19 @@ class SpmVrDatapackStructureTest {
         assertTrue(countOccurrences(setup, "minecraft:villager") >= 2,
                 "need >=2 adult villagers for population facts");
         assertTrue(countOccurrences(setup, "_bed[part=head") >= 3,
-                "need >=3 HOME beds (2 claimed + spare vacancy)");
+                "need >=3 HOME beds (2 for vanilla claim + spare vacancy)");
         assertTrue(setup.contains("claim_village_beds"),
-                "bed claim must be scheduled — unclaimed beds are not settlements");
+                "proximity nudge must be scheduled while villagers acquire beds naturally");
+        assertTrue(setup.contains("time set 18000"),
+                "night setup helps vanilla bed-acquisition AI");
         assertFalse(setup.contains("NoAI:1b"),
-                "NoAI villagers cannot reliably claim occupied HOME POI");
-        assertTrue(claim.contains("minecraft:home"),
-                "claim helper must assign villager HOME memory");
-        assertTrue(claim.contains("SleepingX"),
-                "claim helper must register sleeping/home occupation");
+                "NoAI villagers cannot execute vanilla PoiManager.take() bed claim");
+        assertFalse(claim.contains("minecraft:home"),
+                "must not fake HOME POI via Brain memory injection");
+        assertFalse(claim.toLowerCase().contains("sleepingx"),
+                "must not fake POI tickets via SleepingX/Y/Z injection");
+        assertFalse(claim.contains("data merge entity"),
+                "claim helper must not inject villager ownership NBT");
     }
 
     @Test

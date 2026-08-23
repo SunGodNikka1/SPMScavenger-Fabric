@@ -80,6 +80,29 @@ phase** and **no second mandatory publisher**. Closure map: `setBlock false / in
 
 ---
 
+## Settlement bootstrap preflight (campaign gate 0 — mandatory)
+
+Run **before any VR-T3 row** that depends on `setup_village_stub`. Allow vanilla villager AI
+**≥120 ticks** after `/function spm_vr:_lib/setup_village_stub` (or any scenario that calls it)
+before reading settlement evidence.
+
+| Check | Pass criterion | On fail |
+| --- | --- | --- |
+| Scavenger settlement observation | `VillagePerception` / settlement anchor readable for ally mob | **STOP** — `FIXTURE_FAILURE` |
+| V3-E population facts (when judging VR-T3e or any population-dependent row) | `adultVillagerCount >= 2`, `claimedHomeCount >= 2`, `currentFreeHomeCapacity >= 1` | **STOP** — `FIXTURE_FAILURE` |
+
+**On `FIXTURE_FAILURE`:**
+
+- Do **not** manually inject `Brain.minecraft:home` or `SleepingX/Y/Z`.
+- Do **not** count subsequent VR-T3 rows as product failures.
+- Do **not** repair Tasks 52–58 production code.
+- Report fixture/bootstrap failure and halt the campaign.
+
+HOME occupancy is **POI-ticket state** (`PoiManager.take` → `PoiRecord.acquireTicket()`); memory/sleep
+NBT alone does not establish `IS_OCCUPIED`.
+
+---
+
 ## Recommended campaign order (when authorized)
 
 Execute in one batched session where possible; re-seed world between clusters if state bleeds:
@@ -122,4 +145,5 @@ Before marking V3 **runtime closed**, review:
 | Date | Change |
 | --- | --- |
 | 2026-08-22 | Initial matrix — task-59 prep; `playermob` 0.89.0; VR-T3f excluded |
+| 2026-08-23 | Remove fake HOME/sleep NBT from bootstrap; settlement preflight gate 0; structural test inverted |
 | 2026-08-22 | Pre-launch repair — VR-T3c atomic contract; per-row observation windows; fixture gate COMPLETE; environment pin |

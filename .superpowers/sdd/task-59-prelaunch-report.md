@@ -22,7 +22,7 @@
 
 | Defect | Fix | Evidence |
 | --- | --- | --- |
-| Shared bootstrap not deterministic / unoccupied beds | `setup_village_stub`: bell + **3 HOME beds**, **2 adult villagers** (AI on), night time, scheduled `claim_village_beds` with HOME memory + sleep registration | `_lib/setup_village_stub.mcfunction`, `_lib/claim_village_beds.mcfunction`; `SpmVrDatapackStructureTest.settlementBootstrapEstablishesOccupiedVillageEvidence` |
+| Shared bootstrap fake POI claim | **FIXED** — `claim_village_beds` TP-only; `settlementBootstrapDoesNotFakeHomeOwnership` forbids NBT injection | `_lib/claim_village_beds.mcfunction`; matrix gate 0 preflight |
 | VR-T3e wrong recipient (second PlayerMob) | `population_food_deficit`: villager `spm_vr.villager2` cleared inventory + `spm_vr.food_recipient`; subject carries bread | `scenario/population_food_deficit.mcfunction`; `populationFoodDeficitTargetsVillagerRecipient` |
 | VR-T3b immediate interrupt | Staged zombie via `schedule … stage_interrupt_zombie 120t` after `crop_managed_single` | `scenario/crop_interrupt_combat.mcfunction`, `_lib/stage_interrupt_zombie.mcfunction`; `cropInterruptCombatStagesInterruptionAfterPathingWindow` |
 | VR-T3k two crops bypass contention | **One** mature wheat; two allies with seeds | `scenario/crop_multi_mob.mcfunction`; `cropMultiMobContendsForSingleMatureCrop` |
@@ -50,10 +50,8 @@ These do **not** prove runtime behavior; they block recurrence of the identified
 
 ## Operator notes (live campaign — still unauthorized)
 
-1. Allow **≥60 ticks** after preset load for `claim_village_beds` to run (settlement POI occupation).
-2. VR-T3b: zombie appears at **t+120** — observe from preset load, not from zombie spawn alone.
-3. VR-T3e: wait for `VillageWorkFacts` heartbeat before judging population-support candidacy.
-4. Verify JAR hashes in `docs/porting/VR-T3-RUNTIME-ENVIRONMENT.md` before any future launch.
+1. Run **settlement bootstrap preflight** (matrix gate 0) — ≥120t after stub load; halt on `FIXTURE_FAILURE`.
+2. Allow vanilla bed acquisition; **do not** inject HOME/sleep NBT if preflight fails.
 
 ---
 
@@ -61,9 +59,7 @@ These do **not** prove runtime behavior; they block recurrence of the identified
 
 | Item | Notes |
 | --- | --- |
-| Bed POI occupation in live world | NBT/sleep merge is best-effort without Minecraft boot — may need extra ticks or operator verification via `/data get entity` |
-| All VR-T3 runtime rows | Separate User authorization required |
-| `claim_village_beds` sufficiency | If POI still unoccupied at runtime, re-run `/function spm_vr:_lib/claim_village_beds` once before judging settlement rows |
+| Bed POI occupation in live world | Vanilla `PoiManager.take()` only — preflight gate 0 verifies before VR-T3 rows |
 
 ---
 
