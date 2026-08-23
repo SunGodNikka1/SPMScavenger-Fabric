@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **V3-F CLOSED** (task-58); **V3-G OPEN / AUTHORIZED** (task-59) | `task-58-report.md` |
+| **V3 Village Work** | **V3-F CLOSED** (task-58); **V3-G prep DONE** (task-59); runtime campaign **NOT AUTHORIZED** | `task-58-report.md`, `task-59-report.md` |
 
 **Task-59 authorization scope (2026-08-22):**
 
@@ -109,6 +109,6 @@ Task 58: brief v1.1 — `task-58-brief.md` (V3-F unified ComposterWorkFacts + Co
 Task 58: Gate 0 PASS — `task-58-gate0-report.md`
 Task 58: complete — V3-F STATIC-BEHAVIORAL ACCEPT (`task-58-report.md`, CLOSE-58-1…3)
 
-Task 59: OPEN / AUTHORIZED — V3-G integration and closure; runtime campaign NOT YET AUTHORIZED
+Task 59: prep **DONE** — V3-G runtime matrix + `spm_vr` manifest + closure map (`task-59-report.md`); runtime campaign NOT AUTHORIZED
 
 No commits unless user requests. No Minecraft launches unless separately approved.

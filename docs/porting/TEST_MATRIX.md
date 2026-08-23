@@ -631,3 +631,24 @@ remain `UNVERIFIED` (AV-1).
 | VR-T3l | managed domain + admission deny | host veto | hunger host harvest | static `INFERRED` |
 | VR-T3m | multi-cycle banking | backpack insert | floor pickup | `ContainerMergeTest` + transaction order `CONFIRMED` |
 | runtime VR-T3 crop | live ally field work | episode + veto | host strip / reroll | `UNVERIFIED` — launch not authorized |
+
+## V3-G closure map — task-59 (2026-08-22)
+
+**Brief:** `.superpowers/sdd/task-59-brief.md` · **Runtime matrix:** `docs/porting/VR-T3-RUNTIME-MATRIX.md`  
+**Preset manifest:** `test-datapacks/phase-village-raid/PRESET-MANIFEST.md`  
+**VR-T3f:** **non-applicable** (V3-D2 deferred). Runtime campaign **NOT AUTHORIZED**.
+
+| ID | Static evidence | Runtime |
+| --- | --- | --- |
+| VR-T3a | task-55 `CropHarvestTransactionTest` — `CONFIRMED` | `UNVERIFIED` |
+| VR-T3b | task-55 episode abort — `INFERRED` | `UNVERIFIED` |
+| VR-T3c | `CropHarvestTransactionTest` invariant — `CONFIRMED` | `UNVERIFIED` |
+| VR-T3d | task-58 `CompostScenarioEvidenceTest` — `CONFIRMED` | `UNVERIFIED` |
+| VR-T3e | task-57 static suite — `CONFIRMED` | `UNVERIFIED` |
+| VR-T3f | **N/A** — deferred | **N/A** |
+| VR-T3g–i | task-54 `StorageOwnershipStructuralTest` — `CONFIRMED` (unit) | `UNVERIFIED` |
+| VR-T3j | task-52/53 mandatory wiring — `CONFIRMED` (unit) | `UNVERIFIED` |
+| VR-T3k | task-55 commit revalidation — `CONFIRMED` | `UNVERIFIED` |
+| VR-T3l | D-VR-079-A1 veto — `INFERRED` | `UNVERIFIED` |
+| VR-T3m | F8 banking tests — `CONFIRMED` | `UNVERIFIED` |
+| D-VR-084 witness | task-52 scenarios — `CONFIRMED` (static) | `UNVERIFIED` |
