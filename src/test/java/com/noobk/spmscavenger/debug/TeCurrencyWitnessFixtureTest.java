@@ -49,6 +49,9 @@ class TeCurrencyWitnessFixtureTest {
         }
         assertTrue(source.contains("TeCurrencyWitnessTracker.arm("),
                 "run must delegate to the existing witness preflight/arm");
+        assertTrue(source.contains("mob.getMainHandItem() != s.fixturePick"));
+        assertTrue(source.contains("stack != s.fixtureSticks"),
+                "pre-arm rollback must require exact inserted-stack identity, not item type");
     }
 
     @Test

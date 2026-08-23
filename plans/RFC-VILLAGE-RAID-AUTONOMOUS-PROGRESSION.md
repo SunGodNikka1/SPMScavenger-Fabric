@@ -3024,8 +3024,8 @@ T+1200   if no terminal result: INCOMPLETE with last state and named missing pro
 
 | Step | Scope | Status |
 | --- | --- | --- |
-| **V2-TE-W2.1** | implement `TeCurrencyWitnessFixture`; extend existing command with `prepare/run`; bounded fixture lifecycle only | `IMPLEMENTING / AUTHORIZED` |
-| **V2-TE-W2.2** | static/unit/structural/negative-control suite; semantic-drift review; clean build; new JAR SHA and package audit | `AUTHORIZED with W2.1 validation` |
+| **V2-TE-W2.1** | implement `TeCurrencyWitnessFixture`; extend existing command with `prepare/run`; bounded fixture lifecycle only | **`IMPLEMENTED / CODE_CONFIRMED`** |
+| **V2-TE-W2.2** | static/unit/structural/negative-control suite; semantic-drift review; clean build; new JAR SHA and package audit | **`STATIC ACCEPT`** — 1629 tests, clean build, zero packaged upstream TE classes |
 | **V2-TE-W2.3** | exact-artifact runtime launch and W2 matrix capture | separately unauthorized even after W2.2 |
 | **V2-TE-W2.4** | after accepted witness, remove fixture, tracker, commands, all passive hooks, lifecycle calls, and their temporary tests; rebuild and prove JAR absence | mandatory follow-up |
 
@@ -3036,20 +3036,20 @@ temporary command branch in `VillageProfileCommands`; any fixture tag/constants.
 `compat/tradeeverything` implementation, `TradeEverythingCompat.install()`, and
 `SERVER_STARTED.register(TradeEverythingCompat::prewarm)`.
 
-**Artifact/approval gate:** W2.1 changes the JAR and supersedes the current
+**Artifact/approval gate:** W2.1 changed the JAR and superseded the previous
 `EAF091497A4710EA43C0BE79EA56B0D9259D640CB5FBB5927A3AC3C847C64683` witness approval candidate.
-After W2.2, return exact tests, mutation manifest, structural evidence, remapped JAR path/hash, zero
-packaged upstream TE classes, and exact runtime command. Do not launch until the User approves that
-new artifact.
+W2.2 produced `build/libs/spmscavenger-1.11.0.jar`, SHA-256
+`D6B981B07E86CA0DEF2CAA589C9ABD7CF37619D550BD01A4DB50226DDD575998`, with zero packaged
+upstream TE classes. Do not launch until the User approves this exact artifact.
 
 **Open runtime questions, not design blockers:** exact TE 0.8.0 quote amount for the prepared
 Unbreaking-VIII stack and board under installed config; whether `NoAI` retains normal executor
 legality; elapsed time from empty Gather scan to trade admission. Each is directly measured by W2,
 not answered by fixture inference.
 
-**Frontier after authorization:** `D-VR-TE-W2-1` is `LOCKED`; W2.1/W2.2 are authorized for
-implementation and static/build/package validation with the stronger provenance rule. Minecraft
-launch, W2.3, production behavior changes, Task-59 work, and commit remain unauthorized.
+**Frontier after W2.2:** `D-VR-TE-W2-1` is `LOCKED`; W2.1 is implemented and W2.2 has static/build/
+package acceptance under the stronger provenance rule. Minecraft launch/W2.3 remains unauthorized;
+production behavior changes and Task-59 work remain outside this slice.
 
 Do not fake a player session. Preserve one transaction owner and separate opportunity discovery:
 
@@ -8259,3 +8259,31 @@ inferred.
 reliable exact-artifact witness. **Frontier after:** W2.1 is dependency-ready but
 `NOT AUTHORIZED`; the next decision is authorization of fixture implementation only. Minecraft
 runtime remains separately unauthorized, and Task-59/V3-G remains independent.
+
+### Contribution — User + `Agent_Codex` (V2-TE-W2.1/W2.2, 2026-08-23)
+
+**Mode:** authorized implementation + static validation; no Minecraft launch
+
+**User correction locked:** item-type allowlisting is not provenance. Pre-arm rollback requires the
+exact target/container pair and the exact `ItemStack` object references inserted by the fixture;
+replacement, rearrangement, or ambiguity preserves inventory. After production is armed, PlayerMob
+inventory is always preserved and reported. Fixture merchant deletion requires both the recorded
+UUID and fixture ownership tag.
+
+**Implemented:** one bounded `TeCurrencyWitnessFixture` session; safe-refusal `prepare <mob>` and
+atomic `run <mob>` commands; exact TE/version/bridge/currency, empty-target, nearby-villager,
+route-evidence, loaded-volume, ore-absence, and spawn-position preflight; four component-exact
+witness sticks; stone pick; one tagged stationary Toolsmith with a vanilla 10-emerald iron-pickaxe
+offer; unload/death/stop lifecycle release. The fixture calls the existing tracker arm but contains
+none of the prohibited route, quote, authorization, revalidation, or execution seams.
+
+**Static evidence:** focused fixture/command tests PASS; full `clean build` PASS with **1629 tests / 0
+failures**; negative controls prove post-arm preservation, identity/provenance refusal, validation
+before mutation, partial pre-arm rollback, and absence of production-authority calls. Remapped JAR:
+`build/libs/spmscavenger-1.11.0.jar`; SHA-256
+`D6B981B07E86CA0DEF2CAA589C9ABD7CF37619D550BD01A4DB50226DDD575998`; packaged upstream TE
+class count: **0**.
+
+**Evidence boundary:** fixture structure is `CODE_CONFIRMED`; autonomous convergence, the exact TE
+0.8.0 quote, stationary-villager legality, staged denomination evidence, cleanup behavior in a live
+server, and final witness PASS remain `UNVERIFIED` until separately authorized W2.3 runtime.

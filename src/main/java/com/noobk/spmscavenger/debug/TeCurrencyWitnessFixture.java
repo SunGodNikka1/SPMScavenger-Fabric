@@ -72,8 +72,9 @@ public final class TeCurrencyWitnessFixture {
         Villager villager = null;
         try {
             ItemStack sticks = witnessSticks(server);
+            ItemStack pick = new ItemStack(Items.STONE_PICKAXE);
             backpack.setItem(0, sticks);
-            mob.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
+            mob.setItemSlot(EquipmentSlot.MAINHAND, pick);
 
             BlockPos merchantPos = findMerchantPosition(level, mob.blockPosition());
             villager = createMerchant(level, merchantPos);
@@ -81,7 +82,8 @@ public final class TeCurrencyWitnessFixture {
                 throw new IllegalStateException("server rejected fixture villager spawn");
             }
             session = new Session(mob.getUUID(), mob.getName().getString(), backpack,
-                    villager.getUUID(), level.dimension().location().toString(), Phase.PREPARED);
+                    sticks, pick, villager.getUUID(), level.dimension().location().toString(),
+                    Phase.PREPARED);
             out.add("Target: " + mob.getName().getString() + " [" + mob.getUUID() + "]");
             out.add("Witness inventory: 4 Unbreaking VIII sticks; stone pickaxe equipped");
             out.add("Fixture merchant: " + villager.getUUID()
@@ -138,7 +140,8 @@ public final class TeCurrencyWitnessFixture {
         boolean exactTarget = resolvedMob != null
                 && Objects.equals(resolvedMob.getUUID(), current.mobId)
                 && PlayerMobs.backpack(resolvedMob) == current.backpack;
-        if (current.phase == Phase.PREPARED && exactTarget && exactPreparedInventory(resolvedMob)) {
+        boolean exactPrepared = exactTarget && exactPreparedInventory(resolvedMob, current);
+        if (mayRollbackInventory(current.phase, exactTarget, exactPrepared)) {
             rollbackKnownPreparation(resolvedMob, current.backpack);
             out.add("Target inventory: exact pre-arm fixture preparation rolled back.");
         } else {
@@ -300,16 +303,18 @@ public final class TeCurrencyWitnessFixture {
         return true;
     }
 
-    private static boolean exactPreparedInventory(Mob mob) {
+    private static boolean exactPreparedInventory(Mob mob, Session s) {
         Container backpack = PlayerMobs.backpack(mob);
         if (backpack == null || !mob.getOffhandItem().isEmpty()
-                || !mob.getMainHandItem().is(Items.STONE_PICKAXE)) return false;
+                || mob.getMainHandItem() != s.fixturePick) return false;
         int occupied = 0;
         for (int i = 0; i < backpack.getContainerSize(); i++) {
             ItemStack stack = backpack.getItem(i);
             if (stack.isEmpty()) continue;
             occupied++;
-            if (!TeCurrencyWitnessTracker.isWitnessStickForFixture(stack) || stack.getCount() != 4) return false;
+            if (stack != s.fixtureSticks
+                    || !TeCurrencyWitnessTracker.isWitnessStickForFixture(stack)
+                    || stack.getCount() != 4) return false;
         }
         return occupied == 1;
     }
@@ -337,15 +342,20 @@ public final class TeCurrencyWitnessFixture {
         private final UUID mobId;
         private final String targetName;
         private final Container backpack;
+        private final ItemStack fixtureSticks;
+        private final ItemStack fixturePick;
         private final UUID villagerId;
         private final String dimension;
         private Phase phase;
 
-        private Session(UUID mobId, String targetName, Container backpack, UUID villagerId,
+        private Session(UUID mobId, String targetName, Container backpack,
+                        ItemStack fixtureSticks, ItemStack fixturePick, UUID villagerId,
                         String dimension, Phase phase) {
             this.mobId = mobId;
             this.targetName = targetName;
             this.backpack = backpack;
+            this.fixtureSticks = fixtureSticks;
+            this.fixturePick = fixturePick;
             this.villagerId = villagerId;
             this.dimension = dimension;
             this.phase = phase;
