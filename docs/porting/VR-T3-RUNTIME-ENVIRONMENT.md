@@ -23,7 +23,7 @@
 | Mod | File | SHA-256 | Evidence |
 | --- | --- | --- | --- |
 | **Social Player Mobs** (`playermob`) | `playermob-fabric-0.89.0+1.21.1.jar` | `C8DC0E89C3FD632B6DCC7F8E46D3AE4955DD5504CBA53F72B62314850A64E612` | Downloaded from GitHub release `bh679/playermob-mc` tag `v0.89.0` (485 500 bytes); cached at `Projects/references/artifacts/playermob-fabric-0.89.0+1.21.1.jar` |
-| **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `DD01B0E25854D9B541B715D4BD8AE1A8000698F35188DEF56427C1EEE352A562` | `build/libs/spmscavenger-1.11.0.jar` after `.\gradlew.bat build` |
+| **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `5EF3639FF03DA20191C3C83BCF662461DB081A8ABFA00E2CEBDC8C93A8B49BF9` | Clean W2.4 production artifact at `build/libs/spmscavenger-1.11.0.jar`; temporary V2-TE witness/fixture tooling removed |
 
 **SPM source tag (audit):** `v0.89.0` on `https://github.com/bh679/playermob-mc` (`mod_version=0.89.0` in tag `gradle.properties`).
 
@@ -66,5 +66,6 @@ Structural validation (no Minecraft): `SpmVrDatapackStructureTest`.
 
 | Date | Change |
 | --- | --- |
+| 2026-08-23 | Task-59 resume — repinned Scavenger to the clean W2.4 production artifact after removal of temporary V2-TE witness/fixture tooling |
 | 2026-08-22 | Semantic fixture repair — occupied settlement bootstrap; VR-T3b/e/k/l preset fixes; structural regression tests |
 | 2026-08-22 | Initial environment pin — Task-59 pre-launch sub-slice |

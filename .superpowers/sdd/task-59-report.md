@@ -64,3 +64,12 @@ execution is **not authorized**.
 
 **Preparation DONE.** User checkpoint: review matrix + manifest; authorize Minecraft campaign when
 ready. V3 phase runtime closure remains open until applicable VR-T3 rows record runtime evidence.
+
+## Resume addendum — 2026-08-23
+
+The earlier manifest-only concern is **SUPERSEDED** by the implemented executable datapack and its
+14-test structural/semantic guard suite. Task-59 resume repinned the environment from the obsolete
+pre-W2.4 hash to clean production JAR SHA-256
+`5EF3639FF03DA20191C3C83BCF662461DB081A8ABFA00E2CEBDC8C93A8B49BF9`. Focused fixture validation
+passed 14/14 and `.\gradlew.bat clean build` passed 1614 tests with zero failures/errors/skips.
+There were no V3 production Java changes. Runtime closure remains `UNVERIFIED` and unlaunched.

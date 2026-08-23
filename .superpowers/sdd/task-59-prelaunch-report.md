@@ -71,3 +71,26 @@ These do **not** prove runtime behavior; they block recurrence of the identified
 | 13 presets with semantic shape fixes | **YES** |
 | Structural + regression string guards | **YES** |
 | Runtime VR-T3 evidence | **NO** — awaiting authorization |
+
+---
+
+## Resume revalidation — 2026-08-23
+
+Task-59 was resumed after V2-TE-W2.4 removed its temporary witness/fixture tooling. The runtime
+environment is now repinned to the resulting clean production artifact; no V3 production code or
+fixture semantics changed during this reconciliation.
+
+| Evidence | Result |
+| --- | --- |
+| Focused `SpmVrDatapackStructureTest` | **14/14 PASS** |
+| Executable scenario inventory | **13/13 present** — VR-T3a–e,g–m + D-VR-084 witness |
+| `.\gradlew.bat clean build` | **PASS** — 1614 tests, 0 failures/errors/skips |
+| Clean Scavenger JAR | `build/libs/spmscavenger-1.11.0.jar` |
+| SHA-256 | `5EF3639FF03DA20191C3C83BCF662461DB081A8ABFA00E2CEBDC8C93A8B49BF9` |
+| Host 0.89.0 artifact SHA-256 | `C8DC0E89C3FD632B6DCC7F8E46D3AE4955DD5504CBA53F72B62314850A64E612` — matches environment pin |
+| Packaged upstream Trade Everything classes | **0** |
+| Temporary V2-TE witness classes/references | **0 / 0** |
+
+**AV-1 boundary:** fixture structure, artifact identity, compile, tests, and packaging are
+`CONFIRMED`. All live VR-T3 behavior remains `UNVERIFIED`; Minecraft launch still requires explicit
+authorization.
