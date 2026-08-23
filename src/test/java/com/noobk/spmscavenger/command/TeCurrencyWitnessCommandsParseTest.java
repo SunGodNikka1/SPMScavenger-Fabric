@@ -37,6 +37,8 @@ class TeCurrencyWitnessCommandsParseTest {
 
         for (String command : List.of(
                 "spmscavenger debug te witness start @e[limit=1]",
+                "spmscavenger debug te witness prepare @e[limit=1]",
+                "spmscavenger debug te witness run @e[limit=1]",
                 "spmscavenger debug te witness status",
                 "spmscavenger debug te witness report",
                 "spmscavenger debug te witness stop",

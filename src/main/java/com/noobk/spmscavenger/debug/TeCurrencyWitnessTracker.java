@@ -533,6 +533,11 @@ public final class TeCurrencyWitnessTracker {
                 : statusLines(session, true);
     }
 
+    /** Read-only fixture interlock; it grants no witness or production authority. */
+    public static synchronized boolean hasActiveSession() {
+        return session != null && session.active();
+    }
+
     static synchronized State stateForTests() {
         return session == null ? null : session.state;
     }
@@ -663,6 +668,11 @@ public final class TeCurrencyWitnessTracker {
         }
         var enchantments = stack.get(DataComponents.ENCHANTMENTS);
         return enchantments != null && !enchantments.isEmpty();
+    }
+
+    /** Component-exact fixture identity check; read-only and shared to avoid marker drift. */
+    static boolean isWitnessStickForFixture(ItemStack stack) {
+        return isWitnessStick(stack);
     }
 
     private static String componentFingerprint(ItemStack stack) {

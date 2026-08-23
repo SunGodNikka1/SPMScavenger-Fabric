@@ -130,6 +130,8 @@ public class SpmScavenger implements ModInitializer {
         });
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, world) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
+                com.noobk.spmscavenger.debug.TeCurrencyWitnessFixture.abortForMob(
+                        mob, world.getServer(), "PlayerMob unloaded");
                 com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.abortForMob(
                         mob.getUUID(), "PlayerMob unloaded", world.getGameTime());
                 cancelShelterCommitment(mob);
@@ -194,6 +196,8 @@ public class SpmScavenger implements ModInitializer {
                 }
             }
         });
+        ServerLifecycleEvents.SERVER_STOPPING.register(
+                com.noobk.spmscavenger.debug.TeCurrencyWitnessFixture::shutdownServerState);
         ServerLifecycleEvents.SERVER_STOPPED.register(
                 server -> {
                     com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.shutdownServerState(
@@ -216,6 +220,8 @@ public class SpmScavenger implements ModInitializer {
                 });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
+                com.noobk.spmscavenger.debug.TeCurrencyWitnessFixture.abortForMob(
+                        mob, mob.getServer(), "PlayerMob died");
                 com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.abortForMob(
                         mob.getUUID(), "PlayerMob died", mob.level().getGameTime());
                 cancelShelterCommitment(mob);

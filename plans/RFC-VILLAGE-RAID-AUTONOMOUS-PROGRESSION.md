@@ -10,9 +10,9 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING` — runtime-validation preparation for **V2-TE-W2** only; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
-| **Status** | **V2-TE-W2 automatic fixture `LOCK RECOMMENDED / NOT AUTHORIZED`**. Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G OPEN / AUTHORIZED**. All Minecraft runtime campaigns **NOT YET AUTHORIZED**. |
-| **Nearest frontier** | User-selected compatibility side frontier: authorize **V2-TE-W2** fixture implementation after reviewing `D-VR-TE-W2-1`; global phase frontier remains **Task-59 / V3-G OPEN / AUTHORIZED** and is not blocked by W2. Minecraft runtime remains separately unauthorized. |
-| **Last update** | 2026-08-23 (`Agent_Codex` — V2-TE-W2 reproducible runtime fixture prepared in RFC only) |
+| **Status** | **V2-TE-W2 automatic fixture `LOCKED / W2.1 IMPLEMENTATION AUTHORIZED`** with provenance-safe cleanup amendment. Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G OPEN / AUTHORIZED but out of this slice**. All Minecraft runtime campaigns **NOT YET AUTHORIZED**. |
+| **Nearest frontier** | Implement and statically validate **V2-TE-W2.1/W2.2** only, then return the new instrumented JAR/hash for a separate runtime decision. Task-59/V3-G remains independent and untouched. |
+| **Last update** | 2026-08-23 (`User` cleanup correction + W2.1 authorization; `Agent_Codex` implementation) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -2781,7 +2781,7 @@ reference after lifecycle abort fails the instrumentation itself before the curr
 
 ##### V2-TE-W2 — automatic emerald-block witness fixture (`Agent_Codex`, 2026-08-23)
 
-**Status:** `LOCK RECOMMENDED / IMPLEMENTATION NOT AUTHORIZED / RUNTIME NOT AUTHORIZED`.
+**Status:** `LOCKED / W2.1 IMPLEMENTATION AUTHORIZED / RUNTIME NOT AUTHORIZED`.
 Compatibility maintenance only; independent of Task-59/V3-G. This section prepares the fixture
 contract and does not modify Java, tests, build files, datapacks, configuration, or a Minecraft
 world.
@@ -2804,7 +2804,7 @@ board. The generic adapter receives the exact Q2 object and remains the sole tra
 
 ###### D-VR-TE-W2-1 — fixture mutates inputs; production decides; tracker observes
 
-**Status:** `LOCK RECOMMENDED`.
+**Status:** `LOCKED` by User amendment and W2.1 authorization, 2026-08-23.
 
 ```text
 /spmscavenger debug te witness run <mob>
@@ -2928,10 +2928,18 @@ Q1 evidence, not a fixture-generated substitute.
   fixture-owned state when cleanup is safe.
 - `reset` performs the same cleanup and removes immutable report state; it does not erase recorded
   RFC/log evidence.
-- cleanup may clear the target container/hands only when every remaining stack matches the declared
-  W2 allowlist (witness sticks, emerald/blocks, stone pick, iron pick). Any foreign stack makes
-  cleanup refuse that inventory mutation and print exact recovery instructions. The tagged fixture
-  villager may still be removed independently.
+- **Provenance-safe rollback (`LOCKED` correction):** automatic target-inventory rollback is
+  permitted only before the production witness has armed/executed, while the fixture can prove it
+  is reversing its own preparation. Item type is not provenance: an emerald, emerald block, stone
+  pickaxe, or iron pickaxe acquired after arm does not become fixture-owned merely because its type
+  appears in W2.
+- after arm, `stop/reset` removes the fixture villager only when exact UUID/tag ownership is proven,
+  releases fixture/tracker live references, and **preserves the PlayerMob inventory** unless a
+  stronger exact fixture-only rollback proof exists. The current W2.1 contract deliberately claims
+  no such post-arm proof; it reports inventory contents and recovery instructions instead.
+- before arm, failed prepare/preflight may restore the exact captured empty backpack/hands because
+  no production execution window has opened. This rollback boundary closes permanently when the
+  fixture marks the session `ARMED`.
 - unload/death/dimension change aborts the witness, removes the fixture villager when its server
   level is available, and releases live references. Server stop releases all in-memory references;
   no test fixture state is persisted or resurrected.
@@ -2990,7 +2998,7 @@ T+1200   if no terminal result: INCOMPLETE with last state and named missing pro
 | W2-R2 | production empty Gather scan | normal handoff eventually permits trade | fixture publishes/clears handoff evidence | runtime log witness required |
 | W2-TE1 | exact TE 0.8.0 artifact/config | production Q1/Q2 records one enchanted stick -> physical emerald blocks and exact Q2 identity | fixture calls quote or inserts TE offer | runtime tracker/log required |
 | W2-B1 | fixture vanilla 10-emerald pickaxe board | production admits block liquidity, breaks minimum two blocks in staging, leaves real inventory unchanged until commit, and returns correct change | premature conversion, duplicate notify, fake menu/player | runtime tracker/log required |
-| W2-L1 | stop/reset/unload/death/server stop | release tracker/fixture references and remove only proven fixture-owned state | persisted fixture or deletion of foreign items | tests; lifecycle runtime sample `UNVERIFIED` |
+| W2-L1 | stop/reset/unload/death/server stop | pre-arm rollback may reverse exact preparation; post-arm preserves ambiguous PlayerMob inventory, removes only exact UUID/tag fixture villager, and releases references | same-type inventory treated as provenance; persisted fixture; deletion of foreign items | tests; lifecycle runtime sample `UNVERIFIED` |
 | W2-X1 | accepted witness cleanup | removal task deletes fixture + tracker + hooks/commands, rebuilds, and preserves evidence docs | temporary diagnostics silently ship | post-witness build/package audit required |
 
 ###### Static gates and negative controls before requesting runtime approval
@@ -3004,7 +3012,8 @@ T+1200   if no terminal result: INCOMPLETE with last state and named missing pro
 - tracker structural test remains unchanged and forbids inventory/transaction authority;
 - environmental tests pin actual configured radius and production `dy=-4…4`, refusing raw iron
   without deleting it;
-- identity/cleanup tests prove wrong UUID/container no-op, foreign-item cleanup refusal, tagged
+- identity/cleanup tests prove wrong UUID/container no-op, exact pre-arm rollback, unconditional
+  post-arm inventory preservation even when every stack type appears on the W2 list, tagged
   merchant-only removal, unload/death/dimension/server-stop release, and one-session bound;
 - negative controls must be executed in isolation: remove preflight-before-mutation ordering (rollback
   test fails), permit route publication from fixture (structural test fails), change Q2 identity
@@ -3015,8 +3024,8 @@ T+1200   if no terminal result: INCOMPLETE with last state and named missing pro
 
 | Step | Scope | Status |
 | --- | --- | --- |
-| **V2-TE-W2.1** | implement `TeCurrencyWitnessFixture`; extend existing command with `prepare/run`; bounded fixture lifecycle only | `READY / NOT AUTHORIZED` |
-| **V2-TE-W2.2** | static/unit/structural/negative-control suite; semantic-drift review; clean build; new JAR SHA and package audit | blocked on W2.1 authorization |
+| **V2-TE-W2.1** | implement `TeCurrencyWitnessFixture`; extend existing command with `prepare/run`; bounded fixture lifecycle only | `IMPLEMENTING / AUTHORIZED` |
+| **V2-TE-W2.2** | static/unit/structural/negative-control suite; semantic-drift review; clean build; new JAR SHA and package audit | `AUTHORIZED with W2.1 validation` |
 | **V2-TE-W2.3** | exact-artifact runtime launch and W2 matrix capture | separately unauthorized even after W2.2 |
 | **V2-TE-W2.4** | after accepted witness, remove fixture, tracker, commands, all passive hooks, lifecycle calls, and their temporary tests; rebuild and prove JAR absence | mandatory follow-up |
 
@@ -3038,9 +3047,9 @@ Unbreaking-VIII stack and board under installed config; whether `NoAI` retains n
 legality; elapsed time from empty Gather scan to trade admission. Each is directly measured by W2,
 not answered by fixture inference.
 
-**Frontier after:** `D-VR-TE-W2-1` is `LOCK RECOMMENDED`; W2.1 is dependency-ready but not
-authorized. The next action is one concrete product boundary: authorize W2.1 implementation with
-the W2-P1/P2/R1/L1 static gates. Minecraft launch remains a later, separate decision.
+**Frontier after authorization:** `D-VR-TE-W2-1` is `LOCKED`; W2.1/W2.2 are authorized for
+implementation and static/build/package validation with the stronger provenance rule. Minecraft
+launch, W2.3, production behavior changes, Task-59 work, and commit remain unauthorized.
 
 Do not fake a player session. Preserve one transaction owner and separate opportunity discovery:
 
