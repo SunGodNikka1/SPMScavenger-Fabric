@@ -41,8 +41,7 @@ public final class VillageProfileCommands {
                                                                         EntityArgument.getEntity(ctx, "mob"),
                                                                         StringArgumentType.getString(ctx,
                                                                                 "profile")))))))
-                                .then(VillageStorageCommands.storageBranch()))
-                        .then(TeCurrencyWitnessCommands.debugBranch()));
+                                .then(VillageStorageCommands.storageBranch())));
     }
 
     private static int getProfile(CommandSourceStack source, Entity entity) {

@@ -39,8 +39,6 @@ public final class TradeEverythingCompat {
     public static final String MOD_ID = "tradeeverything";
 
     private static QuoteBridge bridge = ReflectiveTradeEverythingBridge.unavailable();
-    private static volatile String installedVersion;
-    private static volatile boolean currencyCapabilityActive;
 
     private TradeEverythingCompat() {
     }
@@ -59,10 +57,8 @@ public final class TradeEverythingCompat {
             return;
         }
         String version = container.get().getMetadata().getVersion().getFriendlyString();
-        installedVersion = version;
         if (TradeEverythingCurrencyProvider.supportsVersion(version)) {
             MerchantCurrencyPolicies.installOptionalProvider(new TradeEverythingCurrencyProvider());
-            currencyCapabilityActive = true;
             LOGGER.info("[spmscavenger] Trade Everything {} emerald-block currency enabled", version);
         } else {
             LOGGER.warn("[spmscavenger] Trade Everything {} currency behavior is not source-validated; "
@@ -78,21 +74,6 @@ public final class TradeEverythingCompat {
         }
         TradeSources.registerTradeEverything(new TradeEverythingTradeSource(bridge));
         LOGGER.info("[spmscavenger] Trade Everything registered as an optional trade source");
-    }
-
-    /** Temporary witness readout: installed metadata version, independent of either capability. */
-    public static String installedVersion() {
-        return installedVersion;
-    }
-
-    /** Temporary witness readout: whether the separately version-gated denomination installed. */
-    public static boolean currencyCapabilityActive() {
-        return currencyCapabilityActive;
-    }
-
-    /** Temporary witness readout: current reflective quote health, which may fail closed later. */
-    public static boolean quoteBridgeHealthy() {
-        return bridge.available();
     }
 
     /**

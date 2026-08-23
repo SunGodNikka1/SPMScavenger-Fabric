@@ -9,10 +9,10 @@
 | **Host baseline sync** | **CLOSED** (2026-08-22) — doc + authorization; runtime matrix pin is a Task-59 deliverable before launch |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `PLANNING` — runtime-validation preparation for **V2-TE-W2** only; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
-| **Status** | **V2-TE-W2 automatic fixture `LOCKED / W2.1 IMPLEMENTATION AUTHORIZED`** with provenance-safe cleanup amendment. Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G OPEN / AUTHORIZED but out of this slice**. All Minecraft runtime campaigns **NOT YET AUTHORIZED**. |
-| **Nearest frontier** | Implement and statically validate **V2-TE-W2.1/W2.2** only, then return the new instrumented JAR/hash for a separate runtime decision. Task-59/V3-G remains independent and untouched. |
-| **Last update** | 2026-08-23 (`User` cleanup correction + W2.1 authorization; `Agent_Codex` implementation) |
+| **Mode** | `PLANNING` — **V2-TE-W2 CLOSED**; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
+| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G OPEN / AUTHORIZED**. |
+| **Nearest frontier** | V2-TE-W2 is closed. Return to the independent Task-59/V3-G frontier; its Minecraft runtime campaign still requires separate launch authorization. |
+| **Last update** | 2026-08-23 (`User` W2 runtime acceptance + W2.4 authorization; `Agent_Codex` removal) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -2678,9 +2678,9 @@ from NBT. Therefore ordinary no-menu `villager.getOffers()` cannot discover it.
 
 #### V2-TE compatibility maintenance — emerald-block currency parity (2026-08-23)
 
-**Status:** implementation authorized; runtime linkage/execution against the exact v0.8.0 artifact
-remains `UNVERIFIED` until the separately approved runtime witness. Source/API compatibility is
-`CONFIRMED`: v0.8.0 retains the reflective `RecipeValues.ensureIndexed(MinecraftServer) -> void`
+**Status:** **`RUNTIME CONFIRMED / CLOSED`** against the exact v0.8.0 witness artifact. Source/API
+compatibility is `CONFIRMED`: v0.8.0 retains the reflective
+`RecipeValues.ensureIndexed(MinecraftServer) -> void`
 and `OfferQuoter.quote(AbstractVillager, ItemStack, MerchantOffers) -> Optional<MerchantOffer>`
 shapes. Both v0.3.0 and v0.8.0 can select `EMERALD_BLOCK` for a high-value payout. Human payment
 normalization belongs to TE's separate `MerchantMenuMixin`, so quotation health and denomination
@@ -2727,11 +2727,11 @@ or no-menu execution changes. **Falsifying runtime witness:** with the exact pin
 observe a high-value TE sale yielding blocks followed by a normal emerald BUY, verify change and
 inventory atomically, then force/observe quote capability failure without currency revocation.
 
-##### Temporary runtime witness instrumentation — authorized 2026-08-23
+##### Temporary runtime witness instrumentation — **HISTORICAL / REMOVED BY W2.4**
 
-**Disposition:** temporary test support only; remove after the V2-TE v0.8.0 witness is accepted.
-The earlier visual-only launch plan and its JAR are superseded. Minecraft launch remains separately
-unauthorized until the instrumented build, tests, and hash are reviewed.
+**Disposition:** temporary test support only. The exact Trade Everything v0.8.0 witness passed and
+W2.4 removes this instrumentation; the design below is retained as historical evidence, not shipped
+production architecture.
 
 **Behavioral prediction — `PASS / BEHAVIORALLY_PLAUSIBLE`:** a single optional
 `TeCurrencyWitnessTracker` observes the existing production handoffs and never participates in goal
@@ -2781,7 +2781,7 @@ reference after lifecycle abort fails the instrumentation itself before the curr
 
 ##### V2-TE-W2 — automatic emerald-block witness fixture (`Agent_Codex`, 2026-08-23)
 
-**Status:** `LOCKED / W2.1 IMPLEMENTATION AUTHORIZED / RUNTIME NOT AUTHORIZED`.
+**Status:** **`W2.3 RUNTIME PASS / W2.4 REMOVAL AUTHORIZED`**.
 Compatibility maintenance only; independent of Task-59/V3-G. This section prepares the fixture
 contract and does not modify Java, tests, build files, datapacks, configuration, or a Minecraft
 world.
@@ -2992,12 +2992,12 @@ T+1200   if no terminal result: INCOMPLETE with last state and named missing pro
 
 | ID | Setup | Must happen | Must not happen | Evidence status |
 | --- | --- | --- | --- | --- |
-| W2-P1 | empty disposable PlayerMob, safe environment | `prepare` creates exact items + one tagged vanilla-board merchant and prints manifest | partial mutation on any failed gate | automated tests required; runtime `UNVERIFIED` |
-| W2-P2 | unsafe/non-empty target | command refuses before mutation with all failed facts | item loss, terrain edit, unrelated entity removal | automated tests required |
-| W2-R1 | `run <mob>` | compose prepare, existing preflight, arm once | force route evidence, quote, admission, or executor | structural + command tests required |
-| W2-R2 | production empty Gather scan | normal handoff eventually permits trade | fixture publishes/clears handoff evidence | runtime log witness required |
-| W2-TE1 | exact TE 0.8.0 artifact/config | production Q1/Q2 records one enchanted stick -> physical emerald blocks and exact Q2 identity | fixture calls quote or inserts TE offer | runtime tracker/log required |
-| W2-B1 | fixture vanilla 10-emerald pickaxe board | production admits block liquidity, breaks minimum two blocks in staging, leaves real inventory unchanged until commit, and returns correct change | premature conversion, duplicate notify, fake menu/player | runtime tracker/log required |
+| W2-P1 | empty disposable PlayerMob, safe environment | `prepare` creates exact items + one tagged vanilla-board merchant and prints manifest | partial mutation on any failed gate | **`RUNTIME PASS`** — fixture reached `ARMED` with exact target/merchant manifest |
+| W2-P2 | unsafe/non-empty target | command refuses before mutation with all failed facts | item loss, terrain edit, unrelated entity removal | historical fixture tests `CODE_CONFIRMED`; runtime negative not required after positive acceptance |
+| W2-R1 | `run <mob>` | compose prepare, existing preflight, arm once | force route evidence, quote, admission, or executor | **`RUNTIME PASS`** plus historical structural/command tests |
+| W2-R2 | production empty Gather scan | normal handoff eventually permits trade | fixture publishes/clears handoff evidence | **`RUNTIME PASS`** — autonomous production reached TE plan without fixture authority |
+| W2-TE1 | exact TE 0.8.0 artifact/config | production Q1/Q2 records one enchanted stick -> physical emerald blocks and exact Q2 identity | fixture calls quote or inserts TE offer | **`RUNTIME PASS`** — `1 stick -> 10 blocks`, Q1/Q2 correspondence and exact Q2 identity PASS |
+| W2-B1 | fixture vanilla 10-emerald pickaxe board | production admits block liquidity, breaks minimum two blocks in staging, leaves real inventory unchanged until commit, and returns correct change | premature conversion, duplicate notify, fake menu/player | **`RUNTIME PASS`** — staged `8 blocks + 18 emeralds`; real remained `10 blocks`; final `8 blocks + 8 emeralds + pickaxe` |
 | W2-L1 | stop/reset/unload/death/server stop | pre-arm rollback may reverse exact preparation; post-arm preserves ambiguous PlayerMob inventory, removes only exact UUID/tag fixture villager, and releases references | same-type inventory treated as provenance; persisted fixture; deletion of foreign items | tests; lifecycle runtime sample `UNVERIFIED` |
 | W2-X1 | accepted witness cleanup | removal task deletes fixture + tracker + hooks/commands, rebuilds, and preserves evidence docs | temporary diagnostics silently ship | post-witness build/package audit required |
 
@@ -3026,8 +3026,8 @@ T+1200   if no terminal result: INCOMPLETE with last state and named missing pro
 | --- | --- | --- |
 | **V2-TE-W2.1** | implement `TeCurrencyWitnessFixture`; extend existing command with `prepare/run`; bounded fixture lifecycle only | **`IMPLEMENTED / CODE_CONFIRMED`** |
 | **V2-TE-W2.2** | static/unit/structural/negative-control suite; semantic-drift review; clean build; new JAR SHA and package audit | **`STATIC ACCEPT`** — 1629 tests, clean build, zero packaged upstream TE classes |
-| **V2-TE-W2.3** | exact-artifact runtime launch and W2 matrix capture | separately unauthorized even after W2.2 |
-| **V2-TE-W2.4** | after accepted witness, remove fixture, tracker, commands, all passive hooks, lifecycle calls, and their temporary tests; rebuild and prove JAR absence | mandatory follow-up |
+| **V2-TE-W2.3** | exact-artifact runtime launch and W2 matrix capture | **`RUNTIME PASS`** — exact TE 0.8.0 chain recorded |
+| **V2-TE-W2.4** | after accepted witness, remove fixture, tracker, commands, all passive hooks, lifecycle calls, and their temporary tests; rebuild and prove JAR absence | **`COMPLETE / STATIC-PACKAGE PASS`** — 1614 tests; zero temporary source/JAR refs |
 
 **Removal manifest:** `TeCurrencyWitnessFixture`, `TeCurrencyWitnessTracker`,
 `TeCurrencyWitnessCommands`; their tests; every `TeCurrencyWitnessTracker.*` call in
@@ -3042,14 +3042,23 @@ W2.2 produced `build/libs/spmscavenger-1.11.0.jar`, SHA-256
 `D6B981B07E86CA0DEF2CAA589C9ABD7CF37619D550BD01A4DB50226DDD575998`, with zero packaged
 upstream TE classes. Do not launch until the User approves this exact artifact.
 
-**Open runtime questions, not design blockers:** exact TE 0.8.0 quote amount for the prepared
-Unbreaking-VIII stack and board under installed config; whether `NoAI` retains normal executor
-legality; elapsed time from empty Gather scan to trade admission. Each is directly measured by W2,
-not answered by fixture inference.
+**Runtime resolution:** production observed `1 Unbreaking-VIII stick -> 10 emerald blocks`, exact Q2
+reference identity, one authorized/actual sale, and a normal ten-emerald Toolsmith purchase. Payment
+observed `real 10 blocks -> staged 8 blocks + 18 emeralds` while real remained unchanged, then final
+`8 blocks + 8 emeralds + 1 iron pickaxe`. No extra sale, premature conversion, duplicate notify,
+bridge failure, or inventory loss was reported. Stationary `NoAI` merchant legality therefore passed
+for this exact scenario; elapsed time was not recorded and is not required for currency parity.
 
-**Frontier after W2.2:** `D-VR-TE-W2-1` is `LOCKED`; W2.1 is implemented and W2.2 has static/build/
-package acceptance under the stronger provenance rule. Minecraft launch/W2.3 remains unauthorized;
-production behavior changes and Task-59 work remain outside this slice.
+**Frontier after W2.3:** runtime acceptance is complete. W2.4 removes all temporary evidence tooling,
+rebuilds, and proves the production JAR retains only real TE compatibility architecture.
+
+**W2.4 final evidence:** clean `build` PASS with **1614 tests / 0 failures / 0 errors / 0 skipped**.
+Production source contains zero `TeCurrencyWitness*`/fixture-tag references; the remapped JAR contains
+zero witness entries and zero upstream `games/brennan/tradeeverything/**` entries. All five
+project-owned `compat/tradeeverything` classes remain, together with install, prewarm, optional
+currency-provider installation, quote-source registration, and generic staged normalization. Clean
+production JAR: `build/libs/spmscavenger-1.11.0.jar`; SHA-256
+`5EF3639FF03DA20191C3C83BCF662461DB081A8ABFA00E2CEBDC8C93A8B49BF9`.
 
 Do not fake a player session. Preserve one transaction owner and separate opportunity discovery:
 
@@ -8284,6 +8293,39 @@ before mutation, partial pre-arm rollback, and absence of production-authority c
 `D6B981B07E86CA0DEF2CAA589C9ABD7CF37619D550BD01A4DB50226DDD575998`; packaged upstream TE
 class count: **0**.
 
-**Evidence boundary:** fixture structure is `CODE_CONFIRMED`; autonomous convergence, the exact TE
+**Evidence boundary at W2.2 (later resolved by W2.3 below):** fixture structure was
+`CODE_CONFIRMED`; autonomous convergence, the exact TE
 0.8.0 quote, stationary-villager legality, staged denomination evidence, cleanup behavior in a live
 server, and final witness PASS remain `UNVERIFIED` until separately authorized W2.3 runtime.
+
+### Contribution — User + `Agent_Codex` (V2-TE-W2.3/W2.4 closure, 2026-08-23)
+
+**Mode:** accepted runtime validation + authorized temporary-instrumentation removal
+
+**Runtime evidence (`RUNTIME_CONFIRMED`):** exact Trade Everything 0.8.0 production path observed
+`1 Unbreaking-VIII stick -> 10 emerald blocks`, funding deficit/output `10/90`, one authorized and
+one actual sale, semantic Q1/Q2 correspondence, and exact Q2 Java reference identity at execution.
+The ten-emerald Toolsmith BUY observed real-before `10 blocks + 0 emeralds`, staged-after
+normalization `8 blocks + 18 emeralds`, real-during-staging unchanged, and final
+`8 blocks + 8 emeralds + 1 iron pickaxe`. Safety readout: no extra stick sale, premature conversion,
+duplicate notify/trade, bridge failure, or inventory loss. Verdict: **PASS**.
+
+**Removal (`CODE/BUILD/PACKAGE CONFIRMED`):** deleted fixture, tracker, commands, temporary tests,
+observer calls, lifecycle wiring, command branch, fixture tags, and W2-only compatibility/evidence
+readouts. Preserved all project-owned `compat/tradeeverything` classes, install/prewarm, independent
+version-gated currency provider, synthetic quote source, generic staged normalization, and V2 route/
+trade production logic.
+
+**MAIBS semantic-drift review:** `PLANNED -> IMPLEMENTED -> PREDICTED RUNTIME` is exact for this
+cleanup: no Goal, priority, flags, admission, route arbitration, scan, navigation, quote, funding,
+debit, commit, or notify rule changed. Only passive observation/setup surfaces disappeared; the
+previously witnessed autonomous feedback loop remains production-owned. No architecture defect or
+new runtime requirement was introduced by removal.
+
+**Final gate:** `clean build` PASS; 1614 tests, zero failures/errors/skips; zero production-source
+`TeCurrencyWitness*` references; zero witness JAR entries; zero packaged upstream TE entries; five
+project-owned TE compatibility classes retained. Clean production JAR SHA-256:
+`5EF3639FF03DA20191C3C83BCF662461DB081A8ABFA00E2CEBDC8C93A8B49BF9`.
+
+**Frontier after:** V2-TE-W2 closed. Task-59/V3-G is again the nearest independent RFC frontier;
+its Minecraft launch remains separately unauthorized.

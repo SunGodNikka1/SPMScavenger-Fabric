@@ -177,8 +177,4 @@ public final class RouteExhaustionEvidence {
         return EVIDENCE.size();
     }
 
-    /** Read-only debug-fixture preflight; never creates or consumes route authority. */
-    public static boolean tracks(UUID mobId) {
-        return mobId != null && EVIDENCE.containsKey(mobId);
-    }
 }

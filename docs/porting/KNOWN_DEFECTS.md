@@ -7,8 +7,9 @@ gate that closes it. A defect leaves this file only when its gate has evidence.
 
 ## V2-DEF-004 — Trade Everything emerald-block payouts are stranded liquidity
 
-**Status:** REPAIRED — shared policy and atomic transaction gates `CODE_CONFIRMED`; exact
-Trade Everything v0.8.0 runtime witness `UNVERIFIED`. **Discovered:** v0.3.0 → v0.8.0 compatibility
+**Status:** **CLOSED / RUNTIME CONFIRMED** — shared policy and atomic transaction gates
+`CODE_CONFIRMED`; exact Trade Everything v0.8.0 autonomous witness `PASS` on 2026-08-23.
+**Discovered:** v0.3.0 → v0.8.0 compatibility
 revalidation, 2026-08-23. **Applies to:** optional V2-TE only. **Severity:** bounded compatibility
 failure; a high-value funding sale can complete while the following emerald-priced purchase remains
 unfundable.
@@ -32,8 +33,12 @@ both cost slots normalize once on the staged copy, and any later failure discard
 Source/API evidence is pinned in the RFC's V2-TE section: v0.8.0 commit
 `a67795d598ceb3afa7adc3c33e98407cbc177b71`; Fabric artifact SHA-512
 `330b578b0121050c19473ea2d69f034f2fa2127130f182ae33e5966026fc3e958a2e596ad06ab082a72f4b9890c4f6bad3a4a9c71c0f9afbe05f40fe14852f5e`.
-The exact artifact's linkage and physical autonomous sell→block→buy chain remain runtime
-`UNVERIFIED` until separately launched.
+The exact v0.8.0 runtime witness observed production quote/revalidation/execution end to end:
+`1 Unbreaking-VIII stick -> 10 emerald blocks`; one authorized/actual sale; semantic Q1/Q2 match;
+the exact Q2 Java object reached the executor; and the ordinary ten-emerald Toolsmith purchase
+normalized `10 blocks -> staged 8 blocks + 18 emeralds` while real inventory remained at ten
+blocks, then committed `8 blocks + 8 emeralds + 1 iron pickaxe`. No extra stick sale, premature
+conversion, duplicate notify/trade, bridge failure, or inventory loss was reported.
 
 ### Gate
 
@@ -41,17 +46,13 @@ The exact artifact's linkage and physical autonomous sell→block→buy chain re
 two-cost normalization, rollback on no-room, block funding contribution, denomination preservation,
 vanilla absence behavior, exact version fail-closed behavior, and quote/currency capability
 independence. Existing Q1/Q2, synthetic-marker, no-menu, route, and vanilla tests remain green.
-The authorized temporary `TeCurrencyWitnessTracker` is now present behind
-`/spmscavenger debug te witness`. Its structural gates prohibit trade authorization, offer-source
-registration, currency-provider installation, inventory writes, transaction operations, Goal/tick
-ownership, and unbounded registries. Its state-machine tests prove exact Q2 reference-identity
-checking, UUID + container-identity admission, staged-vs-real snapshots, one-session lifecycle
-release, independent quote/currency reporting, and `PASS`/`INCOMPLETE`/`FAIL` distinctions.
-
-Instrumented full `clean build`: 1624 tests, zero failures/errors/skips; remapped JAR SHA-256
-`EAF091497A4710EA43C0BE79EA56B0D9259D640CB5FBB5927A3AC3C847C64683` and zero packaged upstream
-Trade Everything classes. These are code/build/package evidence, not runtime confirmation. This
-temporary instrumentation must be removed after the v0.8.0 witness is accepted.
+The W2 fixture/tracker/commands and every passive observer/lifecycle hook were temporary evidence
+tools and were removed after acceptance by W2.4. Final clean build: **1614 tests, 0 failures, 0
+errors, 0 skipped**. Production JAR `build/libs/spmscavenger-1.11.0.jar`, SHA-256
+`5EF3639FF03DA20191C3C83BCF662461DB081A8ABFA00E2CEBDC8C93A8B49BF9`: zero temporary witness
+entries and zero packaged upstream Trade Everything entries. Production `compat/tradeeverything/**`,
+version-gated currency policy, synthetic quote source, generic staged denomination normalization,
+install, and prewarm remain.
 
 **Task independence:** compatibility maintenance only. It is not Task-59/V3-G and does not gate the
 Village Work runtime campaign.

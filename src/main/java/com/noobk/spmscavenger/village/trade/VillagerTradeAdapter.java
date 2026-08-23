@@ -335,12 +335,9 @@ public final class VillagerTradeAdapter {
         if (villager.isSleeping()) {
             return TradeResult.MERCHANT_UNAVAILABLE;
         }
-        long witnessTick = villager.level() == null ? -1L : villager.level().getGameTime();
-        com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.observeExecutionOffer(
-                backpack, live, witnessTick);
         return executeResolved(
                 backpack, live, preservingAttribution(villager),
-                MerchantCurrencyPolicies.current(), witnessTick);
+                MerchantCurrencyPolicies.current());
     }
 
     /**
@@ -377,15 +374,6 @@ public final class VillagerTradeAdapter {
             MerchantOffer live,
             java.util.function.Consumer<MerchantOffer> notify,
             MerchantCurrencyPolicy currency) {
-        return executeResolved(backpack, live, notify, currency, -1L);
-    }
-
-    private static TradeResult executeResolved(
-            Container backpack,
-            MerchantOffer live,
-            java.util.function.Consumer<MerchantOffer> notify,
-            MerchantCurrencyPolicy currency,
-            long witnessTick) {
         if (backpack == null || live == null) {
             return TradeResult.NO_VILLAGER;
         }
@@ -394,15 +382,11 @@ public final class VillagerTradeAdapter {
         }
 
         ItemStack[] staged = TradeTransaction.stage(backpack);
-        com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.observePaymentStageEntered(
-                backpack, live, staged, witnessTick);
         // Normalize both costs once, inside the same staged transaction. A provider may break the
         // minimum necessary denomination here; any later failure discards the entire staged copy.
         if (!currency.normalizeForPayment(staged, live.getCostA(), live.getCostB())) {
             return TradeResult.CANNOT_AFFORD;
         }
-        com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.observeBlockNormalization(
-                backpack, live, staged, witnessTick);
         if (!TradeTransaction.debit(staged, live.getCostA())) {
             return TradeResult.CANNOT_AFFORD;
         }
@@ -418,14 +402,8 @@ public final class VillagerTradeAdapter {
         }
 
         TradeTransaction.commit(backpack, staged);
-        com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.observeCommit(
-                backpack, live, witnessTick);
         // Exactly once, and only after the mob actually holds the goods.
-        com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.observeNotifyAttempt(
-                backpack, live, witnessTick);
         notify.accept(live);
-        com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.observeNotifyCompleted(
-                backpack, live, witnessTick);
         return TradeResult.TRADED;
     }
 
