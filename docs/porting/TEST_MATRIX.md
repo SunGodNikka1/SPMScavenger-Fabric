@@ -532,12 +532,16 @@ v0.8.0 commit `a67795d598ceb3afa7adc3c33e98407cbc177b71`, Fabric artifact SHA-51
 | quote bridge unhealthy | synthetic quotes fail closed; validated currency capability remains independent | `QuoteBridge.available()` revokes denomination | provider structural test `CODE_CONFIRMED`; runtime fault witness `UNVERIFIED` |
 | unsupported TE version | block capability does not activate | stable quote shape implicitly grants currency parity | provider version test `CODE_CONFIRMED` |
 | exact v0.8.0 artifact | reflective linkage plus autonomous high-value SELL→block→ordinary emerald BUY | fake player/menu, board insertion, price reconstruction, marker loss | runtime `UNVERIFIED` — requires explicit launch approval |
+| temporary witness is unarmed | every hook is a no-op and owns no Goal/tick/scan/policy/transaction authority | instrumentation changes admission, offer choice, inventory, or result | `TeCurrencyWitnessStructuralTest` + `TeCurrencyWitnessTrackerTest` `CODE_CONFIRMED` |
+| armed Q1→Q2→SELL→block→BUY chain | retain semantic evidence and exact Q2 Java identity; capture real/staged/final inventory; distinguish `PASS`, `INCOMPLETE`, and first-invariant `FAIL` | duplicate arithmetic, inferred identity, live references retained after termination | witness tracker state-machine tests `CODE_CONFIRMED`; exact artifact runtime `UNVERIFIED` |
+| witness lifecycle | one UUID + exact container identity; unload/death/stop/reset/server stop release container and Q2 references | multi-mob registry or stale entity/world/container/offer retention | tracker lifecycle + structural tests `CODE_CONFIRMED` |
 
-Verification: focused currency tests and full `clean build` pass — **1614 tests, 0 failures, 0
+Verification: focused currency/witness tests and instrumented full `clean build` pass — **1624 tests, 0 failures, 0
 errors, 0 skipped**. Remapped `spmscavenger-1.11.0.jar` SHA-256
-`9C594FFFDA1FE4B406896FBAAFDDAD118F6D54BD0D8AE90D618FD8566BCC1554`; packaged upstream Trade
+`EAF091497A4710EA43C0BE79EA56B0D9259D640CB5FBB5927A3AC3C847C64683`; packaged upstream Trade
 Everything classes: zero. This confirms compilation, deterministic policy/transaction behavior, and
-packaging only; cross-mod runtime parity remains `UNVERIFIED`.
+temporary witness structure only; cross-mod runtime parity remains `UNVERIFIED`. Minecraft was not
+launched for this build, and the witness instrumentation is removal-bound after acceptance.
 
 ## D-VR-084 / task-52 — MandatoryOwnership pending-claim authority (2026-08-20, R1 2026-08-20)
 

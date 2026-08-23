@@ -360,6 +360,9 @@ public class TradeWithVillagerGoal extends Goal {
             reselect(level);
             return;
         }
+        com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.observeQ2(
+                mob.getUUID(), backpack, attemptSource, plannedOffer, resolved.get(),
+                level.getGameTime());
         VillagerTradeAdapter.TradeResult result =
                 VillagerTradeAdapter.performResolvedTrade(backpack, target, resolved.get());
 
@@ -641,6 +644,15 @@ public class TradeWithVillagerGoal extends Goal {
         Optional<WorkDemandPolicy.MaterialDemand> demand = WorkDemandPolicy
                 .select(backpack, mob.getMainHandItem(), mob.getOffhandItem(), ScavengerConfig.get())
                 .map(WorkDemandPolicy.WorkDemand::payload);
+        com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.observeCompatibilityHealth(
+                mob.getUUID(), backpack,
+                com.noobk.spmscavenger.compat.tradeeverything.TradeEverythingCompat.installedVersion(),
+                com.noobk.spmscavenger.compat.tradeeverything.TradeEverythingCompat.currencyCapabilityActive(),
+                com.noobk.spmscavenger.compat.tradeeverything.TradeEverythingCompat.quoteBridgeHealthy(),
+                level.getGameTime());
+        demand.ifPresent(live ->
+                com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.observeDemand(
+                        mob.getUUID(), backpack, live, level.getGameTime()));
 
         // R5, and the reason this method has an effect at all: every path that asks "is there a
         // consumer" funnels through here, so the exhaustion episode's lifetime is bound to the
@@ -791,6 +803,8 @@ public class TradeWithVillagerGoal extends Goal {
                 offers.add(ranked);
                 owners.put(slot, new Candidate(villager, source.key(), ranked,
                         demand.get().consumerKey(), demand.get().materialKey()));
+                com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.observeQ1(
+                        mob.getUUID(), backpack, source.key(), ranked, level.getGameTime());
                 slot++;
             }
             }
@@ -883,7 +897,7 @@ public class TradeWithVillagerGoal extends Goal {
                                 funding.emeraldsRequired())
                         : null;
 
-        return TradeDemandGate
+        Optional<AuthorizedAttempt> authorized = TradeDemandGate
                 .authorize(selected,
                         new RouteEvidence(existingFeasible, offers, affordable, deficit,
                                 sellLeg == null ? null : sellLeg.authorization()))
@@ -894,6 +908,18 @@ public class TradeWithVillagerGoal extends Goal {
                 .filter(java.util.Objects::nonNull)
                 .filter(candidate -> VillagerTradeAdapter.canAfford(backpack, candidate.offer()))
                 .map(candidate -> new AuthorizedAttempt(candidate, attemptContext));
+        final TradeFundingPlanner.FundingTarget selectedFunding = funding;
+        authorized.ifPresent(attempt -> {
+            if (step == TradeChainPlan.Step.SELL_TO_FUND) {
+                com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.observeFundingPlan(
+                        mob.getUUID(), backpack, attempt.candidate().source(), selectedFunding, sellLeg,
+                        level.getGameTime());
+            } else {
+                com.noobk.spmscavenger.debug.TeCurrencyWitnessTracker.observePurchaseSelected(
+                        mob.getUUID(), backpack, attempt.candidate().offer(), level.getGameTime());
+            }
+        });
+        return authorized;
     }
 
     private static boolean isFundingSell(OfferSnapshot offer) {

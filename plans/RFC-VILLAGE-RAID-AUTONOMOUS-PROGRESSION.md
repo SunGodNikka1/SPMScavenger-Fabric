@@ -2727,6 +2727,58 @@ or no-menu execution changes. **Falsifying runtime witness:** with the exact pin
 observe a high-value TE sale yielding blocks followed by a normal emerald BUY, verify change and
 inventory atomically, then force/observe quote capability failure without currency revocation.
 
+##### Temporary runtime witness instrumentation — authorized 2026-08-23
+
+**Disposition:** temporary test support only; remove after the V2-TE v0.8.0 witness is accepted.
+The earlier visual-only launch plan and its JAR are superseded. Minecraft launch remains separately
+unauthorized until the instrumented build, tests, and hash are reviewed.
+
+**Behavioral prediction — `PASS / BEHAVIORALLY_PLAUSIBLE`:** a single optional
+`TeCurrencyWitnessTracker` observes the existing production handoffs and never participates in goal
+selection. It has no tick callback, Goal, world scan, offer source, policy implementation, inventory
+write, or transaction callback capable of changing a result. When unarmed, every observation call
+returns immediately. When armed, the player sees unchanged autonomous behavior plus bounded command
+and transition-log evidence: demand -> TE Q1 -> selected funding leg -> TE Q2 -> exact Q2 execution
+identity -> sale commit/block payout -> vanilla pickaxe selection -> real-before/staged-after/real-
+during snapshots -> purchase commit. Combat, path interruption, market invalidation, and retry remain
+production-owned; the witness merely stays at its last evidenced stage until production reacquires
+or the operator/lifecycle aborts it.
+
+| Interaction | Authority | Witness behavior |
+| --- | --- | --- |
+| Goal admission / route arbitration | existing `TradeWithVillagerGoal` and V2-C | read only after production admits the route |
+| Sell authorization / funding units | `SellReserveModel`, `TradeFundingPlanner`, active `MerchantCurrencyPolicy` | record the selected production leg and its computed units |
+| Q1/Q2 | `TradeEverythingTradeSource` | record Q1 snapshot and the exact returned Q2 object; never quote itself |
+| Staging / debit / commit | `VillagerTradeAdapter` + `TradeTransaction` | snapshot real and staged state around the existing calls; never normalize, debit, insert, or commit |
+| Unload, death, server stop | existing `SpmScavenger` lifecycle hooks | mark active witness incomplete and release container/Q2 references |
+
+**Alternatives:** (A) observe narrow production seams — **selected**, because invisible staging and
+Java reference identity cannot be established visually; (B) infer success from final inventory and
+animation — rejected because it cannot distinguish premature real-inventory conversion, a rebuilt Q2
+offer, or planner/executor currency drift. Switch back to visual-only evidence only if the production
+transaction exposes an authoritative immutable trace carrying those same facts.
+
+**Predicted weird/failure cases:** (1) no Toolsmith offer appears: `RUNTIME_QUESTION`, report
+`INCOMPLETE`, never `FAIL`; (2) combat interrupts after block payout: `ACCEPTABLE_STEPPING_STONE`, the
+state remains at payout and later production reacquisition may continue; (3) another trade uses the
+same backpack while armed: `RUNTIME_QUESTION`, non-matching offers are ignored and cannot advance the
+specialized state; (4) mob unload/death: `ACCEPTABLE_STEPPING_STONE`, abort and release references;
+(5) observer exception: `ARCHITECTURE_DEFECT` if it escapes into production — the observer must log,
+disable itself, and never alter the trade result.
+
+**Must happen:** one armed UUID plus its exact `InventoryCarrier` container identity; transition-only
+logs; Q1/Q2 semantic evidence; Java identity proof that execution received the stored Q2 object;
+real-before, staged-after-normalization, real-during-staging, and final snapshots; distinct TE version,
+currency-capability, and quote-health fields; `INCOMPLETE` versus first-invariant `FAIL`; release on
+stop/reset/unload/death/server stop. **Must not happen:** tracker-derived offer choice, deficit,
+expendability, currency authority, admission, mutation, forced trade, injected offer, per-tick logging,
+more than one armed mob, or retained entity/world/container/Q2 references after termination.
+
+**Runtime falsifier:** any difference in candidate, route, quote, inventory, or trade result with the
+witness armed versus unarmed; any real-inventory block change before the existing commit; Q2 reference
+inequality at executor entry; more than one sale for a one-use funding plan; or any retained live
+reference after lifecycle abort fails the instrumentation itself before the currency witness is read.
+
 Do not fake a player session. Preserve one transaction owner and separate opportunity discovery:
 
 ```text

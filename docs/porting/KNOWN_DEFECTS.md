@@ -41,9 +41,17 @@ The exact artifact's linkage and physical autonomous sell→block→buy chain re
 two-cost normalization, rollback on no-room, block funding contribution, denomination preservation,
 vanilla absence behavior, exact version fail-closed behavior, and quote/currency capability
 independence. Existing Q1/Q2, synthetic-marker, no-menu, route, and vanilla tests remain green.
-Full `clean build`: 1614 tests, zero failures/errors/skips; remapped JAR SHA-256
-`9C594FFFDA1FE4B406896FBAAFDDAD118F6D54BD0D8AE90D618FD8566BCC1554` and zero packaged upstream
-Trade Everything classes. These are code/build/package evidence, not runtime confirmation.
+The authorized temporary `TeCurrencyWitnessTracker` is now present behind
+`/spmscavenger debug te witness`. Its structural gates prohibit trade authorization, offer-source
+registration, currency-provider installation, inventory writes, transaction operations, Goal/tick
+ownership, and unbounded registries. Its state-machine tests prove exact Q2 reference-identity
+checking, UUID + container-identity admission, staged-vs-real snapshots, one-session lifecycle
+release, independent quote/currency reporting, and `PASS`/`INCOMPLETE`/`FAIL` distinctions.
+
+Instrumented full `clean build`: 1624 tests, zero failures/errors/skips; remapped JAR SHA-256
+`EAF091497A4710EA43C0BE79EA56B0D9259D640CB5FBB5927A3AC3C847C64683` and zero packaged upstream
+Trade Everything classes. These are code/build/package evidence, not runtime confirmation. This
+temporary instrumentation must be removed after the v0.8.0 witness is accepted.
 
 **Task independence:** compatibility maintenance only. It is not Task-59/V3-G and does not gate the
 Village Work runtime campaign.
