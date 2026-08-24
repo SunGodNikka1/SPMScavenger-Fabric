@@ -20,8 +20,8 @@
 | Minecraft / `runClient` / batched VR-T3 execution | **NOT AUTHORIZED** |
 
 **Checkpoint before runtime launch:** `task-59-prelaunch-report.md` + matrix + executable fixtures.
-Replacement artifact candidate: temporary V3 inspector + automated campaign controller JAR SHA-256
-`94534E28364ACF9E6C7FAFB1940D2F3AEF3F90581103DEED58D416A2DAA06F3C`; 1643 tests, 0 failures.
+Replacement artifact candidate: startup-contained temporary V3 inspector + automated campaign controller JAR SHA-256
+`732BBB65C5604D617A9FC84120F7878622C3018DA3B6F84035DFBFEB9A532ECC`; 1645 tests, 0 failures.
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -112,6 +112,6 @@ Task 58: brief v1.1 — `task-58-brief.md` (V3-F unified ComposterWorkFacts + Co
 Task 58: Gate 0 PASS — `task-58-gate0-report.md`
 Task 58: complete — V3-F STATIC-BEHAVIORAL ACCEPT (`task-58-report.md`, CLOSE-58-1…3)
 
-Task 59: Gate 0 **RUNTIME PASS**; temporary one-command campaign controller built and statically accepted (33 focused / 1643 full tests, SHA `94534E28...A06F3C`); no new Minecraft launch, all VR-T3 rows remain `UNVERIFIED` (`task-59-prelaunch-report.md`)
+Task 59: Gate 0 **RUNTIME PASS**; first automated startup failed from invalid raw Brigadier `function` execution; repaired next-tick FunctionManager boundary + failure containment passes 35 focused / 1645 full tests (SHA `732BBB65...532ECC`); no relaunch, VR-T3 rows remain `UNVERIFIED` (`task-59-prelaunch-report.md`)
 
 No commits unless user requests. No Minecraft launches unless separately approved.

@@ -58,6 +58,27 @@ class V3RuntimeCampaignControllerTest {
                 "reset cleanup must remain bound to the recorded Overworld fixture");
         assertTrue(source.contains("active = null;\n        session.forcedChunksReleased"),
                 "terminal release must detach active state before chunk-unload callbacks can re-enter");
+        assertTrue(source.contains("Session.preparing("));
+        assertTrue(source.indexOf("if (session.state == State.PREPARING)")
+                        < source.indexOf("level.getEntity(session.subjectId)"),
+                "PREPARING must execute before subject-dependent tick logic");
+        assertTrue(source.contains("V3CampaignStartupGuard.execute("));
+        assertTrue(source.contains("failStartup("));
+        assertTrue(source.contains("LOGGER.error("));
+        assertTrue(source.contains("startupStage"));
+        int preparingStart = source.indexOf("private static void tickPreparing(");
+        int preparingEnd = source.indexOf("private static void tickGate0(");
+        String preparing = source.substring(preparingStart, preparingEnd);
+        assertTrue(preparing.indexOf("startupStage = StartupStage.EXECUTE_SCENARIO")
+                        < preparing.indexOf("executeFixtureFunctionNow("),
+                "nested datapack dispatch must have an exact failure stage");
+        assertTrue(source.contains("server.getFunctions().execute(function, source)"));
+        assertFalse(source.contains("executeFixtureFunction("),
+                "1.21 function commands must not run through raw Brigadier execute");
+        assertTrue(source.contains("releaseForcedChunksSafely(server, session, tick)"));
+        assertTrue(source.contains("session.state = State.FIXTURE_FAILURE"));
+        assertTrue(source.contains("lastReport.summaryLines()"));
+        assertTrue(source.contains("lastReport.lines()"));
         assertFalse(source.contains("forceload remove all"));
 
         String bootstrap = Files.readString(BOOTSTRAP);

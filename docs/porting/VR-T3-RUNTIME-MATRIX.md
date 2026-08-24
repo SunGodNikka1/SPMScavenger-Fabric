@@ -129,7 +129,8 @@ disposable fixture to day, then waits up to 200 daytime ticks for production to 
 
 ```text
 /spmscavenger debug v3 run mandatory_blocks_village_work
-  -> allowlisted preset at command origin (Overworld only)
+  -> establish PREPARING immediately
+  -> execute loaded preset at command origin on next server tick (Overworld only)
   -> remove unrelated PlayerMobs inside 32-block arena, pre-window only
   -> force-load only newly acquired arena chunks
   -> wait natural Gate0=PASS
@@ -141,6 +142,10 @@ disposable fixture to day, then waits up to 200 daytime ticks for production to 
 
 /spmscavenger debug v3 report
 ```
+
+Startup failures terminate as `FIXTURE_FAILURE` with `startupStage`, exception class/message, and
+root cause in status/report; the full stack trace uses `[spmscavenger/v3-campaign]` in `latest.log`.
+Run `reset` to remove provably tagged partial fixture entities/schedules.
 
 `OBSERVATION_COMPLETE` means the minimum evidence clock completed; it is not PASS. `INCOMPLETE`,
 `FIXTURE_INCOMPLETE`, `FIXTURE_FAILURE`, and `EXTERNAL_INTERFERENCE` classify observation/fixture
@@ -209,6 +214,7 @@ Before marking V3 **runtime closed**, review:
 
 | Date | Change |
 | --- | --- |
+| 2026-08-24 | Repaired startup containment and Minecraft 1.21 function execution boundary; exact artifact repinned; live rerun not authorized |
 | 2026-08-23 | Added temporary one-command campaign controller, passive row clocks, pre-window contamination isolation, exact opening/terminal evidence, and owned fixture chunk lifecycle; launch remains unauthorized |
 | 2026-08-23 | Gate-0 witness completion — remembered settlement identity + full population facts + explicit PASS/FIXTURE_FAILURE/INCOMPLETE |
 | 2026-08-23 | Gate-0 runtime PASS recorded; added independent no-`SHELTER_HOLD` settlement-row precondition after daytime transition |

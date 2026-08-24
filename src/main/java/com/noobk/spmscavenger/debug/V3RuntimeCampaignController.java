@@ -8,9 +8,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.functions.CommandFunction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -51,6 +53,15 @@ public final class V3RuntimeCampaignController {
         ABORTED
     }
 
+    private enum StartupStage {
+        ESTABLISH_BOUNDARY,
+        EXECUTE_SCENARIO,
+        DISCOVER_SUBJECT,
+        FORCE_CHUNKS,
+        REMOVE_CONTAMINANTS,
+        ACTIVATE
+    }
+
     private V3RuntimeCampaignController() {
     }
 
@@ -75,47 +86,30 @@ public final class V3RuntimeCampaignController {
         }
         BlockPos origin = BlockPos.containing(source.getPosition());
         lastReport = null;
-        try {
-            executeFixtureFunction(
-                    source.getServer(), source.withSuppressedOutput(),
-                    "scenario/" + selected.get().id());
-        } catch (CommandSyntaxException ex) {
-            lastReport = CampaignReport.failedBeforeSubject(
-                    selected.get(), level, origin, State.FIXTURE_FAILURE,
-                    "preset command failed: " + ex.getRawMessage().getString());
-            sendLines(source, lastReport.lines());
+        Session preparing = Session.preparing(
+                selected.get(), level.dimension(), origin, level.getGameTime());
+        active = preparing;
+        V3CampaignStartupGuard.Outcome startup = V3CampaignStartupGuard.execute(() ->
+            record(preparing, level.getGameTime(), "PREPARING",
+                    "preset=" + selected.get().id() + " origin=" + origin.toShortString()),
+                outcome -> failStartup(
+                source.getServer(), preparing, level.getGameTime(), outcome));
+        if (!startup.succeeded()) {
+            V3CampaignStartupGuard.Outcome delivery = V3CampaignStartupGuard.execute(
+                    () -> sendLines(source, lastReport.lines()));
+            if (!delivery.succeeded()) {
+                SpmScavenger.LOGGER.error(
+                        "{} scenario={} tick={} event=STARTUP_FAILURE_REPORT_DELIVERY failure={}",
+                        LOG_PREFIX,
+                        preparing.scenario.id(),
+                        level.getGameTime(),
+                        delivery.failureSummary(),
+                        delivery.failure());
+            }
             return 0;
         }
-
-        List<Mob> subjects = level.getEntitiesOfClass(
-                Mob.class,
-                arena(origin),
-                mob -> PlayerMobs.isPlayerMob(mob) && mob.getTags().contains(SUBJECT_TAG));
-        if (subjects.size() != 1) {
-            lastReport = CampaignReport.failedBeforeSubject(
-                    selected.get(), level, origin, State.FIXTURE_FAILURE,
-                    "expected exactly one tagged subject, found " + subjects.size());
-            sendLines(source, lastReport.lines());
-            return 0;
-        }
-
-        Mob subject = subjects.getFirst();
-        active = new Session(
-                selected.get(),
-                level.dimension(),
-                origin,
-                subject.getUUID(),
-                level.getGameTime(),
-                selected.get().requiresGate0() ? State.WAITING_GATE0 : State.WAITING_DAYTIME);
-        forceArenaChunks(level, active);
-        removePreWindowContaminants(level, active);
-        record(active, level.getGameTime(), "START",
-                "preset=" + selected.get().id()
-                        + " row=" + selected.get().rowId()
-                        + " origin=" + origin.toShortString()
-                        + " subject=" + subject.getUUID());
         source.sendSuccess(() -> Component.literal(
-                "V3 campaign started: " + selected.get().id()
+                "V3 campaign preparation queued: " + selected.get().id()
                         + ". Use /spmscavenger debug v3 status or report."), false);
         return 1;
     }
@@ -178,16 +172,20 @@ public final class V3RuntimeCampaignController {
             finish(source.getServer(), active, State.ABORTED, tick,
                     "operator reset campaign", null, null);
         }
-        try {
-            CommandSourceStack fixtureSource = source.getServer().createCommandSourceStack()
-                    .withLevel(source.getServer().overworld())
-                    .withPosition(Vec3.atCenterOf(cleanupOrigin))
-                    .withSuppressedOutput();
-            executeFixtureFunction(source.getServer(), fixtureSource, "cleanup");
-        } catch (CommandSyntaxException ex) {
+        CommandSourceStack fixtureSource = source.getServer().createCommandSourceStack()
+                .withLevel(source.getServer().overworld())
+                .withPosition(Vec3.atCenterOf(cleanupOrigin))
+                .withSuppressedOutput();
+        V3CampaignStartupGuard.Outcome cleanup = V3CampaignStartupGuard.execute(
+                () -> executeFixtureFunctionNow(
+                        source.getServer(), fixtureSource, "cleanup"));
+        if (!cleanup.succeeded()) {
+            SpmScavenger.LOGGER.error(
+                    "{} event=FIXTURE_RESET_FAILURE failure={}",
+                    LOG_PREFIX, cleanup.failureSummary(), cleanup.failure());
             source.sendFailure(Component.literal(
                     "V3 controller state released, but fixture cleanup failed: "
-                            + ex.getRawMessage().getString()));
+                            + cleanup.failureSummary()));
             lastReport = null;
             return 0;
         }
@@ -209,6 +207,10 @@ public final class V3RuntimeCampaignController {
                     "fixture dimension unavailable", null, null);
             return;
         }
+        if (session.state == State.PREPARING) {
+            tickPreparing(server, level, session);
+            return;
+        }
         Entity entity = level.getEntity(session.subjectId);
         if (!(entity instanceof Mob subject) || !PlayerMobs.isPlayerMob(subject)) {
             finish(server, session, State.INCOMPLETE, level.getGameTime(),
@@ -228,9 +230,49 @@ public final class V3RuntimeCampaignController {
         }
     }
 
+    private static void tickPreparing(
+            MinecraftServer server, ServerLevel level, Session session) {
+        V3CampaignStartupGuard.execute(() -> {
+            session.startupStage = StartupStage.EXECUTE_SCENARIO;
+            CommandSourceStack fixtureSource = server.createCommandSourceStack()
+                    .withLevel(level)
+                    .withPosition(Vec3.atCenterOf(session.origin))
+                    .withSuppressedOutput();
+            executeFixtureFunctionNow(
+                    server, fixtureSource, "scenario/" + session.scenario.id());
+
+            session.startupStage = StartupStage.DISCOVER_SUBJECT;
+            List<Mob> subjects = level.getEntitiesOfClass(
+                    Mob.class,
+                    arena(session.origin),
+                    mob -> PlayerMobs.isPlayerMob(mob)
+                            && mob.getTags().contains(SUBJECT_TAG));
+            if (subjects.size() != 1) {
+                throw new IllegalStateException(
+                        "expected exactly one tagged subject, found " + subjects.size());
+            }
+            Mob subject = subjects.getFirst();
+            session.subjectId = subject.getUUID();
+
+            session.startupStage = StartupStage.FORCE_CHUNKS;
+            forceArenaChunks(level, session);
+            session.startupStage = StartupStage.REMOVE_CONTAMINANTS;
+            removePreWindowContaminants(level, session);
+            session.startupStage = StartupStage.ACTIVATE;
+            session.state = session.scenario.requiresGate0()
+                    ? State.WAITING_GATE0 : State.WAITING_DAYTIME;
+            session.reason = "fixture prepared";
+            record(session, level.getGameTime(), "START",
+                    "preset=" + session.scenario.id()
+                            + " row=" + session.scenario.rowId()
+                            + " origin=" + session.origin.toShortString()
+                            + " subject=" + subject.getUUID());
+        }, outcome -> failStartup(server, session, level.getGameTime(), outcome));
+    }
+
     public static synchronized void onSubjectUnavailable(
             MinecraftServer server, UUID mobId, String reason, long tick) {
-        if (active != null && active.subjectId.equals(mobId)) {
+        if (active != null && active.subjectId != null && active.subjectId.equals(mobId)) {
             finish(server, active, State.INCOMPLETE, tick,
                     "subject lifecycle ended: " + reason, null, null);
         }
@@ -384,20 +426,26 @@ public final class V3RuntimeCampaignController {
                         evidence.subjectSeedCount(),
                         snapshot.combatTarget()));
         if (decision.fireDeclaredTrigger()) {
-            try {
+            V3CampaignStartupGuard.Outcome trigger = V3CampaignStartupGuard.execute(() -> {
                 CommandSourceStack fixtureSource = server.createCommandSourceStack()
                         .withLevel(level)
                         .withPosition(Vec3.atCenterOf(session.origin))
                         .withSuppressedOutput();
-                executeFixtureFunction(
+                executeFixtureFunctionNow(
                         server, fixtureSource, "_lib/stage_interrupt_zombie");
+            });
+            if (trigger.succeeded()) {
                 session.progress.markTriggerFired();
                 record(session, snapshot.tick(), "DECLARED_TRIGGER",
                         "spm_vr:_lib/stage_interrupt_zombie at open+"
                                 + elapsed + "t");
-            } catch (CommandSyntaxException ex) {
+            } else {
+                SpmScavenger.LOGGER.error(
+                        "{} scenario={} tick={} event=DECLARED_TRIGGER_FAILURE failure={}",
+                        LOG_PREFIX, session.scenario.id(), snapshot.tick(),
+                        trigger.failureSummary(), trigger.failure());
                 finish(server, session, State.FIXTURE_FAILURE, snapshot.tick(),
-                        "declared scenario trigger failed: " + ex.getRawMessage().getString(),
+                        "declared scenario trigger failed: " + trigger.failureSummary(),
                         snapshot, evidence);
                 return;
             }
@@ -455,10 +503,13 @@ public final class V3RuntimeCampaignController {
         return new AABB(origin).inflate(32.0, 16.0, 32.0);
     }
 
-    private static void executeFixtureFunction(
-            MinecraftServer server, CommandSourceStack source, String path)
-            throws CommandSyntaxException {
-        executeFixtureCommand(server, source, "function spm_vr:" + path);
+    private static void executeFixtureFunctionNow(
+            MinecraftServer server, CommandSourceStack source, String path) {
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("spm_vr", path);
+        CommandFunction<CommandSourceStack> function = server.getFunctions().get(id)
+                .orElseThrow(() -> new IllegalStateException(
+                        "fixture function is not loaded: " + id));
+        server.getFunctions().execute(function, source);
     }
 
     private static void executeFixtureCommand(
@@ -489,6 +540,30 @@ public final class V3RuntimeCampaignController {
         record(session, tick, "FINAL", "state=" + state + " reason=" + reason);
         active = null;
         session.forcedChunksReleased += releaseForcedChunks(server, session);
+        lastReport = CampaignReport.from(session);
+    }
+
+    private static void failStartup(
+            MinecraftServer server,
+            Session session,
+            long tick,
+            V3CampaignStartupGuard.Outcome outcome) {
+        String reason = "startupStage=" + session.startupStage
+                + " exception=" + outcome.failureSummary();
+        SpmScavenger.LOGGER.error(
+                "{} scenario={} tick={} event=STARTUP_FAILURE stage={} failure={}",
+                LOG_PREFIX,
+                session.scenario.id(),
+                tick,
+                session.startupStage,
+                outcome.failureSummary(),
+                outcome.failure());
+        session.state = State.FIXTURE_FAILURE;
+        session.reason = reason;
+        session.terminalTick = tick;
+        record(session, tick, "FINAL", "state=FIXTURE_FAILURE reason=" + reason);
+        active = null;
+        session.forcedChunksReleased += releaseForcedChunksSafely(server, session, tick);
         lastReport = CampaignReport.from(session);
     }
 
@@ -560,6 +635,25 @@ public final class V3RuntimeCampaignController {
         return released;
     }
 
+    @SuppressWarnings("removal")
+    private static int releaseForcedChunksSafely(
+            MinecraftServer server, Session session, long tick) {
+        try {
+            return releaseForcedChunks(server, session);
+        } catch (VirtualMachineError fatal) {
+            throw fatal;
+        } catch (ThreadDeath fatal) {
+            throw fatal;
+        } catch (LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable failure) {
+            SpmScavenger.LOGGER.error(
+                    "{} scenario={} tick={} event=STARTUP_RESOURCE_RELEASE_FAILURE",
+                    LOG_PREFIX, session.scenario.id(), tick, failure);
+            return 0;
+        }
+    }
+
     private static String printableTick(long tick) {
         return tick < 0L ? "NOT_OPEN" : Long.toString(tick);
     }
@@ -578,7 +672,7 @@ public final class V3RuntimeCampaignController {
         private final V3CampaignScenario scenario;
         private final ResourceKey<Level> dimension;
         private final BlockPos origin;
-        private final UUID subjectId;
+        private UUID subjectId;
         private final long startTick;
         private final List<String> events = new ArrayList<>();
         private final List<ForcedChunk> ownedForcedChunks = new ArrayList<>();
@@ -599,6 +693,7 @@ public final class V3RuntimeCampaignController {
         private String terminalSnapshot = "UNAVAILABLE";
         private List<String> terminalEvidence = List.of();
         private V3CampaignProgress progress;
+        private StartupStage startupStage = StartupStage.ESTABLISH_BOUNDARY;
 
         private Session(
                 V3CampaignScenario scenario,
@@ -613,6 +708,15 @@ public final class V3RuntimeCampaignController {
             this.subjectId = subjectId;
             this.startTick = startTick;
             this.state = state;
+        }
+
+        private static Session preparing(
+                V3CampaignScenario scenario,
+                ResourceKey<Level> dimension,
+                BlockPos origin,
+                long startTick) {
+            return new Session(
+                    scenario, dimension, origin, null, startTick, State.PREPARING);
         }
     }
 
@@ -670,18 +774,6 @@ public final class V3RuntimeCampaignController {
                     session.terminalEvidence,
                     session.events,
                     session.eventsTruncated);
-        }
-
-        static CampaignReport failedBeforeSubject(
-                V3CampaignScenario scenario,
-                ServerLevel level,
-                BlockPos origin,
-                State state,
-                String reason) {
-            return new CampaignReport(
-                    scenario, state, reason, null, level.dimension().location().toString(),
-                    origin, level.getGameTime(), -1L, -1L, -1L, level.getGameTime(), 0, 0, 0, 0,
-                    List.of(), "UNAVAILABLE", List.of(), List.of(), false);
         }
 
         List<String> summaryLines() {

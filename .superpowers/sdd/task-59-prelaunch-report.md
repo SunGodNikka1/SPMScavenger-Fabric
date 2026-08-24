@@ -231,3 +231,26 @@ opening, award outcomes, or suppress declared combat.
 Three explicit source probes returned `NOT FOUND`: production claim/admission authority calls;
 navigation/target/sleep/Brain/HOME/inventory mutation; and refresh/POI/trade/Goal-execution calls.
 No Minecraft launch occurred. The exact hash above requires separate runtime approval.
+
+---
+
+## Startup-containment replacement artifact — 2026-08-24
+
+The first live controller command exposed an invalid Minecraft 1.21 API boundary: raw Brigadier
+execution cannot invoke the custom `function` executor. Exact source behavior is
+`UnsupportedOperationException("This function should not run")`. The repaired controller creates
+`PREPARING` first and invokes the loaded function through `ServerFunctionManager` on the next tick,
+then performs discovery/resource activation under a non-fatal containment guard.
+
+| Check | Result |
+| --- | --- |
+| Unchecked fixture-executor harness | contained; `FIXTURE_FAILURE`; status/report evidence; release callback invoked |
+| Fatal control | `OutOfMemoryError` propagated |
+| Focused Task-59 suite | **35/35 PASS** |
+| Clean build | **1645 tests; 0 failures/errors/skips** |
+| JAR | `build/libs/spmscavenger-1.11.0.jar` (1,213,620 bytes) |
+| SHA-256 | `732BBB65C5604D617A9FC84120F7878622C3018DA3B6F84035DFBFEB9A532ECC` |
+| Package audit | 32 temporary V3 classes, 0 upstream TE classes, 5 project-owned TE classes, 0 removed V2 witness entries |
+
+The ally-storage and managed-crop warm-up diagnostics remain separate and `UNVERIFIED`. No
+Minecraft relaunch occurred; the exact replacement hash requires approval.

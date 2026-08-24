@@ -151,3 +151,22 @@ subject instead of inheriting server-spawn execution position.
 No Minecraft process was launched. Static orchestration, tests, artifact identity, and packaging are
 `CONFIRMED`; live controller behavior and every VR-T3 row remain `UNVERIFIED` pending separate
 approval for this exact artifact.
+
+## Automated startup containment repair — 2026-08-24
+
+The first live `run mandatory_blocks_village_work` failed before session/report creation. Pinned
+Minecraft 1.21.1 source identifies the cause: raw Brigadier invocation of the `function` command
+calls `CustomCommandExecutor.CommandAdapter.run()`, which intentionally throws
+`UnsupportedOperationException("This function should not run")`. Direct `/function` succeeds
+because it uses Minecraft's execution queue.
+
+The controller now establishes `PREPARING` immediately, executes the loaded `CommandFunction`
+through `ServerFunctionManager` on the next server tick, and only then discovers the subject and
+acquires resources. Any non-fatal failure records stage/class/message/root cause, logs its stack,
+terminates `FIXTURE_FAILURE`, releases owned chunks, and leaves `status`/`report` plus reset origin.
+JVM-fatal errors remain uncontained.
+
+Focused tests: **35/35 PASS**. Full `clean build`: **1645 tests**, zero failures/errors/skips.
+JAR: `build/libs/spmscavenger-1.11.0.jar`, SHA-256
+`732BBB65C5604D617A9FC84120F7878622C3018DA3B6F84035DFBFEB9A532ECC`.
+No Minecraft relaunch occurred; live repair remains `UNVERIFIED`.

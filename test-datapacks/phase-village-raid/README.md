@@ -27,8 +27,8 @@ windows, and falsifiers live in `docs/porting/VR-T3-RUNTIME-MATRIX.md`; record r
    pinned in `VR-T3-RUNTIME-ENVIRONMENT.md`. Exclude Trade Everything and other optional compat mods.
 3. Start or reload the world, then run `/function spm_vr:help`.
 4. Stand on flat overworld ground with clear space at least 32 blocks around the executor position.
-5. Start exactly one row with `/spmscavenger debug v3 run <preset>`. The controller executes the
-   preset at the command origin, waits for natural Gate 0, advances the disposable fixture to day,
+5. Start exactly one row with `/spmscavenger debug v3 run <preset>`. The controller establishes
+   `PREPARING`, executes the loaded preset at the command origin on the next server tick, waits for natural Gate 0, advances the disposable fixture to day,
    waits up to 200 daytime ticks for genuine `SHELTER_HOLD` release, and opens the evidence window
    only after `RowPrecondition=READY`.
 6. Play normally or stand away. Use `/spmscavenger debug v3 status` for bounded progress and
@@ -52,6 +52,9 @@ windows, and falsifiers live in `docs/porting/VR-T3-RUNTIME-MATRIX.md`; record r
 
 If the JVM or host crashes, ordinary lifecycle cleanup cannot run. Treat the world as disposable
 and inspect vanilla forced chunks before reuse; do not remove foreign forced chunks blindly.
+
+If startup fails, `status` and `report` retain `startupStage`, exception class/message, and root
+cause; `latest.log` retains the stack trace. Use `reset` for tagged partial-fixture cleanup.
 
 ## Campaign order
 

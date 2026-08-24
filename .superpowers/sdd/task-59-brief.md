@@ -425,3 +425,68 @@ Remove with the Task-59 witness after accepted runtime evidence:
 - controller-only datapack trigger changes and documentation.
 
 Preserve production Tasks 52–58, accepted runtime evidence, matrix history, and clean rebuild gates.
+
+---
+
+## v1.5 startup failure containment repair
+
+### Runtime evidence and scope
+
+The first live `run mandatory_blocks_village_work` returned Minecraft's generic unexpected-error
+surface; immediate `status` reported no active campaign or report. `CODE_CONFIRMED` source shape:
+the controller cleared `lastReport`, executed the nested scenario through raw Brigadier, discovered
+the subject, and only then constructed `Session`; only `CommandSyntaxException` was caught.
+
+Pinned Minecraft 1.21.1 sources confirm the root cause. `FunctionCommand` registers a
+`CustomCommandExecutor.CommandAdapter`; that adapter's ordinary Brigadier `run()` throws exact
+`UnsupportedOperationException("This function should not run")`. The controller called
+`server.getCommands().getDispatcher().execute("function ...")`, bypassing Minecraft's execution
+queue, while direct `/function` correctly uses `Commands.performCommand`/`ExecutionContext`.
+Evidence is pinned in the Loom 1.21.1 sources JAR at
+`net/minecraft/commands/execution/CustomCommandExecutor.java`,
+`net/minecraft/server/commands/FunctionCommand.java`, and
+`net/minecraft/commands/Commands.java` (the project's `.gradle/loom-cache/minecraftMaven/...-sources.jar`).
+The separately observed ally-storage and managed-crop warm-up diagnostics remain
+independent Task-59 compatibility evidence; they are not attributed to this startup exception.
+
+### Selected boundary
+
+Create a nullable-subject `PREPARING` session before datapack execution. Execute the loaded
+`CommandFunction` through `ServerFunctionManager.execute` from the following server tick, outside
+the operator command's active execution context; this lets the function queue drain synchronously
+before subject discovery. One controller-owned startup guard covers scenario execution, subject discovery, chunk acquisition, contamination
+cleanup, and activation. It contains any non-fatal `Throwable`, logs the full stack trace under the
+campaign prefix, writes a concise `FIXTURE_FAILURE` report containing exception class/message,
+detaches the active slot, and releases any acquired fixture chunks. `reset` remains available at the
+recorded Overworld origin for partial tagged fixture cleanup. `VirtualMachineError`, `ThreadDeath`,
+and `LinkageError` propagate rather than being disguised as fixture failures.
+
+| Option | Benefit | Failure mode | Disposition |
+| --- | --- | --- | --- |
+| Keep raw Brigadier and catch its exception | Small change | permanently converts every 1.21 function start into fixture failure | Rejected |
+| Call `Commands.performPrefixedCommand` synchronously inside `run` | Uses public command route | queues the function into the current context and returns before subject discovery | Rejected |
+| Broad guard around the whole controller command tree | Maximum containment | can hide programmer/fatal failures in status/report/reset | Rejected |
+| PREPARING session + bounded startup guard | Every startup stage is diagnosable and cleanup-aware; normal commands remain honest | requires nullable subject until discovery and explicit fatal classification | **Selected** |
+
+### Behavioral Prediction (MAIBS-1)
+
+| Layer | Predicted result | Confidence |
+| --- | --- | --- |
+| Intended | Operator receives `FIXTURE_FAILURE`, then `status`/`report` explain the failing stage | `CODE_CONFIRMED` after harness/build; live command `UNVERIFIED` |
+| Fixture/world | Partial blocks/entities may remain, but exact tagged entity/schedule cleanup is available through `reset` | `CODE_CONFIRMED`; world-block rollback deliberately unavailable |
+| Production AI | No Task 52–58 Goal, claim, admission, or behavior changes | `CODE_CONFIRMED` by diff/negative probes |
+| Resource lifecycle | Any chunk tickets acquired before failure are released before the command returns | `CODE_CONFIRMED` by injected-failure harness |
+| Next runtime | Function executes on the next server tick; any later startup failure names exact stage/class/root cause | `UNVERIFIED` until approved rerun |
+
+Predicted weird cases: failure before subject discovery leaves tagged partial fixture state
+(`ACCEPTABLE_STEPPING_STONE`, reset removes provable entities/schedules); failure while releasing a
+chunk may leave a ticket needing disposable-world recovery (`RUNTIME_QUESTION`, log each release
+failure); a JVM-fatal failure still reaches Minecraft/process handling (`ACCEPTABLE_STEPPING_STONE`,
+required safety boundary).
+
+**Must happen:** an injected unchecked fixture-executor failure cannot escape the startup guard;
+the terminal state/report are `FIXTURE_FAILURE`, include class + concise message, and resource
+release executes.
+
+**Must not happen:** JVM-fatal failures are swallowed; `lastReport` disappears; reset loses the
+fixture origin; the repair changes V3 production behavior or conflates warm-up diagnostics.
