@@ -40,6 +40,7 @@ public final class V3RuntimeCampaignController {
 
     enum State {
         PREPARING,
+        WAITING_GATE0_BOOTSTRAP,
         WAITING_GATE0,
         WAITING_DAYTIME,
         WAITING_SHELTER_RELEASE,
@@ -128,6 +129,7 @@ public final class V3RuntimeCampaignController {
                 "scenario=" + active.scenario.id() + " row=" + active.scenario.rowId(),
                 "state=" + active.state + " reason=" + active.reason,
                 "fixtureStartTick=" + active.startTick
+                        + " bootstrapStartTick=" + printableTick(active.bootstrapStartTick)
                         + " windowOpenTick=" + printableTick(active.openingTick),
                 "contaminantsRemovedPreWindow=" + active.contaminantsRemoved,
                 "next=" + nextExpected(active));
@@ -220,6 +222,8 @@ public final class V3RuntimeCampaignController {
 
         V3WitnessSnapshot snapshot = V3WitnessSnapshot.capture(level, subject);
         switch (session.state) {
+            case WAITING_GATE0_BOOTSTRAP ->
+                    tickGate0Bootstrap(server, level, subject, snapshot, session);
             case WAITING_GATE0 -> tickGate0(server, level, subject, snapshot, session);
             case WAITING_DAYTIME -> transitionToDay(server, level, session);
             case WAITING_SHELTER_RELEASE -> tickShelterRelease(level, subject, snapshot, session);
@@ -240,6 +244,9 @@ public final class V3RuntimeCampaignController {
                     .withSuppressedOutput();
             executeFixtureFunctionNow(
                     server, fixtureSource, "scenario/" + session.scenario.id());
+            session.bootstrapStartTick = level.getGameTime();
+            record(session, session.bootstrapStartTick, "GATE0_BOOTSTRAP_START",
+                    "minimumTicks=" + V3Gate0BootstrapGate.MINIMUM_BOOTSTRAP_TICKS);
 
             session.startupStage = StartupStage.DISCOVER_SUBJECT;
             List<Mob> subjects = level.getEntitiesOfClass(
@@ -260,7 +267,7 @@ public final class V3RuntimeCampaignController {
             removePreWindowContaminants(level, session);
             session.startupStage = StartupStage.ACTIVATE;
             session.state = session.scenario.requiresGate0()
-                    ? State.WAITING_GATE0 : State.WAITING_DAYTIME;
+                    ? State.WAITING_GATE0_BOOTSTRAP : State.WAITING_DAYTIME;
             session.reason = "fixture prepared";
             record(session, level.getGameTime(), "START",
                     "preset=" + session.scenario.id()
@@ -315,6 +322,27 @@ public final class V3RuntimeCampaignController {
                 }
             }
         }
+    }
+
+    private static void tickGate0Bootstrap(
+            MinecraftServer server,
+            ServerLevel level,
+            Mob subject,
+            V3WitnessSnapshot snapshot,
+            Session session) {
+        removePreWindowContaminants(level, session);
+        recordTransition(session, snapshot, null);
+        V3Gate0BootstrapGate.Result timing = V3Gate0BootstrapGate.evaluate(
+                session.bootstrapStartTick, snapshot.tick(), snapshot.gate0());
+        if (timing.verdict() == V3Gate0BootstrapGate.Verdict.WAITING_BOOTSTRAP) {
+            session.reason = timing.reason();
+            return;
+        }
+        session.state = State.WAITING_GATE0;
+        session.reason = "natural settlement bootstrap complete; adjudicating Gate0";
+        record(session, snapshot.tick(), "GATE0_BOOTSTRAP_COMPLETE",
+                "elapsedTicks=" + timing.elapsedTicks());
+        tickGate0(server, level, subject, snapshot, session);
     }
 
     private static void transitionToDay(
@@ -660,6 +688,8 @@ public final class V3RuntimeCampaignController {
 
     private static String nextExpected(Session session) {
         return switch (session.state) {
+            case WAITING_GATE0_BOOTSTRAP -> "natural settlement bootstrap >= "
+                    + V3Gate0BootstrapGate.MINIMUM_BOOTSTRAP_TICKS + " ticks";
             case WAITING_GATE0 -> "natural Gate0=PASS";
             case WAITING_DAYTIME -> "declared pre-window day transition";
             case WAITING_SHELTER_RELEASE -> "RowPrecondition=READY";
@@ -681,6 +711,7 @@ public final class V3RuntimeCampaignController {
         private State state;
         private String reason = "fixture prepared";
         private long gate0Tick = -1L;
+        private long bootstrapStartTick = -1L;
         private long dayTransitionTick = -1L;
         private long openingTick = -1L;
         private long terminalTick = -1L;
@@ -731,6 +762,7 @@ public final class V3RuntimeCampaignController {
             String dimension,
             BlockPos origin,
             long fixtureStartTick,
+            long bootstrapStartTick,
             long gate0Tick,
             long dayTransitionTick,
             long windowOpenTick,
@@ -761,6 +793,7 @@ public final class V3RuntimeCampaignController {
                     session.dimension.location().toString(),
                     session.origin,
                     session.startTick,
+                    session.bootstrapStartTick,
                     session.gate0Tick,
                     session.dayTransitionTick,
                     session.openingTick,
@@ -790,6 +823,7 @@ public final class V3RuntimeCampaignController {
             out.add("subject=" + (subjectId == null ? "UNAVAILABLE" : subjectId)
                     + " dimension=" + dimension + " origin=" + origin.toShortString());
             out.add("fixtureStartTick=" + fixtureStartTick
+                    + " bootstrapStartTick=" + printableTick(bootstrapStartTick)
                     + " Gate0Tick=" + printableTick(gate0Tick)
                     + " dayTransitionTick=" + printableTick(dayTransitionTick)
                     + " exactOpeningTick=" + printableTick(windowOpenTick)

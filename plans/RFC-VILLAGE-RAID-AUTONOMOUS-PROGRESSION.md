@@ -10,8 +10,8 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING` — **V2-TE-W2 CLOSED**; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
-| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G STARTUP-CONTAINED CAMPAIGN ARTIFACT READY** (1645-test clean build). |
-| **Nearest frontier** | Explicit launch authorization for repaired Task-59 controller artifact SHA-256 `732BBB65C5604D617A9FC84120F7878622C3018DA3B6F84035DFBFEB9A532ECC`; repaired live startup and VR-T3 behavior remain `UNVERIFIED`. |
+| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G GATE-0-BOOTSTRAP-CONTAINED CAMPAIGN ARTIFACT READY** (1649-test clean build). |
+| **Nearest frontier** | Explicit launch authorization for repaired Task-59 controller artifact SHA-256 `7BD5205B1CFF85608BA53C9C446BC40D00A20E2FBDDCF3FA68A2798CF1CA8577`; VR-T3j remains not started. T3k/T3m observation-model repair remains controller backlog. |
 | **Last update** | 2026-08-24 (`Agent_Codex` Task-59 campaign startup-containment repair) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
@@ -4939,7 +4939,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social | **IMPLEMENTED + RUNTIME CLOSED** — task-46 / 1.11.0 (A–D) | VR-T1.5a–c **CLOSED** (2026-08-15) |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | `KnownVillager` held until V4+ consumer; other work moved to V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains**, relationship credit, finished-output projection, optional Trade Everything source | **IMPLEMENTED + CLOSED** — VR-T2 vanilla path and V2-TE positive path runtime-confirmed to recorded scope | **VR-T2 PASS**; **VR-T2k PASS (`V2-DEF-003c-R1`)**. VR-T2l, V2-I, and profiling are **DEFERRED / NON-BLOCKING** |
-| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | A/B/C/D1/E/F **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (tasks 52–58; 1589 tests). Broad V3-D2 workstation awareness **DEFERRED**. **V3-G STARTUP-CONTAINED CAMPAIGN ARTIFACT READY** (task-59; 1645-test temporary controller artifact). | VR-T3a–m below; runtime **UNVERIFIED** until batched campaign (**launch NOT AUTHORIZED**) |
+| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | A/B/C/D1/E/F **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (tasks 52–58; 1589 tests). Broad V3-D2 workstation awareness **DEFERRED**. **V3-G GATE-0-BOOTSTRAP-CONTAINED CAMPAIGN ARTIFACT READY** (task-59; 1649-test temporary controller artifact). | VR-T3a–m below; runtime **UNVERIFIED** until batched campaign (**launch NOT AUTHORIZED**) |
 | **V4** | Factual site utility + **Place opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**), known traders, utility-driven home promotion and return preference beyond shipped V1.5 return | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
 | **V6** | Player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup, **zombie-villager curing** | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup; curing scenarios to be defined in V6 |
@@ -8558,3 +8558,30 @@ No Minecraft relaunch occurred; repaired live startup remains `UNVERIFIED`.
 **Separate diagnostics:** `Ally storage guard UNVERIFIED after warm-up` and `Managed crop guard
 UNVERIFIED after warm-up` remain independent runtime investigation items. No causal relationship to
 the startup exception is asserted without a matching stack trace.
+
+### Contribution — `Agent_Codex` (Task-59 Gate-0 bootstrap sequencing, 2026-08-24)
+
+**Runtime correction:** the first startup-contained `mandatory_blocks_village_work` run terminated
+`FIXTURE_FAILURE: claimedHomeCount < 2` with no open window. This is discarded as
+`FIXTURE_INCOMPLETE / PREMATURE_GATE0_ADJUDICATION`; Gate-0 capability remains previously confirmed,
+VR-T3j is not started, and no V3 production defect is assigned.
+
+**Code finding:** the controller entered `WAITING_GATE0` immediately after fixture execution and
+terminally consumed a readable intermediate population snapshot on its next tick. The existing
+fixture contract requires at least 120 ticks for natural villager HOME acquisition before numeric
+threshold adjudication. `V3Gate0Assessment` correctly classifies facts only and remains unchanged.
+
+**Decision:** scenario function success now records exact `bootstrapStartTick`, followed by explicit
+`WAITING_GATE0_BOOTSTRAP`. At elapsed ticks 0–119, snapshots remain passive diagnostics and cannot
+advance or terminate Gate 0. At tick 120, normal PASS/INCOMPLETE/FIXTURE_FAILURE adjudication begins;
+the existing 2400-tick overall timeout remains unchanged. This is controller sequencing only and
+does not alter Tasks 52–58 production semantics.
+
+**Validation:** required tick 20/60/119/120 controls pass. Focused V3/datapack suite **48/48 PASS**;
+`clean build` **1649 tests / 0 failures/errors/skips**. JAR SHA-256:
+`7BD5205B1CFF85608BA53C9C446BC40D00A20E2FBDDCF3FA68A2798CF1CA8577`.
+No Minecraft relaunch occurred; repaired runtime sequencing remains `UNVERIFIED`.
+
+**Preserved controller backlog:** VR-T3k's aggregate replant observation does not yet prove
+first-commit versus second-mob invalidation/reacquisition, and VR-T3m's distinct-position mask does
+not yet prove two temporal crop cycles. These are not conflated with this Gate-0 repair.

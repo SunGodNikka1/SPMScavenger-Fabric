@@ -89,8 +89,11 @@ phase** and **no second mandatory publisher**. Closure map: `setBlock false / in
 ## Settlement bootstrap preflight (campaign gate 0 — mandatory)
 
 The preferred controller path performs this gate automatically before any VR-T3 row that depends
-on `setup_village_stub`. It reads only already-produced settlement/facts state and waits up to 2400
-ticks; it never refreshes facts or writes HOME. The one-shot manual fallback remains:
+on `setup_village_stub`. After the scenario function returns successfully, it records
+`bootstrapStartTick` and remains in `WAITING_GATE0_BOOTSTRAP` for at least 120 ticks. Intermediate
+readable numeric deficits are diagnostic only during that grace period. It then adjudicates Gate 0
+and continues bounded waiting for unreadable/incomplete facts within the unchanged 2400-tick overall
+timeout; it never refreshes facts or writes HOME. The one-shot manual fallback remains:
 
 ```text
 /spmscavenger debug v3 inspect @e[tag=spm_vr.subject,limit=1]
@@ -131,9 +134,11 @@ disposable fixture to day, then waits up to 200 daytime ticks for production to 
 /spmscavenger debug v3 run mandatory_blocks_village_work
   -> establish PREPARING immediately
   -> execute loaded preset at command origin on next server tick (Overworld only)
+  -> record exact bootstrapStartTick after successful function execution
   -> remove unrelated PlayerMobs inside 32-block arena, pre-window only
   -> force-load only newly acquired arena chunks
-  -> wait natural Gate0=PASS
+  -> WAITING_GATE0_BOOTSTRAP for >=120 natural ticks; threshold deficits remain diagnostic
+  -> adjudicate natural Gate0 PASS / INCOMPLETE / FIXTURE_FAILURE
   -> logged day/weather fixture transition
   -> wait genuine SHELTER_HOLD release
   -> ROW_PRECONDITION_READY + exact WINDOW_OPEN tick
@@ -214,6 +219,7 @@ Before marking V3 **runtime closed**, review:
 
 | Date | Change |
 | --- | --- |
+| 2026-08-24 | Discarded premature VR-T3j attempt (`claimedHomeCount < 2`, window never opened); added explicit post-function 120-tick Gate-0 bootstrap boundary; T3k/T3m observation-model gaps remain backlog |
 | 2026-08-24 | Repaired startup containment and Minecraft 1.21 function execution boundary; exact artifact repinned; live rerun not authorized |
 | 2026-08-23 | Added temporary one-command campaign controller, passive row clocks, pre-window contamination isolation, exact opening/terminal evidence, and owned fixture chunk lifecycle; launch remains unauthorized |
 | 2026-08-23 | Gate-0 witness completion — remembered settlement identity + full population facts + explicit PASS/FIXTURE_FAILURE/INCOMPLETE |

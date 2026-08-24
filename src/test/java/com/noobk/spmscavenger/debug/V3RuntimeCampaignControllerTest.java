@@ -87,6 +87,33 @@ class V3RuntimeCampaignControllerTest {
         assertTrue(bootstrap.contains("V3RuntimeCampaignController.shutdownServerState(server)"));
     }
 
+    @Test
+    void gate0ThresholdsAreAdjudicatedOnlyAfterNaturalBootstrapWindow() throws IOException {
+        String source = Files.readString(SOURCE);
+        assertTrue(source.contains("WAITING_GATE0_BOOTSTRAP"));
+        assertTrue(source.contains("bootstrapStartTick"));
+        assertTrue(source.contains("GATE0_TIMEOUT_TICKS = 2400L"),
+                "the existing overall Gate-0 timeout must remain unchanged");
+        assertTrue(source.contains(
+                        "snapshot.tick() - session.startTick >= GATE0_TIMEOUT_TICKS"),
+                "bootstrap sequencing must not restart or extend the overall Gate-0 timeout");
+
+        int preparingStart = source.indexOf("private static void tickPreparing(");
+        int bootstrapTickStart = source.indexOf("private static void tickGate0Bootstrap(");
+        String preparing = source.substring(preparingStart, bootstrapTickStart);
+        assertTrue(preparing.indexOf("executeFixtureFunctionNow(")
+                        < preparing.indexOf("session.bootstrapStartTick = level.getGameTime()"),
+                "bootstrap time must start only after successful scenario execution");
+        assertTrue(preparing.contains("? State.WAITING_GATE0_BOOTSTRAP : State.WAITING_DAYTIME"));
+
+        int bootstrapTickEnd = source.indexOf("private static void transitionToDay(");
+        String bootstrapTick = source.substring(bootstrapTickStart, bootstrapTickEnd);
+        assertTrue(bootstrapTick.contains("V3Gate0BootstrapGate.evaluate("));
+        assertTrue(bootstrapTick.indexOf("Verdict.WAITING_BOOTSTRAP")
+                        < bootstrapTick.indexOf("tickGate0(server, level, subject, snapshot, session)"),
+                "numeric Gate-0 adjudication must follow the bootstrap waiting verdict");
+    }
+
     private static int count(String value, String needle) {
         int count = 0;
         int index = 0;

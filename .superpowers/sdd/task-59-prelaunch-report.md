@@ -254,3 +254,29 @@ then performs discovery/resource activation under a non-fatal containment guard.
 
 The ally-storage and managed-crop warm-up diagnostics remain separate and `UNVERIFIED`. No
 Minecraft relaunch occurred; the exact replacement hash requires approval.
+
+---
+
+## Gate-0 bootstrap replacement artifact — 2026-08-24
+
+The startup-contained VR-T3j attempt ended before its window opened because readable
+`claimedHomeCount < 2` was adjudicated before the fixture's required 120-tick natural HOME
+bootstrap. The attempt is discarded as `FIXTURE_INCOMPLETE / PREMATURE_GATE0_ADJUDICATION`; it is
+not a V3 behavior result.
+
+The replacement controller records the exact successful scenario-function tick, exposes
+`WAITING_GATE0_BOOTSTRAP`, and waits through elapsed tick 119 without terminally consuming numeric
+Gate-0 thresholds. Tick 120 begins normal adjudication. The existing 2400-tick overall timeout and
+the read-only `V3Gate0Assessment` contract remain unchanged.
+
+| Check | Result |
+| --- | --- |
+| Boundary regression | tick 20/home 0, tick 60/home 1, tick 119/home 1 remain waiting; tick 120 home 2/free 1 passes; tick 120 home 1 fails fixture |
+| Focused V3/datapack suite | **48/48 PASS** |
+| Clean build | **1649 tests; 0 failures/errors/skips** |
+| JAR | `build/libs/spmscavenger-1.11.0.jar` (1,218,391 bytes) |
+| SHA-256 | `7BD5205B1CFF85608BA53C9C446BC40D00A20E2FBDDCF3FA68A2798CF1CA8577` |
+| Package audit | 36 temporary V3 debug entries (4 bootstrap-gate), 0 upstream TE classes, 5 project-owned TE classes, 0 removed V2 witness entries |
+
+VR-T3k and VR-T3m observation-model corrections remain controller backlog and are not included in
+this artifact. No Minecraft relaunch occurred; exact-hash approval is required.

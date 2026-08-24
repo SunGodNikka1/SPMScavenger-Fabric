@@ -490,3 +490,59 @@ release executes.
 
 **Must not happen:** JVM-fatal failures are swallowed; `lastReport` disappears; reset loses the
 fixture origin; the repair changes V3 production behavior or conflates warm-up diagnostics.
+
+---
+
+## v1.6 Gate-0 bootstrap sequencing repair
+
+### Runtime evidence and correction
+
+The first startup-contained `mandatory_blocks_village_work` run terminated at tick 124 with
+`FIXTURE_FAILURE: claimedHomeCount < 2` before its evidence window opened. The run is discarded as
+`FIXTURE_INCOMPLETE / PREMATURE_GATE0_ADJUDICATION`; VR-T3j did not start and this is not evidence
+of a V3 production defect. `CODE_CONFIRMED`: after successful scenario execution the controller
+entered `WAITING_GATE0`, and its next tick immediately treated the already-readable intermediate
+`V3Gate0Assessment` result as terminal. The documented fixture contract requires 120 ticks of
+natural villager HOME bootstrap before numeric Gate-0 thresholds become adjudicable.
+
+### Selected temporal boundary
+
+Record `bootstrapStartTick` immediately after the scenario function returns successfully, then use
+an explicit `WAITING_GATE0_BOOTSTRAP` state for the first 120 elapsed ticks. Passive snapshots may
+be retained diagnostically during that state, but no numeric Gate-0 result may terminate or advance
+the fixture. At elapsed tick 120, transition to `WAITING_GATE0` and consume the same passive
+assessment normally. The existing overall 2400-tick Gate-0 timeout remains measured from the
+controller session start; `V3Gate0Assessment` remains unchanged.
+
+| Option | Benefit | Failure mode | Disposition |
+| --- | --- | --- | --- |
+| Ignore threshold failures inside `tickGate0` until 120 ticks | Small diff | status falsely claims adjudication has begun; timing ownership stays implicit | Rejected |
+| Make `V3Gate0Assessment` time-aware | Centralized output | couples a pure facts classifier to one fixture's orchestration clock | Rejected |
+| Explicit bootstrap state owned by controller | Visible sequencing, exact clock, assessment remains pure | one additional state/report field | **Selected** |
+
+### Behavioral Prediction (MAIBS-1)
+
+| Layer | Predicted result | Confidence |
+| --- | --- | --- |
+| `T+0` after scenario function | Controller records exact bootstrap start and begins passive waiting | `CODE_CONFIRMED` after tests; runtime `UNVERIFIED` |
+| `T+20`, `T+60`, `T+119` | COMPLETE/FRESH facts with 0 or 1 claimed HOME remain diagnostic; campaign does not terminate | `CODE_CONFIRMED` after threshold harness |
+| `T+120` with 2 claimed / 1 free HOME | Gate0 PASS advances to declared daytime and shelter-release waiting | `CODE_CONFIRMED` after harness; world behavior `UNVERIFIED` |
+| `T+120` with 1 claimed HOME | Fixture terminates `FIXTURE_FAILURE` without opening VR-T3j | `CODE_CONFIRMED` after harness |
+| Production AI | Villager HOME acquisition and Tasks 52–58 remain entirely production-owned | `CODE_CONFIRMED` by diff/negative probes |
+
+Goal interaction: villagers naturally run vanilla HOME acquisition during the bootstrap; the
+subject may remain under `SHELTER_HOLD`; no V3 work window opens and the controller owns no Goal
+flags. Only after Gate0 PASS does the existing daytime/shelter-release sequence proceed.
+
+Predicted weird cases: both villagers acquire HOME before tick 120 but the controller deliberately
+waits out the full contract (`ACCEPTABLE_STEPPING_STONE`); one villager never claims HOME and becomes
+a correct post-grace fixture failure (`RUNTIME_QUESTION`); facts stay unreadable through the grace
+and then remain bounded by the existing overall timeout (`RUNTIME_QUESTION`).
+
+**Must happen:** ticks 20/60/119 with readable under-threshold facts remain
+`WAITING_GATE0_BOOTSTRAP`; tick 120 maps passing facts to PASS and under-threshold facts to
+`FIXTURE_FAILURE`.
+
+**Must not happen:** the controller manufactures HOME evidence, invokes refresh, changes
+`V3Gate0Assessment`, resets the 2400-tick timeout, opens a row during bootstrap, or changes Tasks
+52–58 production semantics. T3k/T3m observation-model repairs remain separate controller backlog.

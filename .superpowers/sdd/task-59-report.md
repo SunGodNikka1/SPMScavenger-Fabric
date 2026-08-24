@@ -170,3 +170,31 @@ Focused tests: **35/35 PASS**. Full `clean build`: **1645 tests**, zero failures
 JAR: `build/libs/spmscavenger-1.11.0.jar`, SHA-256
 `732BBB65C5604D617A9FC84120F7878622C3018DA3B6F84035DFBFEB9A532ECC`.
 No Minecraft relaunch occurred; live repair remains `UNVERIFIED`.
+
+## Gate-0 bootstrap sequencing repair — 2026-08-24
+
+The first startup-contained VR-T3j campaign reached readable facts too early and terminated
+`FIXTURE_FAILURE: claimedHomeCount < 2` with `window=NOT_OPEN->124`. This attempt is discarded as
+`FIXTURE_INCOMPLETE / PREMATURE_GATE0_ADJUDICATION`; VR-T3j was not started and no V3 runtime defect
+is assigned. Code inspection confirmed the controller moved directly from scenario preparation to
+numeric Gate-0 adjudication, despite the fixture's existing 120-tick natural HOME bootstrap contract.
+
+The controller now records `bootstrapStartTick` immediately after successful scenario-function
+execution, enters explicit `WAITING_GATE0_BOOTSTRAP`, and prevents threshold results from advancing
+or terminating the fixture before elapsed tick 120. At/after the boundary, PASS and readable
+numeric failure retain their existing meanings; incomplete facts retain bounded waiting under the
+unchanged 2400-tick overall timeout. `V3Gate0Assessment` and Tasks 52–58 were not modified.
+
+Regression controls pin COMPLETE/FRESH facts with claimed HOME counts 0 at tick 20, 1 at ticks
+60/119, 2 at tick 120, and 1 at tick 120. Focused V3/datapack suite: **48/48 PASS**. Full
+`clean build`: **1649 tests**, zero failures/errors/skips. JAR:
+`build/libs/spmscavenger-1.11.0.jar` (1,218,391 bytes), SHA-256
+`7BD5205B1CFF85608BA53C9C446BC40D00A20E2FBDDCF3FA68A2798CF1CA8577`.
+Package audit: **36** temporary V3 debug entries (**4** bootstrap-gate entries), **0** upstream
+Trade Everything classes, **5** project-owned TE compatibility classes, and **0** removed V2
+witness entries.
+No Minecraft relaunch occurred; the repaired temporal behavior remains `UNVERIFIED`.
+
+Controller backlog remains separate: VR-T3k must observe first-commit versus second-mob
+invalidate/abandon/reacquire rather than one aggregate replant, and VR-T3m must prove temporal
+cycles rather than distinct replanted positions. Neither observation model changed in this repair.

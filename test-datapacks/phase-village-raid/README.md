@@ -91,6 +91,12 @@ After a settlement preset has run for at least 120 ticks, the same inspect comma
 ordinary cadence and sample again; do not invoke refresh or inject HOME/sleep state. Stop the
 campaign on `FIXTURE_FAILURE` and preserve the output.
 
+The automated controller measures those 120 ticks from successful scenario-function execution,
+not command submission. While it reports `WAITING_GATE0_BOOTSTRAP`, readable values such as
+`claimedHomeCount < 2` are diagnostic intermediate state and cannot terminate the run. Numeric
+thresholds become adjudicable only at elapsed bootstrap tick 120; the overall Gate-0 timeout remains
+2400 ticks.
+
 Gate 0 is independent of activity release. The inspector also reports daytime, `SHELTER_HOLD`, and
 one row-precondition verdict. `WAITING_DAYTIME` means transition/wait and resample.
 `FIXTURE_INCOMPLETE` means shelter remained active during daytime: preserve the snapshot and do not
