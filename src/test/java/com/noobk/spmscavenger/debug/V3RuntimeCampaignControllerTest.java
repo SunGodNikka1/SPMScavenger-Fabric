@@ -130,6 +130,22 @@ class V3RuntimeCampaignControllerTest {
         assertFalse(source.contains("setDeltaMovement("));
     }
 
+    @Test
+    void finalIsolationIsFreshAndOuterPresenceNeedsCausalEvidence() throws IOException {
+        String source = Files.readString(SOURCE);
+        int shelterStart = source.indexOf("private static void tickShelterRelease(");
+        int openStart = source.indexOf("private static void openWindow(");
+        String shelter = source.substring(shelterStart, openStart);
+        assertTrue(shelter.contains("Mode.FORCED_BOUNDARY"));
+        assertTrue(shelter.indexOf("Mode.FORCED_BOUNDARY")
+                        < shelter.indexOf("openWindow(level, subject, snapshot, session)"),
+                "window opening must follow a fresh unthrottled isolation scan");
+        assertTrue(source.contains("V3PostOpenContaminationPolicy.evaluate("));
+        assertTrue(source.contains("OUTER_PLAYERMOB_PRESENCE"));
+        assertFalse(source.contains("unrelated PlayerMob entered observation envelope:"),
+                "outer-envelope presence alone must not remain terminal");
+    }
+
     private static int count(String value, String needle) {
         int count = 0;
         int index = 0;

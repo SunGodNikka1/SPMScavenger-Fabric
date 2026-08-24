@@ -24,11 +24,11 @@ enum V3CampaignScenario {
     MANDATORY_BLOCKS_VILLAGE_WORK("mandatory_blocks_village_work", "VR-T3j", true,
             CompletionKind.FIXED, 0, 0, 1000, 1000, 0),
     CROP_MULTI_MOB("crop_multi_mob", "VR-T3k", true,
-            CompletionKind.REPLANT, 0, 200, 0, 2400, 1),
+            CompletionKind.CONTENDED_REPLANT, 0, 200, 0, 2400, 1),
     CROP_HUNGRY_VETO("crop_hungry_veto", "VR-T3l", true,
             CompletionKind.FIXED, 0, 0, 800, 800, 0),
     CROP_MULTI_CYCLE("crop_multi_cycle", "VR-T3m", true,
-            CompletionKind.MULTI_REPLANT, 0, 400, 0, 4000, 2),
+            CompletionKind.TEMPORAL_REPLANT_CYCLE, 0, 400, 0, 4000, 2),
     MANDATORY_OWNERSHIP_WITNESS("mandatory_ownership_witness", "D-VR-084", true,
             CompletionKind.FIXED, 0, 0, 1000, 1000, 0);
 
@@ -37,7 +37,8 @@ enum V3CampaignScenario {
         REPLANT,
         COMBAT_RELEASE,
         COMPOST_DEBIT,
-        MULTI_REPLANT
+        CONTENDED_REPLANT,
+        TEMPORAL_REPLANT_CYCLE
     }
 
     private final String id;

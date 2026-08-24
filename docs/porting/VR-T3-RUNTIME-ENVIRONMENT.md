@@ -23,7 +23,7 @@
 | Mod | File | SHA-256 | Evidence |
 | --- | --- | --- | --- |
 | **Social Player Mobs** (`playermob`) | `playermob-fabric-0.89.0+1.21.1.jar` | `C8DC0E89C3FD632B6DCC7F8E46D3AE4955DD5504CBA53F72B62314850A64E612` | Downloaded from GitHub release `bh679/playermob-mc` tag `v0.89.0` (485 500 bytes); cached at `Projects/references/artifacts/playermob-fabric-0.89.0+1.21.1.jar` |
-| **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `626FB459EBCA54A866E50A535399E04D5E07B1CEBA8D5DD0A5F4103DA582F599` | Task-59 instrumented artifact at `build/libs/spmscavenger-1.11.0.jar`; separate scenario-core, observation-envelope, and escape evidence boundaries |
+| **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `2D2E64924465D18D1590AB87A63B8F8AE650FB8911BE5351C8613F9BE8DF8D7D` | Replacement Task-59 artifact at `build/libs/spmscavenger-1.11.0.jar`; causal post-open contamination, forced final isolation, and temporal T3k/T3m evidence. `626FB...F599` is superseded and must not be installed. |
 
 **SPM source tag (audit):** `v0.89.0` on `https://github.com/bh679/playermob-mc` (`mod_version=0.89.0` in tag `gradle.properties`).
 

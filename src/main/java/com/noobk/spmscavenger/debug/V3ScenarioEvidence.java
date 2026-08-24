@@ -4,6 +4,9 @@ import com.noobk.spmscavenger.PlayerMobs;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.LinkedHashSet;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
@@ -26,10 +29,13 @@ final class V3ScenarioEvidence {
             List<String> lines,
             String transitionFingerprint,
             int replantedTargetMask,
+            int matureTargetMask,
+            Set<UUID> committedHarvestActors,
             int subjectSeedCount) {
 
         Capture {
             lines = List.copyOf(lines);
+            committedHarvestActors = Set.copyOf(committedHarvestActors);
         }
     }
 
@@ -41,11 +47,14 @@ final class V3ScenarioEvidence {
         List<String> lines = new ArrayList<>();
         List<String> transitionParts = new ArrayList<>();
         int replantedMask = 0;
+        int matureMask = 0;
         int blockIndex = 0;
+        List<BlockPos> targetPositions = new ArrayList<>();
 
         for (BlockPos offset : blockOffsets(scenario)) {
             BlockPos pos = origin.offset(offset);
             BlockState state = level.getBlockState(pos);
+            targetPositions.add(pos.immutable());
             String value = "block offset=" + offset.toShortString()
                     + " pos=" + pos.toShortString() + " state=" + state;
             lines.add(value);
@@ -53,6 +62,10 @@ final class V3ScenarioEvidence {
             if (state.hasProperty(BlockStateProperties.AGE_7)
                     && state.getValue(BlockStateProperties.AGE_7) == 0) {
                 replantedMask |= 1 << blockIndex;
+            }
+            if (state.hasProperty(BlockStateProperties.AGE_7)
+                    && state.getValue(BlockStateProperties.AGE_7) == 7) {
+                matureMask |= 1 << blockIndex;
             }
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof Container container) {
@@ -75,6 +88,7 @@ final class V3ScenarioEvidence {
         List<Mob> fixtureMobs = level.getEntitiesOfClass(Mob.class, scenarioCore,
                 mob -> mob.getTags().stream().anyMatch(tag -> tag.startsWith("spm_vr.")));
         fixtureMobs.sort(Comparator.comparing(mob -> mob.getUUID().toString()));
+        Set<UUID> committedHarvestActors = new LinkedHashSet<>();
         for (Mob mob : fixtureMobs.stream().limit(MAX_FIXTURE_MOBS).toList()) {
             String role = mob.getTags().stream()
                     .filter(tag -> tag.startsWith("spm_vr."))
@@ -87,6 +101,18 @@ final class V3ScenarioEvidence {
                     + " pos=" + mob.blockPosition().toShortString()
                     + " target=" + (mob.getTarget() == null ? "none" : mob.getTarget().getUUID()));
             if (PlayerMobs.isPlayerMob(mob)) {
+                V3HarvestEpisodeProbe.Snapshot episode = V3HarvestEpisodeProbe.peek(mob);
+                String episodeLine = "harvestEpisode uuid=" + mob.getUUID()
+                        + " installed=" + episode.installed()
+                        + " running=" + episode.running()
+                        + " phase=" + episode.phase()
+                        + " target=" + episode.target().map(BlockPos::toShortString)
+                                .orElse("none");
+                lines.add(episodeLine);
+                transitionParts.add(episodeLine);
+                if (episode.running() && episode.target().map(targetPositions::contains).orElse(false)) {
+                    committedHarvestActors.add(mob.getUUID());
+                }
                 String inventory = "playerMobInventory uuid=" + mob.getUUID()
                         + " contents=" + inventorySummary(PlayerMobs.backpack(mob));
                 lines.add(inventory);
@@ -106,6 +132,8 @@ final class V3ScenarioEvidence {
                 lines,
                 String.join("|", transitionParts),
                 replantedMask,
+                matureMask,
+                committedHarvestActors,
                 subjectSeeds);
     }
 

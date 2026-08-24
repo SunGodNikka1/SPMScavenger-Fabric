@@ -583,7 +583,7 @@ the scenario core.
 | --- | --- | --- |
 | WINDOW_OPEN | Core target evidence and subject authority snapshot are captured; no steering begins | `CODE_CONFIRMED` after harness |
 | First horizontal distance >32 | `SUBJECT_LEFT_CORE` records distance, pending claim, and active classes; row continues | `CODE_CONFIRMED` after harness; runtime `UNVERIFIED` |
-| Distance 33–192 | Ordinary exploration remains within the protected observation envelope; unrelated PlayerMobs are contamination | `CODE_CONFIRMED` after harness |
+| Distance 33–192 | **SUPERSEDED by v1.8:** ordinary exploration remains within the subject observation envelope; outer unrelated PlayerMobs require causal evidence before becoming contamination | historical v1.7 statement |
 | Distance 193–224 | Outer margin transition is recorded; row still continues | `CODE_CONFIRMED` after harness |
 | Distance >224 | Geometry-dependent rows become spatially `INCOMPLETE`; T3j continues and preserves whether any pending claim appeared | `CODE_CONFIRMED` after harness |
 | T3j +1000 | Terminal evidence distinguishes core departure with no ownership from a fixture disappearance | `UNVERIFIED` until approved runtime |
@@ -595,14 +595,92 @@ navigation. Combat and declared scenario entities remain unsuppressed.
 Predicted weird cases: a subject walks into an unloaded region and lifecycle observation ends
 despite spatial permission (`RUNTIME_QUESTION`, report retained exit evidence); a second expedition
 crosses 224 during T3j (`ACCEPTABLE_STEPPING_STONE`, T3j deliberately continues); an unrelated
-PlayerMob crosses the 192 envelope between bounded contamination scans (`RUNTIME_QUESTION`, scan at
-20-tick cadence); extreme vertical terrain changes Y without horizontal escape
+PlayerMob crosses the 192 envelope between bounded scans (`RUNTIME_QUESTION`, superseded v1.7
+terminal semantics; v1.8 logs non-causal presence); extreme vertical terrain changes Y without horizontal escape
 (`ACCEPTABLE_STEPPING_STONE`, interpretation is intentionally horizontal).
 
 **Must happen:** leaving the 32-block core emits `SUBJECT_LEFT_CORE` with distance, pending claim,
-and active classes and does not terminate; unrelated PlayerMobs inside 192 blocks remain
+and active classes and does not terminate; **SUPERSEDED by v1.8:** 192-block presence alone is not
 contamination; T3j continues beyond 224 while preserving whether a claim was ever observed.
 
 **Must not happen:** the controller teleports, leashes, freezes, path-corrects, navigates, expands
 production authority, uses the scenario core as a subject terminal, or silently lets a
 geometry-dependent row remain meaningful after true escape.
+
+---
+
+## v1.8 causal isolation + T3k/T3m temporal witness repair
+
+### Rejected artifact evidence
+
+Artifact `626FB459...2F599` is **DO NOT RUNTIME TEST**. Its accepted subject spatial policy reused
+the 192-block observation envelope as terminal contamination authority, so an unrelated idle
+PlayerMob 180 blocks away could end the row. Its final pre-window cleanup also shared the 20-tick
+periodic throttle and could skip the exact boundary scan immediately before `WINDOW_OPEN`.
+
+The known crop witnesses were also incomplete: T3k completed from one aggregate replant without
+observing two contenders or stale-target release; T3m completed from two distinct positions rather
+than a repeated temporal cycle.
+
+### Selected isolation model
+
+| Layer | Meaning | Action |
+| --- | --- | --- |
+| Subject observation envelope (192) | valid Alex telemetry | never contamination permission by itself |
+| Pre-window quarantine (192) | remove likely future unrelated PlayerMob intruders | fresh forced scan immediately before open; periodic scans may throttle |
+| Post-open outer presence | unrelated PlayerMob in envelope but outside causal regions | bounded telemetry only |
+| Scenario core (32) | target/evidence geometry | unrelated PlayerMob presence is terminal contamination |
+| Subject proximity (16) | conservative immediate interaction neighborhood | unrelated PlayerMob presence is terminal contamination |
+| Target/combat relationship | directly observable causal link | terminal contamination |
+
+Sixteen blocks is a witness-conservative interaction neighborhood, not an ownership claim. Core-only
+contamination would miss another PlayerMob following or fighting an exploring subject; envelope-wide
+termination creates known false positives. Outer-presence telemetry is bounded to eight unique UUIDs
+per singleton session and never mutates those mobs after opening.
+
+The exact pre-open boundary uses `FORCED_BOUNDARY`, which bypasses the periodic cadence even if the
+last scan was five ticks earlier. Any boundary-scan exception becomes diagnosable fixture failure;
+opening cannot occur without a completed fresh scan.
+
+### T3k and T3m observation model
+
+The temporary witness reads existing running `VillageHarvestEpisodeGoal` instances and their
+committed target positions without invoking Goal methods or changing them.
+
+- **T3k:** require one snapshot with both declared PlayerMobs running harvest episodes committed to
+  the single scenario crop; then observe its mature→age-0 atomic transition; then observe at least
+  one of those prior commitments released. The controller reports observation completeness only;
+  runtime review still determines whether evidence satisfies first-commit/second-revalidation.
+- **T3m:** track each scenario crop through time. Two different cells replanted once are insufficient.
+  Require a second mature→age-0 transition at a previously harvested cell, with observed maturity
+  between the two transitions. No growth, maturity, inventory, or seed state is manufactured.
+
+### Behavioral Prediction (MAIBS-1)
+
+| Timeline | Predicted result | Confidence |
+| --- | --- | --- |
+| pre-open scan at T-5 | periodic quarantine may scan | `CODE_CONFIRMED` after harness |
+| exact open boundary | forced fresh scan runs again and removes/refuses remaining unrelated mobs | `CODE_CONFIRMED` after harness |
+| idle unrelated mob at origin+180 | `OUTER_PRESENCE` telemetry; row continues | `CODE_CONFIRMED` after policy test |
+| unrelated mob in core / within 16 of subject / targeting subject | `EXTERNAL_INTERFERENCE` | `CODE_CONFIRMED` after policy test |
+| T3k two commitments → one replant → stale release | terminal transition clock begins | `CODE_CONFIRMED` after temporal harness; runtime `UNVERIFIED` |
+| T3m two different crops replant once | remains observing | `CODE_CONFIRMED` after negative control |
+| T3m same crop matures and replants again | temporal-cycle stabilization begins | `CODE_CONFIRMED` after harness; runtime `UNVERIFIED` |
+
+Goal interaction: crop goals retain MOVE/LOOK and all canUse/continuation/commit authority. The
+witness only reads running state/target and block state. Combat remains production-owned and is used
+as contamination evidence only when an actual target relationship is observable.
+
+Predicted weird cases: reflection cannot read the temporary goal target and the row times out
+`INCOMPLETE` (`RUNTIME_QUESTION`, never infer contention); a contaminant crosses the causal radius
+between 20-tick samples (`RUNTIME_QUESTION`, target relationship may still expose it); natural wheat
+does not complete a temporal repeat within 4000 ticks (`RUNTIME_QUESTION`, honest T3m incomplete);
+an outer mob is socially irrelevant but logged once (`ACCEPTABLE_STEPPING_STONE`).
+
+**Must happen:** forced boundary scan bypasses throttle; outer-envelope-only presence is telemetry;
+causal core/proximity/target presence is terminal; T3k requires contention→commit→release; T3m
+requires repeated same-cell maturity-separated transition.
+
+**Must not happen:** post-open unrelated mobs are removed or steered; envelope presence alone ends a
+row; opening follows a skipped boundary scan; distinct T3m cells masquerade as temporal cycles; crop
+Goals/transactions are invoked or Tasks 52–58 production semantics change.

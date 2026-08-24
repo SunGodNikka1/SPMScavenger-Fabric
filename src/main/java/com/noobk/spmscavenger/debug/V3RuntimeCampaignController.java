@@ -4,10 +4,12 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.SpmScavenger;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Set;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.functions.CommandFunction;
 import net.minecraft.core.BlockPos;
@@ -34,8 +36,8 @@ public final class V3RuntimeCampaignController {
     private static final String SUBJECT_TAG = "spm_vr.subject";
     private static final long GATE0_TIMEOUT_TICKS = 2400L;
     private static final long SHELTER_RELEASE_TIMEOUT_TICKS = 200L;
-    private static final long CONTAMINATION_SCAN_INTERVAL_TICKS = 20L;
     private static final int MAX_EVENTS = 32;
+    private static final int MAX_OUTER_PRESENCE_LOGS = 8;
 
     private static Session active;
     private static CampaignReport lastReport;
@@ -272,7 +274,8 @@ public final class V3RuntimeCampaignController {
             session.startupStage = StartupStage.FORCE_CHUNKS;
             forceScenarioCoreChunks(level, session);
             session.startupStage = StartupStage.REMOVE_CONTAMINANTS;
-            removePreWindowContaminants(level, session);
+            removePreWindowContaminants(
+                    level, session, V3ContaminationScanGate.Mode.PERIODIC);
             session.startupStage = StartupStage.ACTIVATE;
             session.state = session.scenario.requiresGate0()
                     ? State.WAITING_GATE0_BOOTSTRAP : State.WAITING_DAYTIME;
@@ -310,7 +313,7 @@ public final class V3RuntimeCampaignController {
             Mob subject,
             V3WitnessSnapshot snapshot,
             Session session) {
-        removePreWindowContaminants(level, session);
+        removePreWindowContaminants(level, session, V3ContaminationScanGate.Mode.PERIODIC);
         recordTransition(session, snapshot, null);
         switch (snapshot.gate0().verdict()) {
             case PASS -> {
@@ -338,7 +341,7 @@ public final class V3RuntimeCampaignController {
             Mob subject,
             V3WitnessSnapshot snapshot,
             Session session) {
-        removePreWindowContaminants(level, session);
+        removePreWindowContaminants(level, session, V3ContaminationScanGate.Mode.PERIODIC);
         recordTransition(session, snapshot, null);
         V3Gate0BootstrapGate.Result timing = V3Gate0BootstrapGate.evaluate(
                 session.bootstrapStartTick, snapshot.tick(), snapshot.gate0());
@@ -385,7 +388,7 @@ public final class V3RuntimeCampaignController {
 
     private static void tickShelterRelease(
             ServerLevel level, Mob subject, V3WitnessSnapshot snapshot, Session session) {
-        removePreWindowContaminants(level, session);
+        removePreWindowContaminants(level, session, V3ContaminationScanGate.Mode.PERIODIC);
         recordTransition(session, snapshot, null);
         if (!level.isDay()) {
             finish(level.getServer(), session, State.EXTERNAL_INTERFERENCE, snapshot.tick(),
@@ -393,7 +396,22 @@ public final class V3RuntimeCampaignController {
             return;
         }
         if (snapshot.rowPrecondition().verdict() == V3RowPrecondition.Verdict.READY) {
-            removePreWindowContaminants(level, session);
+            V3CampaignStartupGuard.Outcome isolation = V3CampaignStartupGuard.execute(() ->
+                    removePreWindowContaminants(
+                            level, session, V3ContaminationScanGate.Mode.FORCED_BOUNDARY));
+            if (!isolation.succeeded()) {
+                SpmScavenger.LOGGER.error(
+                        "{} scenario={} tick={} event=FINAL_ISOLATION_FAILURE failure={}",
+                        LOG_PREFIX, session.scenario.id(), snapshot.tick(),
+                        isolation.failureSummary(), isolation.failure());
+                finish(level.getServer(), session, State.FIXTURE_FAILURE, snapshot.tick(),
+                        "final pre-window isolation failed: " + isolation.failureSummary(),
+                        snapshot, null);
+                return;
+            }
+            record(session, snapshot.tick(), "FINAL_ISOLATION_CHECK",
+                    "fresh=true quarantineRadius="
+                            + V3CampaignSpatialPolicy.OBSERVATION_ENVELOPE_RADIUS);
             record(session, snapshot.tick(), "ROW_PRECONDITION_READY",
                     "daytime=true shelterHold=false");
             openWindow(level, subject, snapshot, session);
@@ -414,7 +432,14 @@ public final class V3RuntimeCampaignController {
                 V3ScenarioEvidence.capture(level, subject, session.origin, session.scenario);
         session.openingEvidence = combinedEvidence(snapshot, evidence);
         session.progress = V3CampaignProgress.open(
-                session.scenario, session.openingTick, evidence.subjectSeedCount());
+                session.scenario,
+                session.openingTick,
+                new V3CampaignProgress.Probe(
+                        evidence.replantedTargetMask(),
+                        evidence.matureTargetMask(),
+                        evidence.subjectSeedCount(),
+                        snapshot.combatTarget(),
+                        evidence.committedHarvestActors()));
         session.lastTransitionKey = snapshot.transitionKey() + "|" + evidence.transitionFingerprint();
         session.state = State.OBSERVING;
         session.reason = "row evidence window open";
@@ -431,13 +456,13 @@ public final class V3RuntimeCampaignController {
             Session session) {
         V3CampaignSpatialPolicy.Result spatial =
                 observeSubjectLocation(snapshot, subject, session);
-        List<Mob> contaminants = scanContaminants(level, session, true);
-        if (!contaminants.isEmpty()) {
+        List<String> interference = classifyPostOpenContamination(level, subject, session);
+        if (!interference.isEmpty()) {
             V3ScenarioEvidence.Capture evidence =
                     V3ScenarioEvidence.capture(level, subject, session.origin, session.scenario);
             finish(server, session, State.EXTERNAL_INTERFERENCE, snapshot.tick(),
-                    "unrelated PlayerMob entered observation envelope: "
-                            + contaminants.stream().map(Mob::getUUID).toList(), snapshot, evidence);
+                    "causal unrelated PlayerMob interference: " + interference,
+                    snapshot, evidence);
             return;
         }
         if (V3CampaignSpatialPolicy.spatiallyUninterpretable(
@@ -464,8 +489,10 @@ public final class V3RuntimeCampaignController {
                 snapshot.tick(),
                 new V3CampaignProgress.Probe(
                         evidence.replantedTargetMask(),
+                        evidence.matureTargetMask(),
                         evidence.subjectSeedCount(),
-                        snapshot.combatTarget()));
+                        snapshot.combatTarget(),
+                        evidence.committedHarvestActors()));
         if (decision.fireDeclaredTrigger()) {
             V3CampaignStartupGuard.Outcome trigger = V3CampaignStartupGuard.execute(() -> {
                 CommandSourceStack fixtureSource = server.createCommandSourceStack()
@@ -517,8 +544,11 @@ public final class V3RuntimeCampaignController {
         }
     }
 
-    private static void removePreWindowContaminants(ServerLevel level, Session session) {
-        for (Mob mob : scanContaminants(level, session, false)) {
+    private static void removePreWindowContaminants(
+            ServerLevel level,
+            Session session,
+            V3ContaminationScanGate.Mode mode) {
+        for (Mob mob : scanContaminants(level, session, mode)) {
             V3CampaignContaminationPolicy.Action action =
                     V3CampaignContaminationPolicy.decide(false, false);
             if (action == V3CampaignContaminationPolicy.Action.REMOVE_PRE_WINDOW) {
@@ -531,25 +561,80 @@ public final class V3RuntimeCampaignController {
     }
 
     private static List<Mob> scanContaminants(
-            ServerLevel level, Session session, boolean windowOpen) {
+            ServerLevel level, Session session, V3ContaminationScanGate.Mode mode) {
         long now = level.getGameTime();
-        if (session.lastContaminationScanTick >= 0L
-                && now - session.lastContaminationScanTick
-                        < CONTAMINATION_SCAN_INTERVAL_TICKS) {
+        if (!V3ContaminationScanGate.shouldScan(
+                now, session.lastContaminationScanTick, mode)) {
             return List.of();
         }
         session.lastContaminationScanTick = now;
-        return contaminants(level, session.origin, windowOpen);
+        return quarantineCandidates(level, session.origin);
     }
 
-    private static List<Mob> contaminants(
-            ServerLevel level, BlockPos origin, boolean windowOpen) {
+    private static List<Mob> quarantineCandidates(ServerLevel level, BlockPos origin) {
         return level.getEntitiesOfClass(Mob.class, observationEnvelope(level, origin), mob ->
                 PlayerMobs.isPlayerMob(mob)
                         && V3CampaignContaminationPolicy.decide(
-                                windowOpen,
+                                false,
                                 mob.getTags().contains(FIXTURE_MOB_TAG))
                         != V3CampaignContaminationPolicy.Action.IGNORE);
+    }
+
+    private static List<String> classifyPostOpenContamination(
+            ServerLevel level, Mob subject, Session session) {
+        long now = level.getGameTime();
+        if (!V3ContaminationScanGate.shouldScan(
+                now, session.lastContaminationScanTick,
+                V3ContaminationScanGate.Mode.PERIODIC)) {
+            return List.of();
+        }
+        session.lastContaminationScanTick = now;
+
+        Set<Mob> candidates = new LinkedHashSet<>(level.getEntitiesOfClass(
+                Mob.class, observationEnvelope(level, session.origin),
+                mob -> isUnrelatedPlayerMob(mob)));
+        AABB subjectProximity = subject.getBoundingBox().inflate(
+                V3PostOpenContaminationPolicy.SUBJECT_PROXIMITY_RADIUS);
+        candidates.addAll(level.getEntitiesOfClass(
+                Mob.class, subjectProximity, V3RuntimeCampaignController::isUnrelatedPlayerMob));
+        if (subject.getTarget() instanceof Mob target && isUnrelatedPlayerMob(target)) {
+            candidates.add(target);
+        }
+
+        List<String> terminal = new ArrayList<>();
+        for (Mob mob : candidates) {
+            boolean targeting = mob.getTarget() == subject || subject.getTarget() == mob;
+            double subjectDistance = Math.sqrt(mob.distanceToSqr(subject));
+            V3PostOpenContaminationPolicy.Result result =
+                    V3PostOpenContaminationPolicy.evaluate(
+                            scenarioCore(session.origin).contains(mob.position()),
+                            subjectDistance,
+                            targeting,
+                            false);
+            String detail = "uuid=" + mob.getUUID()
+                    + " distanceFromOrigin=" + formatDistance(horizontalDistance(
+                            session.origin, mob.position()))
+                    + " distanceFromSubject=" + formatDistance(subjectDistance)
+                    + " reason=" + result.reason();
+            if (result.disposition()
+                    == V3PostOpenContaminationPolicy.Disposition.EXTERNAL_INTERFERENCE) {
+                terminal.add(detail);
+            } else if (session.outerPresenceLogged.size() < MAX_OUTER_PRESENCE_LOGS
+                    && session.outerPresenceLogged.add(mob.getUUID())) {
+                record(session, now, "OUTER_PLAYERMOB_PRESENCE", detail);
+            }
+        }
+        return List.copyOf(terminal);
+    }
+
+    private static boolean isUnrelatedPlayerMob(Mob mob) {
+        return PlayerMobs.isPlayerMob(mob) && !mob.getTags().contains(FIXTURE_MOB_TAG);
+    }
+
+    private static double horizontalDistance(BlockPos origin, Vec3 position) {
+        double dx = position.x - (origin.getX() + 0.5);
+        double dz = position.z - (origin.getZ() + 0.5);
+        return Math.sqrt(dx * dx + dz * dz);
     }
 
     private static AABB scenarioCore(BlockPos origin) {
@@ -814,6 +899,7 @@ public final class V3RuntimeCampaignController {
         private boolean midpointRecorded;
         private boolean terminalTransitionRecorded;
         private boolean eventsTruncated;
+        private final Set<UUID> outerPresenceLogged = new LinkedHashSet<>();
         private String lastTransitionKey = "";
         private List<String> openingEvidence = List.of();
         private String terminalSnapshot = "UNAVAILABLE";

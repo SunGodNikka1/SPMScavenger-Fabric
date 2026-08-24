@@ -10,9 +10,9 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING` — **V2-TE-W2 CLOSED**; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
-| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G SPATIALLY-SEPARATED CAMPAIGN ARTIFACT READY** (1653-test clean build). |
-| **Nearest frontier** | Explicit launch authorization for repaired Task-59 controller artifact SHA-256 `626FB459EBCA54A866E50A535399E04D5E07B1CEBA8D5DD0A5F4103DA582F599`; VR-T3j remains not started. T3k/T3m observation-model repair remains controller backlog. |
-| **Last update** | 2026-08-24 (`Agent_Codex` Task-59 campaign startup-containment repair) |
+| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G CAUSAL-ISOLATION CAMPAIGN ARTIFACT STATIC-READY** (1660-test clean build); Minecraft campaign not authorized. |
+| **Nearest frontier** | Review/authorization of replacement Task-59 controller artifact SHA-256 `2D2E64924465D18D1590AB87A63B8F8AE650FB8911BE5351C8613F9BE8DF8D7D`; superseded `626FB...F599` is **DO NOT RUNTIME TEST**. VR-T3j remains not started. |
+| **Last update** | 2026-08-24 (`Agent_Codex` Task-59 causal isolation + T3k/T3m temporal witness repair) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -8611,3 +8611,34 @@ failures/errors/skips**. JAR SHA-256:
 `626FB459EBCA54A866E50A535399E04D5E07B1CEBA8D5DD0A5F4103DA582F599`.
 No Minecraft relaunch occurred; post-open spatial behavior remains `UNVERIFIED`. T3k/T3m remain
 separate observation-model backlog.
+
+### Contribution — `Agent_Codex` (Task-59 causal isolation + temporal crop witnesses, 2026-08-24)
+
+**Conflict disposition:** artifact
+`626FB459EBCA54A866E50A535399E04D5E07B1CEBA8D5DD0A5F4103DA582F599` is explicitly
+**SUPERSEDED / DO NOT RUNTIME TEST**. Its subject geometry remains accepted, but its post-open
+contamination rule treated the 192-block subject observation envelope as contamination authority,
+and its final isolation call could be skipped by the 20-tick scan throttle.
+
+**Locked harness boundary:** `SCENARIO_CORE=32`, subject `OBSERVATION_ENVELOPE=192`, and
+`ESCAPE_BOUNDARY=224` are unchanged. Pre-window quarantine may clean the full 192-block envelope.
+Immediately before `WINDOW_OPEN`, a `FORCED_BOUNDARY` scan bypasses cadence throttling and is
+failure-contained. After opening, outer-envelope presence emits bounded
+`OUTER_PLAYERMOB_PRESENCE` telemetry. It becomes `EXTERNAL_INTERFERENCE` only with causal evidence:
+scenario-core entry, <=16-block subject proximity, or an observable subject/contaminant targeting
+relationship. The controller never removes or steers unrelated mobs after opening.
+
+**T3k/T3m witness correction:** the temporary read-only `V3HarvestEpisodeProbe` observes installed
+production `VillageHarvestEpisodeGoal` running/phase/target state without invoking any Goal method.
+VR-T3k now requires two declared actors committed to the same fixture crop, one replant transition,
+then stale contender release/revalidation before its stabilization clock. VR-T3m now requires one
+cell to be observed mature and replanted in two temporally separate cycles; two distinct one-time
+replants cannot close the row. Missing reflection evidence fails unavailable rather than affecting
+production behavior.
+
+**Static evidence (`CONFIRMED`):** focused causal/cadence/progress/controller tests pass; `clean
+build` passes **1660 tests / 0 failures/errors/skips**. Only temporary `debug/V3*`, Task-59 tests,
+brief, and runtime docs changed; Tasks 52–58 production code is untouched. Packaged upstream Trade
+Everything classes: **0**. Replacement JAR SHA-256:
+`2D2E64924465D18D1590AB87A63B8F8AE650FB8911BE5351C8613F9BE8DF8D7D`.
+Minecraft was not launched; all post-open and temporal runtime behavior remains `UNVERIFIED`.

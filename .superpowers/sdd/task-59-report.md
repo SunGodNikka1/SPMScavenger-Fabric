@@ -224,3 +224,27 @@ failures/errors/skips. JAR: `build/libs/spmscavenger-1.11.0.jar` (1,224,603 byte
 Package audit: **39** temporary V3 debug entries (**3** spatial-policy entries), **0** upstream
 Trade Everything classes, **5** project-owned TE compatibility classes, and **0** removed V2
 witness entries. No Minecraft relaunch occurred; live spatial evidence remains `UNVERIFIED`.
+
+## Causal isolation + T3k/T3m temporal witness repair — 2026-08-24
+
+Artifact `626FB459...2F599` is superseded and **DO NOT RUNTIME TEST**. The accepted 32/192/224
+subject geometry remains unchanged. Post-open outer-envelope presence is now bounded telemetry;
+terminal interference requires scenario-core entry, <=16-block subject proximity, or an observed
+targeting relationship. The exact pre-window boundary scan uses `FORCED_BOUNDARY`, bypasses the
+20-tick periodic throttle, and failure-closes before `WINDOW_OPEN` with a diagnosable report.
+
+The T3k row now passively observes two declared PlayerMobs running harvest episodes against the
+single crop, followed by one age-0 commit and stale contender release. T3m now requires two
+mature→age-0 transitions on the same cell; distinct one-time replants are a negative control. The
+temporary reflection probe only reads installed goal running/phase/target state, invokes no Goal
+method, and degrades to unavailable evidence if reflection/accessor reads fail.
+
+Full `clean build`: **1660 tests**, zero failures/errors/skips. JAR:
+`build/libs/spmscavenger-1.11.0.jar` (1,236,700 bytes), SHA-256
+`2D2E64924465D18D1590AB87A63B8F8AE650FB8911BE5351C8613F9BE8DF8D7D`.
+Package audit: **46** temporary V3 debug class files, **0** upstream Trade Everything classes,
+**5** project-owned TE compatibility classes. Diff audit: **0** changed production Java files
+outside the temporary `debug/V3*` harness; Tasks 52–58 are untouched. Three negative probes found
+no Goal invocation, post-open movement/entity mutation, or production mandatory-authority publish
+calls in the new witness seams. No Minecraft launch or commit occurred; runtime behavior remains
+`UNVERIFIED` pending explicit authorization for this exact artifact.

@@ -141,10 +141,14 @@ disposable fixture to day, then waits up to 200 daytime ticks for production to 
   -> adjudicate natural Gate0 PASS / INCOMPLETE / FIXTURE_FAILURE
   -> logged day/weather fixture transition
   -> wait genuine SHELTER_HOLD release
+  -> forced fresh 192-block quarantine scan (never cadence-skipped)
   -> ROW_PRECONDITION_READY + exact WINDOW_OPEN tick
   -> core exit records SUBJECT_LEFT_CORE + distance/pendingClaim/activeClasses; never leashes subject
-  -> unrelated PlayerMobs entering the 192-block envelope remain EXTERNAL_INTERFERENCE
+  -> outer-envelope unrelated PlayerMobs produce bounded telemetry only
+  -> core entry, <=16-block subject proximity, or targeting relation is EXTERNAL_INTERFERENCE
   -> geometry rows become spatially INCOMPLETE only beyond 224 blocks; VR-T3j continues its clock
+  -> T3k observes two crop commitments, one commit, and stale contender release
+  -> T3m requires two mature->replant transitions on the same crop cell
   -> passive transition/terminal capture for the row clock
   -> release exact owned chunk tickets
 
@@ -233,6 +237,7 @@ Before marking V3 **runtime closed**, review:
 
 | Date | Change |
 | --- | --- |
+| 2026-08-24 | Superseded `626FB...F599`; separated 192-block subject telemetry from causal contamination authority, forced a fresh final isolation scan, and repaired T3k contention/T3m same-cell temporal evidence; replacement SHA `2D2E6492...DF8D7D`, runtime not authorized |
 | 2026-08-24 | Replaced 32-block subject leash with core/envelope/escape model; T3j preserves exploration-without-mandatory-ownership evidence; contamination envelope remains protected |
 | 2026-08-24 | Discarded premature VR-T3j attempt (`claimedHomeCount < 2`, window never opened); added explicit post-function 120-tick Gate-0 bootstrap boundary; T3k/T3m observation-model gaps remain backlog |
 | 2026-08-24 | Repaired startup containment and Minecraft 1.21 function execution boundary; exact artifact repinned; live rerun not authorized |
