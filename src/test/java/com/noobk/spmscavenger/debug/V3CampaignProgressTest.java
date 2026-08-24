@@ -74,9 +74,15 @@ class V3CampaignProgressTest {
         progress.observe(700, probe(0, 0b101, 2, false, Set.of()));
         progress.observe(800, probe(0b001, 0b100, 1, false, Set.of()));
         assertEquals(V3CampaignProgress.Disposition.OBSERVING,
-                progress.observe(1199, probe(0, 0b100, 1, false, Set.of())).disposition());
+                progress.observe(1200, probe(0, 0b100, 1, false, Set.of())).disposition(),
+                "fixture maturity plus one natural cycle is only cycle one");
+
+        progress.observe(1300, probe(0, 0b101, 1, false, Set.of()));
+        progress.observe(1400, probe(0b001, 0b100, 0, false, Set.of()));
+        assertEquals(V3CampaignProgress.Disposition.OBSERVING,
+                progress.observe(1799, probe(0, 0b100, 0, false, Set.of())).disposition());
         assertEquals(V3CampaignProgress.Disposition.OBSERVATION_COMPLETE,
-                progress.observe(1200, probe(0, 0b100, 1, false, Set.of())).disposition());
+                progress.observe(1800, probe(0, 0b100, 0, false, Set.of())).disposition());
     }
 
     @Test
@@ -105,6 +111,22 @@ class V3CampaignProgressTest {
         progress.observe(20, probe(1, 0, 15, false, Set.of()));
         assertEquals(V3CampaignProgress.Disposition.OBSERVING,
                 progress.observe(220, probe(0, 0, 15, false, Set.of())).disposition());
+    }
+
+    @Test
+    void multiMobWinnerReleaseDoesNotProveStaleLoserRevalidated() {
+        UUID winner = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID staleLoser = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        V3CampaignProgress progress = V3CampaignProgress.open(
+                V3CampaignScenario.CROP_MULTI_MOB,
+                0,
+                probe(0, 1, 16, false, Set.of()));
+
+        progress.observe(10, probe(0, 1, 16, false, Set.of(winner, staleLoser)));
+        progress.observe(20, probe(1, 0, 15, false, Set.of(staleLoser)));
+        assertEquals(V3CampaignProgress.Disposition.OBSERVING,
+                progress.observe(220, probe(0, 0, 15, false, Set.of(staleLoser))).disposition(),
+                "the winner finishing cannot stand in for stale-loser release");
     }
 
     @Test

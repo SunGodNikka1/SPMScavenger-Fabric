@@ -23,7 +23,7 @@
 | Mod | File | SHA-256 | Evidence |
 | --- | --- | --- | --- |
 | **Social Player Mobs** (`playermob`) | `playermob-fabric-0.89.0+1.21.1.jar` | `C8DC0E89C3FD632B6DCC7F8E46D3AE4955DD5504CBA53F72B62314850A64E612` | Downloaded from GitHub release `bh679/playermob-mc` tag `v0.89.0` (485 500 bytes); cached at `Projects/references/artifacts/playermob-fabric-0.89.0+1.21.1.jar` |
-| **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `2D2E64924465D18D1590AB87A63B8F8AE650FB8911BE5351C8613F9BE8DF8D7D` | Replacement Task-59 artifact at `build/libs/spmscavenger-1.11.0.jar`; causal post-open contamination, forced final isolation, and temporal T3k/T3m evidence. `626FB...F599` is superseded and must not be installed. |
+| **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `38C3E33276BFC7234CEBB44C99A559AF6FAD4D7A093D6FB8703E4716D58588FC` | Final-static-correction Task-59 artifact at `build/libs/spmscavenger-1.11.0.jar`; T3k all-contender release and T3m baseline + two complete cycles. Earlier `626FB...F599` and `2D2E...8D7D` artifacts are superseded. |
 
 **SPM source tag (audit):** `v0.89.0` on `https://github.com/bh679/playermob-mc` (`mod_version=0.89.0` in tag `gradle.properties`).
 

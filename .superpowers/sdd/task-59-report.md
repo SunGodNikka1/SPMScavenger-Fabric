@@ -248,3 +248,25 @@ outside the temporary `debug/V3*` harness; Tasks 52–58 are untouched. Three ne
 no Goal invocation, post-open movement/entity mutation, or production mandatory-authority publish
 calls in the new witness seams. No Minecraft launch or commit occurred; runtime behavior remains
 `UNVERIFIED` pending explicit authorization for this exact artifact.
+
+## Final static T3k/T3m correction — 2026-08-24
+
+Artifact `2D2E6492...8DF8D7D` is superseded for consolidated campaign use. Its accepted startup,
+Gate-0, spatial, contamination, and final-isolation behavior was not changed.
+
+T3k now requires all UUIDs in the observed pre-commit single-crop contention set to leave that
+stale episode after replant. The successful winner stopping while the loser remains is an isolated
+negative control and no longer starts stabilization. T3m now treats the first replant as baseline;
+only two later same-cell maturity→replant transitions start its +400 clock. Fixture-provided opening
+maturity and a single natural regrowth cycle remain insufficient.
+
+Pinned source inspection also exposes a matrix contradiction: default random ticking and the dry
+fixture put one full wheat cycle on an expected scale near 100,000 ticks, while the controller caps
+T3m at 4000. The harness keeps the exact two-cycle definition and will report honest `INCOMPLETE`;
+it does not accelerate growth or reinterpret the opening crop.
+
+Isolated state-machine tests: **9/9 PASS**. Focused retained harness: **19/19 PASS**. Full `clean
+build`: **1661 tests**, zero failures/errors/skips. JAR:
+`build/libs/spmscavenger-1.11.0.jar` (1,236,566 bytes), SHA-256
+`38C3E33276BFC7234CEBB44C99A559AF6FAD4D7A093D6FB8703E4716D58588FC`.
+No Minecraft launch or commit occurred; runtime remains `UNVERIFIED`.

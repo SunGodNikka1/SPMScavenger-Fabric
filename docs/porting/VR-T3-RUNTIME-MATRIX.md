@@ -73,7 +73,7 @@ applicable** while broad V3-D2 remains deferred.
 | **VR-T3j** | Mandatory work blocks fresh village work | Opinion/discretionary displaces mandatory | `mandatory_blocks_village_work` | **1000 ticks** — mandatory claim/live gather must complete or block before village crop work | task-52/53 wiring tests | `UNVERIFIED` |
 | **VR-T3k** | Two mobs: first commits; second revalidates | Double break; global reservation | `crop_multi_mob` | Through first mob **COMMIT** + second mob **abandon/reacquire** + **200 ticks** | static `CONFIRMED` — task-55 | `UNVERIFIED` |
 | **VR-T3l** | Host harvest veto in managed domain when V3 refused | Wilderness veto; stock food suppressed | `crop_hungry_veto` | **800 ticks** — crop must remain planted; no host strip | static `INFERRED` — D-VR-079-A1 | `UNVERIFIED` |
-| **VR-T3m** | Replant stock from episode banked drops across cycles | Floor-pickup replant supply | `crop_multi_cycle` | **≥2 complete growth/harvest cycles** or until seed reserve blocks replant + **400 ticks** | `ContainerMergeTest`, F8 tests | `UNVERIFIED` |
+| **VR-T3m** | Replant stock from episode banked drops across cycles | Floor-pickup replant supply | `crop_multi_cycle` | Baseline first replant, then **≥2 complete same-cell natural growth/harvest cycles** + **400 ticks** | `ContainerMergeTest`, F8 tests; detector static `CONFIRMED` | `MATRIX/FIXTURE CONTRADICTION` — 4000-tick controller cap is not a realistic unaccelerated two-cycle window; runtime `UNVERIFIED` |
 | **D-VR-084 witness** | Pending mandatory claim blocks discretionary + village work admission | Claim refresh from demand alone | `mandatory_ownership_witness` | **1000 ticks** — real Gather publisher claim visible; village work refused while claim live | task-52 scenarios (static) | `UNVERIFIED` |
 | **SPM 0.89 caution** | Target invalidation/hand-off observable under interruption | Misread as V3 defect | reuse `crop_interrupt_combat` / `mandatory_blocks_village_work` | Same windows as parent rows | host-delta doc only | `UNVERIFIED` |
 
@@ -237,6 +237,7 @@ Before marking V3 **runtime closed**, review:
 
 | Date | Change |
 | --- | --- |
+| 2026-08-24 | Final static T3k/T3m correction: all original contenders must release after commit; opening maturity is baseline-only and T3m requires two later same-cell cycles. Recorded the 4000-tick natural-growth contradiction; SHA `38C3E332...8588FC`; runtime not authorized |
 | 2026-08-24 | Superseded `626FB...F599`; separated 192-block subject telemetry from causal contamination authority, forced a fresh final isolation scan, and repaired T3k contention/T3m same-cell temporal evidence; replacement SHA `2D2E6492...DF8D7D`, runtime not authorized |
 | 2026-08-24 | Replaced 32-block subject leash with core/envelope/escape model; T3j preserves exploration-without-mandatory-ownership evidence; contamination envelope remains protected |
 | 2026-08-24 | Discarded premature VR-T3j attempt (`claimedHomeCount < 2`, window never opened); added explicit post-function 120-tick Gate-0 bootstrap boundary; T3k/T3m observation-model gaps remain backlog |

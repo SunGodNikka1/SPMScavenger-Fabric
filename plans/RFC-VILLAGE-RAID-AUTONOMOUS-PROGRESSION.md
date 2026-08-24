@@ -10,9 +10,9 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING` — **V2-TE-W2 CLOSED**; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
-| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G CAUSAL-ISOLATION CAMPAIGN ARTIFACT STATIC-READY** (1660-test clean build); Minecraft campaign not authorized. |
-| **Nearest frontier** | Review/authorization of replacement Task-59 controller artifact SHA-256 `2D2E64924465D18D1590AB87A63B8F8AE650FB8911BE5351C8613F9BE8DF8D7D`; superseded `626FB...F599` is **DO NOT RUNTIME TEST**. VR-T3j remains not started. |
-| **Last update** | 2026-08-24 (`Agent_Codex` Task-59 causal isolation + T3k/T3m temporal witness repair) |
+| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G FINAL STATIC HARNESS CORRECTION BUILT** (1661-test clean build); Minecraft campaign not authorized. |
+| **Nearest frontier** | Review/authorization of replacement Task-59 artifact SHA-256 `38C3E33276BFC7234CEBB44C99A559AF6FAD4D7A093D6FB8703E4716D58588FC`. VR-T3m retains a declared **MATRIX/FIXTURE CONTRADICTION**: its 4000-tick cap cannot realistically witness two unaccelerated natural wheat cycles. |
+| **Last update** | 2026-08-24 (`Agent_Codex` Task-59 final static T3k/T3m correction) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -8642,3 +8642,30 @@ brief, and runtime docs changed; Tasks 52–58 production code is untouched. Pac
 Everything classes: **0**. Replacement JAR SHA-256:
 `2D2E64924465D18D1590AB87A63B8F8AE650FB8911BE5351C8613F9BE8DF8D7D`.
 Minecraft was not launched; all post-open and temporal runtime behavior remains `UNVERIFIED`.
+
+### Contribution — `Agent_Codex` (Task-59 final static T3k/T3m correction, 2026-08-24)
+
+**Peer-review objection accepted:** `2D2E6492...8DF8D7D` is superseded for the consolidated
+campaign. T3k used `anyMatch` release, allowing the successful winner's normal stop to masquerade as
+stale-loser revalidation. T3m initialized its maturity evidence from the fixture-provided age-7
+state, counting that first harvest as natural growth.
+
+**Implemented harness semantics (`CODE_CONFIRMED`):** T3k now starts its +200 clock only after the
+entire original single-crop contender set has exited that stale committed episode. Winner-only
+release is a passing negative control that remains observing. T3m treats the first age-0 observation
+as baseline, then requires two separate same-cell `baseline/replant → mature → replant` cycles
+before its +400 clock. Opening maturity and one natural regrowth cycle cannot close the row.
+
+**Matrix contradiction (`SOURCE_CONFIRMED` mechanics, runtime timing `UNVERIFIED`):** Minecraft
+1.21.1 `CropBlock.randomTick` plus default `randomTickSpeed=3` gives this dry, one-row fixture an
+expected scale near 100,000 ticks for one seven-age wheat cycle. The existing 4000-tick maximum is
+not a realistic two-cycle window, and forced loading alone does not prove random ticking without a
+near player. The detector was not weakened and growth was not accelerated. VR-T3m will truthfully
+report `INCOMPLETE` unless the matrix later locks a longer window and natural-ticking proximity
+contract.
+
+**Validation:** isolated state-machine suite **9/9 PASS**; focused retained-harness suite **19/19
+PASS**; `clean build` **1661 tests / 0 failures/errors/skips**. Tasks 52–58 and the accepted
+spatial/isolation controller are unchanged. Replacement JAR SHA-256:
+`38C3E33276BFC7234CEBB44C99A559AF6FAD4D7A093D6FB8703E4716D58588FC`.
+No Minecraft launch or commit occurred; runtime behavior remains `UNVERIFIED`.

@@ -684,3 +684,73 @@ requires repeated same-cell maturity-separated transition.
 **Must not happen:** post-open unrelated mobs are removed or steered; envelope presence alone ends a
 row; opening follows a skipped boundary scan; distinct T3m cells masquerade as temporal cycles; crop
 Goals/transactions are invoked or Tasks 52–58 production semantics change.
+
+---
+
+## v1.9 final static T3k/T3m correction
+
+Artifact `2D2E6492...8DF8D7D` is **SUPERSEDED for the consolidated campaign**. Its startup, Gate-0,
+32/192/224 spatial model, causal contamination, and forced final isolation are accepted unchanged.
+Only its T3k/T3m completion semantics are reopened.
+
+### Behavioral Prediction (MAIBS-1)
+
+| Timeline | Required witness result | Failure prevented | Confidence |
+| --- | --- | --- | --- |
+| T3k: two actors target the one crop | remember the exact pre-commit contender UUID set | aggregate replant without contention | `CODE_CONFIRMED` after state test |
+| T3k: crop becomes age 0; winner stops, loser remains | continue observing | winner completion misreported as loser revalidation | `CODE_CONFIRMED` after negative control |
+| T3k: all original stale episode claims clear | begin +200 stabilization | stale loser remains committed | `CODE_CONFIRMED` after state test; runtime `UNVERIFIED` |
+| T3m: initial age 7 becomes age 0 | establish per-cell baseline only; cycle count remains zero | fixture maturity counted as natural growth | `CODE_CONFIRMED` after negative control |
+| T3m: baseline age 0 → observed age 7 → age 0 | complete cycle 1 only | off-by-one closure | `CODE_CONFIRMED` after state test |
+| T3m: same cell again age 0 → age 7 → age 0 | complete cycle 2; begin +400 stabilization | two distinct cells or one natural regrowth close row | `CODE_CONFIRMED` after state test; runtime `UNVERIFIED` |
+
+Goal ownership is unchanged: both PlayerMobs retain production harvest Goal admission, MOVE/LOOK,
+transaction, stop, and reacquisition. The controller only samples running target state and blocks;
+it never identifies a winner by inventing authority or invoking a Goal method.
+
+### Options and decision
+
+| Option | Benefit | Risk | Disposition |
+| --- | --- | --- | --- |
+| Identify the winner through new transaction instrumentation | loser-specific proof | adds observer calls to the accepted Tasks 52–58 production seam | rejected for this final static slice |
+| Require all original single-crop contenders to clear | passive and cannot confuse winner completion with loser release | conservative false-negative if an actor instantly owns a new episode on the same cell | **selected**; age-0 target invalidity bounds that risk |
+| Count opening maturity as cycle growth | fits 4000 ticks more easily | semantically false | rejected |
+| Baseline first replant, then require two maturity-separated replants | exact matrix meaning | exposes the fixture/window contradiction | **selected** |
+
+### 4000-tick contradiction (`SOURCE_CONFIRMED` mechanics; runtime timing `UNVERIFIED`)
+
+Pinned Minecraft 1.21.1 `CropBlock.randomTick` advances one of seven wheat ages only when the crop
+is randomly selected and then passes `nextInt((int)(25/f)+1)`. Default `randomTickSpeed` is 3; each
+section selects only three of 4096 positions per tick. The fixture creates a dry one-row farmland
+strip with no water. Its three adjacent crops have growth speed about 2.25–2.5, so one age advance
+has an expected scale around 15,000 ticks and one seven-age growth cycle around 100,000 ticks. Even
+hydrated geometry remains tens of thousands of ticks per cycle. Random ticks additionally require a
+ticking chunk with a sufficiently near player; a forced chunk alone is not that proof.
+
+Therefore the existing **4000-tick maximum cannot realistically witness two natural complete
+cycles**. This is a **MATRIX/FIXTURE CONTRADICTION**, not permission to weaken cycle counting.
+This slice keeps the bound so failure remains a truthful `INCOMPLETE`; selecting a statistically
+justified longer window plus a natural-ticking/player-proximity contract is a separate matrix
+decision before VR-T3m can be expected to close.
+
+Predicted weird cases: T3k misses a simultaneous commitment between samples (`RUNTIME_QUESTION`,
+honest timeout); T3k clears after both episodes stop but cannot label the winner
+(`ACCEPTABLE_STEPPING_STONE`, all-clear is stronger than required); T3m times out at 4000 despite
+correct production behavior (`ARCHITECTURE_DEFECT` in matrix/fixture timing, not production AI).
+
+**Must happen:** winner-only release remains observing; all original commitments cleared after the
+commit starts T3k stabilization; T3m needs baseline plus two same-cell natural maturity/replant
+cycles.
+
+**Must not happen:** opening age 7 counts as growth; one post-baseline cycle closes T3m; Tasks 52–58,
+spatial/isolation behavior, crop growth, random tick speed, or production Goal authority changes.
+
+### v1.9 static validation
+
+- Isolated progress state machine: **9/9 PASS**, including winner-only-release and initial-maturity
+  negative controls.
+- Focused retained harness: **19/19 PASS**.
+- `clean build`: **1661 tests / 0 failures/errors/skips**.
+- Artifact: `build/libs/spmscavenger-1.11.0.jar`, SHA-256
+  `38C3E33276BFC7234CEBB44C99A559AF6FAD4D7A093D6FB8703E4716D58588FC`.
+- Minecraft runtime: **NOT RUN / UNVERIFIED**. Commit: **not created**.

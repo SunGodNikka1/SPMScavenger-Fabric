@@ -38,10 +38,10 @@ final class V3CampaignProgress {
     private boolean combatSeen;
     private int observedReplantMask;
     private int lastReplantedMask;
-    private int matureSinceLastHarvestMask;
-    private int temporallyHarvestedMask;
-    private int temporalHarvestTransitions;
-    private boolean repeatedTemporalHarvest;
+    private int baselineReplantedMask;
+    private int matureAfterBaselineMask;
+    private int oneCompleteCycleMask;
+    private int twoCompleteCyclesMask;
     private boolean contentionObserved;
     private boolean contendedCommitObserved;
     private Set<UUID> contendersAtCommit = Set.of();
@@ -53,7 +53,6 @@ final class V3CampaignProgress {
         this.openingTick = openingTick;
         this.initialSeedCount = initial.subjectSeedCount();
         this.lastReplantedMask = initial.replantedTargetMask();
-        this.matureSinceLastHarvestMask = initial.matureTargetMask();
     }
 
     static V3CampaignProgress open(
@@ -132,28 +131,22 @@ final class V3CampaignProgress {
         if (terminalObservedAt < 0L
                 && contendedCommitObserved
                 && contendersAtCommit.stream()
-                        .anyMatch(actor -> !probe.committedHarvestActors().contains(actor))) {
+                        .noneMatch(probe.committedHarvestActors()::contains)) {
             terminalObservedAt = now;
         }
     }
 
     private void observeTemporalCycle(long now, Probe probe) {
-        matureSinceLastHarvestMask |= probe.matureTargetMask();
+        matureAfterBaselineMask |= probe.matureTargetMask() & baselineReplantedMask;
         int newlyReplanted = probe.replantedTargetMask() & ~lastReplantedMask;
-        int validTransitions = newlyReplanted & matureSinceLastHarvestMask;
-        while (validTransitions != 0) {
-            int bit = Integer.lowestOneBit(validTransitions);
-            if ((temporallyHarvestedMask & bit) != 0) {
-                repeatedTemporalHarvest = true;
-            }
-            temporallyHarvestedMask |= bit;
-            matureSinceLastHarvestMask &= ~bit;
-            temporalHarvestTransitions++;
-            validTransitions &= ~bit;
-        }
-        if (terminalObservedAt < 0L
-                && repeatedTemporalHarvest
-                && temporalHarvestTransitions >= scenario.requiredReplants()) {
+        int completedCycles = newlyReplanted
+                & baselineReplantedMask
+                & matureAfterBaselineMask;
+        twoCompleteCyclesMask |= completedCycles & oneCompleteCycleMask;
+        oneCompleteCycleMask |= completedCycles;
+        matureAfterBaselineMask &= ~completedCycles;
+        baselineReplantedMask |= newlyReplanted;
+        if (terminalObservedAt < 0L && twoCompleteCyclesMask != 0) {
             terminalObservedAt = now;
         }
     }
