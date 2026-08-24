@@ -546,3 +546,63 @@ and then remain bounded by the existing overall timeout (`RUNTIME_QUESTION`).
 **Must not happen:** the controller manufactures HOME evidence, invokes refresh, changes
 `V3Gate0Assessment`, resets the 2400-tick timeout, opens a row during bootstrap, or changes Tasks
 52–58 production semantics. T3k/T3m observation-model repairs remain separate controller backlog.
+
+---
+
+## v1.7 post-open spatial observation repair
+
+### Code evidence and boundary ownership
+
+`CODE_CONFIRMED`: `tickObservation` currently uses the same 32×16×32 `arena(origin)` both for
+scenario fixture discovery/contamination and as an immediate subject-leash boundary. Any post-open
+core exit terminates `INCOMPLETE`. That can erase the T3j observation the row exists to capture:
+discretionary exploration may move the subject away while mandatory ownership remains absent.
+
+The production `ExploringGoal` has a maximum expedition route distance of 150 blocks and a maximum
+expedition lifetime of 2400 ticks. T3j observes 1000 ticks. A subject that opens within the 32-block
+scenario core can therefore remain relevant at roughly 182 horizontal blocks from the fixture
+origin during one normal expedition. The temporary witness rounds that to a 192-block observation
+envelope and uses a separate 224-block escape boundary (the envelope plus one 32-block core width).
+These are witness interpretation bounds, not movement authority. Only scenario-core chunks remain
+fixture-forced; the controller does not manufacture distant ticking terrain.
+
+| Option | Benefit | Failure mode | Disposition |
+| --- | --- | --- | --- |
+| Keep 32-block immediate terminal | Cheapest observation | hides ordinary exploration/authority failure as fixture loss | Rejected |
+| Remove all spatial bounds | Never masks movement | crop/storage rows can complete after losing all relation to their evidence geometry | Rejected |
+| Core + 192 envelope + 224 escape | Preserves normal expedition evidence while bounding geometry-dependent rows | envelope scans need a cadence; second expedition may exceed the estimate | **Selected** |
+
+T3j is authority-observation-only and therefore does not terminate merely for crossing the escape
+boundary; it retains the full fixed clock while the subject remains a readable entity. Other rows
+may become `INCOMPLETE` only beyond 224 blocks because their crop/storage evidence is anchored to
+the scenario core.
+
+### Behavioral Prediction (MAIBS-1)
+
+| Checkpoint | Predicted observable result | Confidence |
+| --- | --- | --- |
+| WINDOW_OPEN | Core target evidence and subject authority snapshot are captured; no steering begins | `CODE_CONFIRMED` after harness |
+| First horizontal distance >32 | `SUBJECT_LEFT_CORE` records distance, pending claim, and active classes; row continues | `CODE_CONFIRMED` after harness; runtime `UNVERIFIED` |
+| Distance 33–192 | Ordinary exploration remains within the protected observation envelope; unrelated PlayerMobs are contamination | `CODE_CONFIRMED` after harness |
+| Distance 193–224 | Outer margin transition is recorded; row still continues | `CODE_CONFIRMED` after harness |
+| Distance >224 | Geometry-dependent rows become spatially `INCOMPLETE`; T3j continues and preserves whether any pending claim appeared | `CODE_CONFIRMED` after harness |
+| T3j +1000 | Terminal evidence distinguishes core departure with no ownership from a fixture disappearance | `UNVERIFIED` until approved runtime |
+
+Goal interaction: `ExploringGoal` retains normal MOVE ownership and route planning; mandatory work
+may interrupt it through production arbitration; the controller owns no Goal flags and never calls
+navigation. Combat and declared scenario entities remain unsuppressed.
+
+Predicted weird cases: a subject walks into an unloaded region and lifecycle observation ends
+despite spatial permission (`RUNTIME_QUESTION`, report retained exit evidence); a second expedition
+crosses 224 during T3j (`ACCEPTABLE_STEPPING_STONE`, T3j deliberately continues); an unrelated
+PlayerMob crosses the 192 envelope between bounded contamination scans (`RUNTIME_QUESTION`, scan at
+20-tick cadence); extreme vertical terrain changes Y without horizontal escape
+(`ACCEPTABLE_STEPPING_STONE`, interpretation is intentionally horizontal).
+
+**Must happen:** leaving the 32-block core emits `SUBJECT_LEFT_CORE` with distance, pending claim,
+and active classes and does not terminate; unrelated PlayerMobs inside 192 blocks remain
+contamination; T3j continues beyond 224 while preserving whether a claim was ever observed.
+
+**Must not happen:** the controller teleports, leashes, freezes, path-corrects, navigates, expands
+production authority, uses the scenario core as a subject terminal, or silently lets a
+geometry-dependent row remain meaningful after true escape.

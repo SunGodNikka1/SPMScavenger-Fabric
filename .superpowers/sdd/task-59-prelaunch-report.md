@@ -280,3 +280,27 @@ the read-only `V3Gate0Assessment` contract remain unchanged.
 
 VR-T3k and VR-T3m observation-model corrections remain controller backlog and are not included in
 this artifact. No Minecraft relaunch occurred; exact-hash approval is required.
+
+---
+
+## Spatial-observation replacement artifact — 2026-08-24
+
+The 32-block fixture core is no longer a post-open subject leash. Core departure is transition
+evidence, and T3j retains its full authority-observation clock even beyond the separate escape
+boundary. Contamination remains protected across a 192-block horizontal envelope at a bounded
+20-tick cadence. Geometry-dependent rows become spatially uninterpretable only beyond 224 blocks.
+
+| Check | Result |
+| --- | --- |
+| Spatial zones | 32 core; 192 observation envelope; 224 escape boundary; horizontal classification |
+| T3j control | ESCAPED remains nonterminal; pending-claim history and core-exit evidence retained |
+| Geometry-row control | ESCAPED becomes `INCOMPLETE` only beyond 224 |
+| Steering negative controls | no navigation, teleport, movement correction, Goal invocation, or authority manufacture |
+| Focused V3/datapack suite | **52/52 PASS** |
+| Clean build | **1653 tests; 0 failures/errors/skips** |
+| JAR | `build/libs/spmscavenger-1.11.0.jar` (1,224,603 bytes) |
+| SHA-256 | `626FB459EBCA54A866E50A535399E04D5E07B1CEBA8D5DD0A5F4103DA582F599` |
+| Package audit | 39 temporary V3 debug entries (3 spatial-policy), 0 upstream TE classes, 5 project-owned TE classes, 0 removed V2 witness entries |
+
+No Minecraft relaunch occurred. VR-T3j and the spatial transitions remain `UNVERIFIED` for this
+exact artifact; T3k/T3m observation-model backlog remains separate.

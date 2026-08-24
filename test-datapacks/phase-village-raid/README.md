@@ -15,7 +15,7 @@ windows, and falsifiers live in `docs/porting/VR-T3-RUNTIME-MATRIX.md`; record r
   remembered in-bounds settlement, and cached population facts. It retains no session, creates no
   settlement/facts cache, schedules no refresh, and changes no decision.
 - **Campaign authority (temporary):** `/spmscavenger debug v3 run <preset>` owns only fixture setup,
-  pre-window removal of unrelated PlayerMobs in the 32-block arena, natural Gate-0 waiting,
+  pre-window removal of unrelated PlayerMobs in the protected observation envelope, natural Gate-0 waiting,
   a logged pre-window day/weather transition, fixture chunk tickets, row timing, and passive
   evidence. It never starts a Goal, publishes a claim, changes admission, writes HOME/Brain/sleep
   state, steers the subject after opening, or assigns a product verdict.
@@ -33,7 +33,7 @@ windows, and falsifiers live in `docs/porting/VR-T3-RUNTIME-MATRIX.md`; record r
    only after `RowPrecondition=READY`.
 6. Play normally or stand away. Use `/spmscavenger debug v3 status` for bounded progress and
    `/spmscavenger debug v3 report` for opening/transition/terminal evidence. The controller force-
-   loads only arena chunks it newly acquired and releases those exact chunks at every terminal.
+   loads only 32-block scenario-core chunks it newly acquired and releases those exact chunks at every terminal.
 7. The controller returns observation states—not product PASS/FAIL. Review its raw report against
    the matrix, then record the adjudicated result in `VR-T3-RUNTIME-EVIDENCE.md`.
 8. Run `/spmscavenger debug v3 reset` between rows. This releases controller state and invokes the
@@ -55,6 +55,13 @@ and inspect vanilla forced chunks before reuse; do not remove foreign forced chu
 
 If startup fails, `status` and `report` retain `startupStage`, exception class/message, and root
 cause; `latest.log` retains the stack trace. Use `reset` for tagged partial-fixture cleanup.
+
+After `WINDOW_OPEN`, the 32-block scenario core is evidence geometry, not a leash. A subject exit
+emits `SUBJECT_LEFT_CORE` with horizontal distance, `pendingClaim`, and `activeClasses`, and the row
+continues. Contamination detection covers the 192-block observation envelope on a bounded cadence.
+The 224-block escape boundary can end geometry-dependent rows as spatially `INCOMPLETE`, but VR-T3j
+continues because its authority evidence remains meaningful away from the core. The controller does
+not teleport, steer, freeze, or path-correct the subject, and it does not force envelope chunks.
 
 ## Campaign order
 

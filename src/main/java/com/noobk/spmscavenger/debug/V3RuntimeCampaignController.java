@@ -5,6 +5,7 @@ import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.SpmScavenger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.commands.CommandSourceStack;
@@ -33,6 +34,7 @@ public final class V3RuntimeCampaignController {
     private static final String SUBJECT_TAG = "spm_vr.subject";
     private static final long GATE0_TIMEOUT_TICKS = 2400L;
     private static final long SHELTER_RELEASE_TIMEOUT_TICKS = 200L;
+    private static final long CONTAMINATION_SCAN_INTERVAL_TICKS = 20L;
     private static final int MAX_EVENTS = 32;
 
     private static Session active;
@@ -132,6 +134,12 @@ public final class V3RuntimeCampaignController {
                         + " bootstrapStartTick=" + printableTick(active.bootstrapStartTick)
                         + " windowOpenTick=" + printableTick(active.openingTick),
                 "contaminantsRemovedPreWindow=" + active.contaminantsRemoved,
+                "subjectZone=" + active.subjectZone
+                        + " leftCore=" + active.subjectLeftCore
+                        + " maxDistanceFromOrigin="
+                        + formatDistance(active.maxDistanceFromOrigin)
+                        + " pendingClaimObservedAfterOpen="
+                        + active.pendingClaimObservedAfterOpen,
                 "next=" + nextExpected(active));
         sendLines(source, lines);
         return 1;
@@ -251,7 +259,7 @@ public final class V3RuntimeCampaignController {
             session.startupStage = StartupStage.DISCOVER_SUBJECT;
             List<Mob> subjects = level.getEntitiesOfClass(
                     Mob.class,
-                    arena(session.origin),
+                    scenarioCore(session.origin),
                     mob -> PlayerMobs.isPlayerMob(mob)
                             && mob.getTags().contains(SUBJECT_TAG));
             if (subjects.size() != 1) {
@@ -262,7 +270,7 @@ public final class V3RuntimeCampaignController {
             session.subjectId = subject.getUUID();
 
             session.startupStage = StartupStage.FORCE_CHUNKS;
-            forceArenaChunks(level, session);
+            forceScenarioCoreChunks(level, session);
             session.startupStage = StartupStage.REMOVE_CONTAMINANTS;
             removePreWindowContaminants(level, session);
             session.startupStage = StartupStage.ACTIVATE;
@@ -412,6 +420,7 @@ public final class V3RuntimeCampaignController {
         session.reason = "row evidence window open";
         record(session, snapshot.tick(), "WINDOW_OPEN",
                 "exactOpeningTick=" + snapshot.tick() + " " + snapshot.compactLine());
+        observeSubjectLocation(snapshot, subject, session);
     }
 
     private static void tickObservation(
@@ -420,20 +429,24 @@ public final class V3RuntimeCampaignController {
             Mob subject,
             V3WitnessSnapshot snapshot,
             Session session) {
-        List<Mob> contaminants = contaminants(level, session.origin, true);
+        V3CampaignSpatialPolicy.Result spatial =
+                observeSubjectLocation(snapshot, subject, session);
+        List<Mob> contaminants = scanContaminants(level, session, true);
         if (!contaminants.isEmpty()) {
             V3ScenarioEvidence.Capture evidence =
                     V3ScenarioEvidence.capture(level, subject, session.origin, session.scenario);
             finish(server, session, State.EXTERNAL_INTERFERENCE, snapshot.tick(),
-                    "unrelated PlayerMob entered arena: "
+                    "unrelated PlayerMob entered observation envelope: "
                             + contaminants.stream().map(Mob::getUUID).toList(), snapshot, evidence);
             return;
         }
-        if (!arena(session.origin).contains(subject.position())) {
+        if (V3CampaignSpatialPolicy.spatiallyUninterpretable(
+                session.scenario, spatial.zone())) {
             V3ScenarioEvidence.Capture evidence =
                     V3ScenarioEvidence.capture(level, subject, session.origin, session.scenario);
             finish(server, session, State.INCOMPLETE, snapshot.tick(),
-                    "subject left bounded fixture arena", snapshot, evidence);
+                    "subject crossed escape boundary at distance="
+                            + formatDistance(spatial.horizontalDistance()), snapshot, evidence);
             return;
         }
 
@@ -505,7 +518,7 @@ public final class V3RuntimeCampaignController {
     }
 
     private static void removePreWindowContaminants(ServerLevel level, Session session) {
-        for (Mob mob : contaminants(level, session.origin, false)) {
+        for (Mob mob : scanContaminants(level, session, false)) {
             V3CampaignContaminationPolicy.Action action =
                     V3CampaignContaminationPolicy.decide(false, false);
             if (action == V3CampaignContaminationPolicy.Action.REMOVE_PRE_WINDOW) {
@@ -517,9 +530,21 @@ public final class V3RuntimeCampaignController {
         }
     }
 
+    private static List<Mob> scanContaminants(
+            ServerLevel level, Session session, boolean windowOpen) {
+        long now = level.getGameTime();
+        if (session.lastContaminationScanTick >= 0L
+                && now - session.lastContaminationScanTick
+                        < CONTAMINATION_SCAN_INTERVAL_TICKS) {
+            return List.of();
+        }
+        session.lastContaminationScanTick = now;
+        return contaminants(level, session.origin, windowOpen);
+    }
+
     private static List<Mob> contaminants(
             ServerLevel level, BlockPos origin, boolean windowOpen) {
-        return level.getEntitiesOfClass(Mob.class, arena(origin), mob ->
+        return level.getEntitiesOfClass(Mob.class, observationEnvelope(level, origin), mob ->
                 PlayerMobs.isPlayerMob(mob)
                         && V3CampaignContaminationPolicy.decide(
                                 windowOpen,
@@ -527,8 +552,67 @@ public final class V3RuntimeCampaignController {
                         != V3CampaignContaminationPolicy.Action.IGNORE);
     }
 
-    private static AABB arena(BlockPos origin) {
-        return new AABB(origin).inflate(32.0, 16.0, 32.0);
+    private static AABB scenarioCore(BlockPos origin) {
+        double radius = V3CampaignSpatialPolicy.SCENARIO_CORE_RADIUS;
+        return new AABB(origin).inflate(radius, 16.0, radius);
+    }
+
+    private static AABB observationEnvelope(ServerLevel level, BlockPos origin) {
+        double radius = V3CampaignSpatialPolicy.OBSERVATION_ENVELOPE_RADIUS;
+        return new AABB(
+                origin.getX() - radius,
+                level.getMinBuildHeight(),
+                origin.getZ() - radius,
+                origin.getX() + radius,
+                level.getMaxBuildHeight(),
+                origin.getZ() + radius);
+    }
+
+    private static V3CampaignSpatialPolicy.Result observeSubjectLocation(
+            V3WitnessSnapshot snapshot, Mob subject, Session session) {
+        V3CampaignSpatialPolicy.Result current =
+                V3CampaignSpatialPolicy.classify(session.origin, subject.position());
+        session.maxDistanceFromOrigin = Math.max(
+                session.maxDistanceFromOrigin, current.horizontalDistance());
+        session.pendingClaimObservedAfterOpen |= snapshot.pendingClaim().isPresent();
+        String context = "distanceFromOrigin=" + formatDistance(current.horizontalDistance())
+                + " pendingClaim=" + pendingClaimSummary(snapshot)
+                + " activeClasses=" + snapshot.activeClasses();
+        if (!session.subjectLeftCore
+                && current.zone() != V3CampaignSpatialPolicy.Zone.SCENARIO_CORE) {
+            session.subjectLeftCore = true;
+            session.firstCoreExitTick = snapshot.tick();
+            session.firstCoreExitEvidence = context;
+            record(session, snapshot.tick(), "SUBJECT_LEFT_CORE", context);
+        }
+        if (!session.subjectLeftEnvelope
+                && (current.zone() == V3CampaignSpatialPolicy.Zone.ESCAPE_MARGIN
+                        || current.zone() == V3CampaignSpatialPolicy.Zone.ESCAPED)) {
+            session.subjectLeftEnvelope = true;
+            record(session, snapshot.tick(), "SUBJECT_LEFT_OBSERVATION_ENVELOPE", context);
+        }
+        if (!session.subjectEscaped
+                && current.zone() == V3CampaignSpatialPolicy.Zone.ESCAPED) {
+            session.subjectEscaped = true;
+            record(session, snapshot.tick(), "SUBJECT_ESCAPED", context);
+        }
+        if (current.zone() != session.subjectZone) {
+            record(session, snapshot.tick(), "SUBJECT_ZONE",
+                    "from=" + session.subjectZone + " to=" + current.zone() + " " + context);
+            session.subjectZone = current.zone();
+        }
+        return current;
+    }
+
+    private static String pendingClaimSummary(V3WitnessSnapshot snapshot) {
+        return snapshot.pendingClaim()
+                .map(claim -> "YES consumer=" + claim.consumerKey()
+                        + " route=" + claim.routeIdentity())
+                .orElse("NO");
+    }
+
+    private static String formatDistance(double distance) {
+        return String.format(Locale.ROOT, "%.2f", distance);
     }
 
     private static void executeFixtureFunctionNow(
@@ -633,11 +717,12 @@ public final class V3RuntimeCampaignController {
         return List.copyOf(lines);
     }
 
-    private static void forceArenaChunks(ServerLevel level, Session session) {
-        int minChunkX = (session.origin.getX() - 32) >> 4;
-        int maxChunkX = (session.origin.getX() + 32) >> 4;
-        int minChunkZ = (session.origin.getZ() - 32) >> 4;
-        int maxChunkZ = (session.origin.getZ() + 32) >> 4;
+    private static void forceScenarioCoreChunks(ServerLevel level, Session session) {
+        int radius = (int) V3CampaignSpatialPolicy.SCENARIO_CORE_RADIUS;
+        int minChunkX = (session.origin.getX() - radius) >> 4;
+        int maxChunkX = (session.origin.getX() + radius) >> 4;
+        int minChunkZ = (session.origin.getZ() - radius) >> 4;
+        int maxChunkZ = (session.origin.getZ() + radius) >> 4;
         for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
             for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
                 if (level.setChunkForced(chunkX, chunkZ, true)) {
@@ -716,6 +801,16 @@ public final class V3RuntimeCampaignController {
         private long openingTick = -1L;
         private long terminalTick = -1L;
         private int contaminantsRemoved;
+        private long lastContaminationScanTick = -1L;
+        private V3CampaignSpatialPolicy.Zone subjectZone =
+                V3CampaignSpatialPolicy.Zone.SCENARIO_CORE;
+        private boolean subjectLeftCore;
+        private boolean subjectLeftEnvelope;
+        private boolean subjectEscaped;
+        private boolean pendingClaimObservedAfterOpen;
+        private long firstCoreExitTick = -1L;
+        private String firstCoreExitEvidence = "NOT_OBSERVED";
+        private double maxDistanceFromOrigin;
         private boolean midpointRecorded;
         private boolean terminalTransitionRecorded;
         private boolean eventsTruncated;
@@ -771,6 +866,14 @@ public final class V3RuntimeCampaignController {
             int forcedChunksAcquired,
             int forcedChunksReleased,
             int forcedChunksRemaining,
+            boolean subjectLeftCore,
+            boolean subjectLeftEnvelope,
+            boolean subjectEscaped,
+            V3CampaignSpatialPolicy.Zone finalSubjectZone,
+            boolean pendingClaimObservedAfterOpen,
+            long firstCoreExitTick,
+            String firstCoreExitEvidence,
+            double maxDistanceFromOrigin,
             List<String> openingEvidence,
             String terminalSnapshot,
             List<String> terminalEvidence,
@@ -802,6 +905,14 @@ public final class V3RuntimeCampaignController {
                     session.forcedChunksAcquired,
                     session.forcedChunksReleased,
                     session.ownedForcedChunks.size(),
+                    session.subjectLeftCore,
+                    session.subjectLeftEnvelope,
+                    session.subjectEscaped,
+                    session.subjectZone,
+                    session.pendingClaimObservedAfterOpen,
+                    session.firstCoreExitTick,
+                    session.firstCoreExitEvidence,
+                    session.maxDistanceFromOrigin,
                     session.openingEvidence,
                     session.terminalSnapshot,
                     session.terminalEvidence,
@@ -832,6 +943,14 @@ public final class V3RuntimeCampaignController {
             out.add("fixtureForcedChunks acquired=" + forcedChunksAcquired
                     + " released=" + forcedChunksReleased
                     + " remaining=" + forcedChunksRemaining);
+            out.add("subjectSpatial leftCore=" + subjectLeftCore
+                    + " leftObservationEnvelope=" + subjectLeftEnvelope
+                    + " escaped=" + subjectEscaped
+                    + " finalZone=" + finalSubjectZone
+                    + " maxDistanceFromOrigin=" + formatDistance(maxDistanceFromOrigin));
+            out.add("pendingClaimObservedAfterOpen=" + pendingClaimObservedAfterOpen
+                    + " firstCoreExitTick=" + printableTick(firstCoreExitTick)
+                    + " firstCoreExitEvidence=" + firstCoreExitEvidence);
             out.add("-- opening evidence --");
             out.addAll(openingEvidence.isEmpty() ? List.of("UNAVAILABLE") : openingEvidence);
             out.add("-- relevant campaign log lines --");

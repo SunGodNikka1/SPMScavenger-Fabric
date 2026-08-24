@@ -135,13 +135,16 @@ disposable fixture to day, then waits up to 200 daytime ticks for production to 
   -> establish PREPARING immediately
   -> execute loaded preset at command origin on next server tick (Overworld only)
   -> record exact bootstrapStartTick after successful function execution
-  -> remove unrelated PlayerMobs inside 32-block arena, pre-window only
-  -> force-load only newly acquired arena chunks
+  -> remove unrelated PlayerMobs inside protected 192-block observation envelope, pre-window only
+  -> force-load only newly acquired 32-block scenario-core chunks
   -> WAITING_GATE0_BOOTSTRAP for >=120 natural ticks; threshold deficits remain diagnostic
   -> adjudicate natural Gate0 PASS / INCOMPLETE / FIXTURE_FAILURE
   -> logged day/weather fixture transition
   -> wait genuine SHELTER_HOLD release
   -> ROW_PRECONDITION_READY + exact WINDOW_OPEN tick
+  -> core exit records SUBJECT_LEFT_CORE + distance/pendingClaim/activeClasses; never leashes subject
+  -> unrelated PlayerMobs entering the 192-block envelope remain EXTERNAL_INTERFERENCE
+  -> geometry rows become spatially INCOMPLETE only beyond 224 blocks; VR-T3j continues its clock
   -> passive transition/terminal capture for the row clock
   -> release exact owned chunk tickets
 
@@ -157,6 +160,17 @@ Run `reset` to remove provably tagged partial fixture entities/schedules.
 state only. After opening, unrelated PlayerMobs are reported rather than removed, and the controller
 does not teleport/steer the subject or suppress declared combat. Normal stop/reset, subject
 unload/death, dimension loss, terminal completion, and server stop release owned chunk tickets.
+
+### Post-open spatial interpretation
+
+`SCENARIO_CORE` is the 32-block target/evidence region and the only controller-forced chunk region.
+It is not a subject leash. `OBSERVATION_ENVELOPE` extends to 192 horizontal blocks, derived from a
+subject opening within the 32-block core plus the production `ExploringGoal` 150-block expedition
+route cap (182, rounded to 192). Unrelated PlayerMobs are sampled there every 20 ticks as
+contamination. The 192–224 region is a recorded escape margin. Beyond 224, crop/storage rows may be
+spatially `INCOMPLETE`; VR-T3j remains readable because its 1000-tick question is authority state,
+not proximity to a core block. Status/report preserve first core exit, maximum distance, current
+zone, pending-claim history, and transition evidence. No distant envelope chunks are fixture-forced.
 A process crash cannot run lifecycle cleanup; use a disposable backed-up world and inspect forced
 chunks before reuse.
 
@@ -219,6 +233,7 @@ Before marking V3 **runtime closed**, review:
 
 | Date | Change |
 | --- | --- |
+| 2026-08-24 | Replaced 32-block subject leash with core/envelope/escape model; T3j preserves exploration-without-mandatory-ownership evidence; contamination envelope remains protected |
 | 2026-08-24 | Discarded premature VR-T3j attempt (`claimedHomeCount < 2`, window never opened); added explicit post-function 120-tick Gate-0 bootstrap boundary; T3k/T3m observation-model gaps remain backlog |
 | 2026-08-24 | Repaired startup containment and Minecraft 1.21 function execution boundary; exact artifact repinned; live rerun not authorized |
 | 2026-08-23 | Added temporary one-command campaign controller, passive row clocks, pre-window contamination isolation, exact opening/terminal evidence, and owned fixture chunk lifecycle; launch remains unauthorized |

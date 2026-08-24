@@ -70,8 +70,9 @@ final class V3ScenarioEvidence {
         lines.add(subjectInventory);
         transitionParts.add(subjectInventory);
 
-        AABB arena = new AABB(origin).inflate(32.0, 16.0, 32.0);
-        List<Mob> fixtureMobs = level.getEntitiesOfClass(Mob.class, arena,
+        double coreRadius = V3CampaignSpatialPolicy.SCENARIO_CORE_RADIUS;
+        AABB scenarioCore = new AABB(origin).inflate(coreRadius, 16.0, coreRadius);
+        List<Mob> fixtureMobs = level.getEntitiesOfClass(Mob.class, scenarioCore,
                 mob -> mob.getTags().stream().anyMatch(tag -> tag.startsWith("spm_vr.")));
         fixtureMobs.sort(Comparator.comparing(mob -> mob.getUUID().toString()));
         for (Mob mob : fixtureMobs.stream().limit(MAX_FIXTURE_MOBS).toList()) {

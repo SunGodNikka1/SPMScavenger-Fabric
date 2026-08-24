@@ -10,8 +10,8 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING` — **V2-TE-W2 CLOSED**; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
-| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G GATE-0-BOOTSTRAP-CONTAINED CAMPAIGN ARTIFACT READY** (1649-test clean build). |
-| **Nearest frontier** | Explicit launch authorization for repaired Task-59 controller artifact SHA-256 `7BD5205B1CFF85608BA53C9C446BC40D00A20E2FBDDCF3FA68A2798CF1CA8577`; VR-T3j remains not started. T3k/T3m observation-model repair remains controller backlog. |
+| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G SPATIALLY-SEPARATED CAMPAIGN ARTIFACT READY** (1653-test clean build). |
+| **Nearest frontier** | Explicit launch authorization for repaired Task-59 controller artifact SHA-256 `626FB459EBCA54A866E50A535399E04D5E07B1CEBA8D5DD0A5F4103DA582F599`; VR-T3j remains not started. T3k/T3m observation-model repair remains controller backlog. |
 | **Last update** | 2026-08-24 (`Agent_Codex` Task-59 campaign startup-containment repair) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
@@ -4939,7 +4939,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social | **IMPLEMENTED + RUNTIME CLOSED** — task-46 / 1.11.0 (A–D) | VR-T1.5a–c **CLOSED** (2026-08-15) |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | `KnownVillager` held until V4+ consumer; other work moved to V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains**, relationship credit, finished-output projection, optional Trade Everything source | **IMPLEMENTED + CLOSED** — VR-T2 vanilla path and V2-TE positive path runtime-confirmed to recorded scope | **VR-T2 PASS**; **VR-T2k PASS (`V2-DEF-003c-R1`)**. VR-T2l, V2-I, and profiling are **DEFERRED / NON-BLOCKING** |
-| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | A/B/C/D1/E/F **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (tasks 52–58; 1589 tests). Broad V3-D2 workstation awareness **DEFERRED**. **V3-G GATE-0-BOOTSTRAP-CONTAINED CAMPAIGN ARTIFACT READY** (task-59; 1649-test temporary controller artifact). | VR-T3a–m below; runtime **UNVERIFIED** until batched campaign (**launch NOT AUTHORIZED**) |
+| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | A/B/C/D1/E/F **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (tasks 52–58; 1589 tests). Broad V3-D2 workstation awareness **DEFERRED**. **V3-G SPATIALLY-SEPARATED CAMPAIGN ARTIFACT READY** (task-59; 1653-test temporary controller artifact). | VR-T3a–m below; runtime **UNVERIFIED** until batched campaign (**launch NOT AUTHORIZED**) |
 | **V4** | Factual site utility + **Place opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**), known traders, utility-driven home promotion and return preference beyond shipped V1.5 return | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
 | **V6** | Player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup, **zombie-villager curing** | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup; curing scenarios to be defined in V6 |
@@ -8585,3 +8585,29 @@ No Minecraft relaunch occurred; repaired runtime sequencing remains `UNVERIFIED`
 **Preserved controller backlog:** VR-T3k's aggregate replant observation does not yet prove
 first-commit versus second-mob invalidation/reacquisition, and VR-T3m's distinct-position mask does
 not yet prove two temporal crop cycles. These are not conflated with this Gate-0 repair.
+
+### Contribution — `Agent_Codex` (Task-59 spatial observation boundaries, 2026-08-24)
+
+**Objection accepted:** the controller's 32-block fixture arena was evidence geometry, but
+`tickObservation` also used it as an immediate subject terminal. For VR-T3j that could hide the
+observable authority failure under test: discretionary exploration leaves the village while no
+mandatory ownership appears, then the witness incorrectly reports fixture `INCOMPLETE`.
+
+**Decision:** separate `SCENARIO_CORE` (32), protected `OBSERVATION_ENVELOPE` (192), escape margin
+(192–224), and `ESCAPED` (>224). The envelope is evidence-derived: a subject opening within the
+32-block core plus production `ExploringGoal.MAX_EXPEDITION_DISTANCE=150` reaches about 182 blocks;
+192 supplies a chunk-aligned observation bound. The extra core width supplies a 224-block final
+geometry boundary. T3j's 1000-tick authority question remains meaningful beyond it and therefore
+never terminates merely for spatial departure; crop/storage rows may become spatially incomplete.
+
+**Evidence contract:** first exit emits `SUBJECT_LEFT_CORE` with horizontal distance,
+`pendingClaim`, and `activeClasses`. Status/report retain first exit, maximum distance, final zone,
+and whether any pending claim appeared after opening. Unrelated PlayerMobs remain contamination
+inside the observation envelope on a 20-tick scan cadence. Only scenario-core chunks are forced;
+the controller never teleports, leashes, freezes, navigates, or path-corrects the subject.
+
+**Validation:** focused V3/datapack suite **52/52 PASS**; `clean build` **1653 tests / 0
+failures/errors/skips**. JAR SHA-256:
+`626FB459EBCA54A866E50A535399E04D5E07B1CEBA8D5DD0A5F4103DA582F599`.
+No Minecraft relaunch occurred; post-open spatial behavior remains `UNVERIFIED`. T3k/T3m remain
+separate observation-model backlog.

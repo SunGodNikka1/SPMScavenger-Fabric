@@ -114,6 +114,22 @@ class V3RuntimeCampaignControllerTest {
                 "numeric Gate-0 adjudication must follow the bootstrap waiting verdict");
     }
 
+    @Test
+    void postOpenCoreExitIsEvidenceRatherThanSubjectLeash() throws IOException {
+        String source = Files.readString(SOURCE);
+        assertFalse(source.contains("if (!arena(session.origin).contains(subject.position()))"));
+        assertTrue(source.contains("SUBJECT_LEFT_CORE"));
+        assertTrue(source.contains("distanceFromOrigin="));
+        assertTrue(source.contains("pendingClaim="));
+        assertTrue(source.contains("activeClasses="));
+        assertTrue(source.contains("V3CampaignSpatialPolicy.spatiallyUninterpretable("));
+        assertTrue(source.contains("observationEnvelope(level, origin)"),
+                "unrelated PlayerMobs must be detected across the protected envelope");
+        assertFalse(source.contains("getNavigation()"));
+        assertFalse(source.contains("teleportTo("));
+        assertFalse(source.contains("setDeltaMovement("));
+    }
+
     private static int count(String value, String needle) {
         int count = 0;
         int index = 0;

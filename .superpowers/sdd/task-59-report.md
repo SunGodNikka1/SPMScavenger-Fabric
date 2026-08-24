@@ -198,3 +198,29 @@ No Minecraft relaunch occurred; the repaired temporal behavior remains `UNVERIFI
 Controller backlog remains separate: VR-T3k must observe first-commit versus second-mob
 invalidate/abandon/reacquire rather than one aggregate replant, and VR-T3m must prove temporal
 cycles rather than distinct replanted positions. Neither observation model changed in this repair.
+
+## Post-open spatial observation repair — 2026-08-24
+
+Code review confirmed that the controller reused its 32-block fixture `arena` as an immediate
+post-open subject terminal. That was a false-negative mechanism for VR-T3j: normal exploration
+could leave the evidence core while mandatory ownership remained absent, only for the controller to
+rename the authority observation `INCOMPLETE`.
+
+The temporary controller now separates a 32-block `SCENARIO_CORE`, a 192-block protected
+`OBSERVATION_ENVELOPE`, a 192–224 escape margin, and an `ESCAPED` state. The envelope derives from
+the core radius plus `ExploringGoal`'s pinned 150-block expedition route cap, rounded to 192; the
+extra core width gives geometry-dependent rows a 224-block final relevance boundary. T3j is exempt
+from spatial termination because its fixed 1000-tick evidence is authority state rather than a
+crop/container interaction. Core chunks remain the only forced chunks.
+
+First departure records `SUBJECT_LEFT_CORE`, horizontal distance, pending claim, and active
+classes. Reports retain first exit, maximum distance, final zone, and whether any pending claim was
+observed after open. Unrelated PlayerMobs are checked across the observation envelope every 20
+ticks. No navigation, teleport, leash, freeze, or path correction was added.
+
+Focused V3/datapack suite: **52/52 PASS**. Full `clean build`: **1653 tests**, zero
+failures/errors/skips. JAR: `build/libs/spmscavenger-1.11.0.jar` (1,224,603 bytes), SHA-256
+`626FB459EBCA54A866E50A535399E04D5E07B1CEBA8D5DD0A5F4103DA582F599`.
+Package audit: **39** temporary V3 debug entries (**3** spatial-policy entries), **0** upstream
+Trade Everything classes, **5** project-owned TE compatibility classes, and **0** removed V2
+witness entries. No Minecraft relaunch occurred; live spatial evidence remains `UNVERIFIED`.

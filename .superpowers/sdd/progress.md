@@ -20,8 +20,8 @@
 | Minecraft / `runClient` / batched VR-T3 execution | **NOT AUTHORIZED** |
 
 **Checkpoint before runtime launch:** `task-59-prelaunch-report.md` + matrix + executable fixtures.
-Replacement artifact candidate: Gate-0-bootstrap-contained temporary V3 inspector + automated campaign controller JAR SHA-256
-`7BD5205B1CFF85608BA53C9C446BC40D00A20E2FBDDCF3FA68A2798CF1CA8577`; 1649 tests, 0 failures.
+Replacement artifact candidate: spatially separated temporary V3 inspector + automated campaign controller JAR SHA-256
+`626FB459EBCA54A866E50A535399E04D5E07B1CEBA8D5DD0A5F4103DA582F599`; 1653 tests, 0 failures.
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -112,6 +112,6 @@ Task 58: brief v1.1 — `task-58-brief.md` (V3-F unified ComposterWorkFacts + Co
 Task 58: Gate 0 PASS — `task-58-gate0-report.md`
 Task 58: complete — V3-F STATIC-BEHAVIORAL ACCEPT (`task-58-report.md`, CLOSE-58-1…3)
 
-Task 59: Gate 0 **RUNTIME PASS**; premature VR-T3j Gate-0 attempt discarded before window open; explicit post-function 120-tick bootstrap boundary passes 48 focused / 1649 full tests (SHA `7BD5205B...A8577`); no relaunch, VR-T3 rows remain `UNVERIFIED` (`task-59-prelaunch-report.md`)
+Task 59: Gate 0 **RUNTIME PASS**; 32-block subject-leash removed in favor of core/envelope/escape evidence; 52 focused / 1653 full tests (SHA `626FB459...2F599`); no relaunch, VR-T3 rows remain `UNVERIFIED` (`task-59-prelaunch-report.md`)
 
 No commits unless user requests. No Minecraft launches unless separately approved.
