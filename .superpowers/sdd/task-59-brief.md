@@ -14,6 +14,8 @@ it does **not** add new village-work features, mixins, or `MandatoryOwnership` p
 
 **Brief revision history:**
 
+- v1.3 — settlement-row shelter-release precondition (2026-08-23): keep Gate 0 independent;
+  require no live `SHELTER_HOLD` before a settlement-dependent row starts its evidence window
 - v1.2 — Gate-0 witness completion (2026-08-23): remembered settlement + population facts +
   explicit PASS/FIXTURE_FAILURE/INCOMPLETE via non-creating, non-writing reads only
 - v1.1 — runtime-preparation witness addendum (2026-08-23): one-shot passive V3 inspector,
@@ -224,3 +226,30 @@ without changing production consumers or returned production semantics.
 **Forbidden:** `refreshNow`, refresh scheduling, cache creation/write/invalidation, POI acquisition,
 HOME-ticket changes, Brain/sleep NBT, village-memory allocation/recording, or manufactured evidence.
 Existing authority/activity reporting remains unchanged.
+
+### v1.3 settlement-row readiness
+
+The supplied Gate-0 runtime snapshot is accepted as `RUNTIME_CONFIRMED`: remembered settlement
+facts were `COMPLETE + FRESH` and met the numeric thresholds. It also showed a distinct fixture
+condition at reported day time 912: `SeekShelterGoal:SHELTER_HOLD` still owned mandatory authority.
+No settlement-dependent V3 work row may begin its evidence window while that activity remains live.
+
+Extend the existing one-shot readout with an independent row-precondition verdict:
+
+- no `SHELTER_HOLD` → `RowPrecondition=READY`;
+- `SHELTER_HOLD` before daytime → `RowPrecondition=WAITING_DAYTIME`;
+- `SHELTER_HOLD` during daytime → `RowPrecondition=FIXTURE_INCOMPLETE`.
+
+Gate 0 and row readiness are deliberately separate. A row may start only when its required Gate-0
+verdict is `PASS` **and** `RowPrecondition=READY`. `FIXTURE_INCOMPLETE` is fixture evidence, not a
+V3 behavior failure, and must not start the row clock.
+
+The inspector may read `ServerLevel.isDay()` and the already-produced activity observation only.
+It must not set time, stop/restart a Goal, clear authority, navigate, refresh settlement state, or
+otherwise manufacture readiness.
+
+**Must happen:** a daytime snapshot with live `SHELTER_HOLD` reports exact
+`RowPrecondition=FIXTURE_INCOMPLETE`; a snapshot without the hold reports `READY`.
+
+**Must not happen:** Gate 0 is downgraded because of shelter state; the witness changes time or
+Goal/authority state; an evidence window begins from `WAITING_DAYTIME` or `FIXTURE_INCOMPLETE`.

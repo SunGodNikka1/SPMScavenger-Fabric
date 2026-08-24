@@ -23,7 +23,8 @@ windows, and falsifiers live in `docs/porting/VR-T3-RUNTIME-MATRIX.md`; record r
 3. Start or reload the world, then run `/function spm_vr:help`.
 4. Stand on flat overworld ground with clear space at least 32 blocks around the executor position.
 5. Run one preset. For settlement rows, wait at least 120 ticks and apply matrix Gate 0 before
-   judging product behavior.
+   judging product behavior. Then transition or wait until daytime and inspect again. Do not start
+   the row evidence window unless the readout says `RowPrecondition=READY`.
 6. Capture the starting game tick with `/time query gametime`, run
    `/spmscavenger debug v3 inspect @e[tag=spm_vr.subject,limit=1]`, and repeat snapshots at the
    row's meaningful transition and terminal window.
@@ -67,3 +68,8 @@ After a settlement preset has run for at least 120 ticks, the same inspect comma
 `INCOMPLETE` means normal production has not yet produced readable current facts. Wait for its
 ordinary cadence and sample again; do not invoke refresh or inject HOME/sleep state. Stop the
 campaign on `FIXTURE_FAILURE` and preserve the output.
+
+Gate 0 is independent of activity release. The inspector also reports daytime, `SHELTER_HOLD`, and
+one row-precondition verdict. `WAITING_DAYTIME` means transition/wait and resample.
+`FIXTURE_INCOMPLETE` means shelter remained active during daytime: preserve the snapshot and do not
+start the settlement-row clock. The command never changes time or stops shelter itself.

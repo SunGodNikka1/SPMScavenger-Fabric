@@ -1,7 +1,8 @@
 # VR-T3 runtime matrix (V3-G closure)
 
-**Status:** `APPROVED` for preparation — fixtures **IMPLEMENTED** (pre-launch); **runtime execution NOT
-AUTHORIZED** until separate User launch approval (AGENTS.md Gate 6).
+**Status:** fixtures **IMPLEMENTED**; Gate-0 runtime snapshot **CONFIRMED**; no settlement-dependent
+row has started. Any launch with the newly rebuilt shelter-precondition artifact requires separate
+approval (AGENTS.md Gate 6).
 
 **Task:** task-59 / V3-G · **Brief:** `.superpowers/sdd/task-59-brief.md`  
 **RFC:** `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` — phase closure rule (VR-T3f non-applicable)  
@@ -47,7 +48,8 @@ AUTHORIZED** until separate User launch approval (AGENTS.md Gate 6).
 | Evidence record | `docs/porting/VR-T3-RUNTIME-EVIDENCE.md` |
 | Environment / JAR hashes | `docs/porting/VR-T3-RUNTIME-ENVIRONMENT.md` |
 | Static/build baseline | see `task-59-prelaunch-report.md` |
-| **Minecraft campaign** | **NOT AUTHORIZED** — User must approve `runClient` / batched VR-T3 separately |
+| Gate-0 runtime sample | **PASS / RUNTIME_CONFIRMED** at game tick 1240; row start refused by the subsequently locked shelter-release precondition |
+| **Replacement-artifact campaign** | **NOT AUTHORIZED** — User must approve the new exact JAR before another launch |
 
 ---
 
@@ -103,6 +105,21 @@ fixture threshold fails.
 | Scavenger settlement observation | inspector reports `settlement observed: YES` and exact anchor/identity | Continue only when population facts also readable; otherwise `INCOMPLETE` |
 | V3-E population facts | inspector reports `COMPLETE`, `FRESH`, `adultVillagerCount >= 2`, `claimedHomeCount >= 2`, `currentFreeHomeCapacity >= 1` | **STOP** on explicit `Gate0=FIXTURE_FAILURE`; wait/re-sample on `INCOMPLETE` |
 | Gate-0 verdict | inspector emits `Gate0=PASS` | Do not execute population-dependent closure rows until PASS |
+
+### Settlement-row evidence-window precondition
+
+Gate 0 proves settlement/population fixture truth; it does not prove that mandatory activity has
+released the subject. Immediately before any settlement-dependent row begins its evidence window,
+transition or wait until daytime and run the inspector again.
+
+| Readout | Disposition |
+| --- | --- |
+| `RowPrecondition=READY` | No live `SHELTER_HOLD`; the row may start if its other prerequisites pass |
+| `RowPrecondition=WAITING_DAYTIME` | Shelter is still active before daytime; do not start the row; transition/wait and inspect again |
+| `RowPrecondition=FIXTURE_INCOMPLETE` | Shelter remained active during daytime; do not start the row or classify V3 behavior; preserve evidence as fixture-incomplete |
+
+The witness reads `ServerLevel.isDay()` and the existing activity observation. It does not change
+time, stop the shelter Goal, or clear authority. `Gate0=PASS` remains valid when row readiness fails.
 
 **On `FIXTURE_FAILURE`:**
 
@@ -162,6 +179,7 @@ Before marking V3 **runtime closed**, review:
 | Date | Change |
 | --- | --- |
 | 2026-08-23 | Gate-0 witness completion — remembered settlement identity + full population facts + explicit PASS/FIXTURE_FAILURE/INCOMPLETE |
+| 2026-08-23 | Gate-0 runtime PASS recorded; added independent no-`SHELTER_HOLD` settlement-row precondition after daytime transition |
 | 2026-08-23 | Runtime-validation packet — one-shot hidden-authority inspector, datapack help/cleanup, operator runbook, evidence worksheet, new artifact approval gate |
 | 2026-08-22 | Initial matrix — task-59 prep; `playermob` 0.89.0; VR-T3f excluded |
 | 2026-08-23 | Remove fake HOME/sleep NBT from bootstrap; settlement preflight gate 0; structural test inverted |

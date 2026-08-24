@@ -1,6 +1,6 @@
 # VR-T3 runtime evidence record
 
-**Status:** `EMPTY / UNVERIFIED` — fill only during an explicitly authorized Task-59 campaign.  
+**Status:** Gate 0 `RUNTIME_CONFIRMED`; settlement-dependent row evidence remains `UNVERIFIED`.
 **Matrix:** `docs/porting/VR-T3-RUNTIME-MATRIX.md`  
 **Environment:** `docs/porting/VR-T3-RUNTIME-ENVIRONMENT.md`
 
@@ -29,6 +29,33 @@
 | Inspector `completeness` / `freshness` | — |
 | Inspector `Gate0` line + reason | — |
 | Verdict (`PASS` / `FIXTURE_FAILURE` / `INCOMPLETE`) | — |
+
+### Gate-0 sample R1 — 2026-08-23
+
+User-supplied `[spmscavenger/v3-witness]` output at game tick **1240** records:
+
+| Evidence | Result |
+| --- | --- |
+| Reported day time | `912` |
+| Settlement | `YES`; overworld anchor `-20,-60,15` |
+| Population facts | adults `2`; usable HOME capacity `3`; claimed HOME `2`; free HOME `1` |
+| Quality | `COMPLETE`, `FRESH`, observed at tick `1155` |
+| Gate 0 | `PASS — settlement and population thresholds readable` |
+| Activity/authority | `SeekShelterGoal:SHELTER_HOLD`; mandatory permission and Village Work both denied by `MANDATORY_AUTHORITY` |
+| Independent corroboration | Opinion readout: `Holding night shelter (mandatory)`, `SHELTER_HOLD / SETTLED` |
+
+**Disposition:** Gate 0 is `RUNTIME_CONFIRMED`. No settlement-dependent row began. Under the locked
+row-start contract, the reported daytime + live shelter hold is `FIXTURE_INCOMPLETE`; re-run the
+new inspector after shelter release and require `RowPrecondition=READY` before opening a row window.
+
+### Settlement-row precondition
+
+| Evidence | Result |
+| --- | --- |
+| Gate0 remains independent | `PASS` |
+| No `SHELTER_HOLD` before row start | **NO** in R1 |
+| RowPrecondition | `FIXTURE_INCOMPLETE` (derived from direct R1 time/activity evidence; exact new command line awaits a new approved artifact run) |
+| Row clock started | **NO** |
 
 Do not continue population-dependent rows after `FIXTURE_FAILURE`. Do not inject HOME or sleeping
 NBT to repair the fixture.

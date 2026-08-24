@@ -8439,3 +8439,34 @@ behavior remain `UNVERIFIED` until an explicitly approved launch.
 
 **Frontier after:** Task-59/V3-G is **GATE-0-COMPLETE LAUNCH PACKET READY**. The new exact artifact
 supersedes the prior witness hash and requires fresh launch approval; no Minecraft process started.
+
+### Contribution — `Agent_Codex` (Gate-0 R1 + settlement-row shelter precondition, 2026-08-23)
+
+**Runtime evidence (`RUNTIME_CONFIRMED`):** the supplied tick-1240 snapshot reported an overworld
+settlement at `-20,-60,15`, population facts `2 adults / 3 usable HOME / 2 claimed / 1 free`,
+`COMPLETE + FRESH`, and `Gate0=PASS`. The same snapshot and the independent Opinion readout both
+reported `SeekShelterGoal:SHELTER_HOLD` as mandatory authority at reported day time 912. Therefore
+Gate 0 passed, but no settlement-work evidence window was validly open.
+
+**Decision:** settlement-dependent row readiness is a separate passive precondition. No live
+`SHELTER_HOLD` permits `READY`; shelter before daytime is `WAITING_DAYTIME`; shelter remaining in
+daytime is `FIXTURE_INCOMPLETE`. A row starts only after its required Gate 0 passes and row readiness
+is `READY`. Failure of the latter does not rewrite the former or count as a V3 product failure.
+
+**Alternatives:** (A) let the observation window include shelter release — rejected because the
+window would begin while Village Work is objectively denied and measure fixture latency as product
+behavior; (B) have the fixture stop shelter or clear mandatory authority — rejected because it
+manufactures admission; (C) passive precondition over shared activity truth — selected. Strongest
+objection: a nighttime `WAITING_DAYTIME` adds an extra operator sample; that cost preserves the
+distinction between a normal night hold and an abnormal daytime hold.
+
+**Acceptance:** must report exact `FIXTURE_INCOMPLETE` for daytime + hold and `READY` without hold;
+must not set time, stop Goals, clear authority, downgrade Gate 0, or begin a row from a non-ready
+verdict. The supplied R1 is recorded as Gate-0 PASS / row fixture-incomplete; all VR-T3 behavior rows
+remain open.
+
+**Static/package result:** focused V3/facts-cache tests pass 15/15; `clean build` passes **1628 tests
+/ 0 failures/errors/skips**. Replacement instrumented JAR SHA-256:
+`766F099FBC004A007A615DD044A9243901F8FBF621A66EF3A8BBC33C6A3CCA40`; nine expected V3 witness
+class entries, zero upstream Trade Everything classes, five project-owned TE compatibility classes,
+and zero removed V2 witness entries. This new artifact has not been launched.

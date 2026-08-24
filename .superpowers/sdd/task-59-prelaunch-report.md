@@ -172,3 +172,31 @@ authority are unchanged. Runtime Gate-0 behavior remains `UNVERIFIED`; no Minecr
 Three Gate-0 source probes returned `NOT FOUND`: (1) authority/profile/storage/inventory/executor
 mutation, (2) refresh/POI/Brain/memory/cache evidence manufacturing, and (3) retained session/tick
 hook/Goal/navigation calls.
+
+---
+
+## Settlement-row shelter-release checkpoint — 2026-08-23
+
+The first live Gate-0 sample passed its settlement thresholds but exposed a fixture-level owner:
+`SeekShelterGoal:SHELTER_HOLD` remained active at reported day time 912. The row clock did not start.
+The new artifact keeps Gate 0 independent and reports:
+
+- `READY` when no shelter hold is active;
+- `WAITING_DAYTIME` when shelter is active before daytime;
+- `FIXTURE_INCOMPLETE` when shelter remains active during daytime.
+
+| Verification | Result |
+| --- | --- |
+| Initial RED | focused compile failed because `V3RowPrecondition` did not exist |
+| Focused V3 + facts-cache tests | **15/15 PASS** |
+| `clean build` | **PASS** — 1628 tests, 0 failures/errors/skips |
+| Remapped JAR | `build/libs/spmscavenger-1.11.0.jar` |
+| SHA-256 | `766F099FBC004A007A615DD044A9243901F8FBF621A66EF3A8BBC33C6A3CCA40` |
+| Temporary V3 entries | **9** |
+| Upstream Trade Everything classes | **0** |
+| Project-owned TE compat classes | **5** (plus one package directory entry) |
+| Removed V2 witness entries | **0** |
+
+Three source probes returned `NOT FOUND`: (1) time or mandatory-authority mutation, (2) Goal stop/
+admission/navigation or executor mutation, and (3) retained session/tick-hook or settlement refresh
+state. No Minecraft process used the replacement artifact.

@@ -96,3 +96,21 @@ pass 12/12 and `clean build` passes **1625 tests / 0 failures/errors/skips**. Ne
 SHA-256: `1185EBCF362CB5409FC0D61DC4A49EE00016385FAF402C0244C8DC9DF7CD22C6`.
 
 No production semantic or Minecraft runtime claim is upgraded by these static results.
+
+## Gate-0 R1 / shelter-release addendum — 2026-08-23
+
+User-supplied runtime output confirms Gate 0 at game tick 1240: remembered overworld settlement
+`-20,-60,15`, `2` adult villagers, `3` usable HOME capacity, `2` claimed, `1` free, and
+`COMPLETE + FRESH`. The same snapshot showed `SeekShelterGoal:SHELTER_HOLD` retaining mandatory
+authority at reported day time 912. Gate 0 is therefore `RUNTIME_CONFIRMED`, while no V3 work-row
+window started.
+
+The temporary one-shot inspector now emits a separate pure row-precondition verdict from
+`ServerLevel.isDay()` and the existing activity observation: `READY`, `WAITING_DAYTIME`, or exact
+`FIXTURE_INCOMPLETE`. It neither mutates time nor stops/clears a Goal or authority. Focused V3/cache
+tests pass **15/15**; `clean build` passes **1628 tests / 0 failures/errors/skips**. Instrumented JAR
+SHA-256: `766F099FBC004A007A615DD044A9243901F8FBF621A66EF3A8BBC33C6A3CCA40`.
+
+Package audit: nine expected V3 witness/assessment/precondition entries, zero upstream Trade
+Everything classes, five project-owned TE compatibility classes, and zero removed V2 witness
+entries. The replacement artifact has not been launched and requires separate approval.

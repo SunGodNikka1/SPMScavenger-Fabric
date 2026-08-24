@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.noobk.spmscavenger.PlayerMobs;
 import com.noobk.spmscavenger.SpmScavenger;
 import com.noobk.spmscavenger.activity.ActivityObservationService;
+import com.noobk.spmscavenger.activity.ActivityClass;
 import com.noobk.spmscavenger.activity.MandatoryOwnership;
 import com.noobk.spmscavenger.activity.MandatoryOwnershipClaim;
 import com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry;
@@ -85,6 +86,10 @@ public final class V3RuntimeWitnessCommands {
         VillageWorkAdmission.Result villageWork = VillageWorkAdmission.evaluate(
                 profile, observation, mob.getTarget() != null, claim, now);
         Gate0Snapshot gate0 = captureGate0(level, mob);
+        boolean daytime = level.isDay();
+        boolean shelterHold = observation.activeClasses().contains(ActivityClass.SHELTER_HOLD);
+        V3RowPrecondition.Result rowPrecondition =
+                V3RowPrecondition.evaluate(daytime, shelterHold);
 
         List<String> lines = new ArrayList<>();
         lines.add("=== V3 Runtime Witness Snapshot ===");
@@ -121,6 +126,11 @@ public final class V3RuntimeWitnessCommands {
                 .orElse("populationFacts=UNAVAILABLE completeness=UNAVAILABLE freshness=UNAVAILABLE"));
         lines.add("Gate0=" + gate0.assessment().verdict()
                 + " reason=" + gate0.assessment().reason());
+        lines.add("daytime=" + (daytime ? "YES" : "NO")
+                + " dayTime=" + level.getDayTime()
+                + " shelterHold=" + (shelterHold ? "YES" : "NO"));
+        lines.add("RowPrecondition=" + rowPrecondition.verdict()
+                + " reason=" + rowPrecondition.reason());
 
         for (String line : lines) {
             source.sendSuccess(() -> Component.literal(line), false);

@@ -33,6 +33,9 @@ class V3RuntimeWitnessCommandsTest {
         assertTrue(source.contains("currentFreeHomeCapacity="));
         assertTrue(source.contains("completeness="));
         assertTrue(source.contains("freshness="));
+        assertTrue(source.contains("ActivityClass.SHELTER_HOLD"));
+        assertTrue(source.contains("level.isDay()"));
+        assertTrue(source.contains("RowPrecondition="));
     }
 
     @Test
@@ -60,6 +63,9 @@ class V3RuntimeWitnessCommandsTest {
         assertFalse(source.contains("Brain"));
         assertFalse(source.contains("SleepingX"));
         assertFalse(source.contains("setDirty("));
+        assertFalse(source.contains("setDayTime("));
+        assertFalse(source.contains("setTime("));
+        assertFalse(source.contains("wrapped.stop()"));
     }
 
     @Test
