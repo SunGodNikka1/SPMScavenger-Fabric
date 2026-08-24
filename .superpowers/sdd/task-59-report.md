@@ -73,3 +73,15 @@ pre-W2.4 hash to clean production JAR SHA-256
 `5EF3639FF03DA20191C3C83BCF662461DB081A8ABFA00E2CEBDC8C93A8B49BF9`. Focused fixture validation
 passed 14/14 and `.\gradlew.bat clean build` passed 1614 tests with zero failures/errors/skips.
 There were no V3 production Java changes. Runtime closure remains `UNVERIFIED` and unlaunched.
+
+## Runtime-preparation addendum — 2026-08-23
+
+Task-59 now has an operator-complete launch packet. A temporary one-shot V3 witness command closes
+the D-VR-084 hidden-claim evidence gap without retaining state or acquiring production authority;
+the datapack now exposes help, honest entity/schedule-only cleanup, a standalone runbook, and a
+13-row evidence worksheet. RED/GREEN witness tests and the focused fixture suite pass. Full
+`clean build` passes **1618 tests / 0 failures/errors/skips**. Instrumented JAR SHA-256:
+`063585AA5782B576E5CCFDAD5739B133842173EF17232CEBF7B4DA95B01AA628`.
+
+Runtime remains `UNVERIFIED`. The temporary command/test/registration must be removed after accepted
+evidence, followed by a clean production rebuild. No Minecraft launch occurred.

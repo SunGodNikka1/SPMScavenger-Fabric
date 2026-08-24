@@ -89,6 +89,31 @@ class SpmVrDatapackStructureTest {
     }
 
     @Test
+    void operatorEntrypointsAndRunbookExist() throws IOException {
+        Path help = DATAPACK_ROOT.resolve("data/spm_vr/function/help.mcfunction");
+        Path cleanup = DATAPACK_ROOT.resolve("data/spm_vr/function/cleanup.mcfunction");
+        Path readme = DATAPACK_ROOT.resolve("README.md");
+        assertTrue(Files.isRegularFile(help), "missing spm_vr:help");
+        assertTrue(Files.isRegularFile(cleanup), "missing spm_vr:cleanup");
+        assertTrue(Files.isRegularFile(readme), "missing standalone operator README");
+
+        String helpBody = Files.readString(help, StandardCharsets.UTF_8);
+        for (String id : PRESET_IDS) {
+            assertTrue(helpBody.contains("spm_vr:scenario/" + id),
+                    () -> "help must list preset " + id);
+        }
+        String cleanupBody = Files.readString(cleanup, StandardCharsets.UTF_8);
+        assertTrue(cleanupBody.contains("function spm_vr:_lib/reset"));
+        assertTrue(cleanupBody.toLowerCase().contains("blocks are preserved"),
+                "cleanup must disclose that world blocks are not provenance-safe to erase");
+
+        String readmeBody = Files.readString(readme, StandardCharsets.UTF_8);
+        assertTrue(readmeBody.contains("/spmscavenger debug v3 inspect"));
+        assertTrue(readmeBody.contains("VR-T3-RUNTIME-EVIDENCE.md"));
+        assertTrue(readmeBody.contains("does not force"));
+    }
+
+    @Test
     void scenarioFunctionsRejectBoundedRepairWording() throws IOException {
         for (String id : PRESET_IDS) {
             String body = Files.readString(SCENARIO_ROOT.resolve(id + ".mcfunction"),

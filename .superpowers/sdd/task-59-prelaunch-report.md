@@ -94,3 +94,45 @@ fixture semantics changed during this reconciliation.
 **AV-1 boundary:** fixture structure, artifact identity, compile, tests, and packaging are
 `CONFIRMED`. All live VR-T3 behavior remains `UNVERIFIED`; Minecraft launch still requires explicit
 authorization.
+
+---
+
+## Runtime-validation packet — 2026-08-23
+
+The earlier clean-artifact checkpoint is superseded for launch purposes by a temporary instrumented
+artifact. Code inspection established that D-VR-084's pending claim was not exposed by the existing
+running-goal readout, so the matrix could not collect the proof class it required.
+
+### Delivered
+
+- one-shot `/spmscavenger debug v3 inspect <mob>` snapshot of profile, running activities, pending
+  claim, shared mandatory permission, and Village Work admission;
+- stable transition-on-request log prefix `[spmscavenger/v3-witness]`;
+- `/function spm_vr:help` and provenance-safe `/function spm_vr:cleanup`;
+- standalone datapack operator runbook and `VR-T3-RUNTIME-EVIDENCE.md` worksheet;
+- explicit post-acceptance removal manifest in task brief v1.1.
+
+The command owns no session or tick hook and retains no mob/world reference. Structural negative
+controls forbid claim publish/release, Goal invocation, navigation, profile/storage/inventory
+mutation, and trade execution.
+
+### Verification evidence (`CONFIRMED` for static/package scope)
+
+| Check | Result |
+| --- | --- |
+| Witness tests RED | 3/3 failed with `NoSuchFileException` before implementation |
+| Witness tests GREEN | 3/3 pass |
+| Combined witness + datapack focused suite | **18/18 pass** (15 datapack + 3 witness) |
+| `.\gradlew.bat clean build` | **PASS** — 1618 tests, 0 failures/errors/skips |
+| Remapped JAR | `build/libs/spmscavenger-1.11.0.jar` |
+| SHA-256 | `063585AA5782B576E5CCFDAD5739B133842173EF17232CEBF7B4DA95B01AA628` |
+| Temporary V3 witness JAR entries | **1** — expected |
+| Packaged upstream Trade Everything classes | **0** |
+| Project-owned TE compatibility classes | **5** |
+| Removed V2-TE witness entries | **0** |
+
+Three explicit source probes returned `NOT FOUND`: (1) authority/profile/storage mutation calls,
+(2) Goal admission/navigation/executor calls, and (3) retained session/tick-hook state.
+
+**AV-1 boundary:** the witness's read-only code shape and artifact identity are `CONFIRMED`.
+Minecraft behavior remains `UNVERIFIED`; no runtime process was launched.

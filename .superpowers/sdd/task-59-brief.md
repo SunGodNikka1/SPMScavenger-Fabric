@@ -14,6 +14,8 @@ it does **not** add new village-work features, mixins, or `MandatoryOwnership` p
 
 **Brief revision history:**
 
+- v1.1 — runtime-preparation witness addendum (2026-08-23): one-shot passive V3 inspector,
+  datapack help/cleanup, evidence worksheet, artifact reapproval; still no Minecraft launch
 - v1 — initial brief (User authorized Task-59 prep 2026-08-22)
 
 **Target:** `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`
@@ -147,3 +149,56 @@ baseline regresses. Runtime closure remains `UNVERIFIED`.
 ## Report path
 
 `.superpowers/sdd/task-59-report.md`
+
+---
+
+## v1.1 runtime-preparation witness addendum — 2026-08-23
+
+### Evidence gap
+
+Most VR-T3 outcomes are world-visible, but D-VR-084 specifically requires proof of a live pending
+`MandatoryOwnershipClaim`. The existing client activity inspector reports running goals; it does not
+expose that registry claim. Inferring pending authority from movement or an active Gather goal would
+not satisfy AV-1.
+
+### Authorized preparation surface
+
+This v1.1 addendum narrowly supersedes the earlier preparation-phase prohibition on production-tree
+Java changes for this temporary diagnostic only. It does not authorize any V3 behavior change.
+
+Add one temporary operator-only snapshot command:
+
+```text
+/spmscavenger debug v3 inspect <mob>
+```
+
+It may read the target UUID/profile, current running-goal classifications, live pending claim,
+shared `MandatoryOwnership` permission, and `VillageWorkAdmission` result. It must not retain a
+session or entity/world reference and must not call Goal admission/continuation, navigation,
+inventory mutation, claim publish/release, profile/storage mutation, or an executor.
+
+Also add `spm_vr:help`, explicit entity/schedule cleanup, a standalone operator README, and a
+per-row evidence worksheet. These are preparation surfaces only; production behavior remains the
+sole authority.
+
+### Removal manifest
+
+After accepted runtime evidence, remove:
+
+- `V3RuntimeWitnessCommands` and its tests;
+- its registration call in `SpmScavenger`;
+- any wording that requires the temporary command for future normal play.
+
+Preserve the runtime evidence, datapack/runbook, and production V3 architecture.
+
+### v1.1 acceptance
+
+**Must happen:** the inspector reports a pending claim and the exact shared admission outcome from
+production-owned state; the datapack exposes help and bounded fixture cleanup; every row has a place
+for tick-bounded evidence.
+
+**Must not happen:** the inspector publishes/releases authority, changes profile/storage/inventory,
+forces a Goal, calls `canUse`/`canContinueToUse`, navigates, or launches Minecraft.
+
+Changing this temporary diagnostic surface changes the remapped JAR hash; return a clean build,
+test count, package audit, path, and SHA-256 for separate launch approval.

@@ -97,6 +97,9 @@ public class SpmScavenger implements ModInitializer {
         CommandRegistrationCallback.EVENT.register(
                 (dispatcher, registryAccess, environment) ->
                         VillageProfileCommands.register(dispatcher));
+        CommandRegistrationCallback.EVENT.register(
+                (dispatcher, registryAccess, environment) ->
+                        com.noobk.spmscavenger.debug.V3RuntimeWitnessCommands.register(dispatcher));
         ScavengerConfig cfg = ScavengerConfig.get();
 
         switch (PlayerMobs.state()) {

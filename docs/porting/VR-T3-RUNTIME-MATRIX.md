@@ -42,6 +42,9 @@ AUTHORIZED** until separate User launch approval (AGENTS.md Gate 6).
 | `spm_vr` preset manifest | `test-datapacks/phase-village-raid/PRESET-MANIFEST.md` |
 | `spm_vr` executable fixtures | **COMPLETE** — `test-datapacks/phase-village-raid/data/spm_vr/function/` |
 | Structural datapack validation | `SpmVrDatapackStructureTest` (no Minecraft boot) |
+| Operator runbook | `test-datapacks/phase-village-raid/README.md`; `/function spm_vr:help` |
+| Passive hidden-authority snapshot | `/spmscavenger debug v3 inspect <mob>` — temporary one-shot read only |
+| Evidence record | `docs/porting/VR-T3-RUNTIME-EVIDENCE.md` |
 | Environment / JAR hashes | `docs/porting/VR-T3-RUNTIME-ENVIRONMENT.md` |
 | Static/build baseline | see `task-59-prelaunch-report.md` |
 | **Minecraft campaign** | **NOT AUTHORIZED** — User must approve `runClient` / batched VR-T3 separately |
@@ -121,10 +124,14 @@ Execute in one batched session where possible; re-seed world between clusters if
 | Artifact | Path / method |
 | --- | --- |
 | Game log | `logs/latest.log` — grep `spmscavenger`, `VillageWork`, `MandatoryOwnership`, `Compost`, `Harvest` |
-| Mob readout | in-game opinion/activity readout if enabled |
+| Mob readout | in-game opinion/activity readout if enabled; one-shot `/spmscavenger debug v3 inspect @e[tag=spm_vr.subject,limit=1]` for running goals, pending claim, shared authority, and Village Work admission |
 | Profiler | only if perf row added later — not a V3-G gate |
 | Row record | per-id PASS/FAIL/WEIRD with **tick range covering the min observation window** and falsifier quote |
 | Environment | JAR hashes from `VR-T3-RUNTIME-ENVIRONMENT.md` verified on instance |
+
+The temporary inspector logs each snapshot with stable prefix `[spmscavenger/v3-witness]`. It has
+no session, tick hook, retained entity/world reference, or mutation authority. Remove it and rebuild
+the clean production artifact after accepted runtime evidence; preserve the evidence record.
 
 **Banned as proof:** build success; unit test pass alone for runtime rows; subjective play without log quote; observation shorter than the row's minimum window.
 
@@ -144,6 +151,7 @@ Before marking V3 **runtime closed**, review:
 
 | Date | Change |
 | --- | --- |
+| 2026-08-23 | Runtime-validation packet — one-shot hidden-authority inspector, datapack help/cleanup, operator runbook, evidence worksheet, new artifact approval gate |
 | 2026-08-22 | Initial matrix — task-59 prep; `playermob` 0.89.0; VR-T3f excluded |
 | 2026-08-23 | Remove fake HOME/sleep NBT from bootstrap; settlement preflight gate 0; structural test inverted |
 | 2026-08-22 | Pre-launch repair — VR-T3c atomic contract; per-row observation windows; fixture gate COMPLETE; environment pin |

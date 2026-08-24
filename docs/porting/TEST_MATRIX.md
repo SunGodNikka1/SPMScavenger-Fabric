@@ -664,6 +664,7 @@ remain `UNVERIFIED` (AV-1).
 **Brief:** `.superpowers/sdd/task-59-brief.md` · **Runtime matrix:** `docs/porting/VR-T3-RUNTIME-MATRIX.md`  
 **Preset manifest:** `test-datapacks/phase-village-raid/PRESET-MANIFEST.md`  
 **Executable datapack:** `test-datapacks/phase-village-raid/` (`spm_vr`) — structural test `SpmVrDatapackStructureTest`  
+**Operator/evidence packet:** datapack `README.md` + `docs/porting/VR-T3-RUNTIME-EVIDENCE.md`; temporary one-shot `/spmscavenger debug v3 inspect <mob>` exposes hidden pending-authority truth without mutating it
 **VR-T3f:** **non-applicable** (V3-D2 deferred). Runtime campaign **NOT AUTHORIZED**.
 
 | ID | Static evidence | Runtime |
