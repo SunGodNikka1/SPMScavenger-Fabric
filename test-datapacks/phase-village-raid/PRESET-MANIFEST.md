@@ -2,7 +2,7 @@
 
 **Namespace:** `spm_vr`  
 **Datapack root:** `test-datapacks/phase-village-raid/`  
-**Status:** **executable fixtures implemented** — structural validation via `SpmVrDatapackStructureTest`; **Minecraft campaign NOT AUTHORIZED**.
+**Status:** **executable fixtures + temporary automated controller implemented** — structural validation via `SpmVrDatapackStructureTest`; **Minecraft campaign NOT AUTHORIZED**.
 
 **Matrix:** `docs/porting/VR-T3-RUNTIME-MATRIX.md`  
 **Environment:** `docs/porting/VR-T3-RUNTIME-ENVIRONMENT.md`  
@@ -39,10 +39,13 @@ Full runbook: `README.md`. Evidence worksheet: `docs/porting/VR-T3-RUNTIME-EVIDE
 1. Copy or symlink `test-datapacks/phase-village-raid/` into the instance `datapacks/` folder.
 2. Verify JAR hashes in `VR-T3-RUNTIME-ENVIRONMENT.md`.
 3. `/reload` (or restart), then `/function spm_vr:help`.
-4. Stand at the fixture anchor (flat overworld recommended); run `/function spm_vr:scenario/<preset_id>`.
-5. Use `/spmscavenger debug v3 inspect @e[tag=spm_vr.subject,limit=1]` at meaningful transitions.
-6. Observe for the **minimum window** in the matrix row before recording PASS/FAIL/INCOMPLETE.
-7. `/function spm_vr:cleanup` removes tagged entities/schedules; world blocks are intentionally preserved.
+4. Stand at the fixture anchor (flat overworld required); run `/spmscavenger debug v3 run <preset_id>`.
+5. Play normally or stand away; query `status`, then use `report` after the bounded terminal.
+6. Adjudicate the raw observation report against the matrix; `OBSERVATION_COMPLETE` is not PASS.
+7. `/spmscavenger debug v3 reset` releases state and invokes tagged fixture cleanup; world blocks are intentionally preserved.
+
+Direct `/function spm_vr:scenario/<preset_id>`, one-shot `inspect`, and `/function spm_vr:cleanup`
+remain manual fallbacks. VR-T3f is not part of this campaign.
 
 Shared library: `spm_vr:_lib/reset`, `setup_village_stub`, `spawn_ally`.
 

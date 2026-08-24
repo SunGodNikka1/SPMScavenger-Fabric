@@ -1,8 +1,8 @@
 # VR-T3 runtime matrix (V3-G closure)
 
-**Status:** fixtures **IMPLEMENTED**; Gate-0 runtime snapshot **CONFIRMED**; no settlement-dependent
-row has started. Any launch with the newly rebuilt shelter-precondition artifact requires separate
-approval (AGENTS.md Gate 6).
+**Status:** fixtures + temporary automated campaign controller **IMPLEMENTED**; Gate-0 runtime
+snapshot **CONFIRMED**; no settlement-dependent row has started. Any launch with the newly rebuilt
+controller artifact requires separate approval (AGENTS.md Gate 6).
 
 **Task:** task-59 / V3-G · **Brief:** `.superpowers/sdd/task-59-brief.md`  
 **RFC:** `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` — phase closure rule (VR-T3f non-applicable)  
@@ -45,11 +45,12 @@ approval (AGENTS.md Gate 6).
 | Structural datapack validation | `SpmVrDatapackStructureTest` (no Minecraft boot) |
 | Operator runbook | `test-datapacks/phase-village-raid/README.md`; `/function spm_vr:help` |
 | Passive hidden-authority + Gate-0 snapshot | `/spmscavenger debug v3 inspect <mob>` — temporary one-shot read only; reports remembered settlement, population facts, and explicit Gate-0 verdict |
+| Automated campaign | `/spmscavenger debug v3 run <preset>` → `status` / `report` / `stop` / `reset`; one bounded fixture session, transition-only evidence, no product verdict |
 | Evidence record | `docs/porting/VR-T3-RUNTIME-EVIDENCE.md` |
 | Environment / JAR hashes | `docs/porting/VR-T3-RUNTIME-ENVIRONMENT.md` |
 | Static/build baseline | see `task-59-prelaunch-report.md` |
 | Gate-0 runtime sample | **PASS / RUNTIME_CONFIRMED** at game tick 1240; row start refused by the subsequently locked shelter-release precondition |
-| **Replacement-artifact campaign** | **NOT AUTHORIZED** — User must approve the new exact JAR before another launch |
+| **Controller-artifact campaign** | **NOT AUTHORIZED** — User must approve the new exact JAR before launch |
 
 ---
 
@@ -87,9 +88,9 @@ phase** and **no second mandatory publisher**. Closure map: `setBlock false / in
 
 ## Settlement bootstrap preflight (campaign gate 0 — mandatory)
 
-Run **before any VR-T3 row** that depends on `setup_village_stub`. Allow vanilla villager AI
-**≥120 ticks** after `/function spm_vr:_lib/setup_village_stub` (or any scenario that calls it)
-before reading settlement evidence. Then run:
+The preferred controller path performs this gate automatically before any VR-T3 row that depends
+on `setup_village_stub`. It reads only already-produced settlement/facts state and waits up to 2400
+ticks; it never refreshes facts or writes HOME. The one-shot manual fallback remains:
 
 ```text
 /spmscavenger debug v3 inspect @e[tag=spm_vr.subject,limit=1]
@@ -118,8 +119,36 @@ transition or wait until daytime and run the inspector again.
 | `RowPrecondition=WAITING_DAYTIME` | Shelter is still active before daytime; do not start the row; transition/wait and inspect again |
 | `RowPrecondition=FIXTURE_INCOMPLETE` | Shelter remained active during daytime; do not start the row or classify V3 behavior; preserve evidence as fixture-incomplete |
 
-The witness reads `ServerLevel.isDay()` and the existing activity observation. It does not change
-time, stop the shelter Goal, or clear authority. `Gate0=PASS` remains valid when row readiness fails.
+The one-shot witness reads `ServerLevel.isDay()` and existing activity and never changes them. The
+temporary controller, only after Gate0 PASS and before opening, clears weather and advances the
+disposable fixture to day, then waits up to 200 daytime ticks for production to release
+`SHELTER_HOLD`. It does not stop the Goal or clear authority. A retained hold ends as exact
+`FIXTURE_INCOMPLETE`; `Gate0=PASS` remains valid.
+
+## Automated controller contract
+
+```text
+/spmscavenger debug v3 run mandatory_blocks_village_work
+  -> allowlisted preset at command origin (Overworld only)
+  -> remove unrelated PlayerMobs inside 32-block arena, pre-window only
+  -> force-load only newly acquired arena chunks
+  -> wait natural Gate0=PASS
+  -> logged day/weather fixture transition
+  -> wait genuine SHELTER_HOLD release
+  -> ROW_PRECONDITION_READY + exact WINDOW_OPEN tick
+  -> passive transition/terminal capture for the row clock
+  -> release exact owned chunk tickets
+
+/spmscavenger debug v3 report
+```
+
+`OBSERVATION_COMPLETE` means the minimum evidence clock completed; it is not PASS. `INCOMPLETE`,
+`FIXTURE_INCOMPLETE`, `FIXTURE_FAILURE`, and `EXTERNAL_INTERFERENCE` classify observation/fixture
+state only. After opening, unrelated PlayerMobs are reported rather than removed, and the controller
+does not teleport/steer the subject or suppress declared combat. Normal stop/reset, subject
+unload/death, dimension loss, terminal completion, and server stop release owned chunk tickets.
+A process crash cannot run lifecycle cleanup; use a disposable backed-up world and inspect forced
+chunks before reuse.
 
 **On `FIXTURE_FAILURE`:**
 
@@ -151,14 +180,16 @@ Execute in one batched session where possible; re-seed world between clusters if
 | Artifact | Path / method |
 | --- | --- |
 | Game log | `logs/latest.log` — grep `spmscavenger`, `VillageWork`, `MandatoryOwnership`, `Compost`, `Harvest` |
-| Mob readout | in-game opinion/activity readout if enabled; one-shot `/spmscavenger debug v3 inspect @e[tag=spm_vr.subject,limit=1]` for running goals, pending claim, shared authority, and Village Work admission |
+| Mob readout | preferred controller `report`; one-shot `/spmscavenger debug v3 inspect @e[tag=spm_vr.subject,limit=1]` remains a manual corroboration tool |
 | Profiler | only if perf row added later — not a V3-G gate |
 | Row record | per-id PASS/FAIL/WEIRD with **tick range covering the min observation window** and falsifier quote |
 | Environment | JAR hashes from `VR-T3-RUNTIME-ENVIRONMENT.md` verified on instance |
 
-The temporary inspector logs each snapshot with stable prefix `[spmscavenger/v3-witness]`. It has
-no session, tick hook, retained entity/world reference, or mutation authority. Remove it and rebuild
-the clean production artifact after accepted runtime evidence; preserve the evidence record.
+The temporary inspector logs each requested snapshot with `[spmscavenger/v3-witness]`; the
+controller logs bounded transitions with `[spmscavenger/v3-campaign]`. The controller retains only
+one identifier/value session plus one immutable last report, never live entity/world references.
+Remove both temporary surfaces and rebuild the clean production artifact after accepted runtime
+evidence; preserve the evidence record.
 
 **Banned as proof:** build success; unit test pass alone for runtime rows; subjective play without log quote; observation shorter than the row's minimum window.
 
@@ -178,6 +209,7 @@ Before marking V3 **runtime closed**, review:
 
 | Date | Change |
 | --- | --- |
+| 2026-08-23 | Added temporary one-command campaign controller, passive row clocks, pre-window contamination isolation, exact opening/terminal evidence, and owned fixture chunk lifecycle; launch remains unauthorized |
 | 2026-08-23 | Gate-0 witness completion — remembered settlement identity + full population facts + explicit PASS/FIXTURE_FAILURE/INCOMPLETE |
 | 2026-08-23 | Gate-0 runtime PASS recorded; added independent no-`SHELTER_HOLD` settlement-row precondition after daytime transition |
 | 2026-08-23 | Runtime-validation packet — one-shot hidden-authority inspector, datapack help/cleanup, operator runbook, evidence worksheet, new artifact approval gate |

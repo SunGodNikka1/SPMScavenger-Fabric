@@ -167,14 +167,27 @@ class SpmVrDatapackStructureTest {
     @Test
     void cropInterruptCombatStagesInterruptionAfterPathingWindow() throws IOException {
         String body = readScenario("crop_interrupt_combat");
-        assertTrue(body.contains("schedule function spm_vr:_lib/stage_interrupt_zombie"),
-                "interrupt must be staged after PATHING can begin");
+        assertFalse(body.contains("schedule function spm_vr:_lib/stage_interrupt_zombie"),
+                "campaign controller owns the trigger relative to the valid opening tick");
+        assertTrue(body.contains("campaign controller"),
+                "scenario must disclose controller-owned trigger timing");
         assertFalse(body.matches("(?s).*summon minecraft:zombie.*"),
                 "zombie must not spawn immediately in scenario body");
         String stage = Files.readString(LIB_ROOT.resolve("stage_interrupt_zombie.mcfunction"),
                 StandardCharsets.UTF_8);
         assertTrue(stage.contains("summon minecraft:zombie"),
                 "staged helper must spawn the interrupt hostile");
+        assertTrue(stage.contains("execute at @e[type=playermob:player_mob,tag=spm_vr.subject"),
+                "scheduled/command-invoked helper must anchor to the fixture subject");
+    }
+
+    @Test
+    void scheduledBedNudgeAnchorsToFixtureSubject() throws IOException {
+        String claim = Files.readString(LIB_ROOT.resolve("claim_village_beds.mcfunction"),
+                StandardCharsets.UTF_8);
+        assertTrue(countOccurrences(claim,
+                "execute at @e[type=playermob:player_mob,tag=spm_vr.subject") >= 2,
+                "scheduled helper must not inherit server-spawn execution position");
     }
 
     @Test

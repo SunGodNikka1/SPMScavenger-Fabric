@@ -14,6 +14,9 @@ it does **not** add new village-work features, mixins, or `MandatoryOwnership` p
 
 **Brief revision history:**
 
+- v1.4 — automated campaign execution controller (2026-08-23): single-command preset execution,
+  bounded contamination isolation, automatic Gate-0/day/shelter gating, passive transition capture,
+  exact row clocks, terminal evidence, and fixture-only verdicts
 - v1.3 — settlement-row shelter-release precondition (2026-08-23): keep Gate 0 independent;
   require no live `SHELTER_HOLD` before a settlement-dependent row starts its evidence window
 - v1.2 — Gate-0 witness completion (2026-08-23): remembered settlement + population facts +
@@ -253,3 +256,172 @@ otherwise manufacture readiness.
 
 **Must not happen:** Gate 0 is downgraded because of shelter state; the witness changes time or
 Goal/authority state; an evidence window begins from `WAITING_DAYTIME` or `FIXTURE_INCOMPLETE`.
+
+---
+
+## v1.4 automated campaign execution controller
+
+### Authorization and boundary
+
+The User authorizes a temporary Task-59 controller under the existing operator command tree:
+
+```text
+/spmscavenger debug v3 run <preset>
+/spmscavenger debug v3 status
+/spmscavenger debug v3 report
+/spmscavenger debug v3 stop
+/spmscavenger debug v3 reset
+```
+
+The controller is fixture/evidence infrastructure. Tasks 52–58 and their Goals, admission,
+mandatory claims, transactions, priorities, and execution semantics remain untouched. No Minecraft
+launch, commit, or push is authorized.
+
+### Evidence baseline (`CODE_CONFIRMED`)
+
+- Thirteen scenario functions exist under
+  `test-datapacks/phase-village-raid/data/spm_vr/function/scenario/`.
+- `setup_village_stub` creates the bell, three beds, and two adult villagers, sets night, and only
+  nudges villagers while vanilla AI acquires HOME tickets.
+- `V3RuntimeWitnessCommands` already reads shared activity, mandatory claim, Village Work admission,
+  remembered settlement, population facts, daylight, and shelter state without manufacturing them.
+- `SpmScavenger` already owns server-tick, entity-unload/death, and server-stop lifecycle hooks.
+- Pinned host artifact: `D:\Apps\Minecraft Port\Projects\references\artifacts\playermob-fabric-0.89.0+1.21.1.jar`.
+
+### Selected architecture
+
+One global, bounded `V3RuntimeCampaignController` owns at most one active session and one immutable
+last report. It retains identifiers/value snapshots only—never a live Mob, Level, Goal, inventory,
+Villager, or block-entity reference.
+
+```text
+operator run <preset>
+  -> execute declared spm_vr scenario at command origin
+  -> locate exact tagged subject
+  -> remove non-fixture PlayerMobs inside 32-block arena (pre-window only)
+  -> acquire only previously-unforced arena chunks so the operator may stand away
+  -> natural Gate 0 observation
+  -> after PASS, fixture advances world to day (declared pre-window input)
+  -> wait for production SeekShelterGoal to release genuinely
+  -> pre-open contamination check
+  -> RowPrecondition READY
+  -> record exact opening tick
+  -> production AI runs without steering
+  -> transition-only passive snapshots + scenario clock
+  -> terminal evidence + observation disposition
+```
+
+After the window opens, the controller never teleports, removes, steers, retargets, heals, equips,
+or otherwise changes the subject or declared scenario entities. An unrelated PlayerMob entering the
+arena after opening terminates observation as `EXTERNAL_INTERFERENCE`; it is not deleted. Declared
+zombie combat remains legitimate production input.
+
+### Alternatives and decision
+
+| Option | Benefit | Failure mode / cost | Disposition |
+| --- | --- | --- | --- |
+| Datapack schedules only | Little Java state | Cannot read hidden claims/facts reliably; scheduled context can detach triggers from the row clock | Rejected |
+| Java controller directly starts/stops Goals or injects claims | Deterministic-looking runs | Manufactures the behavior under test and invalidates evidence | Rejected |
+| Hybrid fixture controller + passive shared snapshot | Exact timing and hidden-state evidence while production retains behavior | Temporary tick/lifecycle surface requiring strict RET-1 cleanup | **Selected** |
+
+Strongest objection: advancing time after Gate 0 changes a global world input. Waiting naturally is
+safer for a shared world but costs about 5,000 ticks from the fixture's 18,000 start to dawn and
+reintroduces operator/runtime delay. The selected controller changes time only before the row opens,
+logs the exact mutation, and is restricted to a disposable `spm_vr` world. Switch to natural waiting
+if runtime shows the day transition itself invalidates settlement facts or subject state.
+
+Second option for unattended execution was to leave chunks player-loaded. That avoids persistent
+vanilla force-load state but fails the user's stand-away requirement and can silently pause the
+observation clock. The selected controller records only chunks whose `setChunkForced(true)` call
+actually changed state and releases those exact chunks on every normal terminal/lifecycle path; it
+never removes pre-existing foreign forced chunks. A JVM/process crash cannot execute that cleanup,
+so the fixture remains restricted to a disposable backed-up world and the runbook requires forced-
+chunk inspection before reuse.
+
+### Scenario clocks
+
+| Preset | Window completion clock | Bounded incomplete timeout |
+| --- | --- | --- |
+| `crop_managed_single` | first observed replant at target + 200t | 2400t |
+| `crop_interrupt_combat` | controller invokes declared zombie helper at open+120t; observed combat release + 600t | 2400t |
+| `crop_replant_failure` | 800t unchanged observation | 800t |
+| `compost_seed_surplus` | first observed seed debit + 400t | 2400t |
+| `population_food_deficit` | 1200t | 1200t |
+| storage `public/unknown/granted` | 800t | 800t |
+| `mandatory_blocks_village_work` | 1000t | 1000t |
+| `crop_multi_mob` | first observed replant + 200t, with both declared mobs retained in snapshots | 2400t |
+| `crop_hungry_veto` | 800t | 800t |
+| `crop_multi_cycle` | two distinct observed replant transitions + 400t | 4000t |
+| `mandatory_ownership_witness` | 1000t | 1000t |
+
+Completion means `OBSERVATION_COMPLETE`, not product PASS. If a required transition never appears,
+the controller reports `INCOMPLETE` with the last observed state.
+
+### State, evidence, and lifecycle
+
+Allowed fixture/runtime dispositions are `PREPARING`, `WAITING_GATE0`, `WAITING_DAYTIME`,
+`WAITING_SHELTER_RELEASE`, `READY`, `OBSERVING`, `OBSERVATION_COMPLETE`, `INCOMPLETE`,
+`FIXTURE_INCOMPLETE`, `FIXTURE_FAILURE`, `EXTERNAL_INTERFERENCE`, and `ABORTED`. The controller never emits a V3
+behavioral PASS/FAIL.
+
+Transition snapshots retain: tick, position, running activity classes, combat target, pending claim,
+mandatory/Village Work result, Gate 0, row precondition, relevant block states, bounded fixture
+entity identities/positions, and bounded inventory summaries. Log only phase/evidence transitions,
+opening, midpoint, declared trigger, terminal, and final disposition under
+`[spmscavenger/v3-campaign]`.
+
+RET-1: active session key = singleton; bound = one. Last report bound = one. Active state is released
+on completion, timeout, stop/reset, subject unload/death, dimension loss, or server stop. `reset`
+may invoke existing fixture cleanup; server stop clears both slots. A new `run` replaces only a
+terminal report, never another active session. Arena chunk ownership is a bounded 5×5 maximum in
+the current 32-block fixture radius; only successfully newly-forced chunks join the release list.
+
+### Behavioral Prediction (MAIBS-1)
+
+| Layer | Prediction | Confidence |
+| --- | --- | --- |
+| Intended | One command prepares and observes a complete row without operator polling | `UNVERIFIED` until runtime |
+| Mechanism | Preset mutates declared fixture inputs; controller gates and observes; production Goals path/interact | `CODE_CONFIRMED` after build/tests |
+| Visible sequence | Night bootstrap → villagers claim beds → Gate 0 → day → shelter releases → exact row clock → report | `GAME_MECHANICS_INFERRED` until runtime |
+| Interruption | Declared zombie may trigger ordinary combat; undeclared PlayerMob contamination ends evidence without suppression | `UNVERIFIED` until runtime |
+| Termination | Fixed/transition-relative window ends, or bounded timeout/lifecycle/interference produces non-product disposition | `CODE_CONFIRMED` after tests |
+
+Goal interaction: `SeekShelterGoal` owns the pre-window night hold; mandatory Gather remains
+production-owned; V3 Goals at priorities 4/5 remain unforced; host combat can interrupt normally;
+the controller owns no Goal flags and therefore cannot enter GoalSelector arbitration.
+
+Predicted weird behaviors:
+
+1. Villagers never acquire both HOME tickets → `FIXTURE_FAILURE`/`INCOMPLETE`, not product failure
+   (`RUNTIME_QUESTION`).
+2. A friendly unrelated PlayerMob wanders into the arena after open → observation ends
+   `EXTERNAL_INTERFERENCE` (`ACCEPTABLE_STEPPING_STONE`; preserves uncontaminated evidence).
+3. Production never reaches a transition-relative terminal (path failure/starvation) → bounded
+   `INCOMPLETE` with terminal snapshot (`RUNTIME_QUESTION`, not silently extended forever).
+4. Declared zombie targets another entity rather than the subject → VR-T3b times out `INCOMPLETE`
+   (`RUNTIME_QUESTION`; controller must not force aggro).
+
+MAIBS disposition: **PASS — BEHAVIORALLY_PLAUSIBLE for temporary fixture orchestration**. Runtime
+behavior remains `UNVERIFIED` and the exact campaign run is the falsifying experiment.
+
+### Acceptance
+
+**Must happen:** one run command executes an allowlisted preset, opens only after Gate0/day/shelter
+release, records the exact opening tick, observes the declared minimum clock, and produces a compact
+report with raw evidence and no product verdict.
+
+**Must not happen:** Goal invocation/steering, claim/admission manufacture, HOME/Brain/sleep writes,
+post-open subject teleport/removal, expected-result awards, combat suppression, unbounded history,
+or a Minecraft launch during implementation.
+
+### Removal manifest
+
+Remove with the Task-59 witness after accepted runtime evidence:
+
+- `V3RuntimeCampaignController` and controller-only scenario/progress/evidence helpers;
+- controller tests;
+- `run/status/report/stop/reset` command branches;
+- server tick, unload/death, and server-stop controller hooks;
+- controller-only datapack trigger changes and documentation.
+
+Preserve production Tasks 52–58, accepted runtime evidence, matrix history, and clean rebuild gates.

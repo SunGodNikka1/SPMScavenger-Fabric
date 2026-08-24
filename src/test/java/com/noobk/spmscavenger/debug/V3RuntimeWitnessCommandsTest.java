@@ -12,10 +12,12 @@ class V3RuntimeWitnessCommandsTest {
 
     private static final Path SOURCE = Path.of(
             "src/main/java/com/noobk/spmscavenger/debug/V3RuntimeWitnessCommands.java");
+    private static final Path SNAPSHOT_SOURCE = Path.of(
+            "src/main/java/com/noobk/spmscavenger/debug/V3WitnessSnapshot.java");
 
     @Test
     void inspectorReadsSharedProductionTruth() throws IOException {
-        String source = Files.readString(SOURCE);
+        String source = Files.readString(SNAPSHOT_SOURCE);
         assertTrue(source.contains("MandatoryOwnershipRegistry.liveClaim("));
         assertTrue(source.contains("ActivityObservationService.observe("));
         assertTrue(source.contains("MandatoryOwnership.evaluate("));
@@ -36,11 +38,14 @@ class V3RuntimeWitnessCommandsTest {
         assertTrue(source.contains("ActivityClass.SHELTER_HOLD"));
         assertTrue(source.contains("level.isDay()"));
         assertTrue(source.contains("RowPrecondition="));
+        String commands = Files.readString(SOURCE);
+        assertTrue(commands.contains("Commands.literal(\"run\")"));
+        assertTrue(commands.contains("Commands.literal(\"report\")"));
     }
 
     @Test
     void inspectorCannotAcquireProductionAuthorityOrMutateFixtureState() throws IOException {
-        String source = Files.readString(SOURCE);
+        String source = Files.readString(SNAPSHOT_SOURCE);
         assertFalse(source.contains("MandatoryOwnershipRegistry.publish("));
         assertFalse(source.contains("MandatoryOwnershipRegistry.release("));
         assertFalse(source.contains("setProfile("));
@@ -70,10 +75,10 @@ class V3RuntimeWitnessCommandsTest {
 
     @Test
     void inspectorIsOneShotWithoutRetainedSessionState() throws IOException {
-        String source = Files.readString(SOURCE);
+        String source = Files.readString(SNAPSHOT_SOURCE);
         assertFalse(source.contains("static final Map"));
         assertFalse(source.contains("ConcurrentHashMap"));
         assertFalse(source.contains("SERVER_TICK"));
-        assertFalse(source.contains("UUID target"));
+        assertFalse(source.contains("static UUID"));
     }
 }

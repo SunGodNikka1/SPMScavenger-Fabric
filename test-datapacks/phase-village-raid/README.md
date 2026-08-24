@@ -14,6 +14,11 @@ windows, and falsifiers live in `docs/porting/VR-T3-RUNTIME-MATRIX.md`; record r
   of running activities, pending mandatory ownership, Village Work admission, the subject's actual
   remembered in-bounds settlement, and cached population facts. It retains no session, creates no
   settlement/facts cache, schedules no refresh, and changes no decision.
+- **Campaign authority (temporary):** `/spmscavenger debug v3 run <preset>` owns only fixture setup,
+  pre-window removal of unrelated PlayerMobs in the 32-block arena, natural Gate-0 waiting,
+  a logged pre-window day/weather transition, fixture chunk tickets, row timing, and passive
+  evidence. It never starts a Goal, publishes a claim, changes admission, writes HOME/Brain/sleep
+  state, steers the subject after opening, or assigns a product verdict.
 
 ## Install and preflight
 
@@ -22,17 +27,31 @@ windows, and falsifiers live in `docs/porting/VR-T3-RUNTIME-MATRIX.md`; record r
    pinned in `VR-T3-RUNTIME-ENVIRONMENT.md`. Exclude Trade Everything and other optional compat mods.
 3. Start or reload the world, then run `/function spm_vr:help`.
 4. Stand on flat overworld ground with clear space at least 32 blocks around the executor position.
-5. Run one preset. For settlement rows, wait at least 120 ticks and apply matrix Gate 0 before
-   judging product behavior. Then transition or wait until daytime and inspect again. Do not start
-   the row evidence window unless the readout says `RowPrecondition=READY`.
-6. Capture the starting game tick with `/time query gametime`, run
-   `/spmscavenger debug v3 inspect @e[tag=spm_vr.subject,limit=1]`, and repeat snapshots at the
-   row's meaningful transition and terminal window.
-7. Record screenshots or video, exact tick range, relevant inspector/log lines, final block/entity/
-   inventory state, and PASS/FAIL/INCOMPLETE in `VR-T3-RUNTIME-EVIDENCE.md`.
-8. Run `/function spm_vr:cleanup` between rows. This removes fixture-tagged entities and scheduled
-   helpers only. It deliberately preserves placed blocks because same-type world state lacks safe
+5. Start exactly one row with `/spmscavenger debug v3 run <preset>`. The controller executes the
+   preset at the command origin, waits for natural Gate 0, advances the disposable fixture to day,
+   waits up to 200 daytime ticks for genuine `SHELTER_HOLD` release, and opens the evidence window
+   only after `RowPrecondition=READY`.
+6. Play normally or stand away. Use `/spmscavenger debug v3 status` for bounded progress and
+   `/spmscavenger debug v3 report` for opening/transition/terminal evidence. The controller force-
+   loads only arena chunks it newly acquired and releases those exact chunks at every terminal.
+7. The controller returns observation states—not product PASS/FAIL. Review its raw report against
+   the matrix, then record the adjudicated result in `VR-T3-RUNTIME-EVIDENCE.md`.
+8. Run `/spmscavenger debug v3 reset` between rows. This releases controller state and invokes the
+   existing tagged fixture cleanup. The manual fallback `/function spm_vr:cleanup` removes fixture-
+   tagged entities and scheduled helpers only. It deliberately preserves placed blocks because
+   same-type world state lacks safe
    provenance; restore the disposable world backup or move to a fresh area between clusters.
+
+### Controller dispositions
+
+- `OBSERVATION_COMPLETE`: the required observation clock completed; it is **not** product PASS.
+- `INCOMPLETE`: the required production transition did not occur before the bounded timeout.
+- `FIXTURE_INCOMPLETE`: daytime shelter ownership did not release within 200 ticks.
+- `FIXTURE_FAILURE`: preset/Gate-0 fixture contract failed.
+- `EXTERNAL_INTERFERENCE`: unrelated PlayerMob contamination entered after the row opened.
+
+If the JVM or host crashes, ordinary lifecycle cleanup cannot run. Treat the world as disposable
+and inspect vanilla forced chunks before reuse; do not remove foreign forced chunks blindly.
 
 ## Campaign order
 

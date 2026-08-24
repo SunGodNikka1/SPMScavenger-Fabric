@@ -1,0 +1,78 @@
+package com.noobk.spmscavenger.debug;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.junit.jupiter.api.Test;
+
+class V3RuntimeCampaignControllerTest {
+
+    private static final Path SOURCE = Path.of(
+            "src/main/java/com/noobk/spmscavenger/debug/V3RuntimeCampaignController.java");
+    private static final Path BOOTSTRAP = Path.of(
+            "src/main/java/com/noobk/spmscavenger/SpmScavenger.java");
+
+    @Test
+    void controllerUsesOneBoundedSessionAndSharedPassiveSnapshot() throws IOException {
+        String source = Files.readString(SOURCE);
+        assertTrue(source.contains("private static Session active"));
+        assertTrue(source.contains("private static CampaignReport lastReport"));
+        assertTrue(source.contains("V3WitnessSnapshot.capture("));
+        assertTrue(source.contains("MAX_EVENTS"));
+        assertFalse(source.contains("Map<UUID"));
+        assertFalse(source.contains("ConcurrentHashMap"));
+    }
+
+    @Test
+    void controllerCannotAcquireProductionAuthorityOrSteerSubject() throws IOException {
+        String source = Files.readString(SOURCE);
+        assertFalse(source.contains("MandatoryOwnershipRegistry.publish("));
+        assertFalse(source.contains("RouteExhaustionEvidence.publish("));
+        assertFalse(source.contains("VillageWorkAdmission.evaluate("));
+        assertFalse(source.contains("canUse()"));
+        assertFalse(source.contains("canContinueToUse()"));
+        assertFalse(source.contains("getNavigation()"));
+        assertFalse(source.contains("setTarget("));
+        assertFalse(source.contains("startSleeping("));
+        assertFalse(source.contains("Brain"));
+        assertFalse(source.contains("minecraft:home"));
+        assertFalse(source.contains("setItem("));
+    }
+
+    @Test
+    void controllerOwnsExplicitLifecycleAndSuppressedFixtureCommands() throws IOException {
+        String source = Files.readString(SOURCE);
+        assertTrue(source.contains("withSuppressedOutput()"));
+        assertTrue(source.contains("onSubjectUnavailable("));
+        assertTrue(source.contains("shutdownServerState("));
+        assertTrue(source.contains("EXTERNAL_INTERFERENCE"));
+        assertTrue(source.contains("OBSERVATION_COMPLETE"));
+        assertTrue(source.contains("PRODUCT VERDICT: NOT ASSIGNED"));
+        assertTrue(source.contains("setChunkForced("));
+        assertTrue(source.contains("ownedForcedChunks"));
+        assertTrue(source.contains("Level.OVERWORLD"));
+        assertTrue(source.contains("withLevel(source.getServer().overworld())"),
+                "reset cleanup must remain bound to the recorded Overworld fixture");
+        assertTrue(source.contains("active = null;\n        session.forcedChunksReleased"),
+                "terminal release must detach active state before chunk-unload callbacks can re-enter");
+        assertFalse(source.contains("forceload remove all"));
+
+        String bootstrap = Files.readString(BOOTSTRAP);
+        assertTrue(bootstrap.contains("V3RuntimeCampaignController.onServerTick(server)"));
+        assertTrue(count(bootstrap, "V3RuntimeCampaignController.onSubjectUnavailable(") >= 2);
+        assertTrue(bootstrap.contains("V3RuntimeCampaignController.shutdownServerState(server)"));
+    }
+
+    private static int count(String value, String needle) {
+        int count = 0;
+        int index = 0;
+        while ((index = value.indexOf(needle, index)) >= 0) {
+            count++;
+            index += needle.length();
+        }
+        return count;
+    }
+}

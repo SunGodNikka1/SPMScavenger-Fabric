@@ -200,3 +200,34 @@ The new artifact keeps Gate 0 independent and reports:
 Three source probes returned `NOT FOUND`: (1) time or mandatory-authority mutation, (2) Goal stop/
 admission/navigation or executor mutation, and (3) retained session/tick-hook or settlement refresh
 state. No Minecraft process used the replacement artifact.
+
+---
+
+## Automated campaign artifact — 2026-08-23
+
+The manual launch packet is superseded by a one-command temporary controller. Preferred contract:
+
+```text
+/spmscavenger debug v3 run <preset>
+/spmscavenger debug v3 status
+/spmscavenger debug v3 report
+/spmscavenger debug v3 reset
+```
+
+It owns fixture orchestration only: allowlisted preset execution, pre-window contamination removal,
+natural Gate0 wait, declared day/weather transition, genuine shelter-release wait, bounded fixture
+chunk liveness, row timing, and passive snapshots. It does not start/stop Goals, publish/remove
+claims, alter VillageWork admission, inject HOME/Brain/sleep evidence, steer/equip the subject after
+opening, award outcomes, or suppress declared combat.
+
+| Check | Result |
+| --- | --- |
+| Focused campaign/witness/datapack tests | **33/33 PASS** |
+| Clean build | **1643 tests; 0 failures/errors/skips** |
+| JAR | `build/libs/spmscavenger-1.11.0.jar` |
+| SHA-256 | `94534E28364ACF9E6C7FAFB1940D2F3AEF3F90581103DEED58D416A2DAA06F3C` |
+| Package audit | 28 temporary V3 classes (21 controller/snapshot/evidence), 0 upstream TE classes, 5 project-owned TE classes, 0 removed V2 witness entries |
+
+Three explicit source probes returned `NOT FOUND`: production claim/admission authority calls;
+navigation/target/sleep/Brain/HOME/inventory mutation; and refresh/POI/trade/Goal-execution calls.
+No Minecraft launch occurred. The exact hash above requires separate runtime approval.

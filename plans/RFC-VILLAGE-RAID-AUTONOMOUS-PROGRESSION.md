@@ -10,9 +10,9 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING` — **V2-TE-W2 CLOSED**; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
-| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G GATE-0-COMPLETE LAUNCH PACKET READY**. |
-| **Nearest frontier** | Explicit launch authorization for the exact Gate-0-complete Task-59 witness artifact and batched Minecraft VR-T3 campaign; runtime behavior remains `UNVERIFIED`. |
-| **Last update** | 2026-08-23 (`Agent_Codex` Automate Runtime Witness / Gate-0 completion only) |
+| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G AUTOMATED CAMPAIGN ARTIFACT READY** (1643-test clean build). |
+| **Nearest frontier** | Explicit launch authorization for exact Task-59 controller artifact SHA-256 `94534E28364ACF9E6C7FAFB1940D2F3AEF3F90581103DEED58D416A2DAA06F3C`; VR-T3 runtime behavior remains `UNVERIFIED`. |
+| **Last update** | 2026-08-23 (`Agent_Codex` Automate Runtime Witness / campaign execution phase) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -4939,7 +4939,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | **V1.5** | **Settlement attachment & return:** `SettlementRelationship`, familiarity/visit history, commute-to-home/familiar, village-aware social | **IMPLEMENTED + RUNTIME CLOSED** — task-46 / 1.11.0 (A–D) | VR-T1.5a–c **CLOSED** (2026-08-15) |
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | `KnownVillager` held until V4+ consumer; other work moved to V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains**, relationship credit, finished-output projection, optional Trade Everything source | **IMPLEMENTED + CLOSED** — VR-T2 vanilla path and V2-TE positive path runtime-confirmed to recorded scope | **VR-T2 PASS**; **VR-T2k PASS (`V2-DEF-003c-R1`)**. VR-T2l, V2-I, and profiling are **DEFERRED / NON-BLOCKING** |
-| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | A/B/C/D1/E/F **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (tasks 52–58; 1589 tests). Broad V3-D2 workstation awareness **DEFERRED**. **V3-G GATE-0-COMPLETE LAUNCH PACKET READY** (task-59; 1625-test temporary witness artifact). | VR-T3a–m below; runtime **UNVERIFIED** until batched campaign (**launch NOT AUTHORIZED**) |
+| **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | A/B/C/D1/E/F **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (tasks 52–58; 1589 tests). Broad V3-D2 workstation awareness **DEFERRED**. **V3-G AUTOMATED CAMPAIGN ARTIFACT READY** (task-59; 1643-test temporary controller artifact). | VR-T3a–m below; runtime **UNVERIFIED** until batched campaign (**launch NOT AUTHORIZED**) |
 | **V4** | Factual site utility + **Place opinion bridge** (`D-VR-025` **LOCKED**; `D-VR-026` **HELD**), known traders, utility-driven home promotion and return preference beyond shipped V1.5 return | **PARTIAL** | VR-T4: prefer liked legal village; blocking demand still reaches B when only legal source |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
 | **V6** | Player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup, **zombie-villager curing** | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup; curing scenarios to be defined in V6 |
@@ -5025,9 +5025,9 @@ familiarity, an active loot goal, or absence of a V3 work candidate.
 | **V3-D2 — read-only workstation evidence (broad)** | V3-D1 | Generic bounded loaded `PoiTypes.FARMER` workstation evidence for future consumers | Provenance/age/completeness; executor revalidates live block | Becomes gen-1 V3-F prerequisite; executor-local scan | VR-T3f | **DEFERRED** — not required for V3-F gen-1 |
 | **V3-E — population food support** | V3-A; **V3-D1** (villager count + HOME capacity facts); disposable-resource policy; existing gift/drop seam | Offer bounded food surplus when population evidence requests support | Revalidate population, target, inventory reserve, and path at handoff | Consume personal/progression reserve; command breeding; loop gifts with no deficit | VR-T3e/j | **CLOSED / STATIC-BEHAVIORAL ACCEPT** — **task-57** (1543 tests; **DO NOT REOPEN** unless runtime falsifies locked invariant) |
 | **V3-F — composting** | V3-A; V3-C/E; **D-VR-085-A2** + **D-VR-086-A2** + **D-VR-087-A1** + **D-VR-087-TX1**; **`D58-1…D58-12`** | Opportunistic: spend one explicitly disposable compostable at one loaded known composter in one vanilla attempt | Replant/population/progression reserves survive; one attempt terminates; READY output not extracted gen-1 | Double debit; scan every tick; manufactured seed/bone-meal demand; unmodelled stock composted | VR-T3d/j | **CLOSED / STATIC-BEHAVIORAL ACCEPT** — **task-58** (1589 tests; Gate 0 PASS; **DO NOT REOPEN** unless runtime falsifies locked invariant) |
-| **V3-G — integration and closure** | V3-A…F | Static/build gates plus temporary `spm_vr` V3 presets and approved runtime matrix | **Applicable** VR-T3 rows record must/must-not evidence and semantic-drift review (see closure rule) | Replant + one chest row close the whole phase; compile is called behavior proof; **VR-T3f pulled in via closure wording** | VR-T3a–m (**VR-T3f non-applicable** while V3-D2 deferred) | **GATE-0-COMPLETE LAUNCH PACKET READY** — **task-59**; 13 presets + passive one-shot inspector + evidence worksheet; runtime campaign **NOT YET AUTHORIZED** |
+| **V3-G — integration and closure** | V3-A…F | Static/build gates plus temporary `spm_vr` V3 presets and approved runtime matrix | **Applicable** VR-T3 rows record must/must-not evidence and semantic-drift review (see closure rule) | Replant + one chest row close the whole phase; compile is called behavior proof; **VR-T3f pulled in via closure wording** | VR-T3a–m (**VR-T3f non-applicable** while V3-D2 deferred) | **AUTOMATED CAMPAIGN ARTIFACT READY** — **task-59**; 13 presets + passive shared snapshot + bounded controller + evidence worksheet; runtime campaign **NOT YET AUTHORIZED** |
 
-Tasks 52–58 are complete (static). **V3-G (task-59)** is **GATE-0-COMPLETE LAUNCH PACKET READY**. Minecraft runtime
+Tasks 52–58 are complete (static). **V3-G (task-59)** is **AUTOMATED CAMPAIGN ARTIFACT READY**. Minecraft runtime
 campaign **NOT YET AUTHORIZED**.
 
 **Dependency sequence (amended 2026-08-22):** `V2-DEF-002 repair / D-VR-084 → V3-A`; `V3-A → V3-B/C/D1`;
@@ -5039,7 +5039,7 @@ V3-F critical path. Executor-local POI query (Option B) and cubic block scan (Op
 
 ```text
 task-58 = V3-F composting (ComposterWorkFacts + CompostGoal + reserve/transaction policies) — CLOSED
-task-59 = V3-G integration/runtime closure — GATE-0-COMPLETE LAUNCH PACKET READY (runtime launch NOT AUTHORIZED)
+task-59 = V3-G integration/runtime closure — AUTOMATED CAMPAIGN ARTIFACT READY (runtime launch NOT AUTHORIZED)
 ```
 
 Splitting composter facts into a separate “V3-D2 task” before V3-F is **rejected** — the facts are a
@@ -8437,7 +8437,7 @@ facts cache write used by production, goal admission, priority, navigation, or w
 changed. The command can report `INCOMPLETE`; it cannot make itself pass. Live Gate-0 and VR-T3
 behavior remain `UNVERIFIED` until an explicitly approved launch.
 
-**Frontier after:** Task-59/V3-G is **GATE-0-COMPLETE LAUNCH PACKET READY**. The new exact artifact
+**Historical frontier after shelter classifier (SUPERSEDED by campaign-controller artifact below):** Task-59/V3-G was **GATE-0-COMPLETE LAUNCH PACKET READY**. That exact artifact
 supersedes the prior witness hash and requires fresh launch approval; no Minecraft process started.
 
 ### Contribution — `Agent_Codex` (Gate-0 R1 + settlement-row shelter precondition, 2026-08-23)
@@ -8470,3 +8470,63 @@ remain open.
 `766F099FBC004A007A615DD044A9243901F8FBF621A66EF3A8BBC33C6A3CCA40`; nine expected V3 witness
 class entries, zero upstream Trade Everything classes, five project-owned TE compatibility classes,
 and zero removed V2 witness entries. This new artifact has not been launched.
+
+### Contribution — `Agent_Codex` (Automate Runtime Witness: campaign controller design, 2026-08-23)
+
+**Mode:** authorized temporary runtime-fixture implementation; no production semantic change,
+Minecraft launch, commit, or push
+
+**Problem:** the one-shot witness proves hidden state but leaves the operator responsible for
+preset invocation, settlement waiting, day transition, shelter-release polling, contamination,
+window arithmetic, and terminal capture. That is both error-prone and inconsistent with the RFC's
+automatic-fixture contract.
+
+**Code-evidence correction:** `crop_interrupt_combat` currently schedules its declared zombie 120
+ticks after **preset load**, so it can fire during night/Gate-0 bootstrap rather than 120 ticks into
+the valid evidence window. The controller will own that fixture trigger relative to the recorded
+opening tick. It will invoke the existing helper at the arena origin without setting target/aggro;
+production combat remains authoritative.
+
+**Decision (User authorized):** one temporary singleton campaign controller executes an allowlisted
+`spm_vr` preset, removes only non-fixture PlayerMobs within the 32-block arena before opening,
+observes natural Gate 0, advances the disposable fixture to day after PASS, waits for genuine
+`SHELTER_HOLD` release, then opens and times the row. After opening it is passive: undeclared
+PlayerMob entry becomes `EXTERNAL_INTERFERENCE`, not a removal; declared combat remains untouched.
+
+**Alternatives:** datapack-only scheduling cannot read shared hidden truth and loses row-relative
+trigger context; a Goal/claim-driving controller would manufacture the result. The selected hybrid
+uses existing fixture mutations plus the same shared read-only snapshot consumed by `inspect`.
+
+**MAIBS:** the player sees night bootstrap, natural villager HOME acquisition, daytime release,
+ordinary production work/interruptions, and a terminal report. Bounded weird cases are missing HOME
+claims, post-open contamination, absent production terminal, or zombie aggro elsewhere; all become
+fixture/runtime observation dispositions, never synthetic product PASS/FAIL. Status:
+`BEHAVIORALLY_PLAUSIBLE`; runtime remains `UNVERIFIED`.
+
+**Task authority:** exact controller contract, clocks, lifecycle, acceptance, and removal manifest
+are locked in Task-59 brief v1.4. Tasks 52–58 remain closed and untouched.
+
+**Implementation refinement:** unattended observation requires loaded chunks after the operator
+stands away. The controller therefore force-loads only arena chunks for which its own
+`setChunkForced(true)` call changes state, retains their bounded coordinates (maximum 5×5 for the
+32-block arena), and releases those exact owned chunks at every normal terminal, stop/reset,
+subject lifecycle loss, dimension failure, and server stop. It never removes a pre-existing foreign
+forced chunk. This is fixture liveness, not PlayerMob authority. A hard process crash cannot execute
+cleanup, so `spm_vr` remains disposable-world-only and the runbook requires inspection before reuse.
+
+**Evidence disposition:** `OBSERVATION_COMPLETE` closes only the controller's minimum clock. It is
+not a product PASS; the matrix must still adjudicate must-happen and must-not-happen evidence. The
+other terminal classes remain `INCOMPLETE`, `FIXTURE_INCOMPLETE`, `FIXTURE_FAILURE`,
+`EXTERNAL_INTERFERENCE`, or operator/lifecycle `ABORTED`.
+
+**Implementation/static result (`CONFIRMED`, 2026-08-23):** focused controller/witness/datapack
+tests pass **33/33**; `clean build` passes **1643 tests / 0 failures/errors/skips**. Three explicit
+negative-control probe groups found no production claim/admission authority calls, no subject
+navigation/target/sleep/Brain/HOME/inventory mutation, and no facts-refresh/POI/trade/Goal execution
+calls in the controller. Final remapped JAR:
+`build/libs/spmscavenger-1.11.0.jar`, SHA-256
+`94534E28364ACF9E6C7FAFB1940D2F3AEF3F90581103DEED58D416A2DAA06F3C`.
+Package audit: **28** temporary V3 debug classes (**21** controller/snapshot/evidence entries),
+**0** upstream Trade Everything classes, **5** project-owned TE compatibility classes, and **0**
+removed V2 witness entries. No Minecraft process was launched; controller behavior and all VR-T3
+rows remain `UNVERIFIED`.

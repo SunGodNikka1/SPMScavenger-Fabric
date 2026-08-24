@@ -114,3 +114,40 @@ SHA-256: `766F099FBC004A007A615DD044A9243901F8FBF621A66EF3A8BBC33C6A3CCA40`.
 Package audit: nine expected V3 witness/assessment/precondition entries, zero upstream Trade
 Everything classes, five project-owned TE compatibility classes, and zero removed V2 witness
 entries. The replacement artifact has not been launched and requires separate approval.
+
+## Automated campaign-controller addendum — 2026-08-23
+
+The operator-intensive manual row loop is superseded by a temporary singleton controller under
+`/spmscavenger debug v3`: `run <preset>`, `status`, `report`, `stop`, and `reset`. It executes only
+allowlisted `spm_vr` fixtures in the Overworld, removes unrelated PlayerMobs only before opening,
+waits for natural Gate0, performs a declared pre-window day/weather transition, waits for genuine
+`SHELTER_HOLD` release, records the exact opening tick, and captures bounded transition/terminal
+evidence through the row's minimum clock. `OBSERVATION_COMPLETE` is explicitly not product PASS.
+
+To support standing away, the controller force-loads only arena chunks it newly acquires and
+releases those exact chunks on all normal terminal/lifecycle paths. It detaches the active session
+before release so chunk-unload callbacks cannot re-enter completion. Foreign forced chunks are
+never removed. Hard-process-crash cleanup remains unavailable and is documented as a disposable-
+world limitation.
+
+The VR-T3b zombie trigger was corrected from preset-load-relative scheduling to exact
+window-open+120 execution; the helper still only summons the declared hostile and never forces
+target/aggro. Scheduled village bed-claim and interrupt helpers now anchor to the tagged fixture
+subject instead of inheriting server-spawn execution position.
+
+| Verification | Result |
+| --- | --- |
+| Initial RED | focused test compilation failed with missing controller/helper symbols |
+| Focused controller/witness/datapack suite | **33/33 PASS** |
+| Three authority/steering/evidence-manufacture probes | **NOT FOUND** |
+| `clean build` | **PASS — 1643 tests, 0 failures/errors/skips** |
+| Remapped JAR | `build/libs/spmscavenger-1.11.0.jar` (1,206,432 bytes) |
+| SHA-256 | `94534E28364ACF9E6C7FAFB1940D2F3AEF3F90581103DEED58D416A2DAA06F3C` |
+| Temporary V3 debug classes | **28** total; **21** campaign/snapshot/evidence entries |
+| Packaged upstream Trade Everything classes | **0** |
+| Project-owned TE compatibility classes | **5** |
+| Removed V2 witness entries | **0** |
+
+No Minecraft process was launched. Static orchestration, tests, artifact identity, and packaging are
+`CONFIRMED`; live controller behavior and every VR-T3 row remain `UNVERIFIED` pending separate
+approval for this exact artifact.

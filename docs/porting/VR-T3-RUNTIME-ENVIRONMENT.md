@@ -23,7 +23,7 @@
 | Mod | File | SHA-256 | Evidence |
 | --- | --- | --- | --- |
 | **Social Player Mobs** (`playermob`) | `playermob-fabric-0.89.0+1.21.1.jar` | `C8DC0E89C3FD632B6DCC7F8E46D3AE4955DD5504CBA53F72B62314850A64E612` | Downloaded from GitHub release `bh679/playermob-mc` tag `v0.89.0` (485 500 bytes); cached at `Projects/references/artifacts/playermob-fabric-0.89.0+1.21.1.jar` |
-| **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `766F099FBC004A007A615DD044A9243901F8FBF621A66EF3A8BBC33C6A3CCA40` | Task-59 instrumented artifact at `build/libs/spmscavenger-1.11.0.jar`; temporary one-shot V3 diagnostic includes Gate-0 and settlement-row shelter-release readout |
+| **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `94534E28364ACF9E6C7FAFB1940D2F3AEF3F90581103DEED58D416A2DAA06F3C` | Task-59 instrumented artifact at `build/libs/spmscavenger-1.11.0.jar`; temporary V3 inspector + automated campaign controller |
 
 **SPM source tag (audit):** `v0.89.0` on `https://github.com/bh679/playermob-mc` (`mod_version=0.89.0` in tag `gradle.properties`).
 
@@ -47,7 +47,7 @@ Hashes must match this document before the batched VR-T3 campaign.
 | `pack_format` | **48** (1.21.1) |
 | Preset count | **13** — twelve applicable VR-T3 letter rows (`a–e`, `g–m`) + **D-VR-084 witness** |
 | Load hook | `data/minecraft/tags/function/load.json` → `spm_vr:load` |
-| Invoke | `/function spm_vr:scenario/<preset_id>` |
+| Invoke | `/spmscavenger debug v3 run <preset_id>` (direct function remains manual fallback) |
 
 Structural validation (no Minecraft): `SpmVrDatapackStructureTest`.
 
@@ -66,6 +66,7 @@ Structural validation (no Minecraft): `SpmVrDatapackStructureTest`.
 
 | Date | Change |
 | --- | --- |
+| 2026-08-23 | Automated campaign controller — repinned after 1643-test clean build and package audit; no Minecraft launch |
 | 2026-08-23 | Settlement-row precondition — repinned after passive daytime/`SHELTER_HOLD` readiness classification; 1628-test clean build |
 | 2026-08-23 | Gate-0 completion — repinned after non-creating settlement/facts witness extension; 1625-test clean build |
 | 2026-08-23 | Runtime-validation preparation — repinned to temporary V3 one-shot witness artifact; 1618-test clean build |

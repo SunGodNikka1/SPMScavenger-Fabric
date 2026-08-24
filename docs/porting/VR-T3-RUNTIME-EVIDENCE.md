@@ -62,8 +62,10 @@ NBT to repair the fixture.
 
 ## Per-row evidence
 
-For every row, attach the relevant screenshot/video filenames and paste transition-only
-`[spmscavenger/v3-witness]` lines from `latest.log`.
+For every row, attach the relevant screenshot/video filenames and paste bounded transition-only
+`[spmscavenger/v3-campaign]` lines plus any manual corroborating `[spmscavenger/v3-witness]` lines
+from `latest.log`. Record the controller's exact opening/terminal ticks and observation disposition;
+then adjudicate PASS/FAIL/WEIRD separately against the matrix.
 
 | ID | Preset | Start→end tick | Must-happen evidence | Must-not evidence/falsifier probe | Inspector/log evidence | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
