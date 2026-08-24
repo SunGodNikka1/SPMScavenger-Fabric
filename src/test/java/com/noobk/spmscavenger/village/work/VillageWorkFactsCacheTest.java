@@ -3,6 +3,7 @@ package com.noobk.spmscavenger.village.work;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -30,6 +31,20 @@ class VillageWorkFactsCacheTest {
                     SettlementIdentity.of(Level.OVERWORLD, new BlockPos(i, 64, 0)), i));
         }
         assertEquals(VillageWorkTuning.MAX_CACHED_SETTLEMENTS, cache.size());
+    }
+
+    @Test
+    void readOnlyPeekDoesNotReplaceStoredFreshnessSnapshot() {
+        VillageWorkFactsCache cache = VillageWorkFactsCache.createForTest();
+        SettlementIdentity identity = SettlementIdentity.of(Level.OVERWORLD, BlockPos.ZERO);
+        VillageWorkFacts stored = sample(identity, 10L);
+        cache.put(stored);
+
+        VillageWorkFacts projected = cache.peekReadOnly(
+                identity, 10L + VillageWorkTuning.FRESHNESS_WINDOW_TICKS + 1).orElseThrow();
+
+        assertEquals(WorkFactsFreshness.STALE, projected.freshness());
+        assertSame(stored, cache.storedForTest(identity));
     }
 
     private static VillageWorkFacts sample(SettlementIdentity identity, long tick) {

@@ -85,3 +85,14 @@ the datapack now exposes help, honest entity/schedule-only cleanup, a standalone
 
 Runtime remains `UNVERIFIED`. The temporary command/test/registration must be removed after accepted
 evidence, followed by a clean production rebuild. No Minecraft launch occurred.
+
+## Gate-0 completion addendum — 2026-08-23
+
+The same one-shot witness now closes the preflight observability gap: it reports the remembered
+current settlement identity, all population facts, completeness/freshness, and a fail-safe Gate-0
+verdict. A new non-creating/non-writing facts accessor was required because the existing production
+`peek` may persist freshness into its cache; production consumers were not changed. Focused tests
+pass 12/12 and `clean build` passes **1625 tests / 0 failures/errors/skips**. New instrumented JAR
+SHA-256: `1185EBCF362CB5409FC0D61DC4A49EE00016385FAF402C0244C8DC9DF7CD22C6`.
+
+No production semantic or Minecraft runtime claim is upgraded by these static results.

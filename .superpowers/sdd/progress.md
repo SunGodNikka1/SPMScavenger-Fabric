@@ -8,7 +8,7 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **V3-F CLOSED** (task-58); **V3-G LAUNCH PACKET READY** (task-59; temporary witness artifact awaiting approval); runtime campaign **NOT AUTHORIZED** | `task-58-report.md`, `task-59-prelaunch-report.md` |
+| **V3 Village Work** | **V3-F CLOSED** (task-58); **V3-G GATE-0-COMPLETE LAUNCH PACKET READY** (task-59; temporary witness artifact awaiting approval); runtime campaign **NOT AUTHORIZED** | `task-58-report.md`, `task-59-prelaunch-report.md` |
 
 **Task-59 authorization scope (2026-08-22):**
 
@@ -20,8 +20,8 @@
 | Minecraft / `runClient` / batched VR-T3 execution | **NOT AUTHORIZED** |
 
 **Checkpoint before runtime launch:** `task-59-prelaunch-report.md` + matrix + executable fixtures.
-Approved-next artifact candidate: temporary V3 witness JAR SHA-256
-`063585AA5782B576E5CCFDAD5739B133842173EF17232CEBF7B4DA95B01AA628`; 1618 tests, 0 failures.
+Approved-next artifact candidate: Gate-0-complete temporary V3 witness JAR SHA-256
+`1185EBCF362CB5409FC0D61DC4A49EE00016385FAF402C0244C8DC9DF7CD22C6`; 1625 tests, 0 failures.
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -112,6 +112,6 @@ Task 58: brief v1.1 — `task-58-brief.md` (V3-F unified ComposterWorkFacts + Co
 Task 58: Gate 0 PASS — `task-58-gate0-report.md`
 Task 58: complete — V3-F STATIC-BEHAVIORAL ACCEPT (`task-58-report.md`, CLOSE-58-1…3)
 
-Task 59: **LAUNCH PACKET READY** — 13 executable presets + one-shot hidden-authority witness + runbook/evidence worksheet; instrumented artifact awaits explicit approval (`task-59-prelaunch-report.md`); runtime campaign NOT AUTHORIZED
+Task 59: **GATE-0-COMPLETE LAUNCH PACKET READY** — 13 executable presets + one-shot authority/settlement/population witness + runbook/evidence worksheet; instrumented artifact awaits explicit approval (`task-59-prelaunch-report.md`); runtime campaign NOT AUTHORIZED
 
 No commits unless user requests. No Minecraft launches unless separately approved.

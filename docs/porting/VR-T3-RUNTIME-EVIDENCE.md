@@ -26,7 +26,9 @@
 | `adultVillagerCount >= 2` | — |
 | `claimedHomeCount >= 2` | — |
 | `currentFreeHomeCapacity >= 1` | — |
-| Verdict (`PASS` / `FIXTURE_FAILURE`) | — |
+| Inspector `completeness` / `freshness` | — |
+| Inspector `Gate0` line + reason | — |
+| Verdict (`PASS` / `FIXTURE_FAILURE` / `INCOMPLETE`) | — |
 
 Do not continue population-dependent rows after `FIXTURE_FAILURE`. Do not inject HOME or sleeping
 NBT to repair the fixture.

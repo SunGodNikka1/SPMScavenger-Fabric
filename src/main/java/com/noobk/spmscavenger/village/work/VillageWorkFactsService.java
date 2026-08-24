@@ -81,6 +81,23 @@ public final class VillageWorkFactsService {
                 .peek(identity, level.getGameTime());
     }
 
+    /**
+     * Non-creating, non-writing read for passive runtime diagnostics.
+     *
+     * <p>Unlike {@link #peek}, this does not materialize a server cache and does not persist a
+     * freshness transition into an existing cache.
+     */
+    public static Optional<VillageWorkFacts> peekReadOnly(
+            ServerLevel level, SettlementIdentity identity) {
+        if (level == null || identity == null) {
+            return Optional.empty();
+        }
+        VillageWorkFactsCache cache = VillageWorkFactsCache.peekForServer(level.getServer());
+        return cache == null
+                ? Optional.empty()
+                : cache.peekReadOnly(identity, level.getGameTime());
+    }
+
     public static int drainBudget(MinecraftServer server, int budget) {
         if (server == null || budget <= 0) {
             return 0;

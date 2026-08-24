@@ -33,6 +33,11 @@ public final class VillageWorkFactsCache {
         return BY_SERVER.computeIfAbsent(server, ignored -> new VillageWorkFactsCache());
     }
 
+    /** Existing server cache for passive diagnostics, or {@code null}; never creates one. */
+    static VillageWorkFactsCache peekForServer(MinecraftServer server) {
+        return server == null ? null : BY_SERVER.get(server);
+    }
+
     /** Test-only isolated cache without a {@link MinecraftServer} key. */
     static VillageWorkFactsCache createForTest() {
         return new VillageWorkFactsCache();
@@ -57,6 +62,19 @@ public final class VillageWorkFactsCache {
         return Optional.of(fresh);
     }
 
+    /**
+     * Non-writing projection for passive diagnostics.
+     *
+     * <p>Freshness is evaluated at the requested tick, but the stored snapshot and access order are
+     * left untouched. This is deliberately separate from the production {@link #peek} contract.
+     */
+    public Optional<VillageWorkFacts> peekReadOnly(SettlementIdentity identity, long currentTick) {
+        VillageWorkFacts stored = entries.get(identity);
+        return stored == null
+                ? Optional.empty()
+                : Optional.of(FreshnessPolicy.apply(stored, currentTick));
+    }
+
     public void put(VillageWorkFacts facts) {
         if (facts == null) {
             return;
@@ -77,6 +95,10 @@ public final class VillageWorkFactsCache {
 
     int size() {
         return entries.size();
+    }
+
+    VillageWorkFacts storedForTest(SettlementIdentity identity) {
+        return entries.get(identity);
     }
 
     private void trim() {

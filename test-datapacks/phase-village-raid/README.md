@@ -11,8 +11,9 @@ windows, and falsifiers live in `docs/porting/VR-T3-RUNTIME-MATRIX.md`; record r
 - **Production authority:** ordinary Scavenger and Social Player Mobs Goals choose, path, admit,
   mutate, and terminate. The fixture does not force a Goal or award an expected result.
 - **Evidence authority:** `/spmscavenger debug v3 inspect <mob>` takes a one-shot read-only snapshot
-  of running activities, pending mandatory ownership, and Village Work admission. It retains no
-  session and changes no decision.
+  of running activities, pending mandatory ownership, Village Work admission, the subject's actual
+  remembered in-bounds settlement, and cached population facts. It retains no session, creates no
+  settlement/facts cache, schedules no refresh, and changes no decision.
 
 ## Install and preflight
 
@@ -53,3 +54,16 @@ Use `/function spm_vr:help` for the exact function names. VR-T3f is not part of 
 
 Datapack setup and clean builds do not prove runtime behavior. No row becomes `CONFIRMED` until its
 approved live evidence is recorded.
+
+## Gate-0 inspector verdict
+
+After a settlement preset has run for at least 120 ticks, the same inspect command prints:
+
+- `settlement observed: YES/NO`, anchor, and `SettlementIdentity`;
+- adult villagers, total usable HOME capacity, claimed HOME count, and current free capacity;
+- completeness and freshness;
+- `Gate0=PASS`, `Gate0=FIXTURE_FAILURE`, or `Gate0=INCOMPLETE`.
+
+`INCOMPLETE` means normal production has not yet produced readable current facts. Wait for its
+ordinary cadence and sample again; do not invoke refresh or inject HOME/sleep state. Stop the
+campaign on `FIXTURE_FAILURE` and preserve the output.

@@ -43,7 +43,7 @@ AUTHORIZED** until separate User launch approval (AGENTS.md Gate 6).
 | `spm_vr` executable fixtures | **COMPLETE** — `test-datapacks/phase-village-raid/data/spm_vr/function/` |
 | Structural datapack validation | `SpmVrDatapackStructureTest` (no Minecraft boot) |
 | Operator runbook | `test-datapacks/phase-village-raid/README.md`; `/function spm_vr:help` |
-| Passive hidden-authority snapshot | `/spmscavenger debug v3 inspect <mob>` — temporary one-shot read only |
+| Passive hidden-authority + Gate-0 snapshot | `/spmscavenger debug v3 inspect <mob>` — temporary one-shot read only; reports remembered settlement, population facts, and explicit Gate-0 verdict |
 | Evidence record | `docs/porting/VR-T3-RUNTIME-EVIDENCE.md` |
 | Environment / JAR hashes | `docs/porting/VR-T3-RUNTIME-ENVIRONMENT.md` |
 | Static/build baseline | see `task-59-prelaunch-report.md` |
@@ -87,12 +87,22 @@ phase** and **no second mandatory publisher**. Closure map: `setBlock false / in
 
 Run **before any VR-T3 row** that depends on `setup_village_stub`. Allow vanilla villager AI
 **≥120 ticks** after `/function spm_vr:_lib/setup_village_stub` (or any scenario that calls it)
-before reading settlement evidence.
+before reading settlement evidence. Then run:
+
+```text
+/spmscavenger debug v3 inspect @e[tag=spm_vr.subject,limit=1]
+```
+
+The snapshot reads already-produced memory/facts only. `Gate0=INCOMPLETE` means observation is not
+yet readable and may be sampled again after normal production cadence; it does not create or refresh
+evidence. `Gate0=FIXTURE_FAILURE` is emitted only when facts are `COMPLETE + FRESH` but a numeric
+fixture threshold fails.
 
 | Check | Pass criterion | On fail |
 | --- | --- | --- |
-| Scavenger settlement observation | `VillagePerception` / settlement anchor readable for ally mob | **STOP** — `FIXTURE_FAILURE` |
-| V3-E population facts (when judging VR-T3e or any population-dependent row) | `adultVillagerCount >= 2`, `claimedHomeCount >= 2`, `currentFreeHomeCapacity >= 1` | **STOP** — `FIXTURE_FAILURE` |
+| Scavenger settlement observation | inspector reports `settlement observed: YES` and exact anchor/identity | Continue only when population facts also readable; otherwise `INCOMPLETE` |
+| V3-E population facts | inspector reports `COMPLETE`, `FRESH`, `adultVillagerCount >= 2`, `claimedHomeCount >= 2`, `currentFreeHomeCapacity >= 1` | **STOP** on explicit `Gate0=FIXTURE_FAILURE`; wait/re-sample on `INCOMPLETE` |
+| Gate-0 verdict | inspector emits `Gate0=PASS` | Do not execute population-dependent closure rows until PASS |
 
 **On `FIXTURE_FAILURE`:**
 
@@ -151,6 +161,7 @@ Before marking V3 **runtime closed**, review:
 
 | Date | Change |
 | --- | --- |
+| 2026-08-23 | Gate-0 witness completion — remembered settlement identity + full population facts + explicit PASS/FIXTURE_FAILURE/INCOMPLETE |
 | 2026-08-23 | Runtime-validation packet — one-shot hidden-authority inspector, datapack help/cleanup, operator runbook, evidence worksheet, new artifact approval gate |
 | 2026-08-22 | Initial matrix — task-59 prep; `playermob` 0.89.0; VR-T3f excluded |
 | 2026-08-23 | Remove fake HOME/sleep NBT from bootstrap; settlement preflight gate 0; structural test inverted |

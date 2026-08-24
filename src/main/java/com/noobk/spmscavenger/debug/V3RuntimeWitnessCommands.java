@@ -11,8 +11,15 @@ import com.noobk.spmscavenger.mining.MiningProjectSavedData;
 import com.noobk.spmscavenger.mining.MoveHolderClassifier;
 import com.noobk.spmscavenger.mixin.MobGoalSelectorAccessor;
 import com.noobk.spmscavenger.village.PlayerMobVillagePolicySavedData;
+import com.noobk.spmscavenger.village.KnownVillage;
+import com.noobk.spmscavenger.village.MobVillageMemory;
+import com.noobk.spmscavenger.village.SettlementBoundsPolicy;
 import com.noobk.spmscavenger.village.VillageScenarioProfile;
+import com.noobk.spmscavenger.village.VillageMemorySavedData;
 import com.noobk.spmscavenger.village.VillageWorkAdmission;
+import com.noobk.spmscavenger.village.work.SettlementIdentity;
+import com.noobk.spmscavenger.village.work.VillageWorkFacts;
+import com.noobk.spmscavenger.village.work.VillageWorkFactsService;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -77,6 +84,7 @@ public final class V3RuntimeWitnessCommands {
                 source.getServer(), mob.getUUID());
         VillageWorkAdmission.Result villageWork = VillageWorkAdmission.evaluate(
                 profile, observation, mob.getTarget() != null, claim, now);
+        Gate0Snapshot gate0 = captureGate0(level, mob);
 
         List<String> lines = new ArrayList<>();
         lines.add("=== V3 Runtime Witness Snapshot ===");
@@ -97,6 +105,22 @@ public final class V3RuntimeWitnessCommands {
         lines.add("villageWork=" + (villageWork.permitted() ? "ALLOW" : "DENY")
                 + " cause=" + villageWork.cause()
                 + " authorityCause=" + villageWork.authorityCause());
+        lines.add("settlement observed: " + (gate0.settlement().isPresent() ? "YES" : "NO"));
+        lines.add(gate0.settlement()
+                .map(value -> "settlement anchor: " + value.anchor().toShortString()
+                        + " settlement identity: " + value.identity())
+                .orElse("settlement anchor: UNAVAILABLE settlement identity: UNAVAILABLE"));
+        lines.add(gate0.facts()
+                .map(value -> "populationFacts adultVillagerCount=" + value.adultVillagerCount()
+                        + " totalUsableHomeCapacity=" + value.totalUsableHomeCapacity()
+                        + " claimedHomeCount=" + value.claimedHomeCount()
+                        + " currentFreeHomeCapacity=" + value.currentFreeHomeCapacity()
+                        + " completeness=" + value.completeness()
+                        + " freshness=" + value.freshness()
+                        + " observedAtTick=" + value.observedAtTick())
+                .orElse("populationFacts=UNAVAILABLE completeness=UNAVAILABLE freshness=UNAVAILABLE"));
+        lines.add("Gate0=" + gate0.assessment().verdict()
+                + " reason=" + gate0.assessment().reason());
 
         for (String line : lines) {
             source.sendSuccess(() -> Component.literal(line), false);
@@ -104,6 +128,43 @@ public final class V3RuntimeWitnessCommands {
                     LOG_PREFIX, mob.getUUID(), now, line);
         }
         return 1;
+    }
+
+    private static Gate0Snapshot captureGate0(ServerLevel level, Mob mob) {
+        VillageMemorySavedData memory = VillageMemorySavedData.peekInDimension(level);
+        Optional<MobVillageMemory> mobMemory = memory == null
+                ? Optional.empty()
+                : memory.peek(mob.getUUID());
+        Optional<RememberedSettlement> settlement = mobMemory.flatMap(value ->
+                nearestCurrentSettlement(value, mob.blockPosition(), level));
+        Optional<VillageWorkFacts> facts = settlement.flatMap(value ->
+                VillageWorkFactsService.peekReadOnly(level, value.identity()));
+        V3Gate0Assessment.Result assessment =
+                V3Gate0Assessment.evaluate(settlement.isPresent(), facts);
+        return new Gate0Snapshot(settlement, facts, assessment);
+    }
+
+    private static Optional<RememberedSettlement> nearestCurrentSettlement(
+            MobVillageMemory memory,
+            net.minecraft.core.BlockPos mobPos,
+            ServerLevel level) {
+        KnownVillage nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
+        for (KnownVillage village : memory.villages()) {
+            if (!SettlementBoundsPolicy.within(mobPos, village.anchor())) {
+                continue;
+            }
+            double distance = mobPos.distSqr(village.anchor());
+            if (distance < nearestDistance) {
+                nearest = village;
+                nearestDistance = distance;
+            }
+        }
+        if (nearest == null) {
+            return Optional.empty();
+        }
+        SettlementIdentity identity = SettlementIdentity.of(level.dimension(), nearest.anchor());
+        return Optional.of(new RememberedSettlement(nearest.anchor(), identity));
     }
 
     private static List<String> runningGoals(
@@ -125,5 +186,16 @@ public final class V3RuntimeWitnessCommands {
             }
         }
         return List.copyOf(out);
+    }
+
+    private record RememberedSettlement(
+            net.minecraft.core.BlockPos anchor,
+            SettlementIdentity identity) {
+    }
+
+    private record Gate0Snapshot(
+            Optional<RememberedSettlement> settlement,
+            Optional<VillageWorkFacts> facts,
+            V3Gate0Assessment.Result assessment) {
     }
 }

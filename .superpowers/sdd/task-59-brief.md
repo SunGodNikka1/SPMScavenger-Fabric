@@ -14,6 +14,8 @@ it does **not** add new village-work features, mixins, or `MandatoryOwnership` p
 
 **Brief revision history:**
 
+- v1.2 — Gate-0 witness completion (2026-08-23): remembered settlement + population facts +
+  explicit PASS/FIXTURE_FAILURE/INCOMPLETE via non-creating, non-writing reads only
 - v1.1 — runtime-preparation witness addendum (2026-08-23): one-shot passive V3 inspector,
   datapack help/cleanup, evidence worksheet, artifact reapproval; still no Minecraft launch
 - v1 — initial brief (User authorized Task-59 prep 2026-08-22)
@@ -202,3 +204,23 @@ forces a Goal, calls `canUse`/`canContinueToUse`, navigates, or launches Minecra
 
 Changing this temporary diagnostic surface changes the remapped JAR hash; return a clean build,
 test count, package audit, path, and SHA-256 for separate launch approval.
+
+### v1.2 Gate-0 completion
+
+Extend the same snapshot with the subject's remembered in-bounds settlement identity and the
+production `VillageWorkFacts` population fields. Classification is exact:
+
+- no remembered current settlement or no facts → `Gate0=INCOMPLETE`;
+- facts not `COMPLETE + FRESH` → `Gate0=INCOMPLETE`;
+- readable facts with `adultVillagerCount >= 2`, `claimedHomeCount >= 2`, and
+  `currentFreeHomeCapacity >= 1` → `Gate0=PASS`;
+- readable facts that fail any numeric fixture threshold → `Gate0=FIXTURE_FAILURE`.
+
+The witness must use `VillageMemorySavedData.peekInDimension(...).peek(...)` and a non-creating,
+non-writing Village Work facts accessor. Existing `VillageWorkFactsService.peek(...)` is not safe
+for this purpose because its cache read may persist a freshness transition; add a read-only accessor
+without changing production consumers or returned production semantics.
+
+**Forbidden:** `refreshNow`, refresh scheduling, cache creation/write/invalidation, POI acquisition,
+HOME-ticket changes, Brain/sleep NBT, village-memory allocation/recording, or manufactured evidence.
+Existing authority/activity reporting remains unchanged.

@@ -21,6 +21,18 @@ class V3RuntimeWitnessCommandsTest {
         assertTrue(source.contains("MandatoryOwnership.evaluate("));
         assertTrue(source.contains("VillageWorkAdmission.evaluate("));
         assertTrue(source.contains("MoveHolderClassifier.activityClass("));
+        assertTrue(source.contains("VillageMemorySavedData.peekInDimension("));
+        assertTrue(source.contains("memory.peek(mob.getUUID())"));
+        assertTrue(source.contains("VillageWorkFactsService.peekReadOnly("));
+        assertTrue(source.contains("Gate0="));
+        assertTrue(source.contains("settlement observed: "));
+        assertTrue(source.contains("settlement anchor: "));
+        assertTrue(source.contains("adultVillagerCount="));
+        assertTrue(source.contains("totalUsableHomeCapacity="));
+        assertTrue(source.contains("claimedHomeCount="));
+        assertTrue(source.contains("currentFreeHomeCapacity="));
+        assertTrue(source.contains("completeness="));
+        assertTrue(source.contains("freshness="));
     }
 
     @Test
@@ -36,6 +48,18 @@ class V3RuntimeWitnessCommandsTest {
         assertFalse(source.contains("canContinueToUse()"));
         assertFalse(source.contains("setItem("));
         assertFalse(source.contains("performTrade"));
+        assertFalse(source.contains("VillageMemorySavedData.get("));
+        assertFalse(source.contains("memoryOf("));
+        assertFalse(source.contains(".remember("));
+        assertFalse(source.contains("VillageWorkFactsService.peek("));
+        assertFalse(source.contains("refreshNow("));
+        assertFalse(source.contains("scheduleFor"));
+        assertFalse(source.contains("requestRefresh("));
+        assertFalse(source.contains("acquireTicket("));
+        assertFalse(source.contains("PoiManager"));
+        assertFalse(source.contains("Brain"));
+        assertFalse(source.contains("SleepingX"));
+        assertFalse(source.contains("setDirty("));
     }
 
     @Test

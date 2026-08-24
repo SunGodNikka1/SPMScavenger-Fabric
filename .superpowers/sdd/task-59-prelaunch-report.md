@@ -136,3 +136,39 @@ Three explicit source probes returned `NOT FOUND`: (1) authority/profile/storage
 
 **AV-1 boundary:** the witness's read-only code shape and artifact identity are `CONFIRMED`.
 Minecraft behavior remains `UNVERIFIED`; no runtime process was launched.
+
+---
+
+## Gate-0 witness completion — 2026-08-23
+
+The existing command now reports the subject's actual remembered in-bounds settlement anchor/
+identity and cached population facts: adult villagers, total usable HOME capacity, claimed HOME
+count, current free capacity, completeness, freshness, and observation tick. It emits exactly one of
+`Gate0=PASS`, `Gate0=FIXTURE_FAILURE`, or `Gate0=INCOMPLETE`.
+
+`VillageWorkFactsService.peek(...)` was not reused because its current cache path may write a
+freshness transition. The extension instead adds `peekReadOnly`: it does not create a server cache
+and projects current freshness without replacing the stored snapshot. Production consumers remain
+on the existing `peek` contract.
+
+| Verification | Result |
+| --- | --- |
+| Focused Gate-0/witness/cache tests | **12/12 PASS** |
+| Gate classification unit rows | no settlement/facts → INCOMPLETE; stale/incomplete → INCOMPLETE; exact thresholds → PASS; each numeric deficit → FIXTURE_FAILURE |
+| Read-only cache unit control | projected STALE snapshot does not replace stored FRESH object |
+| Structural read-only controls | no cache creation/write, refresh/schedule, authority mutation, Goal/navigation/executor call, POI/Brain/sleep mutation, or retained session |
+| `.\gradlew.bat clean build` | **PASS** — 1625 tests, 0 failures/errors/skips |
+| Remapped JAR | `build/libs/spmscavenger-1.11.0.jar` |
+| SHA-256 | `1185EBCF362CB5409FC0D61DC4A49EE00016385FAF402C0244C8DC9DF7CD22C6` |
+| Temporary V3 witness-related JAR entries | **6** (command, assessment, and nested record/enum classes) |
+| Packaged upstream Trade Everything classes | **0** |
+| Project-owned TE compatibility classes | **5** |
+| Removed V2-TE witness entries | **0** |
+
+**Semantic-drift review:** production refresh cadence, VillageMemory recording, HOME ticket state,
+cache writes used by production consumers, goal admission, priorities, navigation, and activity
+authority are unchanged. Runtime Gate-0 behavior remains `UNVERIFIED`; no Minecraft launch occurred.
+
+Three Gate-0 source probes returned `NOT FOUND`: (1) authority/profile/storage/inventory/executor
+mutation, (2) refresh/POI/Brain/memory/cache evidence manufacturing, and (3) retained session/tick
+hook/Goal/navigation calls.
