@@ -111,4 +111,9 @@ enum V3CampaignScenario {
     int requiredReplants() {
         return requiredReplants;
     }
+
+    boolean requiresMandatoryRoute() {
+        return this == MANDATORY_BLOCKS_VILLAGE_WORK
+                || this == MANDATORY_OWNERSHIP_WITNESS;
+    }
 }

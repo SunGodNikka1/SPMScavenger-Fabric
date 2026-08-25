@@ -290,3 +290,26 @@ PASS**. Full `clean build`: **1663 tests**, zero failures/errors/skips. JAR:
 `build/libs/spmscavenger-1.11.0.jar` (1,241,777 bytes), SHA-256
 `ED07F88D06AE46645AE827DF1C1B31726C687D114501A1444C8676A3F36F56E3`.
 No Minecraft launch or commit occurred; the repair remains runtime `UNVERIFIED`.
+
+## T3j mandatory-route fixture repair — 2026-08-24
+
+Live artifact `ED07F88D...F56E3` completed a valid 1000-tick VR-T3j window (282→1282) with Gate 0,
+shelter release, isolation, and spatial tracking intact, but `pendingClaimObservedAfterOpen=false`.
+The crop remained mature while the subject eventually entered `EXPEDITION`. This is
+`FIXTURE_INCOMPLETE`, not V3 PASS/FAIL: world oak logs did not instantiate a modeled demand.
+
+Both T3j and D-VR-084 now use the same fixture-only inventory frontier: stone pickaxe, diamond axe,
+two sticks, eight torches, crop seeds, and no iron/raw iron. Their datapacks provide a clear natural
+corridor and three exposed iron ores. Before opening, `V3MandatoryRouteReadiness` consumes the real
+`WorkDemandPolicy`, `GatherIntentPolicy`, `GatherRoutePrecursor`, candidate/protection/tool policy,
+and a non-steering path probe. It emits `MANDATORY_ROUTE_READY` only for the exact iron-pick
+consumer with `RAW_IRON`, `nextStep=NOTHING`, scan coverage, and an eligible reachable target.
+Failure is `FIXTURE_INCOMPLETE` before the clock starts.
+
+The fixture/witness contains no claim publication/removal, Gather Goal invocation, admission
+mutation, target steering, or result award. Tasks 52–58, Gate 0, spatial isolation, T3k, and T3m are
+unchanged. Focused debug/datapack tests: **68/68 PASS**. Full `clean build`: **1669 tests**, zero
+failures/errors/skips. JAR: `build/libs/spmscavenger-1.11.0.jar` (1,254,383 bytes), SHA-256
+`8C2DBBA590B55AB55E80A96A84C88C28583F8700A151D90AD3EEFEA4A6CA69F2`. Packaged upstream Trade
+Everything classes: **0**. No Minecraft launch or commit occurred; corrected runtime behavior is
+`UNVERIFIED`.

@@ -30,7 +30,9 @@ windows, and falsifiers live in `docs/porting/VR-T3-RUNTIME-MATRIX.md`; record r
 5. Start exactly one row with `/spmscavenger debug v3 run <preset>`. The controller establishes
    `PREPARING`, executes the loaded preset at the command origin on the next server tick, waits for natural Gate 0, advances the disposable fixture to day,
    waits up to 200 daytime ticks for genuine `SHELTER_HOLD` release, and opens the evidence window
-   only after `RowPrecondition=READY`.
+   only after `RowPrecondition=READY`. The two mandatory-route rows additionally require the passive
+   `MANDATORY_ROUTE_READY` production-policy witness; failure ends as `FIXTURE_INCOMPLETE` before
+   the observation clock starts.
 6. Play normally or stand away. Use `/spmscavenger debug v3 status` for bounded progress and
    `/spmscavenger debug v3 report` for opening/transition/terminal evidence. The controller force-
    loads only 32-block scenario-core chunks it newly acquired and releases those exact chunks at every terminal.
@@ -46,7 +48,8 @@ windows, and falsifiers live in `docs/porting/VR-T3-RUNTIME-MATRIX.md`; record r
 
 - `OBSERVATION_COMPLETE`: the required observation clock completed; it is **not** product PASS.
 - `INCOMPLETE`: the required production transition did not occur before the bounded timeout.
-- `FIXTURE_INCOMPLETE`: daytime shelter ownership did not release within 200 ticks.
+- `FIXTURE_INCOMPLETE`: a dynamic fixture prerequisite (including shelter release or mandatory-route
+  readiness) did not become interpretable; no product verdict is assigned.
 - `FIXTURE_FAILURE`: preset/Gate-0 fixture contract failed.
 - `EXTERNAL_INTERFERENCE`: unrelated PlayerMob contamination entered after the row opened.
 
@@ -73,6 +76,9 @@ not teleport, steer, freeze, or path-correct the subject, and it does not force 
 5. `compost_seed_surplus`
 
 Use `/function spm_vr:help` for the exact function names. VR-T3f is not part of this campaign.
+For the two mandatory-route rows, direct `/function` invocation prepares world geometry only; the
+temporary controller owns their declared inventory frontier and readiness boundary. Use
+`/spmscavenger debug v3 run ...` for admissible evidence.
 
 ## Verdict discipline
 

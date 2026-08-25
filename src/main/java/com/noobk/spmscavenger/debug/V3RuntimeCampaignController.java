@@ -61,6 +61,7 @@ public final class V3RuntimeCampaignController {
         ESTABLISH_BOUNDARY,
         EXECUTE_SCENARIO,
         DISCOVER_SUBJECT,
+        PREPARE_MANDATORY_ROUTE,
         FORCE_CHUNKS,
         REMOVE_CONTAMINANTS,
         ACTIVATE
@@ -270,6 +271,18 @@ public final class V3RuntimeCampaignController {
             Mob subject = subjects.getFirst();
             session.subjectId = subject.getUUID();
 
+            session.startupStage = StartupStage.PREPARE_MANDATORY_ROUTE;
+            V3MandatoryRouteFixture.Result routeFixture =
+                    V3MandatoryRouteFixture.prepare(session.scenario, subject);
+            if (!routeFixture.prepared()) {
+                throw new IllegalStateException(
+                        "mandatory route fixture failed: " + routeFixture.reason());
+            }
+            if (session.scenario.requiresMandatoryRoute()) {
+                record(session, level.getGameTime(), "MANDATORY_ROUTE_FIXTURE_PREPARED",
+                        routeFixture.reason());
+            }
+
             session.startupStage = StartupStage.FORCE_CHUNKS;
             forceScenarioCoreChunks(level, session);
             session.startupStage = StartupStage.REMOVE_CONTAMINANTS;
@@ -410,6 +423,21 @@ public final class V3RuntimeCampaignController {
             return;
         }
         if (snapshot.rowPrecondition().verdict() == V3RowPrecondition.Verdict.READY) {
+            if (session.scenario.requiresMandatoryRoute()) {
+                V3MandatoryRouteReadiness.Result readiness =
+                        V3MandatoryRouteReadiness.evaluate(level, subject, session.origin);
+                if (readiness.verdict() != V3MandatoryRouteReadiness.Verdict.READY) {
+                    record(session, snapshot.tick(), "MANDATORY_ROUTE_NOT_READY",
+                            V3MandatoryRouteReadiness.describe(readiness));
+                    finish(level.getServer(), session, State.FIXTURE_INCOMPLETE, snapshot.tick(),
+                            "MANDATORY_ROUTE_READY precondition failed: "
+                                    + V3MandatoryRouteReadiness.describe(readiness),
+                            snapshot, null);
+                    return;
+                }
+                record(session, snapshot.tick(), "MANDATORY_ROUTE_READY",
+                        V3MandatoryRouteReadiness.describe(readiness));
+            }
             V3CampaignStartupGuard.Outcome isolation = V3CampaignStartupGuard.execute(() ->
                     removePreWindowContaminants(
                             level, session, V3ContaminationScanGate.Mode.FORCED_BOUNDARY));

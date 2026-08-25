@@ -23,7 +23,7 @@
 | Mod | File | SHA-256 | Evidence |
 | --- | --- | --- | --- |
 | **Social Player Mobs** (`playermob`) | `playermob-fabric-0.89.0+1.21.1.jar` | `C8DC0E89C3FD632B6DCC7F8E46D3AE4955DD5504CBA53F72B62314850A64E612` | Downloaded from GitHub release `bh679/playermob-mc` tag `v0.89.0` (485 500 bytes); cached at `Projects/references/artifacts/playermob-fabric-0.89.0+1.21.1.jar` |
-| **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `ED07F88D06AE46645AE827DF1C1B31726C687D114501A1444C8676A3F36F56E3` | Task-59 dynamic-HOME Gate-0 repair at `build/libs/spmscavenger-1.11.0.jar`; preserves final T3k/T3m and spatial corrections. `38C3...8588FC` is superseded after live +120 HOME1 falsification. |
+| **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `8C2DBBA590B55AB55E80A96A84C88C28583F8700A151D90AD3EEFEA4A6CA69F2` | Task-59 mandatory-route fixture repair at `build/libs/spmscavenger-1.11.0.jar`; both mandatory rows use the policy-proven iron frontier and fail before opening unless `MANDATORY_ROUTE_READY`. `ED07...F56E3` is superseded after its valid T3j window proved no mandatory route instantiated. |
 
 **SPM source tag (audit):** `v0.89.0` on `https://github.com/bh679/playermob-mc` (`mod_version=0.89.0` in tag `gradle.properties`).
 
@@ -66,6 +66,7 @@ Structural validation (no Minecraft): `SpmVrDatapackStructureTest`.
 
 | Date | Change |
 | --- | --- |
+| 2026-08-24 | T3j live fixture falsification — replaced world-log assumption in T3j/D-VR-084 with controller-seeded iron-pick frontier, exposed reachable iron, and passive `MANDATORY_ROUTE_READY`; repinned after 1669-test clean build; no Minecraft relaunch |
 | 2026-08-24 | Gate-0 dynamic HOME repair — +120 is minimum grace; HOME claim deficits wait within original 2400-tick session deadline and time out as `FIXTURE_INCOMPLETE`; repinned after 1663-test clean build; no Minecraft relaunch |
 | 2026-08-24 | Post-open spatial repair — core exit is evidence, 192-block contamination envelope, 224-block geometry escape, T3j nonterminal; repinned after 1653-test clean build; no Minecraft relaunch |
 | 2026-08-24 | Gate-0 sequencing repair — explicit 120-tick natural HOME bootstrap measured after scenario execution; repinned after 1649-test clean build; no Minecraft relaunch |

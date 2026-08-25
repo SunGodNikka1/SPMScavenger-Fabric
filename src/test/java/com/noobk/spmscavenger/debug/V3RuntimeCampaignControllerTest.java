@@ -149,6 +149,30 @@ class V3RuntimeCampaignControllerTest {
                 "outer-envelope presence alone must not remain terminal");
     }
 
+    @Test
+    void mandatoryRowsRequirePassiveRouteReadinessBeforeWindowOpen() throws IOException {
+        String source = Files.readString(SOURCE);
+        int shelterStart = source.indexOf("private static void tickShelterRelease(");
+        int openStart = source.indexOf("private static void openWindow(");
+        String shelter = source.substring(shelterStart, openStart);
+
+        assertTrue(shelter.contains("V3MandatoryRouteReadiness.evaluate("));
+        assertTrue(shelter.contains("MANDATORY_ROUTE_READY"));
+        assertTrue(shelter.indexOf("V3MandatoryRouteReadiness.evaluate(")
+                        < shelter.indexOf("openWindow(level, subject, snapshot, session)"),
+                "route readiness must be proven before the evidence clock opens");
+        assertTrue(shelter.contains("State.FIXTURE_INCOMPLETE"));
+
+        String readiness = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/debug/V3MandatoryRouteReadiness.java"));
+        assertFalse(readiness.contains("MandatoryOwnershipRegistry.publish("));
+        assertFalse(readiness.contains("RouteExhaustionEvidence.publish("));
+        assertFalse(readiness.contains("VillageWorkAdmission.evaluate("));
+        assertFalse(readiness.contains("GatherResourcesGoal"));
+        assertFalse(readiness.contains("moveTo("));
+        assertFalse(readiness.contains("setTarget("));
+    }
+
     private static int count(String value, String needle) {
         int count = 0;
         int index = 0;

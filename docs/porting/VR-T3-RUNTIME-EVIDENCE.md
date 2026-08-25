@@ -69,7 +69,7 @@ then adjudicate PASS/FAIL/WEIRD separately against the matrix.
 
 | ID | Preset | Start→end tick | Must-happen evidence | Must-not evidence/falsifier probe | Inspector/log evidence | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| VR-T3j | `mandatory_blocks_village_work` | — | — | — | — | `UNVERIFIED` |
+| VR-T3j | `mandatory_blocks_village_work` | 282→1282 on `ED07...F56E3` | Gate0 and row precondition passed; fixed window completed | `pendingClaimObservedAfterOpen=false`; harvest episode was IDLE at opening; mature crop untouched | subject entered EXPEDITION and left core at tick 1150; spatial harness correctly continued | `FIXTURE_INCOMPLETE` — mandatory route never instantiated; product verdict not reached; fixture superseded |
 | D-VR-084 | `mandatory_ownership_witness` | — | — | — | — | `UNVERIFIED` |
 | VR-T3g | `storage_public_deny` | — | — | — | — | `UNVERIFIED` |
 | VR-T3h | `storage_unknown_deny` | — | — | — | — | `UNVERIFIED` |

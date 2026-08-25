@@ -10,9 +10,9 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING` — **V2-TE-W2 CLOSED**; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
-| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G DYNAMIC-HOME GATE-0 REPAIR BUILT** (1663-test clean build); Minecraft campaign not authorized. |
-| **Nearest frontier** | Review/authorization of replacement Task-59 artifact SHA-256 `ED07F88D06AE46645AE827DF1C1B31726C687D114501A1444C8676A3F36F56E3`. VR-T3j remains not started; VR-T3m retains its declared 4000-tick matrix/fixture contradiction. |
-| **Last update** | 2026-08-24 (`Agent_Codex` Task-59 Gate-0 dynamic HOME occupancy repair) |
+| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G T3j MANDATORY-ROUTE FIXTURE REPAIR BUILT** (1669-test clean build); Minecraft campaign not authorized. |
+| **Nearest frontier** | Review/authorization of replacement Task-59 artifact SHA-256 `8C2DBBA590B55AB55E80A96A84C88C28583F8700A151D90AD3EEFEA4A6CA69F2`. VR-T3j product verdict remains unreached; VR-T3m retains its declared 4000-tick matrix/fixture contradiction. |
+| **Last update** | 2026-08-24 (`Agent_Codex` Task-59 T3j mandatory-route fixture repair) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -8697,3 +8697,32 @@ Tasks 52–58, spatial isolation, T3k, and T3m are unchanged.
 **46/46 PASS**; `clean build` **1663 tests / 0 failures/errors/skips**. Replacement JAR SHA-256:
 `ED07F88D06AE46645AE827DF1C1B31726C687D114501A1444C8676A3F36F56E3`.
 No Minecraft launch or commit occurred; repaired live sequencing remains `UNVERIFIED` until rerun.
+
+### Contribution — `Agent_Codex` (Task-59 T3j mandatory-route fixture falsification, 2026-08-24)
+
+**Live evidence (`RUNTIME_CONFIRMED`):** `ED07F88D...F56E3` opened VR-T3j at tick 282 and completed
+its full fixed window at 1282 with Gate 0, shelter release, isolation, and spatial tracking valid.
+`pendingClaimObservedAfterOpen=false`; the production harvest episode was IDLE at opening, the crop
+stayed mature, and the subject later entered `EXPEDITION`. The correct disposition is
+`FIXTURE_INCOMPLETE`; mandatory ownership never instantiated, so no V3 product verdict exists.
+
+**Root cause (`CODE_CONFIRMED`):** both T3j and D-VR-084 placed oak logs in the world, but
+`WorkDemandPolicy.select(...)` reads backpack/hands/config, not world blocks. Charcoal additionally
+requires carried surplus logs. World-log presence cannot publish production Gather ownership.
+
+**Repair (`CODE_CONFIRMED`):** both presets now establish a bounded iron-pick frontier: fixture-only
+inventory supplies stone pickaxe, diamond axe, two sticks, eight torches, and crop seeds while iron
+and raw iron remain absent; three exposed iron ores sit on a clear natural path. A passive
+`MANDATORY_ROUTE_READY` boundary consumes the real demand, intent, precursor, candidate/protection,
+tool, and path policies. It requires the exact `iron_pickaxe_upgrade → iron_ingot → RAW_IRON`
+frontier, `nextStep=NOTHING`, scan coverage, and an eligible complete approach before opening.
+Failure is `FIXTURE_INCOMPLETE`; no claim or Goal is manufactured.
+
+**Scope/validation:** Tasks 52–58, Gate 0, spatial isolation, T3k, and T3m are untouched. Focused
+debug/datapack **68/68 PASS**; `clean build` **1669 tests / 0 failures/errors/skips**. Replacement JAR
+SHA-256: `8C2DBBA590B55AB55E80A96A84C88C28583F8700A151D90AD3EEFEA4A6CA69F2`. No Minecraft launch or
+commit occurred; corrected ownership behavior remains runtime `UNVERIFIED`.
+
+**Separate unresolved fixture risk:** VR-T3l still assumes nearby world oak logs create a mandatory
+claim. It was not changed in this two-preset repair and must not be used for a product verdict until
+its own compatible `wantsFood + mandatory route` fixture contract is repaired and reviewed.

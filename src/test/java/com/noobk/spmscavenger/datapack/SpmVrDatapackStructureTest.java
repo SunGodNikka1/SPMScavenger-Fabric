@@ -234,6 +234,20 @@ class SpmVrDatapackStructureTest {
     }
 
     @Test
+    void mandatoryRowsProvideTheSameRealIronRouteGeometry() throws IOException {
+        for (String id : List.of(
+                "mandatory_blocks_village_work", "mandatory_ownership_witness")) {
+            String body = readScenario(id);
+            assertTrue(body.contains("minecraft:iron_ore"),
+                    id + " must expose the production-derived RAW_IRON precursor");
+            assertFalse(body.contains("minecraft:oak_log"),
+                    id + " must not claim world-log presence creates WorkDemand");
+            assertTrue(body.contains("mandatory route inventory"),
+                    id + " must name the controller-owned fixture boundary");
+        }
+    }
+
+    @Test
     void presetIdCountMatchesClosureRule() {
         assertEquals(13, PRESET_IDS.size(),
                 "12 applicable VR-T3 letter rows + D-VR-084 witness");

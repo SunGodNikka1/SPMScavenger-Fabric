@@ -1,8 +1,9 @@
 # VR-T3 runtime matrix (V3-G closure)
 
 **Status:** fixtures + temporary automated campaign controller **IMPLEMENTED**; Gate-0 runtime
-snapshot **CONFIRMED**; no settlement-dependent row has started. Any launch with the newly rebuilt
-controller artifact requires separate approval (AGENTS.md Gate 6).
+snapshot **CONFIRMED**. VR-T3j completed one valid 1000-tick observation window, but the run is
+`FIXTURE_INCOMPLETE` because no mandatory route instantiated; no V3 product verdict was reached.
+Any launch with the newly rebuilt controller artifact requires separate approval (AGENTS.md Gate 6).
 
 **Task:** task-59 / V3-G · **Brief:** `.superpowers/sdd/task-59-brief.md`  
 **RFC:** `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` — phase closure rule (VR-T3f non-applicable)  
@@ -70,11 +71,11 @@ applicable** while broad V3-D2 remains deferred.
 | **VR-T3g** | Ally cannot loot `VILLAGE_PUBLIC` without grant | HOME/HIGH alone permits loot | `storage_public_deny` | **800 ticks** after mob paths to chest — no open/loot continuation | `StorageOwnershipStructuralTest` vrT3g_* | `UNVERIFIED` |
 | **VR-T3h** | UNKNOWN ownership → fail closed | Missing evidence treated as permission | `storage_unknown_deny` | **800 ticks** — no open; ownership remains unknown | vrT3h_* unit tests | `UNVERIFIED` |
 | **VR-T3i** | Explicit grant permits; non-ally unchanged | Blanket strip despite grant | `storage_granted_permit` | **800 ticks** after `storage own` grant — permitted access may proceed once | vrT3i_* unit tests | `UNVERIFIED` |
-| **VR-T3j** | Mandatory work blocks fresh village work | Opinion/discretionary displaces mandatory | `mandatory_blocks_village_work` | **1000 ticks** — mandatory claim/live gather must complete or block before village crop work | task-52/53 wiring tests | `UNVERIFIED` |
+| **VR-T3j** | Mandatory work blocks fresh village work | Opinion/discretionary displaces mandatory | `mandatory_blocks_village_work` | `MANDATORY_ROUTE_READY` then **1000 ticks** — mandatory claim/live gather must complete or block before village crop work | task-52/53 wiring + Task-59 frontier tests | `FIXTURE_INCOMPLETE` on superseded `ED07...F56E3`; repaired fixture runtime `UNVERIFIED` |
 | **VR-T3k** | Two mobs: first commits; second revalidates | Double break; global reservation | `crop_multi_mob` | Through first mob **COMMIT** + second mob **abandon/reacquire** + **200 ticks** | static `CONFIRMED` — task-55 | `UNVERIFIED` |
 | **VR-T3l** | Host harvest veto in managed domain when V3 refused | Wilderness veto; stock food suppressed | `crop_hungry_veto` | **800 ticks** — crop must remain planted; no host strip | static `INFERRED` — D-VR-079-A1 | `UNVERIFIED` |
 | **VR-T3m** | Replant stock from episode banked drops across cycles | Floor-pickup replant supply | `crop_multi_cycle` | Baseline first replant, then **≥2 complete same-cell natural growth/harvest cycles** + **400 ticks** | `ContainerMergeTest`, F8 tests; detector static `CONFIRMED` | `MATRIX/FIXTURE CONTRADICTION` — 4000-tick controller cap is not a realistic unaccelerated two-cycle window; runtime `UNVERIFIED` |
-| **D-VR-084 witness** | Pending mandatory claim blocks discretionary + village work admission | Claim refresh from demand alone | `mandatory_ownership_witness` | **1000 ticks** — real Gather publisher claim visible; village work refused while claim live | task-52 scenarios (static) | `UNVERIFIED` |
+| **D-VR-084 witness** | Pending mandatory claim blocks discretionary + village work admission | Claim refresh from demand alone | `mandatory_ownership_witness` | `MANDATORY_ROUTE_READY` then **1000 ticks** — real Gather publisher claim visible; village work refused while claim live | task-52 scenarios + Task-59 frontier tests | repaired fixture runtime `UNVERIFIED` |
 | **SPM 0.89 caution** | Target invalidation/hand-off observable under interruption | Misread as V3 defect | reuse `crop_interrupt_combat` / `mandatory_blocks_village_work` | Same windows as parent rows | host-delta doc only | `UNVERIFIED` |
 
 ### VR-T3c contract (task-55 atomic — no repair)
@@ -131,6 +132,23 @@ disposable fixture to day, then waits up to 200 daytime ticks for production to 
 `SHELTER_HOLD`. It does not stop the Goal or clear authority. A retained hold ends as exact
 `FIXTURE_INCOMPLETE`; `Gate0=PASS` remains valid.
 
+### Mandatory-route evidence-window precondition
+
+VR-T3j and D-VR-084 use one declared iron-pick fixture frontier. Before either evidence window
+opens, the temporary controller passively re-runs the real `WorkDemandPolicy`,
+`GatherIntentPolicy`, `GatherRoutePrecursor`, candidate/protection/tool checks, and a non-steering
+path probe. It emits `MANDATORY_ROUTE_READY` only when:
+
+- selected demand is `minecraft:iron_ingot` for `spmscavenger:iron_pickaxe_upgrade`;
+- the modeled precursor is `RAW_IRON` and the live Gather intent covers it;
+- `ScavengerCrafting.nextStep(...) == NOTHING`;
+- smelting has no carried raw input to execute before Gather;
+- at least one declared exposed iron-ore target remains eligible and has a complete approach path.
+
+Failure is terminal `FIXTURE_INCOMPLETE` before `WINDOW_OPEN`; the controller reports the failed
+production fact. The fixture does not publish a claim, call a Gather Goal, change admission, or
+award the expected result.
+
 ## Automated controller contract
 
 ```text
@@ -145,6 +163,7 @@ disposable fixture to day, then waits up to 200 daytime ticks for production to 
   -> natural Gate0 PASS / INCOMPLETE / FIXTURE_INCOMPLETE / FIXTURE_FAILURE
   -> logged day/weather fixture transition
   -> wait genuine SHELTER_HOLD release
+  -> for T3j/D-VR-084, require passive MANDATORY_ROUTE_READY or stop FIXTURE_INCOMPLETE
   -> forced fresh 192-block quarantine scan (never cadence-skipped)
   -> ROW_PRECONDITION_READY + exact WINDOW_OPEN tick
   -> core exit records SUBJECT_LEFT_CORE + distance/pendingClaim/activeClasses; never leashes subject
@@ -241,6 +260,7 @@ Before marking V3 **runtime closed**, review:
 
 | Date | Change |
 | --- | --- |
+| 2026-08-24 | VR-T3j `ED07...F56E3` completed tick 282→1282 with no claim/mandatory Gather; classified fixture-incomplete. T3j/D-VR-084 now use a policy-proven iron frontier plus pre-window `MANDATORY_ROUTE_READY`; replacement SHA `8C2DBBA5...A6CA69F2`, runtime not authorized |
 | 2026-08-24 | Live `38C3...8588FC` falsification at exact +120/HOME1; reclassified natural HOME deficit as dynamic waiting, preserved structural immediate failures and original 2400-tick deadline; replacement SHA `ED07F88D...F56E3`, runtime not authorized |
 | 2026-08-24 | Final static T3k/T3m correction: all original contenders must release after commit; opening maturity is baseline-only and T3m requires two later same-cell cycles. Recorded the 4000-tick natural-growth contradiction; SHA `38C3E332...8588FC`; runtime not authorized |
 | 2026-08-24 | Superseded `626FB...F599`; separated 192-block subject telemetry from causal contamination authority, forced a fresh final isolation scan, and repaired T3k contention/T3m same-cell temporal evidence; replacement SHA `2D2E6492...DF8D7D`, runtime not authorized |

@@ -816,3 +816,99 @@ teleports villagers, or changes Tasks 52–58, spatial isolation, T3k, or T3m.
 - JAR: `build/libs/spmscavenger-1.11.0.jar`, SHA-256
   `ED07F88D06AE46645AE827DF1C1B31726C687D114501A1444C8676A3F36F56E3`.
 - Runtime repair: **UNVERIFIED** pending separately authorized rerun. Commit: **not created**.
+
+---
+
+## v1.11 T3j mandatory-route fixture falsification
+
+### Live evidence and corrected classification
+
+Artifact `ED07F88D...F56E3` completed a valid VR-T3j window from tick 282 through 1282 with
+`pendingClaimObservedAfterOpen=false`. Gate 0, shelter release, isolation, the 1000-tick clock, and
+the subject spatial model all operated successfully; the subject later entered `EXPEDITION` and
+left the 32-block core without the harness terminating the row. VR-T3j is therefore
+`FIXTURE_INCOMPLETE`: the mandatory route prerequisite never existed, so no V3 product verdict is
+assigned.
+
+`CODE_CONFIRMED`: `WorkDemandPolicy.select(...)` reads backpack, hands, and config. It does not read
+world blocks. Charcoal demand additionally requires `FurnacePolicy.needsCharcoal(...)`, whose final
+gate is at least one surplus carried log. Placing oak logs in the world cannot instantiate either
+fixture's promised mandatory publisher.
+
+Negative probes:
+
+1. world/level/block inputs in `WorkDemandPolicy` — **NOT FOUND**;
+2. claim/authority injection in either affected mcfunction — **NOT FOUND**;
+3. a pre-window `MANDATORY_ROUTE_READY` production-policy witness in Task-59 — **NOT FOUND**.
+
+### Alternatives and decision
+
+| Option | Benefit | Failure mode | Disposition |
+| --- | --- | --- | --- |
+| Publish a fixture claim or invoke Gather directly | deterministic visible denial | tests the harness's authority, not production ownership | rejected |
+| Seed carried surplus logs for charcoal | small fixture delta | charcoal outranks progression, depends on torch/fuel reserve and may hand immediately to smelting | rejected for these rows |
+| Seed an iron-pick consumer frontier plus exposed reachable iron ore | demand, precursor, intent, tool capability, and world target are independently provable through production policies | requires an explicit read-only readiness boundary and fixture-only inventory setup | **selected** |
+
+The fixture-only starting state is: stone pickaxe, diamond axe, two sticks, eight torches, no iron/raw
+iron, plus the scenario's crop seeds. Three exposed iron ore blocks stand on a clear natural strip
+inside the production gather radius. This makes `iron_pickaxe_upgrade` active while satisfying the
+stick/tool prerequisites and suppressing torch/log, diamond, and axe frontiers.
+
+### Behavioral Prediction (MAIBS-1)
+
+| Checkpoint | Production truth | Predicted observable result |
+| --- | --- | --- |
+| fixture setup/night bootstrap | iron-ingot demand exists; precursor is `RAW_IRON`; craft step is `NOTHING`; ore is intact | shelter may own activity, but the route remains derivable without a claim injection |
+| daytime + shelter release | the same live demand/intent is re-read; at least one target is eligible and path-reachable | `MANDATORY_ROUTE_READY` is logged before the window opens |
+| first Gather admission | production Gather publishes the pending route claim before its scan cadence gate | village work is denied by mandatory authority, or running `SCAVENGE_WORK` takes over after executor start |
+| ore acquisition | Gather equips the real stone pick, approaches, and mines exposed ore | the claim may disappear when the executor starts; running mandatory work remains the authority evidence |
+| route advances/completes | raw iron enters the backpack and later smelt/craft may own progression | crop work becomes eligible only after mandatory ownership genuinely clears |
+| prolonged failure | no demand, wrong precursor, ready craft, missing tool, protected ore, or no path | terminate before `WINDOW_OPEN` as `FIXTURE_INCOMPLETE`, with the failed production fact |
+
+Goal interaction: night `SHELTER_HOLD` legitimately preempts the route before the window;
+`SOCIAL_REFLEX` may briefly deny village work but does not satisfy readiness; Gather's pending claim
+or running `SCAVENGE_WORK` remains production-owned; `EXPEDITION` is permitted only if mandatory
+ownership never materializes or later clears.
+
+Predicted weird cases: configuration caps tools below iron (`RUNTIME_QUESTION`, fail readiness rather
+than opening); an ore target becomes protected/unreachable after setup (`RUNTIME_QUESTION`, fail
+readiness with target evidence); Gather starts between the readiness snapshot and window opening
+(`ACCEPTABLE_STEPPING_STONE`, the demand/target remains live and running work is stronger evidence
+than a pending claim); production completes all three ore acquisitions early in the window
+(`ACCEPTABLE_STEPPING_STONE`, T3j is about ordering, not indefinite suppression).
+
+**Must happen:** both affected presets create the same policy-proven iron demand; readiness proves
+selected material, consumer, precursor, `nextStep=NOTHING`, scan coverage, a usable tool, an eligible
+fixture target, and a reachable approach before opening.
+
+**Must not happen:** the fixture publishes/removes a claim, invokes a Gather Goal method, mutates
+Goal state, changes VillageWork admission, awards a result, or changes Tasks 52–58, Gate 0, spatial
+isolation, T3k, or T3m.
+
+**Falsifying runtime experiment:** rerun `mandatory_blocks_village_work`. If
+`MANDATORY_ROUTE_READY` is present but neither a pending claim nor running Gather ownership appears
+before discretionary expedition, the fixture correction is present and the failure moves to the
+production publisher/admission boundary. Static/build success alone leaves that behavior
+`UNVERIFIED`.
+
+### v1.11 static validation and semantic-drift review
+
+- Focused debug + datapack suite: **68/68 PASS**, including missing-tool and unreachable-target
+  negative controls.
+- `clean build`: **1669 tests / 0 failures/errors/skips**.
+- JAR: `build/libs/spmscavenger-1.11.0.jar` (1,254,383 bytes), SHA-256
+  `8C2DBBA590B55AB55E80A96A84C88C28583F8700A151D90AD3EEFEA4A6CA69F2`.
+- Packaged upstream Trade Everything classes: **0**; obsolete TE witness classes: **0**.
+- Production Java outside temporary `debug/V3*`: **0 changed files**. No Minecraft launch or
+  commit occurred.
+
+`PLANNED → IMPLEMENTED → PREDICTED RUNTIME`: the planned iron frontier is the exact implemented
+fixture state; the readiness boundary is stricter than demand presence because it also requires an
+eligible complete approach path. The expected next live report is
+`MANDATORY_ROUTE_FIXTURE_PREPARED → MANDATORY_ROUTE_READY → WINDOW_OPEN`, followed by a production
+pending claim or running `SCAVENGE_WORK` before discretionary expedition. That behavioral claim is
+`UNVERIFIED` until the replacement artifact runs.
+
+Separate scope warning: VR-T3l still contains the same world-log-as-demand assumption, but combines
+it with an empty-backpack `wantsFood()` contract. It is not silently repaired by the T3j frontier
+and remains fixture-unready pending its own compatible design.
