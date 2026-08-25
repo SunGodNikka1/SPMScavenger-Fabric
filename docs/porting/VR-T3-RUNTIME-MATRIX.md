@@ -136,18 +136,22 @@ disposable fixture to day, then waits up to 200 daytime ticks for production to 
 
 VR-T3j and D-VR-084 use one declared iron-pick fixture frontier. Before either evidence window
 opens, the temporary controller passively re-runs the real `WorkDemandPolicy`,
-`GatherIntentPolicy`, `GatherRoutePrecursor`, candidate/protection/tool checks, and a non-steering
-path probe. It emits `MANDATORY_ROUTE_READY` only when:
+`GatherIntentPolicy`, and `GatherRoutePrecursor`. It then reads
+`MandatoryOwnershipRegistry.liveClaim(subjectUUID, currentTick)`:
 
 - selected demand is `minecraft:iron_ingot` for `spmscavenger:iron_pickaxe_upgrade`;
 - the modeled precursor is `RAW_IRON` and the live Gather intent covers it;
 - `ScavengerCrafting.nextStep(...) == NOTHING`;
 - smelting has no carried raw input to execute before Gather;
-- at least one declared exposed iron-ore target remains eligible and has a complete approach path.
+- a matching non-expired production claim opens as `MANDATORY_ROUTE_READY source=LIVE_CLAIM`
+  without requiring the duplicate target-geometry prediction;
+- when no matching claim exists, the bounded candidate/protection/tool checks and non-steering path
+  probe remain the `source=PASSIVE_FALLBACK` and require an eligible complete approach.
 
 Failure is terminal `FIXTURE_INCOMPLETE` before `WINDOW_OPEN`; the controller reports the failed
 production fact. The fixture does not publish a claim, call a Gather Goal, change admission, or
-award the expected result.
+award the expected result. Claim logs include consumer key, generation, open/expiry/current ticks,
+and route identity as diagnostic text only; the concrete route implementation class is never a gate.
 
 ## Automated controller contract
 
@@ -163,7 +167,7 @@ award the expected result.
   -> natural Gate0 PASS / INCOMPLETE / FIXTURE_INCOMPLETE / FIXTURE_FAILURE
   -> logged day/weather fixture transition
   -> wait genuine SHELTER_HOLD release
-  -> for T3j/D-VR-084, require passive MANDATORY_ROUTE_READY or stop FIXTURE_INCOMPLETE
+  -> for T3j/D-VR-084, require current exact policy + matching LIVE_CLAIM, otherwise passive target fallback
   -> forced fresh 192-block quarantine scan (never cadence-skipped)
   -> ROW_PRECONDITION_READY + exact WINDOW_OPEN tick
   -> core exit records SUBJECT_LEFT_CORE + distance/pendingClaim/activeClasses; never leashes subject
@@ -260,6 +264,7 @@ Before marking V3 **runtime closed**, review:
 
 | Date | Change |
 | --- | --- |
+| 2026-08-24 | Three `8C2D...A69F2` T3j reproductions corroborated a live exact-consumer claim and Village Work denial while duplicate geometry prevented official opening. Matching live claim now yields `source=LIVE_CLAIM`; geometry remains only the no-claim fallback. Runtime evidence is corroboration, not closure. Replacement SHA `BDAA788C...A0B2BDC`; runtime not authorized |
 | 2026-08-24 | VR-T3j `ED07...F56E3` completed tick 282→1282 with no claim/mandatory Gather; classified fixture-incomplete. T3j/D-VR-084 now use a policy-proven iron frontier plus pre-window `MANDATORY_ROUTE_READY`; replacement SHA `8C2DBBA5...A6CA69F2`, runtime not authorized |
 | 2026-08-24 | Live `38C3...8588FC` falsification at exact +120/HOME1; reclassified natural HOME deficit as dynamic waiting, preserved structural immediate failures and original 2400-tick deadline; replacement SHA `ED07F88D...F56E3`, runtime not authorized |
 | 2026-08-24 | Final static T3k/T3m correction: all original contenders must release after commit; opening maturity is baseline-only and T3m requires two later same-cell cycles. Recorded the 4000-tick natural-growth contradiction; SHA `38C3E332...8588FC`; runtime not authorized |

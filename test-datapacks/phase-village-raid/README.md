@@ -30,9 +30,10 @@ windows, and falsifiers live in `docs/porting/VR-T3-RUNTIME-MATRIX.md`; record r
 5. Start exactly one row with `/spmscavenger debug v3 run <preset>`. The controller establishes
    `PREPARING`, executes the loaded preset at the command origin on the next server tick, waits for natural Gate 0, advances the disposable fixture to day,
    waits up to 200 daytime ticks for genuine `SHELTER_HOLD` release, and opens the evidence window
-   only after `RowPrecondition=READY`. The two mandatory-route rows additionally require the passive
-   `MANDATORY_ROUTE_READY` production-policy witness; failure ends as `FIXTURE_INCOMPLETE` before
-   the observation clock starts.
+   only after `RowPrecondition=READY`. The two mandatory-route rows additionally require the exact
+   production-policy frontier plus either a matching live production claim (`source=LIVE_CLAIM`)
+   or the passive target fallback (`source=PASSIVE_FALLBACK`). Failure ends as
+   `FIXTURE_INCOMPLETE` before the observation clock starts.
 6. Play normally or stand away. Use `/spmscavenger debug v3 status` for bounded progress and
    `/spmscavenger debug v3 report` for opening/transition/terminal evidence. The controller force-
    loads only 32-block scenario-core chunks it newly acquired and releases those exact chunks at every terminal.

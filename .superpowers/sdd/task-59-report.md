@@ -313,3 +313,64 @@ failures/errors/skips. JAR: `build/libs/spmscavenger-1.11.0.jar` (1,254,383 byte
 `8C2DBBA590B55AB55E80A96A84C88C28583F8700A151D90AD3EEFEA4A6CA69F2`. Packaged upstream Trade
 Everything classes: **0**. No Minecraft launch or commit occurred; corrected runtime behavior is
 `UNVERIFIED`.
+
+## Live-claim stopping-rule repair — 2026-08-24
+
+**Status:** `DONE_WITH_CONCERNS` — static repair and package gate complete; official T3j/D-VR-084
+runtime closure remains `UNVERIFIED` because this turn forbade Minecraft launch.
+
+### Files changed
+
+- `src/main/java/com/noobk/spmscavenger/debug/V3MandatoryRouteReadiness.java`
+- `src/test/java/com/noobk/spmscavenger/debug/V3MandatoryRouteReadinessTest.java`
+- `.superpowers/sdd/task-59-brief.md`
+- `.superpowers/sdd/task-59-report.md`
+- `plans/RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md`
+- `docs/porting/VR-T3-RUNTIME-MATRIX.md`
+- `docs/porting/VR-T3-RUNTIME-ENVIRONMENT.md`
+- `test-datapacks/phase-village-raid/README.md`
+- `test-datapacks/phase-village-raid/PRESET-MANIFEST.md`
+- `.superpowers/sdd/progress.md`
+
+### Delivered semantics
+
+`V3MandatoryRouteReadiness` now re-proves the exact public production frontier and reads
+`MandatoryOwnershipRegistry.liveClaim(subjectUUID, now)`. A matching non-expired
+`spmscavenger:iron_pickaxe_upgrade` claim returns `READY source=LIVE_CLAIM` before fixture target/path
+inspection. Wrong, expired, absent, or policy-drifted claims cannot do so; the existing passive
+geometry check remains the fallback. Reports retain consumer, generation, open/expiry/current ticks,
+and diagnostic route identity without depending on its concrete class.
+
+### Commands and exact results
+
+Working directory: `D:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`.
+
+- RED: `.\gradlew.bat test --tests com.noobk.spmscavenger.debug.V3MandatoryRouteReadinessTest`
+  failed at `compileTestJava` with 17 missing-symbol/signature errors for `Source`, `source()`,
+  `claimEvidence()`, and the claim-aware `evaluatePolicy` overload.
+- GREEN focused controller/readiness suite: build successful.
+- GREEN `.\gradlew.bat test --tests "com.noobk.spmscavenger.debug.*"`: **57 tests**, zero
+  failures/errors/skips.
+- `.\gradlew.bat clean build`: **BUILD SUCCESSFUL**, **1675 tests**, zero failures/errors/skips;
+  one pre-existing deprecation warning in `EpisodeRetentionTest`.
+- Package audit: `build/libs/spmscavenger-1.11.0.jar`, **1,260,259 bytes**, SHA-256
+  `BDAA788CAE2126FDE46F858A4076DF69FF0590F151CD3A6B88A32A580A0B2BDC`; packaged upstream Trade
+  Everything classes **0**; temporary V3 class entries **59** as expected for the removal-bound
+  Task-59 campaign artifact.
+
+### Source evidence and self-review
+
+- `CONFIRMED`: `MandatoryOwnershipClaim.expired(now)` is `now >= expiresAt`; registry `liveClaim`
+  deletes and returns empty for expiry. The controller uses that public registry seam.
+- `CONFIRMED`: matching false/true geometry, wrong consumer, expired/no claim fallback, policy drift,
+  metadata, no private route-class policy, and claim-before-geometry ordering are regression-covered.
+- `CONFIRMED`: only temporary `debug/V3MandatoryRouteReadiness.java` changed under production Java;
+  Tasks 52–58 production files are untouched.
+- Negative source probes: claim publication/release/removal in the fixture/readiness pair —
+  **NOT FOUND**; `GatherResourcesGoal`/`canUse()`/concrete route-identity type policy — **NOT FOUND**;
+  movement/teleport/navigation steering — **NOT FOUND**.
+- `RUNTIME_CORROBORATED`: three external live reports observed real mandatory ownership and Village
+  Work denial; the third official window did not open. Local logs do not contain that external run.
+- `UNVERIFIED`: replacement-artifact `source=LIVE_CLAIM -> WINDOW_OPEN` and official row result.
+
+No Minecraft launch or commit occurred.

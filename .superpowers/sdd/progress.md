@@ -112,6 +112,6 @@ Task 58: brief v1.1 — `task-58-brief.md` (V3-F unified ComposterWorkFacts + Co
 Task 58: Gate 0 PASS — `task-58-gate0-report.md`
 Task 58: complete — V3-F STATIC-BEHAVIORAL ACCEPT (`task-58-report.md`, CLOSE-58-1…3)
 
-Task 59: Gate 0 **RUNTIME PASS**; 32-block subject-leash removed in favor of core/envelope/escape evidence; 52 focused / 1653 full tests (SHA `626FB459...2F599`); no relaunch, VR-T3 rows remain `UNVERIFIED` (`task-59-prelaunch-report.md`)
+Task 59: Gate 0 **RUNTIME PASS**; live-claim stopping rule static-complete after three geometry false negatives; 57 focused / 1675 full tests (SHA `BDAA788C...A0B2BDC`); no relaunch, VR-T3 rows remain `UNVERIFIED` (`task-59-report.md`)
 
 No commits unless user requests. No Minecraft launches unless separately approved.

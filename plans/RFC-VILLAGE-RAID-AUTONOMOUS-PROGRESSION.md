@@ -11,7 +11,7 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING` — **V2-TE-W2 CLOSED**; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
 | **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G T3j MANDATORY-ROUTE FIXTURE REPAIR BUILT** (1669-test clean build); Minecraft campaign not authorized. |
-| **Nearest frontier** | Review/authorization of replacement Task-59 artifact SHA-256 `8C2DBBA590B55AB55E80A96A84C88C28583F8700A151D90AD3EEFEA4A6CA69F2`. VR-T3j product verdict remains unreached; VR-T3m retains its declared 4000-tick matrix/fixture contradiction. |
+| **Nearest frontier** | Review/authorization of replacement Task-59 artifact SHA-256 `BDAA788CAE2126FDE46F858A4076DF69FF0590F151CD3A6B88A32A580A0B2BDC`. VR-T3j has runtime corroboration of real mandatory ownership but no official window/closure; VR-T3m retains its declared 4000-tick matrix/fixture contradiction. |
 | **Last update** | 2026-08-24 (`Agent_Codex` Task-59 T3j mandatory-route fixture repair) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
@@ -8726,3 +8726,39 @@ commit occurred; corrected ownership behavior remains runtime `UNVERIFIED`.
 **Separate unresolved fixture risk:** VR-T3l still assumes nearby world oak logs create a mandatory
 claim. It was not changed in this two-preset repair and must not be used for a product verdict until
 its own compatible `wantsFood + mandatory route` fixture contract is repaired and reviewed.
+
+### Contribution — `Agent_Codex` (Task-59 live-claim stopping-rule repair, 2026-08-24)
+
+**Frontier before:** artifact `8C2DBBA5...A6CA69F2` produced the exact iron-pick production route
+and a real pending `MandatoryOwnershipClaim` across three origins. Village Work was denied while the
+claim was live, but Task-59's duplicate target-geometry oracle prevented `WINDOW_OPEN`.
+
+**Runtime evidence (`RUNTIME_CORROBORATED`, not closure):** the user-supplied third report records
+Gate 0 PASS, released shelter, `RowPrecondition=READY`, exact
+`iron_pickaxe_upgrade -> iron_ingot -> RAW_IRON`, `nextStep=NOTHING`, a live claim, and
+`villageWork=DENY/DENY_MANDATORY_AUTHORITY`. The official evidence window never opened. Local
+`logs/latest.log` contains no copy of that external session, so this evidence corroborates production
+ownership/denial but cannot close VR-T3j or D-VR-084.
+
+**Decision correction (`SUPERSEDED`):** mandatory target geometry after production claim publication
+is no longer part of the opening gate. The controller first re-proves the current exact public policy
+frontier, then passively reads `MandatoryOwnershipRegistry.liveClaim(subjectUUID, now)`. A matching
+non-expired exact-consumer claim yields `MANDATORY_ROUTE_READY source=LIVE_CLAIM` and short-circuits
+before fixture target/path inspection. Wrong, expired, or absent claims do not grant readiness;
+candidate/protection/tool/path evidence remains the `PASSIVE_FALLBACK`. Route identity is recorded
+only as diagnostic text, never matched by concrete implementation class.
+
+**Authority and behavior review:** fixture -> production -> witness ownership remains unchanged. No
+claim publication/release, Goal field/method access, movement, teleport, result award, or Tasks 52–58
+change was introduced. Once the official window opens, normal mandatory completion, running-activity
+handoff, combat interruption, and later Village Work re-resolution remain wholly production-owned.
+
+**Static validation (`CONFIRMED`):** the RED focused compile failed on the absent source/claim API;
+GREEN temporary debug suite passed **57/57**. Full `clean build` passed **1675 tests / 0 failures,
+errors, or skips**. JAR `build/libs/spmscavenger-1.11.0.jar` is 1,260,259 bytes, SHA-256
+`BDAA788CAE2126FDE46F858A4076DF69FF0590F151CD3A6B88A32A580A0B2BDC`; packaged upstream Trade
+Everything classes: **0**. Minecraft was not launched and no commit was created.
+
+**Frontier after:** exact-artifact review and separate runtime authorization. A successful rerun must
+log `source=LIVE_CLAIM` with consumer/generation/open/expiry/current ticks and open the official
+window; behavioral closure remains `UNVERIFIED` until that evidence exists.

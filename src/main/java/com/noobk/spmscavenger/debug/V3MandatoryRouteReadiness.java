@@ -8,6 +8,8 @@ import com.noobk.spmscavenger.ScavengerConfig;
 import com.noobk.spmscavenger.ScavengerCrafting;
 import com.noobk.spmscavenger.ToolBox;
 import com.noobk.spmscavenger.WorkDemandPolicy;
+import com.noobk.spmscavenger.activity.MandatoryOwnershipClaim;
+import com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry;
 import com.noobk.spmscavenger.village.trade.GatherRoutePrecursor;
 import java.util.LinkedHashSet;
 import java.util.Optional;
@@ -37,17 +39,54 @@ final class V3MandatoryRouteReadiness {
         INCOMPLETE
     }
 
+    enum Source {
+        LIVE_CLAIM,
+        PASSIVE_FALLBACK,
+        NONE
+    }
+
     record TargetEvidence(boolean eligible, boolean reachable, String detail) {
+    }
+
+    record ClaimEvidence(
+            String consumerKey,
+            int generation,
+            long openedAt,
+            long expiresAt,
+            long currentTick,
+            String routeIdentity) {
+
+        static ClaimEvidence capture(MandatoryOwnershipClaim claim, long now) {
+            return new ClaimEvidence(
+                    claim.consumerKey().toString(),
+                    claim.generation(),
+                    claim.openedAt(),
+                    claim.expiresAt(),
+                    now,
+                    String.valueOf(claim.routeIdentity()));
+        }
     }
 
     record Result(
             Verdict verdict,
+            Source source,
             String material,
             String consumer,
             Optional<GatherIntentPolicy.Resource> precursor,
             ScavengerCrafting.Step readyCraftStep,
             boolean scanCovers,
             TargetEvidence targetEvidence,
+            Optional<ClaimEvidence> claimEvidence,
+            String reason) {
+    }
+
+    private record PolicyEvidence(
+            boolean exactFrontier,
+            String material,
+            String consumer,
+            Optional<GatherIntentPolicy.Resource> precursor,
+            ScavengerCrafting.Step readyCraftStep,
+            boolean scanCovers,
             String reason) {
     }
 
@@ -58,16 +97,27 @@ final class V3MandatoryRouteReadiness {
         Container backpack = PlayerMobs.backpack(subject);
         if (backpack == null) {
             return incomplete("PlayerMob backpack unavailable", new TargetEvidence(
-                    false, false, "target not evaluated"));
+                    false, false, "target not evaluated"), Optional.empty());
         }
-        TargetEvidence target = inspectFixtureTargets(level, subject, fixtureOrigin);
-        return evaluatePolicy(
+        long now = level.getGameTime();
+        PolicyEvidence policy = inspectPolicy(
                 backpack,
                 subject.getMainHandItem(),
                 subject.getOffhandItem(),
                 ScavengerConfig.get(),
-                subject.blockPosition().getY(),
-                target);
+                subject.blockPosition().getY());
+        Optional<MandatoryOwnershipClaim> claim =
+                MandatoryOwnershipRegistry.liveClaim(subject.getUUID(), now);
+        if (!policy.exactFrontier()) {
+            return finish(policy, new TargetEvidence(false, false, "target not evaluated"), claim, now);
+        }
+        if (matchingLiveClaim(claim, now)) {
+            return finish(policy, new TargetEvidence(
+                    false, false, "not evaluated: matching live production claim supersedes geometry"),
+                    claim, now);
+        }
+        TargetEvidence target = inspectFixtureTargets(level, subject, fixtureOrigin);
+        return finish(policy, target, claim, now);
     }
 
     static Result evaluatePolicy(
@@ -77,11 +127,34 @@ final class V3MandatoryRouteReadiness {
             ScavengerConfig cfg,
             int mobBlockY,
             TargetEvidence targetEvidence) {
+        return evaluatePolicy(
+                backpack, mainHand, offHand, cfg, mobBlockY, targetEvidence, Optional.empty(), 0L);
+    }
+
+    static Result evaluatePolicy(
+            Container backpack,
+            ItemStack mainHand,
+            ItemStack offHand,
+            ScavengerConfig cfg,
+            int mobBlockY,
+            TargetEvidence targetEvidence,
+            Optional<MandatoryOwnershipClaim> claim,
+            long now) {
+        return finish(inspectPolicy(backpack, mainHand, offHand, cfg, mobBlockY),
+                targetEvidence, claim, now);
+    }
+
+    private static PolicyEvidence inspectPolicy(
+            Container backpack,
+            ItemStack mainHand,
+            ItemStack offHand,
+            ScavengerConfig cfg,
+            int mobBlockY) {
         Optional<WorkDemandPolicy.MaterialDemand> selected = WorkDemandPolicy
                 .select(backpack, mainHand, offHand, cfg)
                 .map(WorkDemandPolicy.WorkDemand::payload);
         if (selected.isEmpty()) {
-            return incomplete("WorkDemandPolicy selected no modeled demand", targetEvidence);
+            return policyIncomplete("WorkDemandPolicy selected no modeled demand");
         }
 
         WorkDemandPolicy.MaterialDemand demand = selected.get();
@@ -94,33 +167,58 @@ final class V3MandatoryRouteReadiness {
 
         if (!demand.materialKey().equals(EXPECTED_MATERIAL)
                 || !demand.consumerKey().equals(EXPECTED_CONSUMER)) {
-            return result(Verdict.INCOMPLETE, material, consumer, precursor,
-                    intent.readyCraftStep(), scanCovers, targetEvidence,
+            return policy(false, material, consumer, precursor,
+                    intent.readyCraftStep(), scanCovers,
                     "selected demand is not the fixture iron-pick frontier");
         }
         if (precursor.isEmpty() || precursor.get() != GatherIntentPolicy.Resource.RAW_IRON) {
-            return result(Verdict.INCOMPLETE, material, consumer, precursor,
-                    intent.readyCraftStep(), scanCovers, targetEvidence,
+            return policy(false, material, consumer, precursor,
+                    intent.readyCraftStep(), scanCovers,
                     "iron demand has no RAW_IRON precursor");
         }
         if (intent.readyCraftStep() != ScavengerCrafting.Step.NOTHING) {
-            return result(Verdict.INCOMPLETE, material, consumer, precursor,
-                    intent.readyCraftStep(), scanCovers, targetEvidence,
+            return policy(false, material, consumer, precursor,
+                    intent.readyCraftStep(), scanCovers,
                     "crafting already owns next step " + intent.readyCraftStep());
         }
         if (!intent.shouldGather() || !scanCovers) {
-            return result(Verdict.INCOMPLETE, material, consumer, precursor,
-                    intent.readyCraftStep(), scanCovers, targetEvidence,
+            return policy(false, material, consumer, precursor,
+                    intent.readyCraftStep(), scanCovers,
                     "Gather intent does not cover the selected precursor");
         }
+        return policy(true, material, consumer, precursor,
+                intent.readyCraftStep(), true,
+                "production demand, precursor, and Gather intent are ready");
+    }
+
+    private static Result finish(
+            PolicyEvidence policy,
+            TargetEvidence targetEvidence,
+            Optional<MandatoryOwnershipClaim> claim,
+            long now) {
+        Optional<ClaimEvidence> claimEvidence = claim.map(value -> ClaimEvidence.capture(value, now));
+        if (!policy.exactFrontier()) {
+            return result(Verdict.INCOMPLETE, Source.NONE, policy, targetEvidence, claimEvidence,
+                    policy.reason());
+        }
+        if (matchingLiveClaim(claim, now)) {
+            return result(Verdict.READY, Source.LIVE_CLAIM, policy, targetEvidence, claimEvidence,
+                    "matching live production claim owns the exact fixture frontier");
+        }
         if (!targetEvidence.eligible() || !targetEvidence.reachable()) {
-            return result(Verdict.INCOMPLETE, material, consumer, precursor,
-                    intent.readyCraftStep(), scanCovers, targetEvidence,
+            return result(Verdict.INCOMPLETE, Source.NONE, policy, targetEvidence, claimEvidence,
                     "no eligible reachable fixture RAW_IRON target: " + targetEvidence.detail());
         }
-        return result(Verdict.READY, material, consumer, precursor,
-                intent.readyCraftStep(), true, targetEvidence,
+        return result(Verdict.READY, Source.PASSIVE_FALLBACK, policy, targetEvidence, claimEvidence,
                 "production demand, precursor, Gather intent, and target are ready");
+    }
+
+    private static boolean matchingLiveClaim(
+            Optional<MandatoryOwnershipClaim> claim,
+            long now) {
+        return claim.filter(value -> !value.expired(now))
+                .filter(value -> EXPECTED_CONSUMER.equals(value.consumerKey()))
+                .isPresent();
     }
 
     private static TargetEvidence inspectFixtureTargets(
@@ -202,25 +300,45 @@ final class V3MandatoryRouteReadiness {
         return result;
     }
 
-    private static Result incomplete(String reason, TargetEvidence targetEvidence) {
-        return result(Verdict.INCOMPLETE, "UNAVAILABLE", "UNAVAILABLE", Optional.empty(),
-                ScavengerCrafting.Step.NOTHING, false, targetEvidence, reason);
+    private static PolicyEvidence policyIncomplete(String reason) {
+        return policy(false, "UNAVAILABLE", "UNAVAILABLE", Optional.empty(),
+                ScavengerCrafting.Step.NOTHING, false, reason);
     }
 
-    private static Result result(
-            Verdict verdict,
+    private static PolicyEvidence policy(
+            boolean exactFrontier,
             String material,
             String consumer,
             Optional<GatherIntentPolicy.Resource> precursor,
             ScavengerCrafting.Step step,
             boolean scanCovers,
-            TargetEvidence target,
             String reason) {
-        return new Result(verdict, material, consumer, precursor, step, scanCovers, target, reason);
+        return new PolicyEvidence(
+                exactFrontier, material, consumer, precursor, step, scanCovers, reason);
+    }
+
+    private static Result incomplete(
+            String reason,
+            TargetEvidence targetEvidence,
+            Optional<ClaimEvidence> claimEvidence) {
+        return result(Verdict.INCOMPLETE, Source.NONE, policyIncomplete(reason),
+                targetEvidence, claimEvidence, reason);
+    }
+
+    private static Result result(
+            Verdict verdict,
+            Source source,
+            PolicyEvidence policy,
+            TargetEvidence target,
+            Optional<ClaimEvidence> claimEvidence,
+            String reason) {
+        return new Result(verdict, source, policy.material(), policy.consumer(), policy.precursor(),
+                policy.readyCraftStep(), policy.scanCovers(), target, claimEvidence, reason);
     }
 
     static String describe(Result result) {
         return "verdict=" + result.verdict()
+                + " source=" + result.source()
                 + " material=" + result.material()
                 + " consumer=" + result.consumer()
                 + " precursor=" + result.precursor().map(Enum::name).orElse("UNAVAILABLE")
@@ -229,6 +347,14 @@ final class V3MandatoryRouteReadiness {
                 + " targetEligible=" + result.targetEvidence().eligible()
                 + " targetReachable=" + result.targetEvidence().reachable()
                 + " target=" + result.targetEvidence().detail()
+                + result.claimEvidence().map(value ->
+                        " claimConsumerKey=" + value.consumerKey()
+                                + " claimGeneration=" + value.generation()
+                                + " claimOpenedAt=" + value.openedAt()
+                                + " claimExpiresAt=" + value.expiresAt()
+                                + " currentTick=" + value.currentTick()
+                                + " claimRoute=" + value.routeIdentity())
+                        .orElse(" claim=NONE currentTick=UNAVAILABLE")
                 + " reason=" + result.reason();
     }
 }

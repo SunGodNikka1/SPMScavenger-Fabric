@@ -167,7 +167,7 @@ Shared library: `spm_vr:_lib/reset`, `setup_village_stub`, `spawn_ally`.
 | **VR-T3** | VR-T3j |
 | **Purpose** | Live mandatory progression blocks village work |
 | **World** | Crop + controller-seeded iron-pick frontier + three exposed reachable iron ores |
-| **Precondition** | `MANDATORY_ROUTE_READY` before the evidence window |
+| **Precondition** | `MANDATORY_ROUTE_READY source=LIVE_CLAIM`, or passive target fallback when no matching live claim exists |
 | **Must observe** | Village work waits; mandatory completes first |
 | **Falsifier** | Compost/harvest wins over pending mandatory |
 | **Min window** | 1000 ticks (matrix) |
@@ -212,7 +212,7 @@ Shared library: `spm_vr:_lib/reset`, `setup_village_stub`, `spawn_ally`.
 | **VR-T3** | (witness row — not a VR-T3 letter id) |
 | **Purpose** | Pending mandatory claim visible to `VillageWorkAdmission` |
 | **World** | Same policy-proven iron-pick frontier and exposed iron targets as VR-T3j; crop nearby; **no authority injection** |
-| **Precondition** | `MANDATORY_ROUTE_READY` before the evidence window |
+| **Precondition** | `MANDATORY_ROUTE_READY source=LIVE_CLAIM`, or passive target fallback when no matching live claim exists |
 | **Must observe** | Village work refused while claim live |
 | **Falsifier** | Village work starts despite pending claim |
 | **Min window** | 1000 ticks (matrix) |

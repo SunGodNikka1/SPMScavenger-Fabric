@@ -912,3 +912,79 @@ pending claim or running `SCAVENGE_WORK` before discretionary expedition. That b
 Separate scope warning: VR-T3l still contains the same world-log-as-demand assumption, but combines
 it with an empty-backpack `wantsFood()` contract. It is not silently repaired by the T3j frontier
 and remains fixture-unready pending its own compatible design.
+
+---
+
+## v1.12 T3j / D-VR-084 live-claim stopping-rule repair
+
+### Runtime falsification and scope
+
+Three separately originated runs of artifact `8C2DBBA5...A6CA69F2` reached Gate 0 PASS, daytime,
+released `SHELTER_HOLD`, and the exact production-derived
+`iron_pickaxe_upgrade -> iron_ingot -> RAW_IRON` frontier. In the latest supplied runtime report a
+live production `MandatoryOwnershipClaim` already denied Village Work, but the temporary readiness
+oracle refused to open because its duplicate target-geometry prediction said the fixture ore was
+outside scan bounds. This is `RUNTIME_CORROBORATED`, not row closure: the official window never
+opened.
+
+This repair changes only the temporary Task-59 stopping rule. Tasks 52–58 and production ownership,
+Gather, route, Village Work, Goal, and navigation semantics are frozen.
+
+### Alternatives and selected authority order
+
+| Option | Benefit | Strongest failure mode | Disposition |
+| --- | --- | --- | --- |
+| Keep geometry as mandatory even after publication | independently predicts a target | a second, drift-prone scan oracle can veto production's already-published responsibility | superseded by live evidence |
+| Accept any live claim | smallest controller rule | a wrong consumer or stale claim can open the wrong row | rejected |
+| Re-prove the current exact policy frontier, then accept a matching non-expired live claim; retain geometry only when no matching claim exists | production remains sole authority while impossible/no-claim fixtures still fail early | a claim can expire just before the read and fall back to geometry | **selected** |
+
+The controller must call only
+`MandatoryOwnershipRegistry.liveClaim(subjectUUID, currentTick)`. A matching claim is usable only
+when its consumer is `spmscavenger:iron_pickaxe_upgrade`, it is not expired, and the current public
+production policy still resolves the exact expected material and precursor with
+`nextStep=NOTHING` and Gather intent coverage. Its concrete `routeIdentity` is diagnostic text only.
+The result is `MANDATORY_ROUTE_READY source=LIVE_CLAIM`, and target geometry/path readiness is not
+evaluated in that branch. A wrong, expired, or absent claim cannot satisfy the gate; ordinary passive
+target readiness remains the fallback.
+
+Claim evidence retains `consumerKey`, `generation`, `openedAt`, `expiresAt`, `currentTick`, and
+diagnostic route identity. No fixture or witness API may publish/release ownership, inspect private
+Goal state, call Goal methods, move/teleport/steer the subject, or assign the expected result.
+
+### Behavioral Prediction (MAIBS-1 delta)
+
+| Checkpoint | Evidence owner | Predicted visible/controller result |
+| --- | --- | --- |
+| daytime boundary, matching live claim | production registry + current demand/intent policy | row opens immediately as `source=LIVE_CLAIM`, even if the duplicate target oracle would reject geometry |
+| matching claim released before the read | current policy + passive target fallback | geometry decides readiness; no historical claim is treated as live |
+| wrong-consumer claim | current policy + passive target fallback | wrong claim is logged diagnostically but grants no readiness |
+| after `WINDOW_OPEN` | production activity/claim observations only | controller observes normal Gather/village-work ordering; it never steers or prolongs ownership |
+| T+1000 | row clock | terminal evidence can adjudicate the official matrix instead of a pre-window geometric false negative |
+
+Goal interaction is unchanged: `SHELTER_HOLD` must release first; a pending live Gather claim blocks
+Village Work through shared production authority; when Gather starts, running mandatory activity may
+replace the pending claim; urgent/combat authority may still preempt naturally.
+
+Predicted weird cases:
+
+1. claim expires exactly at the opening read -> `RUNTIME_QUESTION`; expiry is authoritative and the
+   safe fallback runs;
+2. Gather changes the concrete route-identity class -> `ACCEPTABLE_STEPPING_STONE`; the field is
+   logged but never policy-matched;
+3. a wrong-consumer claim coexists with a geometrically valid exact frontier ->
+   `ACCEPTABLE_STEPPING_STONE`; readiness may come only from `PASSIVE_FALLBACK`, never that claim.
+
+**Must happen:** matching live claim + exact current frontier yields `READY source=LIVE_CLAIM` with
+all requested metadata and without target geometry being required.
+
+**Must not happen:** wrong/expired/absent claims create permission; concrete route-identity classes
+become policy; the debug controller invokes Goal/navigation behavior or mutates production state.
+
+**Required RED/GREEN regressions:** matching live claim with false and true geometry; wrong-consumer
+claim with false geometry; expired claim with valid fallback; no claim with valid fallback. The
+wrong/expired/no-claim cases must prove their result source is not `LIVE_CLAIM`.
+
+**Falsifying runtime experiment:** on the replacement artifact, reproduce the prior state. The row
+must log `MANDATORY_ROUTE_READY source=LIVE_CLAIM` with metadata and open an official window. Failure
+to open, policy drift away from the exact frontier, or a wrong-consumer claim opening the row falsifies
+the repair. No Minecraft launch is authorized in this task turn.
