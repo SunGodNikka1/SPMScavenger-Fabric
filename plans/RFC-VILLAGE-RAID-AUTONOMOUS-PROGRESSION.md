@@ -11,7 +11,7 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING` — **V2-TE-W2 CLOSED**; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
 | **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G T3j MANDATORY-ROUTE FIXTURE REPAIR BUILT** (1669-test clean build); Minecraft campaign not authorized. |
-| **Nearest frontier** | Review/authorization of replacement Task-59 artifact SHA-256 `BDAA788CAE2126FDE46F858A4076DF69FF0590F151CD3A6B88A32A580A0B2BDC`. VR-T3j has runtime corroboration of real mandatory ownership but no official window/closure; VR-T3m retains its declared 4000-tick matrix/fixture contradiction. |
+| **Nearest frontier** | VR-T3j is **RUNTIME PASS** on `BDAA788C...A0B2BDC`. Continue the separately authorized Task-59 campaign with D-VR-084 and remaining applicable VR-T3 rows; VR-T3m retains its declared 4000-tick matrix/fixture contradiction. |
 | **Last update** | 2026-08-24 (`Agent_Codex` Task-59 T3j mandatory-route fixture repair) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
@@ -5255,7 +5255,7 @@ for gen-1 (compost is a low-priority side activity); document in VR-T3d notes.
 | **VR-T3g** | `VILLAGE_ALLY` + `VILLAGE_PUBLIC` container | Host `RaidContainersGoal` cannot admit or continue looting it | HOME/HIGH alone is used as permission; container opens/continues looting | `UNVERIFIED` — V3-A/B; supersedes old VR-T1.5d wording |
 | **VR-T3h** | `VILLAGE_ALLY` + `UNKNOWN` ownership | Fail closed and leave container untouched | Missing evidence is interpreted as public access or permission | `UNVERIFIED` — V3-B |
 | **VR-T3i** | Explicit mob-owned/shared storage and non-ally control | Explicitly permitted ally access may proceed; non-ally host behavior remains unchanged | Blanket goal strip or ally denial despite positive permission | `UNVERIFIED` — V3-B |
-| **VR-T3j** | Live/pending mandatory progression while village work is available | Mandatory work retains authority; village work waits and later re-resolves | Idle observation or Opinion preference displaces pending mandatory work | `UNVERIFIED` — V3-A/E/F |
+| **VR-T3j** | Live/pending mandatory progression while village work is available | Mandatory work retains authority; village work waits and later re-resolves | Idle observation or Opinion preference displaces pending mandatory work | **`RUNTIME PASS`** on `BDAA788C...A0B2BDC` — `LIVE_CLAIM`, pig-combat preemption, Gather resume, running `SCAVENGE_WORK`, no Village Work displacement |
 | **VR-T3k** | Two mobs select one crop; first changes it | First commits; second detects invalidation and reacquires/abandons without mutation | Double break/replant, stale target loop, or persistent global crop reservation | `UNVERIFIED` — V3-C |
 | **VR-T3l** | Managed-domain crop, mob hungry (`wantsFood()`), V3 admission refused | Host `HarvestCropsGoal` is vetoed at that position; the field stays planted; the mob's own food behaviour (`HuntForFoodGoal`, foraging) is unaffected | Host destructive harvest runs inside the managed domain; or the veto extends to wilderness crops and suppresses stock SPM food behaviour | `UNVERIFIED` — V3-C (D-VR-079-A1) |
 | **VR-T3m** | Repeated managed harvest episodes over many cycles | Replant stock is sustained by the episode's **own** banked drops; a crop whose pinned drops cannot guarantee a planting item pauses managed harvest instead of draining the reserve | Planting supply is recovered via floor-item pickup; a field is harvested down to a barren state because the reserve ran out mid-episode | `UNVERIFIED` — V3-C (F8) |
@@ -8762,3 +8762,33 @@ Everything classes: **0**. Minecraft was not launched and no commit was created.
 **Frontier after:** exact-artifact review and separate runtime authorization. A successful rerun must
 log `source=LIVE_CLAIM` with consumer/generation/open/expiry/current ticks and open the official
 window; behavioral closure remains `UNVERIFIED` until that evidence exists.
+
+### Contribution — `Agent_Codex` (VR-T3j runtime acceptance, 2026-08-24)
+
+**Runtime result (`RUNTIME_CONFIRMED`, user-adjudicated external witness):** exact artifact
+`BDAA788C...A0B2BDC` opened VR-T3j from a matching `LIVE_CLAIM` and completed the full 1000-tick
+window. An autonomous pig combat episode temporarily preempted Gather. Village Work remained blocked
+during combat, Gather resumed afterward, and running `SCAVENGE_WORK` continued to block Village Work.
+No Village Work displacement was observed.
+
+**Interruption significance:** this closes more than the uninterrupted admission path. The observed
+sequence is:
+
+```text
+LIVE_CLAIM opens window
+  -> autonomous pig combat preempts Gather
+  -> Village Work remains denied
+  -> combat clears
+  -> Gather resumes
+  -> SCAVENGE_WORK becomes the running mandatory owner
+  -> Village Work remains denied
+  -> full 1000-tick window completes
+```
+
+This confirms authority continuity across pending ownership, legitimate urgent/combat preemption,
+executor resumption, and running mandatory ownership for VR-T3j. It does not independently close the
+D-VR-084 witness row or any other VR-T3 scenario. The local workspace does not contain the external
+session's raw `latest.log`, so the evidence record explicitly preserves its user-supplied provenance.
+
+**Frontier before -> after:** VR-T3j official window unverified -> **VR-T3j RUNTIME PASS**. Task-59
+campaign remains open for the other applicable rows; Tasks 52–58 are not reopened.

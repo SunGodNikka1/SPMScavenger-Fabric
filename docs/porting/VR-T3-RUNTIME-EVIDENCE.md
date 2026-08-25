@@ -1,6 +1,6 @@
 # VR-T3 runtime evidence record
 
-**Status:** Gate 0 `RUNTIME_CONFIRMED`; settlement-dependent row evidence remains `UNVERIFIED`.
+**Status:** Gate 0 and VR-T3j `RUNTIME_CONFIRMED`; remaining settlement-dependent rows are independently `UNVERIFIED`.
 **Matrix:** `docs/porting/VR-T3-RUNTIME-MATRIX.md`  
 **Environment:** `docs/porting/VR-T3-RUNTIME-ENVIRONMENT.md`
 
@@ -69,7 +69,7 @@ then adjudicate PASS/FAIL/WEIRD separately against the matrix.
 
 | ID | Preset | Start→end tick | Must-happen evidence | Must-not evidence/falsifier probe | Inspector/log evidence | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| VR-T3j | `mandatory_blocks_village_work` | 282→1282 on `ED07...F56E3` | Gate0 and row precondition passed; fixed window completed | `pendingClaimObservedAfterOpen=false`; harvest episode was IDLE at opening; mature crop untouched | subject entered EXPEDITION and left core at tick 1150; spatial harness correctly continued | `FIXTURE_INCOMPLETE` — mandatory route never instantiated; product verdict not reached; fixture superseded |
+| VR-T3j | `mandatory_blocks_village_work` | full 1000-tick window on `BDAA788C...A0B2BDC` (exact ticks not supplied) | `source=LIVE_CLAIM` opened the row; autonomous pig combat preempted Gather; Gather resumed; running `SCAVENGE_WORK` retained mandatory authority | Village Work stayed blocked during combat and running Gather; no Village Work displacement observed | User-adjudicated runtime report; local workspace logs do not contain the external session. Superseded `ED07...F56E3` fixture-incomplete attempt remains historical evidence only | **`RUNTIME PASS`** |
 | D-VR-084 | `mandatory_ownership_witness` | — | — | — | — | `UNVERIFIED` |
 | VR-T3g | `storage_public_deny` | — | — | — | — | `UNVERIFIED` |
 | VR-T3h | `storage_unknown_deny` | — | — | — | — | `UNVERIFIED` |
@@ -87,20 +87,20 @@ then adjudicate PASS/FAIL/WEIRD separately against the matrix.
 
 | Question | Evidence / disposition |
 | --- | --- |
-| Did the correct Scavenger goal perform each positive result? | — |
+| Did the correct Scavenger goal perform each positive result? | VR-T3j: `LIVE_CLAIM` opening followed by running `SCAVENGE_WORK`; **PASS** |
 | Did any row pass only because a host goal performed the work? | — |
 | Did P4 torch contention starve V3 work? | — |
-| Did SPM 0.89 target acquire/loss semantics change interruption? | — |
-| Did any hidden pending claim disagree with visible activity? | — |
+| Did SPM 0.89 target acquire/loss semantics change interruption? | VR-T3j: autonomous pig combat temporarily preempted Gather and Gather resumed afterward; no harmful drift observed in this row |
+| Did any hidden pending claim disagree with visible activity? | VR-T3j: no; pending live claim opened the row and running `SCAVENGE_WORK` later supplied the visible mandatory owner |
 
 ## Final disposition
 
 | Item | Result |
 | --- | --- |
-| Applicable rows passed | — / 13 |
+| Applicable rows passed | **1 / 13** (`VR-T3j`) |
 | Failed rows | — |
-| Incomplete rows | — |
-| Weird/runtime questions | — |
+| Incomplete rows | historical superseded VR-T3j fixture attempts only; current VR-T3j passed |
+| Weird/runtime questions | autonomous pig combat was a valid interruption witness, not a failure |
 | V3-G closure recommendation | `UNVERIFIED` |
 
 Temporary `V3RuntimeWitnessCommands` must be removed and the clean production JAR rebuilt after

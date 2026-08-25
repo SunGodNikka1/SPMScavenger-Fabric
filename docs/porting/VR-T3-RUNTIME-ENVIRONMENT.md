@@ -1,6 +1,6 @@
 # VR-T3 runtime environment pin (pre-launch)
 
-**Status:** pinned to the temporary Task-59 V3 witness artifact — **Minecraft campaign NOT AUTHORIZED**.
+**Status:** pinned to the temporary Task-59 V3 witness artifact — VR-T3j runtime accepted; campaign remains in progress and any further launch requires separate approval.
 
 **Matrix:** `docs/porting/VR-T3-RUNTIME-MATRIX.md`  
 **Datapack:** `test-datapacks/phase-village-raid/` (`spm_vr`)
@@ -66,6 +66,7 @@ Structural validation (no Minecraft): `SpmVrDatapackStructureTest`.
 
 | Date | Change |
 | --- | --- |
+| 2026-08-24 | Exact `BDAA788C...A0B2BDC` artifact produced VR-T3j RUNTIME PASS over the full 1000-tick window, including autonomous pig-combat preemption and Gather resumption; remaining rows not implied |
 | 2026-08-24 | T3j/D-VR-084 live-claim stopping rule — matching live production ownership now supersedes duplicate geometry while exact policy remains required; 1675-test clean build; SHA `BDAA788C...A0B2BDC`; no Minecraft relaunch |
 | 2026-08-24 | T3j live fixture falsification — replaced world-log assumption in T3j/D-VR-084 with controller-seeded iron-pick frontier, exposed reachable iron, and passive `MANDATORY_ROUTE_READY`; repinned after 1669-test clean build; no Minecraft relaunch |
 | 2026-08-24 | Gate-0 dynamic HOME repair — +120 is minimum grace; HOME claim deficits wait within original 2400-tick session deadline and time out as `FIXTURE_INCOMPLETE`; repinned after 1663-test clean build; no Minecraft relaunch |

@@ -676,7 +676,7 @@ remain `UNVERIFIED` (AV-1).
 | VR-T3e | task-57 static suite — `CONFIRMED` | `UNVERIFIED` |
 | VR-T3f | **N/A** — deferred | **N/A** |
 | VR-T3g–i | task-54 `StorageOwnershipStructuralTest` — `CONFIRMED` (unit) | `UNVERIFIED` |
-| VR-T3j | task-52/53 mandatory wiring — `CONFIRMED` (unit) | `UNVERIFIED` |
+| VR-T3j | task-52/53 mandatory wiring — `CONFIRMED` (unit) | **`RUNTIME PASS`** on `BDAA788C...A0B2BDC`: full 1000 ticks; live claim opening; pig-combat preemption; Gather resume; no Village Work displacement |
 | VR-T3k | task-55 commit revalidation — `CONFIRMED` | `UNVERIFIED` |
 | VR-T3l | D-VR-079-A1 veto — `INFERRED` | `UNVERIFIED` |
 | VR-T3m | F8 banking tests — `CONFIRMED` | `UNVERIFIED` |

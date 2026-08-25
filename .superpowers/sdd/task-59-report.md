@@ -374,3 +374,19 @@ Working directory: `D:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric`.
 - `UNVERIFIED`: replacement-artifact `source=LIVE_CLAIM -> WINDOW_OPEN` and official row result.
 
 No Minecraft launch or commit occurred.
+
+## VR-T3j runtime acceptance — 2026-08-24
+
+**Status:** VR-T3j `RUNTIME PASS`; Task-59 remains `DONE_WITH_CONCERNS` at campaign level because the
+remaining applicable rows are independently unverified.
+
+User-adjudicated evidence from exact artifact `BDAA788C...A0B2BDC` records a matching `LIVE_CLAIM`
+opening, a full 1000-tick official window, autonomous pig-combat preemption, Village Work remaining
+blocked throughout combat, Gather resumption, running `SCAVENGE_WORK` ownership, and no Village Work
+displacement. This confirms the must-happen and must-not-happen outcomes for VR-T3j, including its
+interruption/resume path.
+
+The external runtime's raw `latest.log` is not present in the local workspace. Evidence provenance is
+therefore recorded as the user's runtime report rather than falsely citing local logs. D-VR-084 and
+all other rows remain independent; no production change, build, Minecraft relaunch, or commit was
+performed while recording this result.

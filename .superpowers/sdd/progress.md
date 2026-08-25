@@ -112,6 +112,6 @@ Task 58: brief v1.1 — `task-58-brief.md` (V3-F unified ComposterWorkFacts + Co
 Task 58: Gate 0 PASS — `task-58-gate0-report.md`
 Task 58: complete — V3-F STATIC-BEHAVIORAL ACCEPT (`task-58-report.md`, CLOSE-58-1…3)
 
-Task 59: Gate 0 **RUNTIME PASS**; live-claim stopping rule static-complete after three geometry false negatives; 57 focused / 1675 full tests (SHA `BDAA788C...A0B2BDC`); no relaunch, VR-T3 rows remain `UNVERIFIED` (`task-59-report.md`)
+Task 59: Gate 0 + VR-T3j **RUNTIME PASS** on `BDAA788C...A0B2BDC` (LIVE_CLAIM → pig-combat preemption → Gather resume → SCAVENGE_WORK; no Village Work displacement); remaining VR-T3 rows independently `UNVERIFIED` (`task-59-report.md`)
 
 No commits unless user requests. No Minecraft launches unless separately approved.
