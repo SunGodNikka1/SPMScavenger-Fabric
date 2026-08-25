@@ -91,23 +91,26 @@ phase** and **no second mandatory publisher**. Closure map: `setBlock false / in
 The preferred controller path performs this gate automatically before any VR-T3 row that depends
 on `setup_village_stub`. After the scenario function returns successfully, it records
 `bootstrapStartTick` and remains in `WAITING_GATE0_BOOTSTRAP` for at least 120 ticks. Intermediate
-readable numeric deficits are diagnostic only during that grace period. It then adjudicates Gate 0
-and continues bounded waiting for unreadable/incomplete facts within the unchanged 2400-tick overall
-timeout; it never refreshes facts or writes HOME. The one-shot manual fallback remains:
+readable numeric deficits are diagnostic only during that grace period. Afterward, structural
+impossibilities fail immediately while `claimedHomeCount < 2` remains dynamic `INCOMPLETE` within
+the unchanged 2400-tick overall timeout anchored to fixture start. The controller never refreshes
+facts or writes HOME. The one-shot manual fallback remains:
 
 ```text
 /spmscavenger debug v3 inspect @e[tag=spm_vr.subject,limit=1]
 ```
 
 The snapshot reads already-produced memory/facts only. `Gate0=INCOMPLETE` means observation is not
-yet readable and may be sampled again after normal production cadence; it does not create or refresh
-evidence. `Gate0=FIXTURE_FAILURE` is emitted only when facts are `COMPLETE + FRESH` but a numeric
-fixture threshold fails.
+yet readable, or natural HOME acquisition is still pending, and may be sampled again after normal
+production cadence; it does not create or refresh evidence. `Gate0=FIXTURE_FAILURE` is emitted only
+for complete/fresh structural impossibility: fewer than two adults, fewer than three usable HOME
+POIs, or no free HOME after two claims. Dynamic HOME claims still below two at the original overall
+deadline produce `FIXTURE_INCOMPLETE` with exact final counts.
 
 | Check | Pass criterion | On fail |
 | --- | --- | --- |
 | Scavenger settlement observation | inspector reports `settlement observed: YES` and exact anchor/identity | Continue only when population facts also readable; otherwise `INCOMPLETE` |
-| V3-E population facts | inspector reports `COMPLETE`, `FRESH`, `adultVillagerCount >= 2`, `claimedHomeCount >= 2`, `currentFreeHomeCapacity >= 1` | **STOP** on explicit `Gate0=FIXTURE_FAILURE`; wait/re-sample on `INCOMPLETE` |
+| V3-E population facts | inspector reports `COMPLETE`, `FRESH`, `adultVillagerCount >= 2`, `totalUsableHomeCapacity >= 3`, `claimedHomeCount >= 2`, `currentFreeHomeCapacity >= 1` | **STOP** on structural `Gate0=FIXTURE_FAILURE`; wait naturally on dynamic claim `INCOMPLETE`; overall claim timeout is `FIXTURE_INCOMPLETE` |
 | Gate-0 verdict | inspector emits `Gate0=PASS` | Do not execute population-dependent closure rows until PASS |
 
 ### Settlement-row evidence-window precondition
@@ -138,7 +141,8 @@ disposable fixture to day, then waits up to 200 daytime ticks for production to 
   -> remove unrelated PlayerMobs inside protected 192-block observation envelope, pre-window only
   -> force-load only newly acquired 32-block scenario-core chunks
   -> WAITING_GATE0_BOOTSTRAP for >=120 natural ticks; threshold deficits remain diagnostic
-  -> adjudicate natural Gate0 PASS / INCOMPLETE / FIXTURE_FAILURE
+  -> after +120: structural failure is terminal; dynamic HOME claims continue bounded waiting
+  -> natural Gate0 PASS / INCOMPLETE / FIXTURE_INCOMPLETE / FIXTURE_FAILURE
   -> logged day/weather fixture transition
   -> wait genuine SHELTER_HOLD release
   -> forced fresh 192-block quarantine scan (never cadence-skipped)
@@ -237,6 +241,7 @@ Before marking V3 **runtime closed**, review:
 
 | Date | Change |
 | --- | --- |
+| 2026-08-24 | Live `38C3...8588FC` falsification at exact +120/HOME1; reclassified natural HOME deficit as dynamic waiting, preserved structural immediate failures and original 2400-tick deadline; replacement SHA `ED07F88D...F56E3`, runtime not authorized |
 | 2026-08-24 | Final static T3k/T3m correction: all original contenders must release after commit; opening maturity is baseline-only and T3m requires two later same-cell cycles. Recorded the 4000-tick natural-growth contradiction; SHA `38C3E332...8588FC`; runtime not authorized |
 | 2026-08-24 | Superseded `626FB...F599`; separated 192-block subject telemetry from causal contamination authority, forced a fresh final isolation scan, and repaired T3k contention/T3m same-cell temporal evidence; replacement SHA `2D2E6492...DF8D7D`, runtime not authorized |
 | 2026-08-24 | Replaced 32-block subject leash with core/envelope/escape model; T3j preserves exploration-without-mandatory-ownership evidence; contamination envelope remains protected |

@@ -23,7 +23,38 @@ class V3Gate0BootstrapGateTest {
     @Test
     void exactBootstrapBoundaryAdjudicatesReadableThresholds() {
         assertVerdict(120L, 2, V3Gate0BootstrapGate.Verdict.PASS);
-        assertVerdict(120L, 1, V3Gate0BootstrapGate.Verdict.FIXTURE_FAILURE);
+        assertVerdict(120L, 1, V3Gate0BootstrapGate.Verdict.INCOMPLETE);
+    }
+
+    @Test
+    void homeOneAtBoundaryCanNaturallyAdvanceToPassWithoutResettingClock() {
+        long fixtureStart = 900L;
+        long bootstrapStart = 1_000L;
+        V3Gate0Assessment.Result homeOne = assessment(1);
+        assertEquals(V3Gate0BootstrapGate.Verdict.INCOMPLETE,
+                V3Gate0BootstrapGate.evaluate(bootstrapStart, 1_120L, homeOne).verdict());
+        assertEquals(V3Gate0TimeoutGate.Verdict.WAITING,
+                V3Gate0TimeoutGate.evaluate(fixtureStart, 1_120L, homeOne).verdict());
+
+        assertEquals(V3Gate0BootstrapGate.Verdict.PASS,
+                V3Gate0BootstrapGate.evaluate(
+                        bootstrapStart, 1_400L, assessment(2)).verdict());
+    }
+
+    @Test
+    void homeOneThroughOriginalOverallDeadlineIsFixtureIncomplete() {
+        long fixtureStart = 900L;
+        V3Gate0Assessment.Result homeOne = assessment(1);
+        assertEquals(V3Gate0TimeoutGate.Verdict.WAITING,
+                V3Gate0TimeoutGate.evaluate(
+                        fixtureStart,
+                        fixtureStart + V3Gate0TimeoutGate.OVERALL_TIMEOUT_TICKS - 1,
+                        homeOne).verdict());
+        assertEquals(V3Gate0TimeoutGate.Verdict.FIXTURE_INCOMPLETE,
+                V3Gate0TimeoutGate.evaluate(
+                        fixtureStart,
+                        fixtureStart + V3Gate0TimeoutGate.OVERALL_TIMEOUT_TICKS,
+                        homeOne).verdict());
     }
 
     @Test

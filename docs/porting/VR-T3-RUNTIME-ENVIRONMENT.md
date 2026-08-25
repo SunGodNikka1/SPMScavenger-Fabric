@@ -23,7 +23,7 @@
 | Mod | File | SHA-256 | Evidence |
 | --- | --- | --- | --- |
 | **Social Player Mobs** (`playermob`) | `playermob-fabric-0.89.0+1.21.1.jar` | `C8DC0E89C3FD632B6DCC7F8E46D3AE4955DD5504CBA53F72B62314850A64E612` | Downloaded from GitHub release `bh679/playermob-mc` tag `v0.89.0` (485 500 bytes); cached at `Projects/references/artifacts/playermob-fabric-0.89.0+1.21.1.jar` |
-| **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `38C3E33276BFC7234CEBB44C99A559AF6FAD4D7A093D6FB8703E4716D58588FC` | Final-static-correction Task-59 artifact at `build/libs/spmscavenger-1.11.0.jar`; T3k all-contender release and T3m baseline + two complete cycles. Earlier `626FB...F599` and `2D2E...8D7D` artifacts are superseded. |
+| **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `ED07F88D06AE46645AE827DF1C1B31726C687D114501A1444C8676A3F36F56E3` | Task-59 dynamic-HOME Gate-0 repair at `build/libs/spmscavenger-1.11.0.jar`; preserves final T3k/T3m and spatial corrections. `38C3...8588FC` is superseded after live +120 HOME1 falsification. |
 
 **SPM source tag (audit):** `v0.89.0` on `https://github.com/bh679/playermob-mc` (`mod_version=0.89.0` in tag `gradle.properties`).
 
@@ -66,6 +66,7 @@ Structural validation (no Minecraft): `SpmVrDatapackStructureTest`.
 
 | Date | Change |
 | --- | --- |
+| 2026-08-24 | Gate-0 dynamic HOME repair — +120 is minimum grace; HOME claim deficits wait within original 2400-tick session deadline and time out as `FIXTURE_INCOMPLETE`; repinned after 1663-test clean build; no Minecraft relaunch |
 | 2026-08-24 | Post-open spatial repair — core exit is evidence, 192-block contamination envelope, 224-block geometry escape, T3j nonterminal; repinned after 1653-test clean build; no Minecraft relaunch |
 | 2026-08-24 | Gate-0 sequencing repair — explicit 120-tick natural HOME bootstrap measured after scenario execution; repinned after 1649-test clean build; no Minecraft relaunch |
 | 2026-08-24 | Startup containment repair — replaced invalid raw Brigadier function execution with next-tick `ServerFunctionManager`; repinned after 1645-test clean build; no Minecraft relaunch |

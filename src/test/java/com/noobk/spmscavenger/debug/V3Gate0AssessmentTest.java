@@ -42,15 +42,21 @@ class V3Gate0AssessmentTest {
     }
 
     @Test
-    void eachReadableNumericDeficitIsFixtureFailure() {
+    void structuralDeficitsFailButHomeAcquisitionDeficitRemainsDynamic() {
         assertEquals(V3Gate0Assessment.Verdict.FIXTURE_FAILURE,
                 V3Gate0Assessment.evaluate(true, Optional.of(facts(
                         1, 3, 2, 1, WorkFactsCompleteness.COMPLETE, WorkFactsFreshness.FRESH)))
                         .verdict());
         assertEquals(V3Gate0Assessment.Verdict.FIXTURE_FAILURE,
                 V3Gate0Assessment.evaluate(true, Optional.of(facts(
-                        2, 3, 1, 1, WorkFactsCompleteness.COMPLETE, WorkFactsFreshness.FRESH)))
+                        2, 2, 1, 1, WorkFactsCompleteness.COMPLETE, WorkFactsFreshness.FRESH)))
                         .verdict());
+        V3Gate0Assessment.Result dynamic = V3Gate0Assessment.evaluate(
+                true, Optional.of(facts(
+                        2, 3, 1, 2, WorkFactsCompleteness.COMPLETE, WorkFactsFreshness.FRESH)));
+        assertEquals(V3Gate0Assessment.Verdict.INCOMPLETE, dynamic.verdict());
+        assertEquals(V3Gate0Assessment.EvidenceKind.DYNAMIC_HOME_OCCUPANCY,
+                dynamic.evidenceKind());
         assertEquals(V3Gate0Assessment.Verdict.FIXTURE_FAILURE,
                 V3Gate0Assessment.evaluate(true, Optional.of(facts(
                         2, 3, 2, 0, WorkFactsCompleteness.COMPLETE, WorkFactsFreshness.FRESH)))

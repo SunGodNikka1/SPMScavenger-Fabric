@@ -34,7 +34,6 @@ public final class V3RuntimeCampaignController {
     private static final String LOG_PREFIX = "[spmscavenger/v3-campaign]";
     private static final String FIXTURE_MOB_TAG = "spm_vr.mob";
     private static final String SUBJECT_TAG = "spm_vr.subject";
-    private static final long GATE0_TIMEOUT_TICKS = 2400L;
     private static final long SHELTER_RELEASE_TIMEOUT_TICKS = 200L;
     private static final int MAX_EVENTS = 32;
     private static final int MAX_OUTER_PRESENCE_LOGS = 8;
@@ -326,13 +325,28 @@ public final class V3RuntimeCampaignController {
             case FIXTURE_FAILURE -> finish(server, session, State.FIXTURE_FAILURE, snapshot.tick(),
                     "Gate0=" + snapshot.gate0().reason(), snapshot, null);
             case INCOMPLETE -> {
-                if (snapshot.tick() - session.startTick >= GATE0_TIMEOUT_TICKS) {
+                V3Gate0TimeoutGate.Result timeout = V3Gate0TimeoutGate.evaluate(
+                        session.startTick, snapshot.tick(), snapshot.gate0());
+                if (timeout.verdict() == V3Gate0TimeoutGate.Verdict.FIXTURE_INCOMPLETE) {
+                    finish(server, session, State.FIXTURE_INCOMPLETE, snapshot.tick(),
+                            timeout.reason() + "; " + gate0Counts(snapshot), snapshot, null);
+                } else if (timeout.verdict() == V3Gate0TimeoutGate.Verdict.INCOMPLETE) {
                     finish(server, session, State.INCOMPLETE, snapshot.tick(),
-                            "Gate0 remained INCOMPLETE for " + GATE0_TIMEOUT_TICKS + " ticks",
-                            snapshot, null);
+                            timeout.reason() + "; " + gate0Counts(snapshot), snapshot, null);
                 }
             }
         }
+    }
+
+    private static String gate0Counts(V3WitnessSnapshot snapshot) {
+        return snapshot.facts().map(value ->
+                "adultVillagerCount=" + value.adultVillagerCount()
+                        + " totalUsableHomeCapacity=" + value.totalUsableHomeCapacity()
+                        + " claimedHomeCount=" + value.claimedHomeCount()
+                        + " currentFreeHomeCapacity=" + value.currentFreeHomeCapacity()
+                        + " completeness=" + value.completeness()
+                        + " freshness=" + value.freshness())
+                .orElse("populationFacts=UNAVAILABLE");
     }
 
     private static void tickGate0Bootstrap(

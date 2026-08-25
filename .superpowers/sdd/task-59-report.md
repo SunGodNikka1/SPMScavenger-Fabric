@@ -270,3 +270,23 @@ build`: **1661 tests**, zero failures/errors/skips. JAR:
 `build/libs/spmscavenger-1.11.0.jar` (1,236,566 bytes), SHA-256
 `38C3E33276BFC7234CEBB44C99A559AF6FAD4D7A093D6FB8703E4716D58588FC`.
 No Minecraft launch or commit occurred; runtime remains `UNVERIFIED`.
+
+## Gate-0 dynamic HOME occupancy repair — 2026-08-24
+
+Live artifact `38C3E332...8588FC` reached exactly bootstrap+120 with one naturally claimed HOME and
+terminated before opening. This falsifies the controller's fixed-deadline semantic assumption;
+VR-T3j was not started and no Tasks 52–58 production defect is assigned.
+
+The controller now distinguishes structural impossibility from dynamic HOME occupancy. After the
+unchanged minimum grace, adults<2 or usable homes<3 is immediate `FIXTURE_FAILURE`.
+`claimedHomeCount<2` remains waiting under the original fixture-start-based 2400-tick deadline.
+Claims>=2/free>=1 passes; claims>=2/free<1 fails structurally. HOME claim deficit persisting through
+the original deadline becomes `FIXTURE_INCOMPLETE` with exact final counts. Unreadable facts at the
+deadline retain ordinary `INCOMPLETE`.
+
+No POI ticket, HOME/Brain/sleep state, refresh, teleport, Goal, spatial, T3k, T3m, or Tasks 52–58
+behavior changed. Focused Gate-0/controller tests: **15/15 PASS**. Temporary debug suite: **46/46
+PASS**. Full `clean build`: **1663 tests**, zero failures/errors/skips. JAR:
+`build/libs/spmscavenger-1.11.0.jar` (1,241,777 bytes), SHA-256
+`ED07F88D06AE46645AE827DF1C1B31726C687D114501A1444C8676A3F36F56E3`.
+No Minecraft launch or commit occurred; the repair remains runtime `UNVERIFIED`.

@@ -92,11 +92,14 @@ class V3RuntimeCampaignControllerTest {
         String source = Files.readString(SOURCE);
         assertTrue(source.contains("WAITING_GATE0_BOOTSTRAP"));
         assertTrue(source.contains("bootstrapStartTick"));
-        assertTrue(source.contains("GATE0_TIMEOUT_TICKS = 2400L"),
+        assertTrue(source.contains("V3Gate0TimeoutGate.evaluate("),
                 "the existing overall Gate-0 timeout must remain unchanged");
         assertTrue(source.contains(
-                        "snapshot.tick() - session.startTick >= GATE0_TIMEOUT_TICKS"),
+                        "session.startTick, snapshot.tick(), snapshot.gate0()"),
                 "bootstrap sequencing must not restart or extend the overall Gate-0 timeout");
+        assertTrue(source.contains("State.FIXTURE_INCOMPLETE"));
+        assertTrue(source.contains("gate0Counts(snapshot)"),
+                "dynamic timeout must retain exact final population counts");
 
         int preparingStart = source.indexOf("private static void tickPreparing(");
         int bootstrapTickStart = source.indexOf("private static void tickGate0Bootstrap(");

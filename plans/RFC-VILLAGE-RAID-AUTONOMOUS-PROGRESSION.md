@@ -10,9 +10,9 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING` — **V2-TE-W2 CLOSED**; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
-| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G FINAL STATIC HARNESS CORRECTION BUILT** (1661-test clean build); Minecraft campaign not authorized. |
-| **Nearest frontier** | Review/authorization of replacement Task-59 artifact SHA-256 `38C3E33276BFC7234CEBB44C99A559AF6FAD4D7A093D6FB8703E4716D58588FC`. VR-T3m retains a declared **MATRIX/FIXTURE CONTRADICTION**: its 4000-tick cap cannot realistically witness two unaccelerated natural wheat cycles. |
-| **Last update** | 2026-08-24 (`Agent_Codex` Task-59 final static T3k/T3m correction) |
+| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G DYNAMIC-HOME GATE-0 REPAIR BUILT** (1663-test clean build); Minecraft campaign not authorized. |
+| **Nearest frontier** | Review/authorization of replacement Task-59 artifact SHA-256 `ED07F88D06AE46645AE827DF1C1B31726C687D114501A1444C8676A3F36F56E3`. VR-T3j remains not started; VR-T3m retains its declared 4000-tick matrix/fixture contradiction. |
+| **Last update** | 2026-08-24 (`Agent_Codex` Task-59 Gate-0 dynamic HOME occupancy repair) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -8669,3 +8669,31 @@ PASS**; `clean build` **1661 tests / 0 failures/errors/skips**. Tasks 52–58 an
 spatial/isolation controller are unchanged. Replacement JAR SHA-256:
 `38C3E33276BFC7234CEBB44C99A559AF6FAD4D7A093D6FB8703E4716D58588FC`.
 No Minecraft launch or commit occurred; runtime behavior remains `UNVERIFIED`.
+
+### Contribution — `Agent_Codex` (Task-59 Gate-0 dynamic HOME falsification, 2026-08-24)
+
+**Live falsification (`RUNTIME_CONFIRMED`):** artifact `38C3E332...8588FC` recorded fixture
+bootstrap `1816→1936`, exactly 120 ticks, then terminal `claimedHomeCount < 2` with
+`exactOpeningTick=NOT_OPEN`. VR-T3j did not start. The local workspace logs do not contain that
+external session; the exact live controller report supplied by the user is the evidence source.
+
+**Superseded assumption:** 120 ticks is retained only as minimum natural-bootstrap grace. A
+complete/fresh HOME claim deficit is transient-capable vanilla POI evidence and is not structural
+fixture impossibility.
+
+**Implemented controller classification (`CODE_CONFIRMED`):** complete/fresh facts with fewer than
+two adults or fewer than three usable HOME POIs fail immediately. `claimedHomeCount < 2` becomes
+explicit `DYNAMIC_HOME_OCCUPANCY` and continues under the original session deadline. Claims>=2 plus
+free HOME>=1 passes immediately; claims>=2 with no free HOME remains structural failure. Dynamic
+HOME occupancy still below threshold at the unchanged 2400-tick overall deadline becomes
+`FIXTURE_INCOMPLETE` and reports exact adult/total/claimed/free/completeness/freshness values.
+Unreadable evidence at timeout remains ordinary `INCOMPLETE`.
+
+**Authority preservation:** no HOME/Brain/sleep writes, POI ticket acquisition, refresh call,
+teleport, or production Goal invocation was added. Facts refresh does not alter `session.startTick`.
+Tasks 52–58, spatial isolation, T3k, and T3m are unchanged.
+
+**Static validation:** focused Gate-0/controller **15/15 PASS**; complete temporary debug suite
+**46/46 PASS**; `clean build` **1663 tests / 0 failures/errors/skips**. Replacement JAR SHA-256:
+`ED07F88D06AE46645AE827DF1C1B31726C687D114501A1444C8676A3F36F56E3`.
+No Minecraft launch or commit occurred; repaired live sequencing remains `UNVERIFIED` until rerun.

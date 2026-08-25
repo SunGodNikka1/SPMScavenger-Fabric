@@ -754,3 +754,65 @@ spatial/isolation behavior, crop growth, random tick speed, or production Goal a
 - Artifact: `build/libs/spmscavenger-1.11.0.jar`, SHA-256
   `38C3E33276BFC7234CEBB44C99A559AF6FAD4D7A093D6FB8703E4716D58588FC`.
 - Minecraft runtime: **NOT RUN / UNVERIFIED**. Commit: **not created**.
+
+---
+
+## v1.10 Gate-0 dynamic HOME occupancy falsification
+
+### Live evidence and scope
+
+Artifact `38C3E332...8588FC` produced `bootstrapStart=1816`, adjudication at exactly `1936`,
+`claimedHomeCount < 2`, and `exactOpeningTick=NOT_OPEN`. This is `RUNTIME_CONFIRMED` evidence that
+120 ticks is not a sound terminal deadline for naturally acquired vanilla HOME tickets. The local
+workspace `logs/latest.log` and `run/logs/latest.log` do not contain this external live session;
+the exact controller report supplied by the user is the pinned runtime evidence for this repair.
+
+The 120-tick boundary remains a minimum grace period. The existing 2400-tick overall deadline
+remains anchored to the original fixture `startTick`; facts refreshes do not restart it.
+
+### Decision and alternatives
+
+| Option | Benefit | Failure mode | Disposition |
+| --- | --- | --- | --- |
+| Increase the fixed HOME grace beyond 120 | minimal code change | merely moves the guessed terminal boundary; natural acquisition can still be later | rejected |
+| Treat every readable deficit as non-terminal until timeout | avoids premature failure | wastes the full timeout for impossible missing villagers/beds | rejected |
+| Split structural impossibility from dynamic HOME occupancy | immediate failure for impossible fixture; natural claims retain bounded time | requires explicit evidence kind and timeout classification | **selected** |
+
+After complete/fresh facts, `adultVillagerCount < 2` or `totalUsableHomeCapacity < 3` is structural
+fixture failure. `claimedHomeCount < 2` is dynamic HOME occupancy and remains waiting. Once claims
+reach two, `currentFreeHomeCapacity < 1` is structural failure; otherwise Gate 0 passes.
+
+### Behavioral Prediction (MAIBS-1)
+
+| Time | Facts | Controller result | Observable effect |
+| --- | --- | --- | --- |
+| bootstrap +0…119 | any readable deficit | `WAITING_GATE0_BOOTSTRAP` | no row opens or fails |
+| +120 | adults=2, homes=3, claimed=1 | `WAITING_GATE0` | villagers continue natural POI behavior; no ticket is manufactured |
+| later, before overall timeout | claimed=2, free=1 | Gate0 `PASS` | normal daytime/shelter-release sequence begins |
+| overall timeout | adults=2, homes=3, claimed=1 | `FIXTURE_INCOMPLETE` with final counts | T3 row never starts; report identifies natural claim timeout |
+| +120 complete/fresh adults<2 or homes<3 | structural impossibility | `FIXTURE_FAILURE` immediately | operator repairs fixture rather than waiting uselessly |
+
+Production villager Brain/POI acquisition remains the only authority for HOME tickets. No Goal,
+Brain, POI, sleep, teleport, refresh, or facts-cache mutation is introduced.
+
+Predicted weird cases: one villager acquires HOME just after timeout (`RUNTIME_QUESTION`, bounded
+false-negative remains possible); complete/fresh facts fluctuate stale and delay classification
+(`ACCEPTABLE_STEPPING_STONE`, timeout remains anchored); an external villager owns the spare HOME so
+claims reach two but free stays zero (`ARCHITECTURE_DEFECT` in fixture isolation, correctly reported
+as structural failure).
+
+**Must happen:** HOME1 at +120 continues waiting; HOME2/free1 before the original deadline passes;
+HOME1 through the original deadline becomes `FIXTURE_INCOMPLETE` with exact final counts.
+
+**Must not happen:** facts refresh resets the deadline; dynamic HOME1 becomes immediate
+`FIXTURE_FAILURE`; the harness calls `PoiManager.take`, writes HOME/Brain/sleep state, repeatedly
+teleports villagers, or changes Tasks 52–58, spatial isolation, T3k, or T3m.
+
+### v1.10 static validation
+
+- Focused Gate-0/controller tests: **15/15 PASS**.
+- Full temporary debug suite: **46/46 PASS**.
+- `clean build`: **1663 tests / 0 failures/errors/skips**.
+- JAR: `build/libs/spmscavenger-1.11.0.jar`, SHA-256
+  `ED07F88D06AE46645AE827DF1C1B31726C687D114501A1444C8676A3F36F56E3`.
+- Runtime repair: **UNVERIFIED** pending separately authorized rerun. Commit: **not created**.
