@@ -70,14 +70,13 @@ class SettlementOpinionBoundaryTest {
     }
 
     @Test
-    void noV4dOrLaterOwnerWasIntroduced() throws IOException {
+    void noV4eOrLaterOwnerWasIntroduced() throws IOException {
         Path root = Path.of("src/main/java/com/noobk/spmscavenger");
         try (var paths = Files.walk(root)) {
             List<String> names = paths.filter(path -> path.toString().endsWith(".java"))
                     .map(path -> path.getFileName().toString())
                     .toList();
             assertEquals(0, names.stream().filter(name -> name.equals("VillageInteractionDirector.java")).count());
-            assertEquals(0, names.stream().filter(name -> name.equals("VillageIntent.java")).count());
         }
     }
 

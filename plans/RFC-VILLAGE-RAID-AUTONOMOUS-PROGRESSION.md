@@ -9,10 +9,10 @@
 | **Host baseline sync** | **CLOSED** (2026-08-22) — doc + authorization; runtime matrix pin is a Task-59 deliverable before launch |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0 through V4-C implemented |
-| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** VR-T3j is **RUNTIME PASS**. V4-P0 / `D-VR-096`, V4-R0 / `D-VR-089`, V4-A / `D-VR-090`, V4-B / `D-VR-025`, and V4-C / `D-VR-092` plus ranking-side `D-VR-093` are **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-D onward and first-home behavior remain locked but unimplemented. |
-| **Nearest frontier** | **V4-D — VillageIntent ownership/lifecycle**, only when separately authorized. Remaining V3 runtime rows stay open and resumable from the validation artifact. Any Minecraft launch still requires separate approval. |
-| **Last update** | 2026-08-26 (`Agent_Codex`, V4-C implementation/static-package acceptance) |
+| **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0 through V4-D implemented |
+| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** VR-T3j is **RUNTIME PASS**. V4-P0 / `D-VR-096`, V4-R0 / `D-VR-089`, V4-A / `D-VR-090`, V4-B / `D-VR-025`, V4-C / `D-VR-092` plus ranking-side `D-VR-093`, and V4-D / `D-VR-091` are **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-E onward and first-home behavior remain locked but unimplemented. |
+| **Nearest frontier** | **V4-E — existing COMMUTE integration**, only when separately authorized. Remaining V3 runtime rows stay open and resumable from the validation artifact. Any Minecraft launch still requires separate approval. |
+| **Last update** | 2026-08-26 (`Agent_Codex`, V4-D implementation/static-package acceptance) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -4999,7 +4999,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | `KnownVillager` held until V4+ consumer; other work moved to V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains**, relationship credit, finished-output projection, optional Trade Everything source | **IMPLEMENTED + CLOSED** — VR-T2 vanilla path and V2-TE positive path runtime-confirmed to recorded scope | **VR-T2 PASS**; **VR-T2k PASS (`V2-DEF-003c-R1`)**. VR-T2l, V2-I, and profiling are **DEFERRED / NON-BLOCKING** |
 | **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | Tasks 52–58 **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT**. Certification remains **PARTIALLY COMPLETE / OPEN** under `D-VR-088`; the Task-59 harness is preserved through the validation-mod extraction, not shipped as production architecture. | VR-T3j **RUNTIME PASS**; remaining representative runtime rows a/b/d/e/g/i/k/l stay open and do not block V4 |
-| **V4** | Settlement fact decomposition; bounded positive trader-capability memory; bounded Opinion bridge; destination intent; existing COMMUTE integration; first-home-only promotion | **IMPLEMENTING:** V4-P0 through V4-C static/package accepted; V4-D onward unimplemented | One realistic single-village capability→leave→blocking demand→return COMMUTE→changed live offer→V2 revalidation/transaction witness; multi-village ranking deterministic |
+| **V4** | Settlement fact decomposition; bounded positive trader-capability memory; bounded Opinion bridge; destination intent; existing COMMUTE integration; first-home-only promotion | **IMPLEMENTING:** V4-P0 through V4-D static/package accepted; V4-E onward unimplemented | One realistic single-village capability→leave→blocking demand→return COMMUTE→changed live offer→V2 revalidation/transaction witness; multi-village ranking deterministic |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
 | **V6** | Player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup, **zombie-villager curing** | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup; curing scenarios to be defined in V6 |
 | **V7** | Advanced community: rescue, repair, transport, settlement projects, group coop, founding through world truth + ordinary perception, repair/build golem | **NOT PRACTICAL** gen-1 | Deferred |
@@ -5013,7 +5013,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | **V4-A — known trader evidence** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — bounded trader identity + component-aware positive capability descriptors and expiry | V4-R0, `D-VR-090` | Deterministic bounds/TTL/invalidation/lifecycle tests; full dual build PASS |
 | **V4-B — Opinion bridge** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — `SettlementOpinionBias` in Opinion package; immutable Place snapshot; village receives bounded integer only | V4-R0, `D-VR-025` | 9 deterministic boundary/cap tests plus retained Place-ranker suite; full dual build PASS |
 | **V4-C — factual destination ranking** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — structural evidence-class-first comparator; horizontal factual tuple; bounded Opinion; transient non-persistent demotion input | V4-A/B, `D-VR-092/093` | 18 deterministic routing/fact/lifecycle/boundary tests; full dual build PASS |
-| **V4-D — VillageIntent** | Persist reason/destination only; continuously revalidate demand and existing route authority | V4-C, `D-VR-091` | Authority-loss/interruption/expiry tests |
+| **V4-D — VillageIntent** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — transient reason/destination only; canonical material+consumer identity; live route/destination legitimacy versus interruption admissibility; one-per-mob lifecycle cleanup; no authority/path/persistence | V4-C, `D-VR-091` | 16 deterministic intent/identity/interruption/invalidation/lifecycle/boundary tests; full dual build PASS |
 | **V4-E — COMMUTE integration** | Feed destination intent into existing multi-leg COMMUTE; arrival returns to live V2 discovery | V4-D | Navigation integration runtime represented by V4-G |
 | **V4-F — first-home promotion** | Event-bound first home after real associated sleep at HIGH; never autonomous re-home | V4-R0, `D-VR-042-A1/094` | Deterministic sleep-event and persistence tests |
 | **V4-G — closure** | Single-village leave/return/live-offer-change integration witness | V4-A–F, `D-VR-095` | One approved representative runtime session |
@@ -9274,3 +9274,55 @@ ranker. Runtime destination behavior remains **UNVERIFIED / NOT APPLICABLE YET**
 
 **Frontier after:** V4-C is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-D remains unimplemented
 and requires separate authorization.
+
+### Contribution — `Agent_Codex` (V4-D VillageIntent ownership/lifecycle, 2026-08-26)
+
+**Authorization:** implement locked D-VR-091 only; no `ExploringGoal`/COMMUTE integration,
+pathing, market execution, route-failure producer, first-home behavior, runtime witness, launch, or
+commit.
+
+**Code verification / negative probes (`CODE_CONFIRMED`):** `WorkDemandPolicy.MaterialDemand`
+carried material, positive deficit and consumer but had no stable identity abstraction;
+`ExistingRouteFeasibility.ExistingRouteStatus` already owned the only displacement fact and admits
+trade only on positive `INFEASIBLE`; no `VillageIntent` owner and no persisted execution commitment
+existed. This selected a bounded local lifecycle seam rather than another universal planner or a
+second route authority.
+
+**Implementation (`CODE_CONFIRMED`):** `MaterialDemandIdentity(materialKey, consumerKey)` is now the
+canonical deficit-independent identity. `VillageIntent` stores only kind, `SettlementKey`, opening
+tick and (for `REQUIRED_TRADE`) that identity. `VillageIntentPolicy` opens only when current facts
+contain a live demand, canonical `INFEASIBLE` status, a V4-C selection and that exact destination in
+the caller-resolved hard-compatible remembered set. Revalidation checks the same demand identity,
+current route status and current destination candidacy; interruption preserves semantic existence
+while reporting current admission false. Capability evidence, Opinion and later rankings are absent
+from revalidation, so TTL crossing cannot become a mid-trip NO and score changes cannot retarget.
+
+`VillageIntentRegistry` retains at most one value-only entry per loaded PlayerMob UUID. A new
+selection cannot steal it. An invalid existing entry is physically removed, and invalidation plus
+reselection are separate calls. Entity unload, death and server stop are production eviction sites.
+There is no timer, SavedData, entity/world reference, market object, path state, Goal, route-failure
+producer, or V4-E consumer.
+
+**Alternatives:** persisting the intent would survive restart but could resurrect stale execution
+authority; caching V2 authorization/ranking would simplify resume but turn old market/preference
+facts into permission. Both are rejected. The selected transient identity-only registry loses
+progress on unload but recomputes from persistent semantic memory, which matches the execution
+commitment boundary.
+
+**RED→GREEN / final gate (`CONFIRMED`):** the focused suite first failed compilation with 78
+missing-symbol errors. The final 16-test V4-D matrix plus retained routing/Opinion boundaries pass.
+`clean build` passed **1,692 production + 57 validation tests**, zero failures/errors, including both
+JAR audits. Production SHA-256 is
+`FF405C71CAED85ED2A3471434ECE7CED0AD5C5714E979232AF4169B82962328A`; validation remains
+`BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0`. Production packages zero
+validation namespace entries and zero upstream Trade Everything classes.
+
+**Semantic drift / MAIBS:** planned → implemented is exact for V4-D. No player-visible behavior can
+change yet because no Goal consumes the registry. Future combat interruption may retain the reason
+and destination, but resumption must call live revalidation; demand disappearance during the
+interruption closes the intent. Physical travel/resume remains **UNVERIFIED / NOT APPLICABLE YET**
+until V4-E/G. V4-E must structurally forbid treating `current()` existence as permission and require
+`revalidate` at every admission/resume boundary.
+
+**Frontier after:** V4-D is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-E existing-COMMUTE
+integration remains unimplemented and requires separate authorization.

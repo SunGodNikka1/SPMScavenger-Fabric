@@ -8,6 +8,7 @@ import net.minecraft.world.item.Items;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -19,10 +20,25 @@ public final class WorkDemandPolicy {
     public enum WorkType { SMELT_BATCH }
     public enum DemandClass { SURVIVAL, PROGRESSION }
 
+    /** Stable consumer-route identity; the live deficit is deliberately not part of identity. */
+    public record MaterialDemandIdentity(
+            ResourceLocation materialKey, ResourceLocation consumerKey) {
+        public MaterialDemandIdentity {
+            Objects.requireNonNull(materialKey, "materialKey");
+            Objects.requireNonNull(consumerKey, "consumerKey");
+        }
+    }
+
     public record MaterialDemand(
             ResourceLocation materialKey, int derivedDeficit, ResourceLocation consumerKey) {
         public MaterialDemand {
+            Objects.requireNonNull(materialKey, "materialKey");
+            Objects.requireNonNull(consumerKey, "consumerKey");
             if (derivedDeficit <= 0) throw new IllegalArgumentException("deficit must be positive");
+        }
+
+        public MaterialDemandIdentity identity() {
+            return new MaterialDemandIdentity(materialKey, consumerKey);
         }
     }
 

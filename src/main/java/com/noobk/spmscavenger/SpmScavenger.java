@@ -145,6 +145,7 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.village.population.PopulationFoodEpisodeCooldown.release(mob.getUUID());
                 com.noobk.spmscavenger.village.compost.CompostEpisodeCooldown.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.clear(mob.getUUID());
+                com.noobk.spmscavenger.village.intent.VillageIntentRegistry.release(mob.getUUID());
                 // D-VR-084 / RET-1: the pending-claim store is runtime-only; unload (chunk or
                 // dimension) releases the claim so no claim outlives its owner's presence. The
                 // remembered terminal survives ordinary unload (the mob may return); permanent
@@ -208,6 +209,7 @@ public class SpmScavenger implements ModInitializer {
                     com.noobk.spmscavenger.village.compost.CompostEpisodeCooldown.shutdownServerState();
                     com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.shutdownServerState();
                     com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.shutdownServerState();
+                    com.noobk.spmscavenger.village.intent.VillageIntentRegistry.shutdownServerState();
                     com.noobk.spmscavenger.village.storage.StorageGuardCompatibility.shutdownServerState();
                     com.noobk.spmscavenger.village.crop.HarvestCropGuardCompatibility.shutdownServerState();
                     VillagePerceptionScheduler.shutdown(server);
@@ -225,6 +227,7 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.village.population.PopulationFoodEpisodeCooldown.release(mob.getUUID());
                 com.noobk.spmscavenger.village.compost.CompostEpisodeCooldown.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.clear(mob.getUUID());
+                com.noobk.spmscavenger.village.intent.VillageIntentRegistry.release(mob.getUUID());
                 com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.release(
                         mob.getUUID(),
                         com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.ReleaseReason.ORDINARY);

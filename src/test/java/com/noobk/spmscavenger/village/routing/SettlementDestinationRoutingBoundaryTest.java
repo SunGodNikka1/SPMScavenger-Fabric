@@ -39,11 +39,9 @@ class SettlementDestinationRoutingBoundaryTest {
     }
 
     @Test
-    void noV4dOrLaterImplementationWasAdded() throws IOException {
+    void noV4eOrLaterImplementationWasAdded() throws IOException {
         String all = allProductionSource();
         assertFalse(all.contains("class VillageInteractionDirector"));
-        assertFalse(all.contains("record VillageIntent"));
-        assertFalse(all.contains("class VillageIntent"));
         assertFalse(all.contains("FirstHomePromotion"));
     }
 
