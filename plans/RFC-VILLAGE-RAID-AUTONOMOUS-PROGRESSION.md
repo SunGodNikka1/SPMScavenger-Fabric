@@ -9,10 +9,10 @@
 | **Host baseline sync** | **Task-66 CLOSED STATIC/PACKAGE** (2026-08-27); v0.96 runtime behavior remains unverified until a separately approved launch |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0 through V4-D implemented |
-| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** VR-T3j is **RUNTIME PASS on the historical v0.89 artifact**. V4-P0 through V4-E are **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. Task-66 established v0.96 as the canonical static baseline and repaired the two new fire-goal compatibility seams. |
-| **Nearest frontier** | **V4-F — first-home promotion**, only when separately authorized. Remaining V3 runtime rows resume against v0.96 from the validation artifact; accepted v0.89 evidence is retained and not relabelled. Any Minecraft launch still requires separate approval. |
-| **Last update** | 2026-08-27 (`Agent_Codex`, SPM v0.89→v0.96 host-baseline sync) |
+| **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0 through V4-F implemented |
+| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** VR-T3j is **RUNTIME PASS on the historical v0.89 artifact**. V4-P0 through V4-F are **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. Task-66 established v0.96 as the canonical static baseline; V4 runtime integration remains unverified. |
+| **Nearest frontier** | **V4-G — one representative single-village runtime integration witness**, only when separately prepared and authorized. Remaining V3 runtime rows resume against v0.96 from the validation artifact; accepted v0.89 evidence is retained and not relabelled. Any Minecraft launch still requires separate approval. |
+| **Last update** | 2026-08-27 (`Agent_Codex`, V4-F first-home promotion static/package acceptance) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -1363,7 +1363,7 @@ When `remember()` merges via `at(anchor)`, fold relationship rows: `max` familia
 when within bounds of MEDIUM+ familiarity settlement. `onSocialEpisode` only when greet
 `COMPLETED` **and** mob was in bounds at episode start.
 
-#### First-home promotion (`D-VR-042-A1` — `LOCKED FOR V4-F`)
+#### First-home promotion (`D-VR-042-A1` — `IMPLEMENTED + STATIC/PACKAGE ACCEPTED`)
 
 At the real `SeekShelterGoal` sleep boundary, after `mob.startSleeping(bedPos)`, require
 `mob.isSleeping()`, an unambiguous association from that exact bed position to an **already remembered**
@@ -1396,9 +1396,10 @@ slice lands.
 
 **Implementation binding:** return must route through `ExploringGoal` expedition seed (`D-VR-038`), not a new priority-3 executor.
 
-**Weirdness watch:** before V4-F lands, ordinary production still lacks the first-home sleep caller;
-historical VR-T1.5 debug designation remains evidence only. Commute must yield to active mining/cave
-handoff (`D-VR-043`).
+**Weirdness watch:** V4-F now supplies the ordinary first-home sleep caller. Overlapping remembered
+settlement association envelopes deliberately fail closed rather than choosing nearest, and physical
+sleep→home behavior remains runtime-unverified. Commute must yield to active mining/cave handoff
+(`D-VR-043`).
 
 ---
 
@@ -5024,7 +5025,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | `KnownVillager` held until V4+ consumer; other work moved to V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains**, relationship credit, finished-output projection, optional Trade Everything source | **IMPLEMENTED + CLOSED** — VR-T2 vanilla path and V2-TE positive path runtime-confirmed to recorded scope | **VR-T2 PASS**; **VR-T2k PASS (`V2-DEF-003c-R1`)**. VR-T2l, V2-I, and profiling are **DEFERRED / NON-BLOCKING** |
 | **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | Tasks 52–58 **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT**. Certification remains **PARTIALLY COMPLETE / OPEN** under `D-VR-088`; the Task-59 harness is preserved through the validation-mod extraction, not shipped as production architecture. | VR-T3j **RUNTIME PASS**; remaining representative runtime rows a/b/d/e/g/i/k/l stay open and do not block V4 |
-| **V4** | Settlement fact decomposition; bounded positive trader-capability memory; bounded Opinion bridge; destination intent; existing COMMUTE integration; first-home-only promotion | **IMPLEMENTING:** V4-P0 through V4-D static/package accepted; V4-E onward unimplemented | One realistic single-village capability→leave→blocking demand→return COMMUTE→changed live offer→V2 revalidation/transaction witness; multi-village ranking deterministic |
+| **V4** | Settlement fact decomposition; bounded positive trader-capability memory; bounded Opinion bridge; destination intent; existing COMMUTE integration; first-home-only promotion | **IMPLEMENTED THROUGH V4-F / STATIC+PACKAGE ACCEPTED; runtime closure open** | One realistic single-village capability→leave→blocking demand→return COMMUTE→changed live offer→V2 revalidation/transaction witness; multi-village ranking deterministic |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
 | **V6** | Player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup, **zombie-villager curing** | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup; curing scenarios to be defined in V6 |
 | **V7** | Advanced community: rescue, repair, transport, settlement projects, group coop, founding through world truth + ordinary perception, repair/build golem | **NOT PRACTICAL** gen-1 | Deferred |
@@ -5039,8 +5040,8 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | **V4-B — Opinion bridge** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — `SettlementOpinionBias` in Opinion package; immutable Place snapshot; village receives bounded integer only | V4-R0, `D-VR-025` | 9 deterministic boundary/cap tests plus retained Place-ranker suite; full dual build PASS |
 | **V4-C — factual destination ranking** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — structural evidence-class-first comparator; horizontal factual tuple; bounded Opinion; transient non-persistent demotion input | V4-A/B, `D-VR-092/093` | 18 deterministic routing/fact/lifecycle/boundary tests; full dual build PASS |
 | **V4-D — VillageIntent** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — transient reason/destination only; canonical material+consumer identity; live route/destination legitimacy versus interruption admissibility; one-per-mob lifecycle cleanup; no authority/path/persistence | V4-C, `D-VR-091` | 16 deterministic intent/identity/interruption/invalidation/lifecycle/boundary tests; full dual build PASS |
-| **V4-E — COMMUTE integration** | Feed destination intent into existing multi-leg COMMUTE; arrival returns to live V2 discovery | V4-D | Navigation integration runtime represented by V4-G |
-| **V4-F — first-home promotion** | Event-bound first home after real associated sleep at HIGH; never autonomous re-home | V4-R0, `D-VR-042-A1/094` | Deterministic sleep-event and persistence tests |
+| **V4-E — COMMUTE integration** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — director-bound intent feeds existing multi-leg COMMUTE; arrival returns to live V2 discovery | V4-D | Deterministic integration/lifecycle/package tests; physical navigation represented by V4-G |
+| **V4-F — first-home promotion** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — post-`startSleeping`/`isSleeping` first home through the canonical writer; ambiguous/unknown association fails closed; never autonomous re-home | V4-R0, `D-VR-042-A1/094` | Focused sleep-edge, threshold, association, no-latch, persistence and rekey tests; no Minecraft launch |
 | **V4-G — closure** | Single-village leave/return/live-offer-change integration witness | V4-A–F, `D-VR-095` | One approved representative runtime session |
 
 V4-P0 is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V3 certification stays open and resumable from
@@ -9020,10 +9021,10 @@ implementation baseline before choosing the legacy migration.
 | **D-VR-091** | `VillageInteractionDirector` selects settlement intent/destination only. `REQUIRED_TRADE` never mints mandatory authority and exists only while the same progression demand and existing route/admission justification remain. Existing `ExploringGoal` COMMUTE owns movement; V2/local executors own interaction and revalidation. |
 | **D-VR-092** | Blocking-trade destination choice is **capability-evidence-class-first**: objective legality/admission, POSITIVE_HINT before UNKNOWN, factual utility/travel estimate, bounded Opinion, deterministic tie-break. A hint is a reason to investigate, not feasibility or permission. |
 | **D-VR-093** | Remote travel cost is a cheap horizontal anchor estimate with dimension compatibility, not remote pathfinding or chunk interaction. Selected COMMUTE discovers reachability; bounded failures produce transient demotion/retry, never a permanent blacklist. |
-| **D-VR-094** | HOME is stable factual identity. V4 may automatically designate only the first home through `D-VR-042-A1`; no utility-, Opinion-, trader-, or later-sleep-driven autonomous re-home. |
+| **D-VR-094** | **IMPLEMENTED for V4:** HOME is stable factual identity. V4 may automatically designate only the first home through `D-VR-042-A1`; no utility-, Opinion-, trader-, or later-sleep-driven autonomous re-home. |
 | **D-VR-095** | V4 closure uses deterministic policy/lifecycle tests plus one realistic single-village integration witness. Multi-village ranking is deterministic-test scope, not a two-village runtime prerequisite. |
 | **D-VR-096** | Task-59 certification machinery moves to a separately packaged validation/test mod; passive truth APIs and General Debug remain production. V3 certification remains open. Dependency direction is strictly `spmscavenger_validation -> spmscavenger -> Minecraft/SPM`, never production -> validation. |
-| **D-VR-042-A1** | First-home-only promotion: after real `startSleeping(bedPos)`, require `isSleeping`, exact bed association to an already remembered settlement, familiarity >=600, and no current home. No sleep latch, memory creation, sampled poll, or autonomous re-home. Supersedes D-VR-042's product-decision/config-default wording. |
+| **D-VR-042-A1** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED:** first-home-only promotion after real `startSleeping(bedPos)` requires `isSleeping`, exactly one existing remembered settlement association for the bed, familiarity >=600, and no current home. No sleep latch, memory creation, sampled poll, nearest fallback, or autonomous re-home. Supersedes D-VR-042's product-decision/config-default wording. |
 
 #### D-VR-096 extraction and dependency gate
 
@@ -9432,3 +9433,39 @@ validation SHA-256 is `5CAF12091A17A96B7D09D502F7FA2467A6C5E193E4F07510F1F0EA5D2
 Runtime compatibility remains **UNVERIFIED** because no launch was authorized.
 
 **Frontier after:** Task-66 is closed; V4-F first-home promotion is next.
+
+### Contribution — `Agent_Codex` (V4-F first-home promotion, 2026-08-27)
+
+**Authorization:** implement only `D-VR-042-A1` and the first-home portion of `D-VR-094`; no
+re-home arbitration, V4-E change, runtime witness, launch, debug expansion, raid behavior, or commit.
+
+**Implementation (`CODE_CONFIRMED`):** `SeekShelterGoal.lieDown()` retains its real bed/occupancy/
+claim validation, calls `mob.startSleeping(bedPos)`, and invokes `FirstHomePromotion` only when the
+same mob reports `isSleeping()`. The policy reads only existing dimension/mob village memory through
+`peekInDimension` + `peek`, requires no existing home, resolves the exact bed against exactly one
+canonical remembered settlement inside the established `SettlementBoundsPolicy`, and requires
+familiarity >=600. Zero, unrelated, or multiple matches fail closed. The single mutation delegates
+to `VillageMemorySavedData.designateHome`, preserving R0 home mutation, relationship effects,
+dirtying, persistence, and anchor-rekey ownership.
+
+**Alternatives:** the 48-block identity merge radius was rejected because settlement equivalence is
+not bed association. Nearest-anchor selection was rejected because it invents certainty in overlap.
+The selected exact-one association is safer but may omit promotion at a large-village edge or where
+two remembered envelopes overlap; runtime frequency is unverified and would be the evidence needed
+to reconsider geometry.
+
+**Acceptance (`STATIC/PACKAGE CONFIRMED`):** focused threshold/sleep/association/no-latch/
+no-rehome/save-load/rekey tests pass. Final `clean build` passes 1,719 production + 57 validation
+tests with zero failures/errors. Production contains zero validation namespace, Task-59 temporary,
+or upstream Trade Everything classes; validation duplicates zero production classes. Production
+SHA-256 is `918CA885EBD5FA985FBE234DE11D05E983DFAF882A4092921BA15F46B59E089B`;
+validation SHA-256 is `5CAF12091A17A96B7D09D502F7FA2467A6C5E193E4F07510F1F0EA5D23DD0EFF`.
+
+**MAIBS / claim boundary:** successful qualifying sleep may now create the first HOME in the same
+tick; failed sleep, 599 familiarity, old sleep followed by later familiarity gain, ambiguous memory,
+or any later sleep with an existing home cannot. Physical sleep→HOME behavior and overlap/edge-bed
+frequency remain **UNVERIFIED** because Minecraft was not launched.
+
+**Frontier after:** V4-P0 through V4-F are implemented and static/package accepted. V4-G is the one
+representative single-village runtime integration witness and still requires separate preparation
+and explicit launch approval.

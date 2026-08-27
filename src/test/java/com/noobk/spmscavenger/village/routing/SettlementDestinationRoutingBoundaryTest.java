@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,10 +40,11 @@ class SettlementDestinationRoutingBoundaryTest {
     }
 
     @Test
-    void v4eFacadeExistsButFirstHomeProducerDoesNot() throws IOException {
+    void v4eFacadeAndTheSingleDedicatedV4fProducerExist() throws IOException {
         String all = allProductionSource();
         assertTrue(all.contains("class VillageInteractionDirector"));
-        assertFalse(all.contains("FirstHomePromotion"));
+        assertTrue(all.contains("class FirstHomePromotion"));
+        assertEquals(1, count(all, "class FirstHomePromotion"));
     }
 
     private static String routingSource() throws IOException {
@@ -65,5 +67,9 @@ class SettlementDestinationRoutingBoundaryTest {
             }
         }
         return combined.toString();
+    }
+
+    private static int count(String body, String needle) {
+        return (body.length() - body.replace(needle, "").length()) / needle.length();
     }
 }

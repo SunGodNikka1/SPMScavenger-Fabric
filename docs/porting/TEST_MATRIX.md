@@ -708,6 +708,20 @@ Validation SHA-256: `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F
 
 Runtime loading of the pair remains **UNVERIFIED**; no Minecraft launch occurred.
 
+## V4-F first-home promotion — Task 67 (2026-08-27)
+
+| Check | Must happen | Must not happen | Evidence |
+| --- | --- | --- | --- |
+| Real event boundary | Promotion is evaluated only after `SeekShelterGoal` calls `startSleeping(bedPos)` and observes `isSleeping()` true | Failed sleep or a sampled sleeping poll creates HOME | `FirstHomePromotionTest.productionWiringUsesTheRealSleepEdgeAndExistingWriterOnly` — `CODE_CONFIRMED`; physical event `UNVERIFIED` |
+| Existing-memory association | Exactly one already-remembered settlement inside the established settlement envelope may qualify | Sleep creates memory, nearest-wins resolves ambiguity, or an unrelated remembered settlement qualifies | unknown/unrelated/ambiguous association controls — `CONFIRMED` |
+| Familiarity boundary | Familiarity 600 may promote the first HOME | 599 promotes, or reaching 600 later replays an old sleep | threshold and no-retroactive-latch tests — `CONFIRMED` |
+| Stable HOME | The canonical existing `VillageMemorySavedData.designateHome` writer runs once and R0 save/load/rekey semantics preserve HOME | Later sleep, higher familiarity, Opinion or trader facts autonomously re-home | writer-count, existing-home, save/load and supersession tests — `CONFIRMED` |
+| Scope/package | Production and validation build together; production remains free of validation/Task-59/upstream-TE classes | V4-F adds Goal/navigation/ranking/debug/runtime-witness behavior | `clean build` 1,719 + 57 tests; package audits zero forbidden/duplicate classes — `CONFIRMED` |
+
+**Runtime status:** first-home physical sleep→persistence behavior remains **UNVERIFIED**. V4-G is the
+next representative integration witness and still requires separately prepared fixture evidence and
+explicit Minecraft launch approval.
+
 **V4-R0 settlement representation (`D-VR-089`, STATIC/PACKAGE PASS, 2026-08-26):**
 `KnownVillage` persists only anchor/observation facts. `MobVillageMemory` persists one optional root
 `homeAnchor`; legacy `HOME_VILLAGE` migrates deterministically, duplicate legacy homes choose the

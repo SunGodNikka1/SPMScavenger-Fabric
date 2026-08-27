@@ -72,14 +72,14 @@ class SettlementOpinionBoundaryTest {
     }
 
     @Test
-    void v4eDirectorExistsButFirstHomeOwnerDoesNot() throws IOException {
+    void v4eDirectorAndTheSingleAuthorizedV4fHomeOwnerExist() throws IOException {
         Path root = Path.of("src/main/java/com/noobk/spmscavenger");
         try (var paths = Files.walk(root)) {
             List<String> names = paths.filter(path -> path.toString().endsWith(".java"))
                     .map(path -> path.getFileName().toString())
                     .toList();
             assertEquals(1, names.stream().filter(name -> name.equals("VillageInteractionDirector.java")).count());
-            assertEquals(0, names.stream().filter(name -> name.equals("FirstHomePromotion.java")).count());
+            assertEquals(1, names.stream().filter(name -> name.equals("FirstHomePromotion.java")).count());
         }
     }
 

@@ -6,6 +6,7 @@ import com.noobk.spmscavenger.activity.ActivityObservationService;
 import com.noobk.spmscavenger.experience.RestAnchorType;
 import com.noobk.spmscavenger.experience.RestCloseReason;
 import com.noobk.spmscavenger.experience.RestSessionCoordinator;
+import com.noobk.spmscavenger.village.FirstHomePromotion;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
@@ -234,6 +235,9 @@ public class SeekShelterGoal extends Goal {
                 && ownsLiveClaim(commitment, mob.level().getGameTime())) {
             mob.getNavigation().stop();
             mob.startSleeping(bedPos);
+            if (mob.isSleeping() && mob.level() instanceof ServerLevel serverLevel) {
+                FirstHomePromotion.afterSuccessfulSleep(serverLevel, mob, bedPos);
+            }
             markArrived();
             RestSessionCoordinator.openShelterRecovery(
                     mob, commitment.commitmentId(), bedPos,

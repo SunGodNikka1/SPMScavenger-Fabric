@@ -32,7 +32,7 @@ RUNTIME-AUTHORIZED**. Any further launch requires exact pair approval.
 | Mod | File | SHA-256 | Evidence status |
 | --- | --- | --- | --- |
 | Social Player Mobs | `playermob-fabric-0.96.0+1.21.1.jar` | `508EDA58611A2A0738E257F98C2E14C5032C6EFBF5B1A985C9F93EE295131097` | GitHub v0.96 release artifact + Task-66 source/artifact contract audit **CONFIRMED**; runtime **UNVERIFIED** |
-| Production Scavenger | `spmscavenger-1.11.0.jar` | `67F3F063DD22312FF08BF1DFC0431B13749450B430AC6DFBDF38E6FEA1B0A3AB` | Task-66 `clean build`, 1,711 tests and production package audit **CONFIRMED**; runtime loading **UNVERIFIED** |
+| Production Scavenger | `spmscavenger-1.11.0.jar` | `918CA885EBD5FA985FBE234DE11D05E983DFAF882A4092921BA15F46B59E089B` | Task-67 V4-F `clean build`, 1,719 tests and production package audit **CONFIRMED**; runtime loading **UNVERIFIED** |
 | Task-59 validation sidecar | `spmscavenger-1.11.0-validation.jar` | `5CAF12091A17A96B7D09D502F7FA2467A6C5E193E4F07510F1F0EA5D23DD0EFF` | Task-66 `clean build`, 57 tests and validation package audit **CONFIRMED**; runtime loading **UNVERIFIED** |
 
 **SPM source tags (audit):** `v0.89.0` commit `a1bd88bfe7605bcc6f7c409669012afc8a47d448`

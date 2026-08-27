@@ -3,7 +3,6 @@ package com.noobk.spmscavenger.village;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -230,7 +229,7 @@ class MobVillageMemoryHomeMigrationTest {
     }
 
     @Test
-    void structuralModelContainsNoTierAndV4eDoesNotIntroduceHomeProducer() throws IOException {
+    void structuralModelContainsNoTierAndOnlyV4fIntroducesTheHomeProducer() throws IOException {
         Path villageSource = Path.of("src/main/java/com/noobk/spmscavenger/village");
         assertFalse(Files.exists(villageSource.resolve("SettlementTier.java")));
         String known = Files.readString(villageSource.resolve("KnownVillage.java"));
@@ -244,7 +243,8 @@ class MobVillageMemoryHomeMigrationTest {
         assertTrue(findProductionSource("KnownVillager") != null,
                 "V4-A KnownVillager evidence is now the authorized frontier");
         assertNotNull(findProductionSource("VillageInteractionDirector"));
-        assertNull(findProductionSource("FirstHomePromotion"));
+        assertNotNull(findProductionSource("FirstHomePromotion"),
+                "V4-F is the authorized first-home producer after V4-E remained home-neutral");
     }
 
     private static Path findProductionSource(String fileStem) throws IOException {

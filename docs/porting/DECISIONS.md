@@ -1795,3 +1795,25 @@ Full offer persistence was rejected because stale market facts could become coun
 Production therefore passively consumes only the complete vanilla board V2 already read; it performs
 no new scan and does not persist query-shaped TE synthetic quotes as stable board facts. Live V2
 discovery, authorization, Q1/Q2, and transaction revalidation remain unchanged.
+
+## 2026-08-27 - V4-F: first HOME is a real-sleep consequence, never a utility transition
+
+`D-VR-042-A1` and the V4 portion of `D-VR-094` are implemented at
+`SeekShelterGoal.lieDown()`'s existing real interaction boundary. Only after
+`startSleeping(bedPos)` leaves the mob actually sleeping may the policy read already-existing
+village memory. Exactly one remembered settlement inside the existing settlement presence/work
+envelope, familiarity >=600, and no current home delegates once to the canonical
+`VillageMemorySavedData.designateHome` writer.
+
+Zero or multiple associations fail closed; there is no nearest fallback. Sleep does not perceive or
+create a settlement, and no `sleptHere`, pending-home, counter, timer, sampled poll, config, or
+automatic re-home state exists. Once HOME is present, later sleep, familiarity, Opinion, trader
+evidence, or utility cannot replace it.
+
+Alternative 48-block identity-radius matching was rejected because anchor identity merging is not
+bed association. Nearest remembered settlement was rejected because it invents certainty in
+overlapping villages. The selected 64-block exact-one rule reuses established settlement semantics;
+runtime evidence of systematic large-village edge-bed false negatives or frequent overlap ambiguity
+would reopen the geometry but would not by itself justify nearest-wins. Static/package acceptance is
+1,719 production + 57 validation tests with zero failures; physical sleep-to-HOME behavior remains
+unverified until the separately authorized V4-G witness.

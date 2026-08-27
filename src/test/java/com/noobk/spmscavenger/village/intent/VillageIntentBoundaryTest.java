@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -38,10 +39,11 @@ class VillageIntentBoundaryTest {
     }
 
     @Test
-    void v4EAddsFacadeButNoSecondGoalOrFirstHomeBehavior() throws IOException {
+    void v4EAddsFacadeWithoutSecondGoalAndV4fHasOnlyItsDedicatedOwner() throws IOException {
         String source = allProductionSource();
         assertTrue(source.contains("class VillageInteractionDirector"));
-        assertFalse(source.contains("FirstHomePromotion"));
+        assertTrue(source.contains("class FirstHomePromotion"));
+        assertEquals(1, count(source, "class FirstHomePromotion"));
         assertFalse(source.contains("VillageIntentGoal"));
         assertFalse(source.contains("VillageTravelGoal"));
         assertFalse(source.contains("RequiredTradeTravelGoal"));
