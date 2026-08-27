@@ -683,7 +683,7 @@ Minecraft launches remain separately authorized.
 | VR-T3i | task-54 explicit grant + non-ally controls — `CONFIRMED` | **REQUIRED** — positive permit/non-ally host integration |
 | VR-T3j | task-52/53 mandatory wiring — `CONFIRMED` (unit) | **`RUNTIME PASS`** on `BDAA788C...A0B2BDC`: full 1000 ticks; live claim opening; pig-combat preemption; Gather resume; no Village Work displacement |
 | VR-T3k | task-55 commit revalidation — `CONFIRMED` | `UNVERIFIED` |
-| VR-T3l | D-VR-079-A1 veto + continuation policy — `CONFIRMED` for local logic; optional host attachment `UNVERIFIED` | **REQUIRED after fixture redesign** — minimal SPM 0.89 host-hook attachment/refusal + wilderness/fail-open witness; no mandatory claim |
+| VR-T3l | D-VR-079-A1 veto + continuation policy — `CONFIRMED` for local logic; optional host attachment `UNVERIFIED` | **REQUIRED after fixture redesign** — minimal SPM 0.96 host-hook attachment/refusal + wilderness/fail-open witness; no mandatory claim; window covers 0.5x–2x reaction timing |
 | VR-T3m | F8 banking/conservation tests — `CONFIRMED` | **STATIC SUBSTITUTION** — closes with representative T3a runtime; no two-natural-generation standalone run |
 | D-VR-084 witness | task-52 scenarios/temporal simulations/mutations + accepted T3j runtime | **CLOSURE SATISFIED COMPOSITIONALLY; no standalone rerun** |
 

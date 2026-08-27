@@ -19,7 +19,7 @@ approval (AGENTS.md Gate 6).
 | **12** | Scoped VR-T3 **letter rows** — `a–e`, `g–m` (VR-T3f excluded); proof classes now differ |
 | **8** | Remaining runtime-required rows — `a`, `b`, `d`, `e`, `g`, `i`, `k`, `l` |
 | **13 historical presets** | Existing `spm_vr` IDs remain an implementation inventory, not thirteen closure obligations; D-VR-084 and T3m require no standalone run, and current T3l is invalid pending redesign |
-| **SPM 0.89 caution** | Reuses existing presets (`crop_interrupt_combat`, `mandatory_blocks_village_work`) — **not** a fourteenth preset |
+| **SPM 0.96 timing caution** | Reuses existing presets (`crop_interrupt_combat`, `mandatory_blocks_village_work`) — **not** a fourteenth preset |
 
 ---
 
@@ -27,7 +27,7 @@ approval (AGENTS.md Gate 6).
 
 | Mod | Version | Required | Notes |
 | --- | --- | --- | --- |
-| **Social Player Mobs** (`playermob`) | **0.89.0** | **yes** | SHA-256 pinned in `VR-T3-RUNTIME-ENVIRONMENT.md` |
+| **Social Player Mobs** (`playermob`) | **0.96.0** | **yes** | SHA-256 pinned in `VR-T3-RUNTIME-ENVIRONMENT.md`; accepted T3j evidence remains historical v0.89 |
 | **SPM Scavenger** (`spmscavenger`) | **1.11.0** (task-59 build) | **yes** | SHA-256 pinned in environment doc |
 | **Fabric API** | **0.116.4+1.21.1** | **yes** | Loader **0.16.14** — see environment doc |
 | Trade Everything | — | **no** | Contaminates uncontaminated village-work proof (V2 `D-VR-069` precedent) |
@@ -74,15 +74,15 @@ not create duplicate runtime obligations. **VR-T3f remains non-applicable** whil
 | **VR-T3d** | One compost unit consumed; level advance or unchanged both terminate | Double debit; reserve violation; bone-meal demand | `compost_seed_surplus` | One activation through **terminal** (level change or unchanged) + **400 ticks** with no second debit | `CompostScenarioEvidenceTest`, task-58 report | `UNVERIFIED` |
 | **VR-T3e** | One disposable food delivery when deficit exists | Breeding command; reserve violation; gift loop | `population_food_deficit` | **1200 ticks** minimum — must show **one** handoff episode, not repeated gifting | task-57 static; `PopulationFood*` tests | `UNVERIFIED` |
 | **VR-T3f** | — | — | — | — | **DEFERRED** (V3-D2) | **N/A — non-applicable** |
-| **VR-T3g** | Ally cannot loot `VILLAGE_PUBLIC` without grant | HOME/HIGH alone permits loot | `storage_public_deny` | **800 ticks** after mob paths to chest — no open/loot continuation | `StorageOwnershipStructuralTest` vrT3g_* | `UNVERIFIED` |
+| **VR-T3g** | Ally cannot loot `VILLAGE_PUBLIC` without grant | HOME/HIGH alone permits loot | `storage_public_deny`; host `searchContainers=enabled` required | **800 ticks** after mob paths to chest — no open/loot continuation | `StorageOwnershipStructuralTest` vrT3g_* | `UNVERIFIED`; disabled host container search is a false PASS and does not exercise the hook |
 | **VR-T3h** | UNKNOWN ownership → fail closed | Missing evidence treated as permission | historical `storage_unknown_deny` (optional diagnostic only) | No standalone window | task-54 `vrT3h_*` tri-state/UNKNOWN tests | **CLOSURE SATISFIED — STATIC-SUBSUMED; T3g is live deny-hook representative** |
 | **VR-T3i** | Explicit grant permits; non-ally unchanged | Blanket strip despite grant | `storage_granted_permit` | **800 ticks** after `storage own` grant — permitted access may proceed once | vrT3i_* unit tests | `UNVERIFIED` |
 | **VR-T3j** | Mandatory work blocks fresh village work | Opinion/discretionary displaces mandatory | `mandatory_blocks_village_work` | `MANDATORY_ROUTE_READY` then **1000 ticks** — mandatory claim/live gather must complete or block before village crop work | task-52/53 wiring + Task-59 frontier tests | **RUNTIME PASS** on `BDAA788C...A0B2BDC`: `LIVE_CLAIM` opening; pig combat preemption; Gather resume; `SCAVENGE_WORK` ownership; Village Work never displaced mandatory |
 | **VR-T3k** | Two mobs: first commits; second revalidates | Double break; global reservation | `crop_multi_mob` | Through first mob **COMMIT** + second mob **abandon/reacquire** + **200 ticks** | static `CONFIRMED` — task-55 | `UNVERIFIED` |
-| **VR-T3l** | SPM 0.89 host `HarvestCropsGoal` hook attaches and refuses a positively managed crop | Hook silently misses; wilderness/unresolved target is vetoed; stock food behavior broadly suppressed | **REDESIGN REQUIRED** — replace `crop_hungry_veto`; do not use nearby logs or mandatory claims | Smallest window that observes host target evaluation/refusal plus wilderness/fail-open control | mixin policy/continuation tests are static `CONFIRMED`; attachment remains runtime-only | **RUNTIME REQUIRED — BLOCKED BY FIXTURE DESIGN** |
+| **VR-T3l** | SPM 0.96 host `HarvestCropsGoal` hook attaches and refuses a positively managed crop | Hook silently misses; wilderness/unresolved target is vetoed; stock food behavior broadly suppressed | **REDESIGN REQUIRED** — replace `crop_hungry_veto`; do not use nearby logs or mandatory claims | Smallest window that observes host target evaluation/refusal plus wilderness/fail-open control; tolerate the host 0.5x–2x `reactTicks` timing envelope | mixin policy/continuation tests are static `CONFIRMED`; v0.96 attachment remains runtime-only | **RUNTIME REQUIRED — BLOCKED BY FIXTURE DESIGN** |
 | **VR-T3m** | Replant stock is banked and conserved across repeated episodes | Floor-pickup supply or reserve drain | historical `crop_multi_cycle` (not a closure preset) | No standalone natural-growth window | `ContainerMergeTest` + transaction banking/conservation tests; T3a supplies representative live episode seam | **STATIC SUBSTITUTION — closes when T3a runtime passes** |
 | **D-VR-084 witness** | Live pending/running mandatory authority blocks Village Work; deterministic lifecycle releases correctly | Demand self-renews authority or stale claim survives | historical `mandatory_ownership_witness` (no closure run) | No standalone window | accepted T3j live sequence + task-52 scenarios, temporal simulations, and mutation controls | **CLOSURE SATISFIED COMPOSITIONALLY** |
-| **SPM 0.89 caution** | Target invalidation/hand-off observable under interruption | Misread as V3 defect | reuse `crop_interrupt_combat` / `mandatory_blocks_village_work` | Same windows as parent rows | host-delta doc only | `UNVERIFIED` |
+| **SPM 0.96 caution** | Reaction-delayed target acquisition and target invalidation/hand-off remain observable under interruption | Timing drift misread as V3 defect | reuse `crop_interrupt_combat`; T3j must not be rerun | Parent window must cover the slowest 2x reaction timing | Task-66 host-delta audit only | `UNVERIFIED` |
 
 ### VR-T3c contract (task-55 atomic — no repair)
 
@@ -233,7 +233,7 @@ Execute in one batched session where possible; re-seed world between clusters if
 3. **Population handoff** — VR-T3e
 4. **Compost mutation/navigation** — VR-T3d
 5. **SPM host attachment** — redesigned minimal VR-T3l only after fixture review
-6. **SPM 0.89 target-edge caution** — witness during VR-T3b where relevant
+6. **SPM 0.96 reaction/target-edge caution** — witness during VR-T3b where relevant
 
 Do **not** rerun T3j or schedule standalone T3c, T3h, T3m, or D-VR-084 closure sessions.
 
@@ -265,7 +265,7 @@ Before marking V3 **runtime closed**, review:
 
 - Did any row pass for the wrong reason (e.g. host goal did the work, not Scavenger executor)?
 - Did P4 torch contention starve compost/harvest (document as `RUNTIME_QUESTION`, not auto-fail)?
-- Did SPM 0.89 target-edge semantics change observable interruption (compatibility note only)?
+- Did SPM 0.96 reaction-delayed target acquisition change observable interruption timing (compatibility note only)?
 
 ---
 

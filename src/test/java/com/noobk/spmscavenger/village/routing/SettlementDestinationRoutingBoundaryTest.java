@@ -39,9 +39,9 @@ class SettlementDestinationRoutingBoundaryTest {
     }
 
     @Test
-    void noV4eOrLaterImplementationWasAdded() throws IOException {
+    void v4eFacadeExistsButFirstHomeProducerDoesNot() throws IOException {
         String all = allProductionSource();
-        assertFalse(all.contains("class VillageInteractionDirector"));
+        assertTrue(all.contains("class VillageInteractionDirector"));
         assertFalse(all.contains("FirstHomePromotion"));
     }
 

@@ -15,20 +15,20 @@
 | # | Preset ID | VR-T3 / witness | Function |
 | --- | --- | --- | --- |
 | 1 | `crop_managed_single` | VR-T3a | `spm_vr:scenario/crop_managed_single` |
-| 2 | `crop_interrupt_combat` | VR-T3b (+ SPM 0.89 caution) | `spm_vr:scenario/crop_interrupt_combat` |
+| 2 | `crop_interrupt_combat` | VR-T3b (+ SPM 0.96 timing caution) | `spm_vr:scenario/crop_interrupt_combat` |
 | 3 | `crop_replant_failure` | VR-T3c | `spm_vr:scenario/crop_replant_failure` |
 | 4 | `compost_seed_surplus` | VR-T3d | `spm_vr:scenario/compost_seed_surplus` |
 | 5 | `population_food_deficit` | VR-T3e | `spm_vr:scenario/population_food_deficit` |
 | 6 | `storage_public_deny` | VR-T3g | `spm_vr:scenario/storage_public_deny` |
 | 7 | `storage_unknown_deny` | VR-T3h | `spm_vr:scenario/storage_unknown_deny` |
 | 8 | `storage_granted_permit` | VR-T3i | `spm_vr:scenario/storage_granted_permit` |
-| 9 | `mandatory_blocks_village_work` | VR-T3j (+ SPM 0.89 caution) | `spm_vr:scenario/mandatory_blocks_village_work` |
+| 9 | `mandatory_blocks_village_work` | VR-T3j historical v0.89 PASS; do not rerun | `spm_vr:scenario/mandatory_blocks_village_work` |
 | 10 | `crop_multi_mob` | VR-T3k | `spm_vr:scenario/crop_multi_mob` |
 | 11 | `crop_hungry_veto` | VR-T3l | `spm_vr:scenario/crop_hungry_veto` |
 | 12 | `crop_multi_cycle` | VR-T3m | `spm_vr:scenario/crop_multi_cycle` |
 | 13 | `mandatory_ownership_witness` | D-VR-084 witness | `spm_vr:scenario/mandatory_ownership_witness` |
 
-**Twelve applicable VR-T3 letter rows** (`a–e`, `g–m`) **+ D-VR-084 witness = thirteen preset IDs.** SPM 0.89 caution reuses presets 2 and 9.
+**Twelve applicable VR-T3 letter rows** (`a–e`, `g–m`) **+ D-VR-084 witness = thirteen preset IDs.** Future unrun rows use SPM 0.96; accepted T3j remains pinned to its historical v0.89 run.
 
 ---
 
@@ -61,7 +61,7 @@ Shared library: `spm_vr:_lib/reset`, `setup_village_stub`, `spawn_ally`.
 | Bootstrap | `setup_village_stub` + scheduled `claim_village_beds` (TP only — **no** HOME/sleep NBT injection) |
 | Runtime gate 0 | Settlement bootstrap preflight in `VR-T3-RUNTIME-MATRIX.md` — halt on `FIXTURE_FAILURE` |
 | `mobGriefing` | **true** (crop/compost rows require it) |
-| Host | `playermob` **0.89.0** (hash pinned) |
+| Host | `playermob` **0.96.0** (hash pinned); historical T3j result remains v0.89 |
 
 ---
 
@@ -79,7 +79,7 @@ Shared library: `spm_vr:_lib/reset`, `setup_village_stub`, `spawn_ally`.
 | **Falsifier** | Bare farmland after successful pathing |
 | **Min window** | terminal COMMIT + 200 ticks (matrix) |
 
-### `spm_vr:crop_interrupt_combat` — VR-T3b + SPM 0.89 caution
+### `spm_vr:crop_interrupt_combat` — VR-T3b + SPM 0.96 timing caution
 
 | Field | Value |
 | --- | --- |

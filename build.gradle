@@ -104,6 +104,39 @@ test {
     useJUnitPlatform()
 }
 
+def spmReferenceFile = file(project.property('spm_reference_jar'))
+
+tasks.withType(Test).configureEach {
+    systemProperty 'spm.reference.jar', spmReferenceFile.absolutePath
+    systemProperty 'spm.reference.version', project.property('spm_reference_version')
+    systemProperty 'spm.reference.sha256', project.property('spm_reference_sha256')
+}
+
+def verifySpmHostBaseline = tasks.register('verifySpmHostBaseline') {
+    description = 'Pins and verifies the optional Social Player Mobs compatibility oracle.'
+    group = 'verification'
+    inputs.file(spmReferenceFile)
+    doLast {
+        if (!spmReferenceFile.isFile()) {
+            throw new GradleException("Missing pinned SPM reference artifact: ${spmReferenceFile}")
+        }
+        def digest = java.security.MessageDigest.getInstance('SHA-256')
+        spmReferenceFile.withInputStream { stream ->
+            byte[] buffer = new byte[8192]
+            for (int read = stream.read(buffer); read >= 0; read = stream.read(buffer)) {
+                if (read > 0) {
+                    digest.update(buffer, 0, read)
+                }
+            }
+        }
+        def actual = digest.digest().encodeHex().toString().toUpperCase(java.util.Locale.ROOT)
+        def expected = project.property('spm_reference_sha256').toString().toUpperCase(java.util.Locale.ROOT)
+        if (actual != expected) {
+            throw new GradleException("SPM reference SHA-256 ${actual} != pinned ${expected}")
+        }
+    }
+}
+
 def validationTestTask = tasks.register('validationTest', Test) {
     description = 'Runs validation/test-mod structural tests.'
     group = 'verification'
@@ -206,6 +239,7 @@ tasks.named('assemble') {
 }
 
 tasks.named('check') {
+    dependsOn verifySpmHostBaseline
     dependsOn validationTestTask
     dependsOn auditProductionJar
     dependsOn auditValidationJar

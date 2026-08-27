@@ -29,7 +29,7 @@ import org.objectweb.asm.Opcodes;
  *
  * <h2>Why this call site</h2>
  *
- * Verified against pinned {@code playermob-0.86.0} bytecode, {@code canUse()} is:
+ * Reverified against pinned {@code playermob-0.96.0} source/artifact, {@code canUse()} is:
  *
  * <pre>
  * if (cooldownTicks > 0) { cooldownTicks--; return false; }

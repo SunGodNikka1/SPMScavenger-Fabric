@@ -408,7 +408,7 @@ batched-witness decision and supersedes later wording that made D-VR-084 indepen
 | VR-T3h | **CLOSURE SATISFIED — STATIC-SUBSUMED** | task-54 UNKNOWN/tri-state evidence; T3g remains the representative live host deny-hook proof |
 | VR-T3m | **STATIC SUBSTITUTION** | representative T3a live crop episode + deterministic F8 banking/conservation; impossible two-unaccelerated-generation/4000t obligation removed |
 | VR-T3j | **RUNTIME PASS / NO RERUN** | `BDAA788C...A0B2BDC` accepted evidence |
-| VR-T3l | **RUNTIME REQUIRED / FIXTURE REDESIGN REQUIRED** | minimal passive SPM 0.89 `HarvestCropsGoal` optional-mixin attachment/refusal witness with wilderness/unresolved fail-open control |
+| VR-T3l | **RUNTIME REQUIRED / FIXTURE REDESIGN REQUIRED** | minimal passive SPM 0.96 `HarvestCropsGoal` optional-mixin attachment/refusal witness with wilderness/unresolved fail-open control; cover reaction-scaled timing |
 
 The existing T3l fixture is invalid because nearby oak logs do not establish mandatory Gather
 authority. Its replacement must not attempt to repair that premise. The witness owns only fixture
@@ -478,3 +478,12 @@ Artifacts:
 **Next:** V4-R0 may begin independently. Remaining VR-T3 certification resumes only from an exact
 approved production/validation artifact pair. Sidecar loading/runtime command registration remains
 **UNVERIFIED** because P0 did not authorize a Minecraft launch.
+
+## Host-baseline continuation note (Task-66, 2026-08-27)
+
+The accepted Task-59/T3j result remains pinned to SPM v0.89 and is not invalidated or relabelled.
+Remaining runtime rows now target the statically audited v0.96 artifact. T3g must explicitly run
+with host `searchContainers=enabled`, otherwise host admission prevents `RaidContainersGoal` from
+reaching the Scavenger hook and the row is a false pass. T3b/T3l observation must allow v0.96's
+reaction-scaled timing; T3l's unique runtime obligation is host-mixin attachment on v0.96. No
+accepted row requires a rerun absent a concrete semantic contradiction.

@@ -80,6 +80,18 @@ public final class VillageIntentRegistry {
         }
     }
 
+    /** Releases travel ownership only when the exact still-current commitment arrived/failed. */
+    public static synchronized boolean releaseIfCurrent(UUID mobId, VillageIntent expected) {
+        if (mobId == null || expected == null) {
+            return false;
+        }
+        if (INTENTS.get(mobId) != expected) {
+            return false;
+        }
+        INTENTS.remove(mobId);
+        return true;
+    }
+
     public static void shutdownServerState() {
         INTENTS.clear();
     }

@@ -13,7 +13,7 @@
 | **V4-R0 settlement representation** | **DONE / STATIC+PACKAGE ACCEPTED (`D-VR-089`)** — independent `homeAnchor`, deterministic tier migration, rekey/eviction/save-load coverage; no V4 behavior producer | `task-61-report.md` |
 | **V4-A known trader evidence** | **DONE / STATIC+PACKAGE ACCEPTED (`D-VR-090`)** — bounded component-exact positive capabilities in existing village-memory lifecycle; live vanilla-board observation only; no market authority | `task-62-report.md` |
 | **V4-D VillageIntent** | **DONE / STATIC+PACKAGE ACCEPTED (`D-VR-091`)** — transient reason/destination only; stable material+consumer identity, live route/destination revalidation, interruption suspension, lifecycle cleanup; no authority or movement | `task-65-report.md` |
-| **V4 Architecture** | `D-VR-089…096` + `D-VR-042-A1` **LOCKED**; V4-E COMMUTE integration is the next unimplemented slice | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
+| **V4 Architecture** | `D-VR-089…096` + `D-VR-042-A1` **LOCKED**; V4-E is static/package accepted; Task-66 v0.96 host sync complete; V4-F is next | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
 
 **Task-59 authorization scope (2026-08-22):**
 
@@ -131,5 +131,7 @@ Task 63: **DONE / STATIC+PACKAGE ACCEPTED** — V4-B added immutable `Settlement
 Task 64: **DONE / STATIC+PACKAGE ACCEPTED** — V4-C added component/TTL-aware immutable ranking facts, structural POSITIVE_HINT→UNKNOWN lexicographic destination ranking, horizontal-only factual utility, bounded Opinion ordering, deterministic dimension+anchor tie-break, and bounded transient non-persistent route demotion input. 1,676 production + 57 validation tests; no V4-D+ consumer/runtime (`task-64-report.md`).
 
 Task 65: **DONE / STATIC+PACKAGE ACCEPTED** — V4-D added canonical material+consumer demand identity, minimal transient `VillageIntent`, pure live legitimacy/admissibility revalidation, one-per-loaded-mob registry with unload/death/server-stop cleanup, and no path/market/SavedData authority. 1,692 production + 57 validation tests; no V4-E consumer/runtime (`task-65-report.md`).
+
+Task 66: **DONE / STATIC+PACKAGE ACCEPTED** — V4-E added the production `VillageInteractionDirector`, exact-intent `CommuteDirective` binding, REQUIRED_TRADE as a second source for the existing COMMUTE executor, anchor-targeted chained legs, live resume/continuation revalidation, arrival handoff to V2, and terminal-only bounded transient route demotion. The closure addendum pins SPM v0.96 (`508EDA...1097`), explicitly audits all load-bearing V3/V4 host seams, classifies Douse as safety and Flint ignition as combat, and repairs the shelter provenance hook. No second Goal/navigation/market authority; v0.96 runtime remains unverified (`task-66-report.md`).
 
 No commits unless user requests. No Minecraft launches unless separately approved.

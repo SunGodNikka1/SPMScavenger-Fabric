@@ -20,26 +20,29 @@ RUNTIME-AUTHORIZED**. Any further launch requires exact pair approval.
 
 ---
 
-## Mod artifacts (runtime instance must match)
+## Last accepted runtime pair (historical v0.89 evidence only)
 
 | Mod | File | SHA-256 | Evidence |
 | --- | --- | --- | --- |
 | **Social Player Mobs** (`playermob`) | `playermob-fabric-0.89.0+1.21.1.jar` | `C8DC0E89C3FD632B6DCC7F8E46D3AE4955DD5504CBA53F72B62314850A64E612` | Downloaded from GitHub release `bh679/playermob-mc` tag `v0.89.0` (485 500 bytes); cached at `Projects/references/artifacts/playermob-fabric-0.89.0+1.21.1.jar` |
 | **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `BDAA788CAE2126FDE46F858A4076DF69FF0590F151CD3A6B88A32A580A0B2BDC` | Task-59 live-claim stopping-rule repair at `build/libs/spmscavenger-1.11.0.jar`; the exact production frontier plus a matching live claim opens as `source=LIVE_CLAIM` without the superseded geometry veto. No-claim cases retain the passive target fallback. `8C2D...A69F2` is superseded after three runtime reproductions showed a real claim could be rejected by duplicate geometry. |
 
-### Prepared replacement pair — do not install/launch without separate approval
+### Canonical future validation baseline — do not install/launch without separate approval
 
 | Mod | File | SHA-256 | Evidence status |
 | --- | --- | --- | --- |
-| Production Scavenger | `spmscavenger-1.11.0.jar` | `05E77B7F9ACC29B0459FA8F4B5908082546188591A9AD4AFB6D024A4E00A930B` | V4-R0 `clean build` + production package audit **CONFIRMED**; runtime loading **UNVERIFIED** |
-| Task-59 validation sidecar | `spmscavenger-1.11.0-validation.jar` | `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0` | compile/test/package audit **CONFIRMED**; sidecar initialization/commands **UNVERIFIED** |
+| Social Player Mobs | `playermob-fabric-0.96.0+1.21.1.jar` | `508EDA58611A2A0738E257F98C2E14C5032C6EFBF5B1A985C9F93EE295131097` | GitHub v0.96 release artifact + Task-66 source/artifact contract audit **CONFIRMED**; runtime **UNVERIFIED** |
+| Production Scavenger | `spmscavenger-1.11.0.jar` | `67F3F063DD22312FF08BF1DFC0431B13749450B430AC6DFBDF38E6FEA1B0A3AB` | Task-66 `clean build`, 1,711 tests and production package audit **CONFIRMED**; runtime loading **UNVERIFIED** |
+| Task-59 validation sidecar | `spmscavenger-1.11.0-validation.jar` | `5CAF12091A17A96B7D09D502F7FA2467A6C5E193E4F07510F1F0EA5D23DD0EFF` | Task-66 `clean build`, 57 tests and validation package audit **CONFIRMED**; runtime loading **UNVERIFIED** |
 
-**SPM source tag (audit):** `v0.89.0` on `https://github.com/bh679/playermob-mc` (`mod_version=0.89.0` in tag `gradle.properties`).
+**SPM source tags (audit):** `v0.89.0` commit `a1bd88bfe7605bcc6f7c409669012afc8a47d448`
+and `v0.96` commit `38ebf89f2f8464e41d7c47be197b2ff27ef9edec` from
+`https://github.com/bh679/playermob-mc`.
 
 **Operator check before launch:**
 
 ```powershell
-Get-FileHash "path\to\playermob-fabric-0.89.0+1.21.1.jar" -Algorithm SHA256
+Get-FileHash "path\to\playermob-fabric-0.96.0+1.21.1.jar" -Algorithm SHA256
 Get-FileHash "path\to\spmscavenger-1.11.0.jar" -Algorithm SHA256
 ```
 
@@ -75,6 +78,7 @@ Structural validation (no Minecraft): `SpmVrDatapackStructureTest`.
 
 | Date | Change |
 | --- | --- |
+| 2026-08-27 | Task-66 pinned SPM v0.96 source/artifact, repaired fire-goal taxonomy/shelter compatibility, and made v0.96 the future validation baseline; no Minecraft launch |
 | 2026-08-26 | V4-R0 changed only settlement-memory representation; prepared replacement production hash after 1,635 production + 57 validation tests; validation sidecar unchanged; no Minecraft launch |
 | 2026-08-26 | V4-P0 extracted Task-59 into the separately packaged validation sidecar; prepared exact replacement pair after 1,624 production + 57 validation tests and package audits; no Minecraft launch |
 | 2026-08-24 | Exact `BDAA788C...A0B2BDC` artifact produced VR-T3j RUNTIME PASS over the full 1000-tick window, including autonomous pig-combat preemption and Gather resumption; remaining rows not implied |

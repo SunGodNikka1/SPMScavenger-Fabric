@@ -136,7 +136,8 @@ public final class MoveHolderClassifier {
 
         String className = goalType.getName();
         if (endsWithAny(className,
-                "FireBucketGoal", "FleeFromCategoryGoal", "TrainRecoveryGoal")) {
+                "FireBucketGoal", "DouseFireInPathGoal",
+                "FleeFromCategoryGoal", "TrainRecoveryGoal")) {
             return ActivityClass.MANDATORY_SAFETY;
         }
         if (endsWithAny(className, "CommandedActionGoal", "StayNearGoal")) {
@@ -315,6 +316,7 @@ public final class MoveHolderClassifier {
 
     private static boolean isKnownCombatGoal(String className) {
         return className.endsWith("PlayerMobAttackGoal")
+                || className.endsWith("FlintAndSteelIgniteGoal")
                 || className.endsWith("TntCombatGoal")
                 || className.endsWith("EndCrystalCombatGoal")
                 || className.endsWith("WeaponAwareAttackGoal")

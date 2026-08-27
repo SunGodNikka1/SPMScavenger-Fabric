@@ -83,9 +83,23 @@ class ActivityTaxonomyTest {
         assertClass(ActivityClass.MANDATORY_SURVIVAL, EatFoodGoal.class);
         assertClass(ActivityClass.MANDATORY_COMMAND, CommandedActionGoal.class);
         assertClass(ActivityClass.MANDATORY_COMBAT, WeaponAwareAttackGoal.class);
+        assertClass(ActivityClass.MANDATORY_COMBAT, FlintAndSteelIgniteGoal.class);
+        assertClass(ActivityClass.MANDATORY_SAFETY, DouseFireInPathGoal.class);
         assertClass(ActivityClass.PASSIVE_HELPER, PlayerMobDoorGoal.class);
         assertClass(ActivityClass.SOCIAL_REFLEX, DoorOperationGoal.class);
         assertClass(ActivityClass.UNKNOWN_ACTIVE, CompletelyUnknownGoal.class);
+    }
+
+    @Test
+    void newV096FireGoalsHaveSemanticMoveHolderClasses() {
+        assertEquals(MoveHolderClassification.PROTECTED_COMBAT,
+                MoveHolderClassifier.classify(
+                        new FlintAndSteelIgniteGoal(), null, null, UUID.randomUUID(), 0L),
+                "the target-driven MOVE+LOOK ignition ritual is combat, not UNKNOWN_MOVE_HOLDER");
+        assertEquals(MoveHolderClassification.PROTECTED_SAFETY_RECOVERY,
+                MoveHolderClassifier.classify(
+                        new DouseFireInPathGoal(), null, null, UUID.randomUUID(), 0L),
+                "the MOVE+LOOK path-fire response is safety, not UNKNOWN_MOVE_HOLDER");
     }
 
     @Test
@@ -147,6 +161,10 @@ class ActivityTaxonomyTest {
     }
 
     private abstract static class StubGoal extends Goal {
+        private StubGoal() {
+            setFlags(java.util.EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
+        }
+
         @Override
         public boolean canUse() {
             return true;
@@ -160,6 +178,8 @@ class ActivityTaxonomyTest {
     private static final class EatFoodGoal extends StubGoal {}
     private static final class CommandedActionGoal extends StubGoal {}
     private static final class WeaponAwareAttackGoal extends StubGoal {}
+    private static final class FlintAndSteelIgniteGoal extends StubGoal {}
+    private static final class DouseFireInPathGoal extends StubGoal {}
     private static final class PlayerMobDoorGoal extends StubGoal {}
     private static final class DoorOperationGoal extends StubGoal {}
     private static final class CompletelyUnknownGoal extends StubGoal {}

@@ -18,6 +18,9 @@ import com.noobk.spmscavenger.SpmScavenger;
 import com.noobk.spmscavenger.village.SettlementBoundsPolicy;
 import com.noobk.spmscavenger.village.SettlementRelationshipService;
 import com.noobk.spmscavenger.village.SettlementReturnPolicy;
+import com.noobk.spmscavenger.village.interaction.CommuteDirective;
+import com.noobk.spmscavenger.village.interaction.CommuteDirectiveEvaluation;
+import com.noobk.spmscavenger.village.interaction.VillageInteractionDirector;
 import com.noobk.spmscavenger.experience.ExpeditionEndAttribution;
 import com.noobk.spmscavenger.experience.ExperienceEmitters;
 import com.noobk.spmscavenger.experience.MobExperienceContext;
@@ -155,6 +158,9 @@ public final class ExploringGoal extends Goal {
     private static final int HEADING_SECTORS = 12;
     private static final int HEADING_MEMORY_LIMIT = 6;
     private static final double ARRIVAL_DISTANCE_SQR = 2.25;
+    /** Final required-trade landing candidates are resolved within LANDING_RADIUS of the anchor. */
+    private static final double REQUIRED_TRADE_ARRIVAL_DISTANCE_SQR =
+            (LANDING_RADIUS + 2.0) * (LANDING_RADIUS + 2.0);
     private static final double PROGRESS_EPSILON_SQR = 0.25;
     private static final double FORWARD_SKIP_MARGIN = 8.0;
     private static final double LATERAL_REJOIN_DISTANCE = 32.0;
@@ -169,6 +175,7 @@ public final class ExploringGoal extends Goal {
     private ExpeditionState expedition;
     private NavigationState navigationState;
     private long retryAfterTick;
+    private long nextRequiredTradeProbeTick;
     private final NaturalDescentSearchState descentSearch = new NaturalDescentSearchState();
 
     public ExploringGoal(PathfinderMob mob, ExplorationReadiness readiness) {
@@ -213,8 +220,28 @@ public final class ExploringGoal extends Goal {
             return false;
         }
 
+        Optional<CommuteDirective> requiredTrade =
+                VillageInteractionDirector.openOrResumeRequiredTrade(level, mob);
+        if (expedition != null && expedition.requiredTradeBinding != null) {
+            if (requiredTrade.isEmpty()
+                    || !expedition.requiredTradeBinding.matchesExact(
+                            requiredTrade.get().binding())) {
+                closeRequiredTradeExpedition(now, "directive-closed-or-replaced");
+            }
+        } else if (requiredTrade.isPresent()
+                && expedition != null
+                && !expedition.caveHandoffContinuation) {
+            supersedeWithRequiredTrade(now);
+        }
+
         if (expedition == null) {
-            if (!trySeedCommuteExpedition(level, now, cfg)) {
+            if (requiredTrade.isPresent()) {
+                if (!seedRequiredTradeCommuteExpedition(level, now, requiredTrade.get())) {
+                    retryAfterTick = now + REPLAN_DELAY_TICKS;
+                    return false;
+                }
+                emitExpeditionUnlocked(expedition, now);
+            } else if (!trySeedCommuteExpedition(level, now, cfg)) {
                 if (!readiness.eligibleForNewExpedition(
                         now,
                         cfg.exploreLocalTripsThreshold,
@@ -327,12 +354,61 @@ public final class ExploringGoal extends Goal {
         return true;
     }
 
+    /** Seeds one deterministic <=150-block leg toward the exact remembered settlement anchor. */
+    private boolean seedRequiredTradeCommuteExpedition(
+            ServerLevel level, long now, CommuteDirective directive) {
+        BlockPos anchor = directive.destination();
+        double dx = anchor.getX() + 0.5 - mob.getX();
+        double dz = anchor.getZ() + 0.5 - mob.getZ();
+        double distance = Math.hypot(dx, dz);
+        if (distance * distance <= REQUIRED_TRADE_ARRIVAL_DISTANCE_SQR) {
+            VillageInteractionDirector.completeArrival(mob.getUUID(), directive.binding());
+            return false;
+        }
+        double legBudget = Math.min(distance, MAX_EXPEDITION_DISTANCE);
+        ExpeditionState seeded = createRequiredTradeLeg(
+                level, dx / distance, dz / distance, legBudget, distance <= MAX_EXPEDITION_DISTANCE,
+                anchor, now);
+        if (seeded == null) {
+            return false;
+        }
+        seeded.kind = ExpeditionKind.COMMUTE;
+        seeded.commuteAnchor = anchor.immutable();
+        seeded.requiredTradeBinding = directive.binding();
+        expedition = seeded;
+        return true;
+    }
+
     @Override
     public boolean canContinueToUse() {
         if (expedition == null) {
             return false;
         }
-        if (DiscretionaryAuthority.mustYieldDiscretionaryExplore(mob.getUUID())) {
+        if (mob.level() instanceof ServerLevel level && expedition.requiredTradeBinding != null) {
+            CommuteDirectiveEvaluation evaluation =
+                    VillageInteractionDirector.revalidateRequiredTrade(
+                            level,
+                            mob,
+                            expedition.requiredTradeBinding,
+                            mob.getTarget() != null);
+            if (evaluation.state() == CommuteDirectiveEvaluation.State.CLOSED) {
+                closeRequiredTradeExpedition(level.getGameTime(), evaluation.cause());
+                return false;
+            }
+            if (evaluation.state() == CommuteDirectiveEvaluation.State.INTERRUPTED) {
+                return false;
+            }
+        } else if (mob.level() instanceof ServerLevel level
+                && expedition != null
+                && !expedition.caveHandoffContinuation
+                && level.getGameTime() >= nextRequiredTradeProbeTick
+                && probeRequiredTradePreemption(level)) {
+            // The higher-value directive has opened. stop() will discard only this activation's
+            // path; canUse() then replaces the old discretionary/return expedition deliberately.
+            return false;
+        }
+        if (expedition.requiredTradeBinding == null
+                && DiscretionaryAuthority.mustYieldDiscretionaryExplore(mob.getUUID())) {
             if (mob.level() instanceof ServerLevel level) {
                 UUID exploreIntentId = DiscretionaryAuthority.runningExploreIntentId(mob.getUUID());
                 if (exploreIntentId != null) {
@@ -363,6 +439,11 @@ public final class ExploringGoal extends Goal {
         ScavengerConfig cfg = ScavengerConfig.get();
         return cfg.enabled && cfg.exploring && mob.getTarget() == null && !mob.isPassenger()
                 && navigationState != null;
+    }
+
+    private boolean probeRequiredTradePreemption(ServerLevel level) {
+        nextRequiredTradeProbeTick = level.getGameTime() + REPLAN_DELAY_TICKS;
+        return VillageInteractionDirector.openOrResumeRequiredTrade(level, mob).isPresent();
     }
 
     @Override
@@ -618,6 +699,48 @@ public final class ExploringGoal extends Goal {
 
     private ExpeditionState createExpedition(ServerLevel level, ScavengerConfig cfg) {
         return createExpedition(level, cfg, Double.NaN, Double.NaN, MAX_EXPEDITION_DISTANCE, 0.0);
+    }
+
+    /**
+     * Required-trade waypoint generation only. Physical path creation, probing, retries, progress,
+     * and interruption remain the one shared COMMUTE implementation below.
+     */
+    private ExpeditionState createRequiredTradeLeg(
+            ServerLevel level,
+            double headingX,
+            double headingZ,
+            double routeBudget,
+            boolean finalLeg,
+            BlockPos anchor,
+            long now) {
+        double maximumStage = Mth.clamp(
+                ScavengerConfig.get().exploreMaxStageDistance, 16.0, 48.0);
+        int stageCount = Math.max(1, Math.min(
+                MAX_STAGES, (int) Math.ceil(routeBudget / maximumStage)));
+        List<IntendedWaypoint> waypoints = new ArrayList<>(stageCount);
+        int mobY = mob.blockPosition().getY();
+        for (int stage = 1; stage <= stageCount; stage++) {
+            double forward = routeBudget * stage / stageCount;
+            int x = Mth.floor(mob.getX() + headingX * forward);
+            int z = Mth.floor(mob.getZ() + headingZ * forward);
+            if (finalLeg && stage == stageCount) {
+                x = anchor.getX();
+                z = anchor.getZ();
+            }
+            if (!chunkGuardTicking(level, new ChunkPos(x >> 4, z >> 4), mobY)) {
+                return null;
+            }
+            waypoints.add(new IntendedWaypoint(x, z, forward));
+        }
+        return new ExpeditionState(
+                ExplorationIntent.NORMAL,
+                mob.getX(),
+                mob.getZ(),
+                headingX,
+                headingZ,
+                ExplorationPolicy.headingSector(headingX, headingZ, HEADING_SECTORS),
+                List.copyOf(waypoints),
+                now);
     }
 
     /**
@@ -1248,13 +1371,43 @@ public final class ExploringGoal extends Goal {
         }
         ExpeditionKind kind = expedition.kind;
         BlockPos commuteAnchor = expedition.commuteAnchor;
+        CommuteDirective.Binding requiredTradeBinding = expedition.requiredTradeBinding;
         boolean discretionaryTerminal = isDiscretionaryExplorePath() && !expedition.caveHandoffContinuation;
         if (attributesExplorationExperience(expedition)) {
             emitExpeditionTerminal(expedition, now, ExpeditionEndAttribution.completed());
         }
         if (mob.level() instanceof ServerLevel level) {
             clearCaveContinuationCommitment(level);
-            if (kind == ExpeditionKind.COMMUTE
+            if (kind == ExpeditionKind.COMMUTE && requiredTradeBinding != null) {
+                CommuteDirectiveEvaluation evaluation =
+                        VillageInteractionDirector.revalidateRequiredTrade(
+                                level, mob, requiredTradeBinding, false);
+                boolean arrived = commuteAnchor != null
+                        && horizontalDistanceSqr(actualEnd, commuteAnchor)
+                                <= REQUIRED_TRADE_ARRIVAL_DISTANCE_SQR;
+                if (evaluation.state() == CommuteDirectiveEvaluation.State.ACTIVE && !arrived) {
+                    CommuteDirective directive = evaluation.directive().orElseThrow();
+                    expedition = null;
+                    navigationState = null;
+                    if (seedRequiredTradeCommuteExpedition(level, now, directive)) {
+                        PlanResult result = planCurrentStage(level, now);
+                        if (result == PlanResult.READY && navigationState != null) {
+                            mob.getNavigation().moveTo(navigationState.path, exploreSpeed());
+                            return;
+                        }
+                        handlePlanFailure(result, now);
+                        return;
+                    }
+                    retryAfterTick = now + REPLAN_DELAY_TICKS;
+                    return;
+                }
+                if (arrived) {
+                    VillageInteractionDirector.completeArrival(mob.getUUID(), requiredTradeBinding);
+                    SpmScavenger.LOGGER.info(
+                            "[spmscavenger] required-trade commute arrived entity={} anchor={}",
+                            mob.getId(), commuteAnchor);
+                }
+            } else if (kind == ExpeditionKind.COMMUTE
                     && commuteAnchor != null
                     && !SettlementBoundsPolicy.within(actualEnd, commuteAnchor)
                     && tryChainCommuteLeg(level, now, ScavengerConfig.get(), commuteAnchor)) {
@@ -1338,6 +1491,10 @@ public final class ExploringGoal extends Goal {
                 && isDiscretionaryExplorePath()
                 && !expedition.caveHandoffContinuation;
         if (expedition != null) {
+            if (reason == EndReason.PATH_FAILURE && expedition.requiredTradeBinding != null) {
+                VillageInteractionDirector.recordTerminalRouteFailure(
+                        mob.getUUID(), expedition.requiredTradeBinding, now);
+            }
             emitExpeditionTerminal(expedition, now, semanticsFor(reason));
             if (mob.level() instanceof ServerLevel level) {
                 clearCaveContinuationCommitment(level);
@@ -1363,6 +1520,41 @@ public final class ExploringGoal extends Goal {
         }
         readiness.consume(now + (reason == EndReason.SIMULATION_FRONTIER
                 ? COOLDOWN_TICKS / 2 : COOLDOWN_TICKS));
+    }
+
+    private void closeRequiredTradeExpedition(long now, String cause) {
+        if (expedition == null || expedition.requiredTradeBinding == null) {
+            return;
+        }
+        SpmScavenger.LOGGER.info(
+                "[spmscavenger] required-trade commute closed entity={} cause={} anchor={}",
+                mob.getId(), cause, expedition.commuteAnchor);
+        navigationState = null;
+        expedition = null;
+        mob.getNavigation().stop();
+    }
+
+    private void supersedeWithRequiredTrade(long now) {
+        if (expedition == null) {
+            return;
+        }
+        boolean discretionary = isDiscretionaryExplorePath() && !expedition.caveHandoffContinuation;
+        if (attributesExplorationExperience(expedition)) {
+            emitExpeditionTerminal(expedition, now, ExpeditionEndAttribution.authorityInterrupt());
+        }
+        navigationState = null;
+        expedition = null;
+        mob.getNavigation().stop();
+        if (discretionary) {
+            DiscretionaryAuthority.onExploreTerminal(
+                    mob.getUUID(), IntentLifecycle.INTERRUPTED, now, "required-trade-commute");
+        }
+    }
+
+    static double horizontalDistanceSqr(BlockPos left, BlockPos right) {
+        long dx = (long) left.getX() - right.getX();
+        long dz = (long) left.getZ() - right.getZ();
+        return (double) dx * dx + (double) dz * dz;
     }
 
     /**
@@ -1461,6 +1653,7 @@ public final class ExploringGoal extends Goal {
         boolean caveHandoffContinuation;
         ExpeditionKind kind = ExpeditionKind.DISCRETIONARY;
         BlockPos commuteAnchor;
+        CommuteDirective.Binding requiredTradeBinding;
 
         ExpeditionState(
                 ExplorationIntent intent,

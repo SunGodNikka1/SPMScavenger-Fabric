@@ -64,19 +64,22 @@ class SettlementOpinionBoundaryTest {
                 String body = Files.readString(file);
                 assertFalse(body.contains("PersonalityModel"), file.toString());
                 assertFalse(body.contains("AffectiveState"), file.toString());
-                assertTrue(body.contains("SettlementOpinionBias"), file.toString());
+                assertTrue(body.contains("SettlementOpinionBias")
+                                || body.contains("SettlementOpinionInputs"),
+                        file.toString());
             }
         }
     }
 
     @Test
-    void noV4eOrLaterOwnerWasIntroduced() throws IOException {
+    void v4eDirectorExistsButFirstHomeOwnerDoesNot() throws IOException {
         Path root = Path.of("src/main/java/com/noobk/spmscavenger");
         try (var paths = Files.walk(root)) {
             List<String> names = paths.filter(path -> path.toString().endsWith(".java"))
                     .map(path -> path.getFileName().toString())
                     .toList();
-            assertEquals(0, names.stream().filter(name -> name.equals("VillageInteractionDirector.java")).count());
+            assertEquals(1, names.stream().filter(name -> name.equals("VillageInteractionDirector.java")).count());
+            assertEquals(0, names.stream().filter(name -> name.equals("FirstHomePromotion.java")).count());
         }
     }
 

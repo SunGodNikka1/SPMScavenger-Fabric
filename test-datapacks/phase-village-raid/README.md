@@ -23,8 +23,10 @@ windows, and falsifiers live in `docs/porting/VR-T3-RUNTIME-MATRIX.md`; record r
 ## Install and preflight
 
 1. Use a disposable backed-up overworld. Copy this folder into `<world>/datapacks/phase-village-raid`.
-2. Install only Fabric API 0.116.4+1.21.1, Social Player Mobs 0.89.0, and the exact Scavenger JAR
+2. Install only Fabric API 0.116.4+1.21.1, Social Player Mobs 0.96.0, and the exact production + validation Scavenger JARs
    pinned in `VR-T3-RUNTIME-ENVIRONMENT.md`. Exclude Trade Everything and other optional compat mods.
+   For VR-T3g, explicitly keep host `searchContainers=enabled`; a host-disabled raid goal cannot
+   exercise the storage-deny mixin and is not acceptance evidence.
 3. Start or reload the world, then run `/function spm_vr:help`.
 4. Stand on flat overworld ground with clear space at least 32 blocks around the executor position.
 5. Start exactly one row with `/spmscavenger debug v3 run <preset>`. The controller establishes

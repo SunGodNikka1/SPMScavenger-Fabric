@@ -5,14 +5,14 @@
 | Field | Value |
 | --- | --- |
 | **Project root** | `d:\Apps\Minecraft Port\Projects\SPMScavenger-1.21.1-Fabric` |
-| **Host platform** | Social Player Mobs (`playermob`) **v0.89.0** (canonical baseline) |
-| **Host baseline sync** | **CLOSED** (2026-08-22) — doc + authorization; runtime matrix pin is a Task-59 deliverable before launch |
+| **Host platform** | Social Player Mobs (`playermob`) **v0.96.0** (canonical compile/test/reference baseline) |
+| **Host baseline sync** | **Task-66 CLOSED STATIC/PACKAGE** (2026-08-27); v0.96 runtime behavior remains unverified until a separately approved launch |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0 through V4-D implemented |
-| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** VR-T3j is **RUNTIME PASS**. V4-P0 / `D-VR-096`, V4-R0 / `D-VR-089`, V4-A / `D-VR-090`, V4-B / `D-VR-025`, V4-C / `D-VR-092` plus ranking-side `D-VR-093`, and V4-D / `D-VR-091` are **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-E onward and first-home behavior remain locked but unimplemented. |
-| **Nearest frontier** | **V4-E — existing COMMUTE integration**, only when separately authorized. Remaining V3 runtime rows stay open and resumable from the validation artifact. Any Minecraft launch still requires separate approval. |
-| **Last update** | 2026-08-26 (`Agent_Codex`, V4-D implementation/static-package acceptance) |
+| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** VR-T3j is **RUNTIME PASS on the historical v0.89 artifact**. V4-P0 through V4-E are **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. Task-66 established v0.96 as the canonical static baseline and repaired the two new fire-goal compatibility seams. |
+| **Nearest frontier** | **V4-F — first-home promotion**, only when separately authorized. Remaining V3 runtime rows resume against v0.96 from the validation artifact; accepted v0.89 evidence is retained and not relabelled. Any Minecraft launch still requires separate approval. |
+| **Last update** | 2026-08-27 (`Agent_Codex`, SPM v0.89→v0.96 host-baseline sync) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -26,16 +26,41 @@
 | `RaiderTargetsPlayerMobMixin` | Illagers target `PlayerMobEntity` | PlayerMob is **raid victim**, not vanilla raid initiator |
 | Village companion spawn | `WorldGenRegionMixin` | Social spawn flavour; **not** economic integration |
 
-### Host baseline and provenance (`LOCKED` 2026-08-22)
+### Host baseline and provenance (`LOCKED`, updated 2026-08-27)
 
 | Field | Value |
 | --- | --- |
-| **Canonical host baseline** | SPM **`playermob` v0.89.0** |
+| **Canonical host baseline** | SPM **`playermob` v0.96.0**; Fabric 1.21.1 artifact SHA-256 `508EDA58611A2A0738E257F98C2E14C5032C6EFBF5B1A985C9F93EE295131097` |
 | **Historical audit pin** | SPM v0.86.0 (`4b80b5e849`) — retained as **historical provenance** where cited below; not rewritten |
-| **0.86→0.89 host-delta review** | **PASS** for V3-sensitive assumptions (see table) |
-| **Task-59 integration gate** | **`playermob` 0.89.0** pinned in approved runtime matrix — Task-59 deliverable before runtime launch |
+| **Source pins** | v0.89 commit `a1bd88bfe7605bcc6f7c409669012afc8a47d448`; v0.96 commit `38ebf89f2f8464e41d7c47be197b2ff27ef9edec` |
+| **0.89→0.96 host-delta review** | **STATIC COMPATIBILITY PASS WITH REPAIRS** — fire-goal taxonomy + shelter combat provenance repaired; runtime remains `UNVERIFIED` |
+| **Task-59 integration gate** | Accepted v0.89 evidence remains historical. Every unrun row must use the v0.96 production + validation pair and the expectation notes below. |
 
-**V3-sensitive assumptions — delta review (`PASS` v0.89.0):**
+**Load-bearing host delta verdicts (`SOURCE/ARTIFACT_CONFIRMED`; runtime effects `UNVERIFIED`):**
+
+| Seam | v0.89→v0.96 evidence | Verdict / Scavenger disposition |
+| --- | --- | --- |
+| `PlayerMobEntity#registerGoals`, priorities and flags | Existing ordering is retained; v0.96 adds `DouseFireInPathGoal` and `FlintAndSteelIgniteGoal` at P1. Both own MOVE+LOOK. | **COMPATIBLE CHANGE / REPAIR APPLIED.** Douse is `MANDATORY_SAFETY`; Flint is target-driven `MANDATORY_COMBAT`. Neither may fall through `UNKNOWN_ACTIVE` or `UNKNOWN_MOVE_HOLDER`. |
+| Douse fire-in-path activity | Bounded path-safety/fire-removal behavior; no combat target required. | **COMPATIBLE CHANGE.** It is protected safety and is deliberately not blocked by shelter target provenance. |
+| Flint-and-steel ignite activity | Target-driven combat ritual that navigates, looks and places fire. | **REQUIRES SCAVENGER REPAIR — DONE.** Added combat taxonomy and `WeaponAttackShelterHoldMixin` coverage so passive hunt targets cannot bypass shelter hold. |
+| `HarvestCropsGoal` attachment | Class, constructor, `mob`, `targetPos`, `canUse`, `canContinue`, P6 and food-gated destructive semantics persist. Scan/post-visit/windup delays now use `reactTicks`. | **COMPATIBLE CHANGE.** V3 pseudo-mixin seam remains statically present; future T3l must prove attachment on v0.96. |
+| `RaidContainersGoal` attachment | Class/fields/method seams and P3 persist. `canUse` now first applies `allowsScavenging(searchContainers)`; scan/open/close/sneak timing uses `reactTicks`. | **COMPATIBLE CHANGE.** Host config is an earlier deny gate and cannot make Scavenger permit storage. T3g must run with `searchContainers=enabled` or it cannot prove the V3 hook. |
+| `searchContainers` configuration | New `enabled` / `disabled` / `onlynaturallyspawning` host gate; default is enabled and legacy mobs retain natural-origin migration. | **COMPATIBLE CHANGE.** No duplicate Scavenger setting and no attempt to override a host denial. |
+| `FriendlyGreetGoal` | Source file is byte-identical across pinned tags; P1, MOVE+LOOK and `nearestWhereReaction(Reaction,double)` descriptor remain. | **UNCHANGED.** Artifact contract test pins the intermediary descriptor used by the optional redirect seam. |
+| Target acquisition/loss | Earlier social/reincarnation falling-edge semantics persist; v0.95 adds reaction-delayed retaliation acquisition without replacing `getTarget()` retain/drop truth. | **COMPATIBLE CHANGE.** Interruption timing may move; no authority rewrite. |
+| Reaction speed | v0.95/0.96 route scan, windup, cooldown and repath timing through `reactTicks` / inverse timing, including crop/container/fire paths. | **COMPATIBLE CHANGE.** Future observation windows must tolerate the 0.5x–2x timing envelope; static timing is not runtime proof. |
+| PlayerMob unload/death/removal | `die(DamageSource)` is unchanged; neither tag adds a PlayerMob `remove` override. Fabric entity unload/death callbacks remain the Scavenger cleanup boundary. | **UNCHANGED.** |
+| Pet-owner resolution mixins | v0.92 adds fallback resolution from vanilla ownables/tamables/horses to live PlayerMobs when vanilla owner resolution is null. | **COMPATIBLE CHANGE.** Scavenger targets none of those host methods/classes; no ownership-state coupling found. |
+| Raider targets PlayerMob | `RaiderTargetsPlayerMobMixin` is byte-identical between source tags and remains in the v0.96 artifact. | **UNCHANGED.** Existing raid-victim posture is retained. |
+| Scavenger V3 executor band vs host table | Host Raid/Eat/Collect remain P3, Harvest remains P6, train work P7 and idle movement P8; only P1 fire entries were added. | **UNCHANGED** for V3 P4/P5 ordering assumptions. New fire behavior is higher authority and is covered by shared classification. |
+| Direct/reflected SPM symbols | `PlayerMobEntity`, inventory carrier shape, `fightFlight`, `friendliness`, `feelingToward`, `getStayAnchor`, private `attackOrder`, `FeelingLedger.DEFAULT`, `WeaponAwareAttackGoal`, and V3 host goal field seams remain in the pinned artifact. | **UNCHANGED / artifact-gated.** Optional integration remains reflection/mixin based; no upstream classes are packaged. |
+
+**Negative evidence recorded:** no `FriendlyGreetGoal` source delta; no PlayerMob death/removal
+lifecycle delta; no Scavenger mixin target overlaps the new pet-owner target classes; and no existing
+goal priority change was found outside the two new P1 fire goals. These are source-diff conclusions,
+not v0.96 runtime claims.
+
+**Historical V3-sensitive assumptions — 0.86→0.89 review (`PASS` at that baseline):**
 
 | Assumption | Historical source | Revalidated v0.89.0 |
 | --- | --- | --- |
@@ -57,9 +82,9 @@ Task-59 should still **witness** target invalidation/hand-off in the batched VR-
 (especially VR-T3b/c/j) as **compatibility evidence/caution** — **not** as a new V3 feature, mixin,
 or repair slice.
 
-**Provenance rule:** statements tagged `historical provenance — audit v0.86.0` remain accurate for
-when they were recorded. Load-bearing host facts for Task-59 carry **`REVALIDATED v0.89.0`** in the
-delta table above or inline where cited.
+**Provenance rule:** statements tagged `historical provenance — audit v0.86.0` or `REVALIDATED
+v0.89.0` remain accurate for when they were recorded. The v0.96 table above is the canonical static
+compatibility verdict. Accepted runtime evidence is never silently upgraded from v0.89 to v0.96.
 
 ---
 
@@ -67,7 +92,7 @@ delta table above or inline where cited.
 
 **Player-interaction parity with a human player for village/raid content is `PARTIAL` at best today and `NOT PRACTICAL` for full economic + raid-initiation parity without substantial new systems.**
 
-Social Player Mobs (canonical baseline **v0.89.0**; many early audits are **historical provenance —
+Social Player Mobs (canonical baseline **v0.96.0**; many early audits are **historical provenance —
 audit v0.86.0**):
 
 - **Can** fight illagers when engaged; use bows, shields, TNT, crystals; flee; eat; loot containers; greet villagers; sleep in beds; open doors; use commanded fake-player item use.
@@ -5334,7 +5359,7 @@ for gen-1 (compost is a low-priority side activity); document in VR-T3d notes.
 | **VR-T3i** | Explicit mob-owned/shared storage and non-ally control | Explicitly permitted ally access may proceed; non-ally host behavior remains unchanged | Blanket goal strip or ally denial despite positive permission | `UNVERIFIED` — V3-B |
 | **VR-T3j** | Live/pending mandatory progression while village work is available | Mandatory work retains authority; village work waits and later re-resolves | Idle observation or Opinion preference displaces pending mandatory work | **`RUNTIME PASS`** on `BDAA788C...A0B2BDC` — `LIVE_CLAIM`, pig-combat preemption, Gather resume, running `SCAVENGE_WORK`, no Village Work displacement |
 | **VR-T3k** | Two mobs select one crop; first changes it | First commits; second detects invalidation and reacquires/abandons without mutation | Double break/replant, stale target loop, or persistent global crop reservation | `UNVERIFIED` — V3-C |
-| **VR-T3l** | SPM 0.89 host `HarvestCropsGoal` evaluates a managed crop and a wilderness/fail-open control | The optional `@Pseudo(require=0)` hook is demonstrably attached; it refuses the managed crop while leaving the wilderness/fail-open boundary unchanged | Missing attachment silently permits managed stripping, or the veto suppresses stock wilderness food harvesting | **RUNTIME REQUIRED / FIXTURE REDESIGN REQUIRED** — smallest passive host-mixin attachment witness only; the invalid nearby-oak/mandatory-claim fixture is superseded |
+| **VR-T3l** | SPM 0.96 host `HarvestCropsGoal` evaluates a managed crop and a wilderness/fail-open control | The optional `@Pseudo(require=0)` hook is demonstrably attached; it refuses the managed crop while leaving the wilderness/fail-open boundary unchanged | Missing attachment silently permits managed stripping, or the veto suppresses stock wilderness food harvesting | **RUNTIME REQUIRED / FIXTURE REDESIGN REQUIRED** — smallest passive host-mixin attachment witness only; the invalid nearby-oak/mandatory-claim fixture is superseded; cover reaction-scaled timing |
 | **VR-T3m** | Repeated managed harvest episodes over many cycles | Replant stock is sustained by the episode's **own** banked drops; a crop whose pinned drops cannot guarantee a planting item pauses managed harvest instead of draining the reserve | Planting supply is recovered via floor-item pickup; a field is harvested down to a barren state because the reserve ran out mid-episode | **STATIC SUBSTITUTION LOCKED** — VR-T3a supplies representative live crop-episode integration; deterministic banking/conservation tests prove repetition. No two-natural-generation standalone runtime obligation |
 
 **Phase closure (`D-VR-088`, `LOCKED` 2026-08-26; supersedes the blanket standalone-runtime reading
@@ -8939,7 +8964,7 @@ into repeated runtime obligations.
   two unaccelerated same-cell generations within 4000 ticks requirement is removed as a closure
   obligation, not weakened into a shorter false witness.
 - **VR-T3l:** runtime-required only for the unique optional `@Pseudo(require=0)` attachment seam.
-  Redesign as the smallest passive witness showing SPM 0.89 `HarvestCropsGoal` actually reaches the
+  Redesign as the smallest passive witness showing SPM 0.96 `HarvestCropsGoal` actually reaches the
   hook, a managed crop is refused, and a wilderness/unresolved control remains fail-open. Nearby
   oak logs and mandatory ownership are neither prerequisites nor proof.
 - **VR-T3j:** **RUNTIME PASS**; no rerun.
@@ -9326,3 +9351,84 @@ until V4-E/G. V4-E must structurally forbid treating `current()` existence as pe
 
 **Frontier after:** V4-D is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-E existing-COMMUTE
 integration remains unimplemented and requires separate authorization.
+
+### Contribution — `Agent_Codex` (V4-E director + existing COMMUTE integration, 2026-08-26)
+
+**Authorization:** implement the locked V4 orchestration boundary and existing-COMMUTE integration
+only; no second travel Goal, market execution, first-home promotion, runtime witness, launch, or
+commit.
+
+**Implementation (`CODE_CONFIRMED`):** `VillageInteractionDirector` is now the sole facade that
+assembles live demand, canonical existing-route status, remembered village/trader capability facts,
+V4-C ranking, Opinion input, and V4-D intent opening/revalidation. Opinion-owned
+`SettlementOpinionInputs` prevents the village package from composing affect/personality directly.
+The resulting `CommuteDirective` contains only the actual settlement anchor, REQUIRED_TRADE purpose,
+and an exact-instance binding to the immutable `VillageIntent`; it contains no market or movement
+authority.
+
+`ExploringGoal` remains the only executor. Existing V1.5 `SETTLEMENT_RETURN` continues through
+`SettlementReturnPolicy` and its established 64-block presence boundary. REQUIRED_TRADE is a second
+COMMUTE source that does not require HOME/HIGH familiarity and walks deterministic <=150-block legs,
+with the final leg aimed at the current settlement anchor. The exact binding lives in durable
+`ExpeditionState`; disposable `NavigationState` remains path-only. Continuation, resumption and
+leg chaining revalidate through the director. Combat suspends and drops the path; demand/route/
+destination invalidation closes the old expedition; an equal replacement intent at the same anchor
+cannot inherit it. Arrival conditionally releases travel ownership and hands all live discovery and
+transaction authority to V2.
+
+The existing COMMUTE six-failure terminal budget is the only producer for new transient
+`RouteAttemptEvidence`. `VillageRouteAttemptRegistry` keeps at most 16 rows per loaded mob, demotes a
+terminally failed destination for 600 ticks, physically prunes expiry, and clears on unload/death/
+server stop. Combat, `stop()`, simulation frontier, a single failed path probe, demand invalidation,
+shutdown and ordinary replanning publish nothing.
+
+**Alternatives:** direct V4 composition inside `ExploringGoal` was rejected because it turns the
+movement executor into a village/progression brain. A new required-trade travel Goal was rejected
+because it duplicates navigation lifetime, retry state and scheduler arbitration. The selected
+facade + exact binding preserves one director boundary and one physical executor.
+
+**Static/package gate (`CONFIRMED`):** deterministic tests cover live displaced demand to a
+non-home/zero-familiarity settlement, ranking-without-demand refusal, exact replacement isolation,
+V1.5 preservation, anchor-targeted final legs, interruption-safe binding, demand-loss closure,
+arrival handoff, terminal-only transient demotion and lifecycle cleanup. Structural tests find no
+second travel Goal/navigation/retry/market owner. Final `clean build` passed **1,707 production + 57
+validation tests**, zero failures/errors, and both package audits. Production SHA-256 is
+`6593D528E7398C8EDC32F931FF759A42B1FABB14E402564E08E12C29946F3E45`; validation remains
+`BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0`, with zero duplicated classes,
+zero production validation classes and zero packaged upstream Trade Everything classes.
+
+**MAIBS / remaining proof:** physical multi-leg travel, combat resume, anchor arrival and changed-
+offer V2 handoff are **UNVERIFIED** until V4-G. The strongest known risk is a large settlement whose
+remembered trader lies outside V2's 16-block discovery radius from the canonical anchor. V4-G's
+single-village changed-offer witness must falsify that boundary; static success cannot close it.
+
+**Frontier after:** V4-E is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-F first-home promotion is
+next; V4-G remains the one representative runtime session after V4-A–F.
+
+### Contribution — `Agent_Codex` (SPM v0.89→v0.96 host-baseline sync, 2026-08-27)
+
+**Authorization:** pause product behavior after V4-E; audit and pin the newest Fabric 1.21.1 host,
+repair only compatibility regressions, update future V3 expectations, and run static/package gates.
+No Minecraft launch, commit, or V4-F behavior.
+
+**Outcome (`SOURCE/ARTIFACT/BUILD_CONFIRMED`):** v0.96.0 is the canonical reference baseline at
+source commit `38ebf89f2f8464e41d7c47be197b2ff27ef9edec`; release artifact SHA-256 is
+`508EDA58611A2A0738E257F98C2E14C5032C6EFBF5B1A985C9F93EE295131097`. The host table near the RFC
+front records an explicit verdict for every load-bearing goal, mixin, config, target, reaction,
+lifecycle, pet-owner, and public/reflected symbol seam.
+
+Two compatibility repairs were required. New P1 MOVE+LOOK `DouseFireInPathGoal` is mandatory safety.
+New P1 MOVE+LOOK, target-driven `FlintAndSteelIgniteGoal` is mandatory combat and now participates in
+the shelter target-provenance guard. Tests prove neither becomes `UNKNOWN_ACTIVE` or
+`UNKNOWN_MOVE_HOLDER`. Host crop/container timing is now reaction-scaled; `RaidContainersGoal` also
+honors `searchContainers`, so disabled container search cannot count as T3g proof. Accepted v0.89
+evidence remains historical; unrun rows use v0.96.
+
+**Final gate:** `clean build` passed 1,711 production + 57 validation tests with zero failures,
+errors, or skips. Both package audits passed; neither artifact contains SPM/Trade Everything
+classes, production contains no validation/Task-59 machinery, and there are zero duplicated classes.
+Production SHA-256 is `67F3F063DD22312FF08BF1DFC0431B13749450B430AC6DFBDF38E6FEA1B0A3AB`;
+validation SHA-256 is `5CAF12091A17A96B7D09D502F7FA2467A6C5E193E4F07510F1F0EA5D23DD0EFF`.
+Runtime compatibility remains **UNVERIFIED** because no launch was authorized.
+
+**Frontier after:** Task-66 is closed; V4-F first-home promotion is next.

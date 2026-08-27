@@ -80,7 +80,7 @@ then adjudicate PASS/FAIL/WEIRD separately against the matrix.
 | VR-T3b | `crop_interrupt_combat` | — | — | — | — | `UNVERIFIED` |
 | VR-T3c | no standalone run required | preflight/rollback/escrow and exact age-0 transaction properties | no partial mutation, false success, loot on failure, or repair phase | `CropHarvestTransactionBehaviorTest` + task-55 mutation evidence | **`CLOSURE SATISFIED — STATIC/TRANSACTION CONFIRMED`** |
 | VR-T3k | `crop_multi_mob` | — | — | — | — | `UNVERIFIED` |
-| VR-T3l | **fixture redesign required** | Must observe actual SPM 0.89 `HarvestCropsGoal` hook attachment and managed-crop refusal | Must preserve wilderness/unresolved fail-open; no mandatory-claim surrogate | current `crop_hungry_veto` nearby-log premise is invalid | **`RUNTIME REQUIRED — BLOCKED BY FIXTURE DESIGN`** |
+| VR-T3l | **fixture redesign required** | Must observe actual SPM 0.96 `HarvestCropsGoal` hook attachment and managed-crop refusal | Must preserve wilderness/unresolved fail-open; no mandatory-claim surrogate | current `crop_hungry_veto` nearby-log premise is invalid; witness must tolerate reaction-scaled timing | **`RUNTIME REQUIRED — BLOCKED BY FIXTURE DESIGN`** |
 | VR-T3m | no standalone run required | T3a will supply representative live crop episode; deterministic tests prove banked-drop conservation/repetition | no floor-pickup supply or reserve drain | `ContainerMergeTest`, `CropHarvestTransactionBehaviorTest`, task-55 F8 evidence | **`STATIC SUBSTITUTION — PENDING T3a RUNTIME`** |
 | VR-T3e | `population_food_deficit` | — | — | — | — | `UNVERIFIED` |
 | VR-T3d | `compost_seed_surplus` | — | — | — | — | `UNVERIFIED` |
@@ -92,7 +92,7 @@ then adjudicate PASS/FAIL/WEIRD separately against the matrix.
 | Did the correct Scavenger goal perform each positive result? | VR-T3j: `LIVE_CLAIM` opening followed by running `SCAVENGE_WORK`; **PASS** |
 | Did any row pass only because a host goal performed the work? | — |
 | Did P4 torch contention starve V3 work? | — |
-| Did SPM 0.89 target acquire/loss semantics change interruption? | VR-T3j: autonomous pig combat temporarily preempted Gather and Gather resumed afterward; no harmful drift observed in this row |
+| Did historical SPM 0.89 target acquire/loss semantics change interruption? | VR-T3j: autonomous pig combat temporarily preempted Gather and Gather resumed afterward; no harmful drift observed in this row. This does not prove v0.96 reaction-delayed acquisition. |
 | Did any hidden pending claim disagree with visible activity? | VR-T3j: no; pending live claim opened the row and running `SCAVENGE_WORK` later supplied the visible mandatory owner |
 
 ## Final disposition

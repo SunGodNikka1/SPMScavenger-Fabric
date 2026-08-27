@@ -37,5 +37,8 @@ class ShelterEnvelopeMixinContractTest {
                 "admission remains an unbound SOCIAL_REFLEX");
         assertTrue(greet.contains("method = {\"canContinueToUse\", \"method_6266\"}"),
                 "continuation has its own binding-aware policy hook");
+        assertTrue(combat.contains("FlintAndSteelIgniteGoal"),
+                "SPM 0.96's priority-1 combat ritual must share the existing target-provenance "
+                        + "guard instead of bypassing shelter on passive hunt targets");
     }
 }

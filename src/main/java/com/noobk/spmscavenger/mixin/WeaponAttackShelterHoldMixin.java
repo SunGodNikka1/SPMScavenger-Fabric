@@ -13,6 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Pseudo
 @Mixin(targets = {
         "games.brennan.playermob.entity.goal.WeaponAwareAttackGoal",
+        "games.brennan.playermob.entity.goal.FlintAndSteelIgniteGoal",
         "games.brennan.playermob.entity.goal.TntCombatGoal",
         "games.brennan.playermob.entity.goal.EndCrystalCombatGoal"
 })

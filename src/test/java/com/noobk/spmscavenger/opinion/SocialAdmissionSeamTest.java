@@ -34,9 +34,9 @@ class SocialAdmissionSeamTest {
     @Test
     void mustHappen_theRedirectTargetExistsInThePinnedArtifact() throws Exception {
         java.nio.file.Path jar = java.nio.file.Path.of(
-                "run/.fabric/processedMods/playermob-0.86.0-64b5720b4b825f21.jar");
-        org.junit.jupiter.api.Assumptions.assumeTrue(
-                java.nio.file.Files.exists(jar), "pinned SPM artifact not present in this checkout");
+                System.getProperty("spm.reference.jar"));
+        assertTrue(java.nio.file.Files.exists(jar),
+                "the Gradle-pinned SPM compatibility oracle must be present");
 
         byte[] entity;
         try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {
@@ -50,9 +50,10 @@ class SocialAdmissionSeamTest {
                 "the method the redirect names must exist");
         assertTrue(constants.contains(
                         "(Lgames/brennan/playermob/entity/Reaction;D)"
-                                + "Lnet/minecraft/world/entity/LivingEntity;"),
-                "with the exact descriptor the @At target declares - a matching name and a changed "
-                        + "signature is the silent-failure case");
+                                + "Lnet/minecraft/class_1309;"),
+                "the distributed v0.96 artifact must retain the exact intermediary descriptor "
+                        + "which Loom remaps for the named @At target - a matching name and a "
+                        + "changed signature is the silent-failure case");
     }
 
     // ---- pulse semantics ----

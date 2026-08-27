@@ -49,7 +49,7 @@ public final class PlayerMobs {
 
     /**
      * Fallback only. Pinned to {@code FeelingLedger.DEFAULT} as observed in
-     * {@code playermob-fabric-0.86.0+1.21.1.jar}; used solely when the live field cannot be read.
+     * {@code playermob-fabric-0.96.0+1.21.1.jar}; used solely when the live field cannot be read.
      *
      * <p>Gate SPM-0: a copied constant is a hardcode with a delayed fuse — if SPM moves its neutral
      * point, a copy stays silently wrong and nothing fails loudly. So this value is never used while
@@ -326,7 +326,7 @@ public final class PlayerMobs {
 
     /**
      * Whether the current target is pinned by SPM's explicit player-issued attack order. The
-     * source field is transient and private in v0.86.0, so this optional compatibility read fails
+     * source field remains transient and private in v0.96.0, so this optional compatibility read fails
      * closed: an unknown target never gains permission to abandon nighttime shelter.
      */
     public static AttackOrderState attackOrderState(Mob mob) {

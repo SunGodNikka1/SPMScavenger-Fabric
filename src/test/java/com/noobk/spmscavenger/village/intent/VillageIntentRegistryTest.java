@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VillageIntentRegistryTest {
@@ -101,6 +102,20 @@ class VillageIntentRegistryTest {
         VillageIntentRegistry.openRequiredTrade(MOB, live(Set.of(A), false), selection(A), 20L);
         VillageIntentRegistry.shutdownServerState();
         assertEquals(0, VillageIntentRegistry.trackedIntentCount());
+    }
+
+    @Test
+    void conditionalReleaseRequiresExactIntentInstance() {
+        VillageIntent current = VillageIntentRegistry.openRequiredTrade(
+                MOB, live(Set.of(A), false), selection(A), 10L).orElseThrow();
+        VillageIntent equalButDifferent = new VillageIntent(
+                current.kind(), current.destination(), current.openedAtTick(),
+                current.requiredTradeDemand());
+
+        assertFalse(VillageIntentRegistry.releaseIfCurrent(MOB, equalButDifferent));
+        assertTrue(VillageIntentRegistry.current(MOB).isPresent());
+        assertTrue(VillageIntentRegistry.releaseIfCurrent(MOB, current));
+        assertTrue(VillageIntentRegistry.current(MOB).isEmpty());
     }
 
     private static VillageIntentFacts live(Set<SettlementKey> compatible, boolean interrupted) {

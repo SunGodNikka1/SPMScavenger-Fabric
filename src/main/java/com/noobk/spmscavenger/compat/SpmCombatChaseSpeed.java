@@ -24,7 +24,7 @@ public final class SpmCombatChaseSpeed {
     static final String WEAPON_AWARE_ATTACK_GOAL =
             "games.brennan.playermob.entity.goal.WeaponAwareAttackGoal";
 
-    /** Observed in SPM 0.86.0 {@code PlayerMobEntity#registerGoals}. */
+    /** Revalidated in SPM 0.96.0 {@code PlayerMobEntity#registerGoals}. */
     private static final float DEFAULT_RANGED_ATTACK_RANGE = 8.0f;
 
     private static boolean warnedMissing;

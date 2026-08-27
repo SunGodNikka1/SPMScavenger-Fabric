@@ -32,17 +32,19 @@ class VillageIntentBoundaryTest {
     void productionLifecycleReleasesTransientIntent() throws IOException {
         String source = Files.readString(Path.of(
                 "src/main/java/com/noobk/spmscavenger/SpmScavenger.java"));
-        assertTrue(count(source, "VillageIntentRegistry.release(mob.getUUID())") >= 2,
-                "entity unload and death must release transient intent");
-        assertTrue(source.contains("VillageIntentRegistry.shutdownServerState()"));
+        assertTrue(count(source, "VillageInteractionDirector.release(") >= 2,
+                "entity unload and death must release intent and attempt history together");
+        assertTrue(source.contains("VillageInteractionDirector\n                            .shutdownServerState()"));
     }
 
     @Test
-    void noGoalCommuteFailureProducerOrFirstHomeBehaviorWasIntroduced() throws IOException {
+    void v4EAddsFacadeButNoSecondGoalOrFirstHomeBehavior() throws IOException {
         String source = allProductionSource();
-        assertFalse(source.contains("class VillageInteractionDirector"));
+        assertTrue(source.contains("class VillageInteractionDirector"));
         assertFalse(source.contains("FirstHomePromotion"));
         assertFalse(source.contains("VillageIntentGoal"));
+        assertFalse(source.contains("VillageTravelGoal"));
+        assertFalse(source.contains("RequiredTradeTravelGoal"));
         assertFalse(intentSource().contains("RouteAttemptEvidence.Attempt"));
     }
 

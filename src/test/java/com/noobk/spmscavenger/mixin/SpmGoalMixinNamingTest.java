@@ -24,7 +24,8 @@ import java.util.stream.Stream;
  *
  * Social Player Mobs ships remapped to intermediary. Its goals override vanilla {@code Goal} methods,
  * so those overrides are named {@code method_6264} etc. in the distributed jar - {@code javap} on
- * {@code playermob-0.86.0} shows <b>no</b> readable {@code canUse} on any of its 14 goal classes.
+ * {@code playermob-0.96.0} confirms the host Goal overrides remain intermediary-named in the
+ * distributed Fabric artifact.
  *
  * <p>Our mixins are {@code remap = false} (correct - SPM's own class names must not be remapped), so
  * {@code method = "canUse"} was never remapped either, matched nothing, and with {@code require = 0}
