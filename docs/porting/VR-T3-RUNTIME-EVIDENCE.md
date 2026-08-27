@@ -1,6 +1,8 @@
 # VR-T3 runtime evidence record
 
-**Status:** Gate 0 and VR-T3j `RUNTIME_CONFIRMED`; remaining settlement-dependent rows are independently `UNVERIFIED`.
+**Status:** Gate 0 and VR-T3j `RUNTIME_CONFIRMED`. Under locked `D-VR-088`, D-VR-084, T3c,
+and T3h are closure-satisfied without standalone runtime; T3m uses static substitution after T3a.
+Eight representative integration rows remain runtime-required.
 **Matrix:** `docs/porting/VR-T3-RUNTIME-MATRIX.md`  
 **Environment:** `docs/porting/VR-T3-RUNTIME-ENVIRONMENT.md`
 
@@ -70,16 +72,16 @@ then adjudicate PASS/FAIL/WEIRD separately against the matrix.
 | ID | Preset | Start→end tick | Must-happen evidence | Must-not evidence/falsifier probe | Inspector/log evidence | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | VR-T3j | `mandatory_blocks_village_work` | full 1000-tick window on `BDAA788C...A0B2BDC` (exact ticks not supplied) | `source=LIVE_CLAIM` opened the row; autonomous pig combat preempted Gather; Gather resumed; running `SCAVENGE_WORK` retained mandatory authority | Village Work stayed blocked during combat and running Gather; no Village Work displacement observed | User-adjudicated runtime report; local workspace logs do not contain the external session. Superseded `ED07...F56E3` fixture-incomplete attempt remains historical evidence only | **`RUNTIME PASS`** |
-| D-VR-084 | `mandatory_ownership_witness` | — | — | — | — | `UNVERIFIED` |
+| D-VR-084 | no standalone run (`mandatory_ownership_witness` is historical) | T3j observed live pending/running mandatory ownership across combat preemption and resume | Task-52 proves expiry/no-renewal/release/lifecycle negative controls | `BDAA788C...A0B2BDC` T3j runtime + `.superpowers/sdd/task-52-report.md` mutation matrix | **`CLOSURE SATISFIED COMPOSITIONALLY`** |
 | VR-T3g | `storage_public_deny` | — | — | — | — | `UNVERIFIED` |
-| VR-T3h | `storage_unknown_deny` | — | — | — | — | `UNVERIFIED` |
+| VR-T3h | no standalone run required | task-54 tri-state/UNKNOWN policy denies absent ownership evidence | Missing evidence must not become permission | deterministic task-54 tests; T3g remains the representative live host deny-hook row | **`CLOSURE SATISFIED — STATIC-SUBSUMED`** |
 | VR-T3i | `storage_granted_permit` | — | — | — | — | `UNVERIFIED` |
 | VR-T3a | `crop_managed_single` | — | — | — | — | `UNVERIFIED` |
 | VR-T3b | `crop_interrupt_combat` | — | — | — | — | `UNVERIFIED` |
-| VR-T3c | `crop_replant_failure` | — | — | — | — | `UNVERIFIED` |
+| VR-T3c | no standalone run required | preflight/rollback/escrow and exact age-0 transaction properties | no partial mutation, false success, loot on failure, or repair phase | `CropHarvestTransactionBehaviorTest` + task-55 mutation evidence | **`CLOSURE SATISFIED — STATIC/TRANSACTION CONFIRMED`** |
 | VR-T3k | `crop_multi_mob` | — | — | — | — | `UNVERIFIED` |
-| VR-T3l | `crop_hungry_veto` | — | — | — | — | `UNVERIFIED` |
-| VR-T3m | `crop_multi_cycle` | — | — | — | — | `UNVERIFIED` |
+| VR-T3l | **fixture redesign required** | Must observe actual SPM 0.89 `HarvestCropsGoal` hook attachment and managed-crop refusal | Must preserve wilderness/unresolved fail-open; no mandatory-claim surrogate | current `crop_hungry_veto` nearby-log premise is invalid | **`RUNTIME REQUIRED — BLOCKED BY FIXTURE DESIGN`** |
+| VR-T3m | no standalone run required | T3a will supply representative live crop episode; deterministic tests prove banked-drop conservation/repetition | no floor-pickup supply or reserve drain | `ContainerMergeTest`, `CropHarvestTransactionBehaviorTest`, task-55 F8 evidence | **`STATIC SUBSTITUTION — PENDING T3a RUNTIME`** |
 | VR-T3e | `population_food_deficit` | — | — | — | — | `UNVERIFIED` |
 | VR-T3d | `compost_seed_surplus` | — | — | — | — | `UNVERIFIED` |
 
@@ -97,11 +99,14 @@ then adjudicate PASS/FAIL/WEIRD separately against the matrix.
 
 | Item | Result |
 | --- | --- |
-| Applicable rows passed | **1 / 13** (`VR-T3j`) |
+| Runtime-confirmed rows | **1** (`VR-T3j`; no rerun) |
+| Closure-satisfied without standalone runtime | **3** (`VR-T3c`, `VR-T3h`, `D-VR-084`) |
+| Conditional static substitution | **VR-T3m** — closes when representative VR-T3a runtime passes |
+| Remaining runtime-required rows | **8** — `VR-T3a`, `b`, `d`, `e`, `g`, `i`, `k`, `l` |
 | Failed rows | — |
-| Incomplete rows | historical superseded VR-T3j fixture attempts only; current VR-T3j passed |
+| Fixture/matrix blockers | VR-T3l requires minimal host-hook fixture redesign; old nearby-log/mandatory premise invalid. Historical T3m 4000-tick natural-growth matrix is superseded as a closure obligation |
 | Weird/runtime questions | autonomous pig combat was a valid interruption witness, not a failure |
-| V3-G closure recommendation | `UNVERIFIED` |
+| V3-G closure recommendation | **OPEN** — run only the eight representative integration rows after T3l fixture review and separate runtime approval |
 
 Temporary `V3RuntimeWitnessCommands` must be removed and the clean production JAR rebuilt after
 accepted evidence. Preserve this record and the RFC contribution when removing instrumentation.

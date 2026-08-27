@@ -10,9 +10,9 @@
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING` — **V2-TE-W2 CLOSED**; **V1 + V1-D + V1.5 CLOSED**; **V2 + V2-TE CLOSED**; V3-A/B/C/D1/E/F **CLOSED (static)**; broad V3-D2 workstation awareness **DEFERRED**; **D58-1…D58-12 LOCKED** |
-| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). **Task-59 / V3-G T3j MANDATORY-ROUTE FIXTURE REPAIR BUILT** (1669-test clean build); Minecraft campaign not authorized. |
-| **Nearest frontier** | VR-T3j is **RUNTIME PASS** on `BDAA788C...A0B2BDC`. Continue the separately authorized Task-59 campaign with D-VR-084 and remaining applicable VR-T3 rows; VR-T3m retains its declared 4000-tick matrix/fixture contradiction. |
-| **Last update** | 2026-08-24 (`Agent_Codex` Task-59 T3j mandatory-route fixture repair) |
+| **Status** | **V2-TE-W2 runtime `PASS`; W2.4 cleanup `COMPLETE / STATIC-PACKAGE PASS`.** Tasks 52–58 **`IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT`** (**1589 tests** at V3-F closure). Task-59 closure policy **LOCKED** by `D-VR-088`; VR-T3j is **RUNTIME PASS**. |
+| **Nearest frontier** | Remaining runtime-required integration rows are **VR-T3a, b, d, e, g, i, k**, plus a redesigned minimal **VR-T3l host-mixin attachment/veto witness**. VR-T3j must not be rerun; D-VR-084, T3c, and T3h are closure-satisfied without standalone runtime, while T3m uses the locked static substitution after representative T3a runtime. |
+| **Last update** | 2026-08-26 (`Agent_Codex` + User, `D-VR-088` V3 closure minimization) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -5248,22 +5248,35 @@ for gen-1 (compost is a low-priority side activity); document in VR-T3d notes.
 | --- | --- | --- | --- | --- |
 | **VR-T3a** | Managed mature crop, seed available, reachable farmland | Mob paths, harvests, and leaves the same managed position replanted in one committed episode | A visible successful harvest ends as bare farmland | `UNVERIFIED` — V3-C |
 | **VR-T3b** | Combat/command/shelter interruption before interaction | No world mutation occurs; retained candidate is discarded/revalidated after interruption | Old path/target resumes blindly; crop removed before authority permits commit | `UNVERIFIED` — V3-C |
-| **VR-T3c** | Seed/support/crop changes before commit or replant write fails | Preflight aborts without harvest; if failure follows mutation, mandatory bounded repair/reacquisition owns cleanup | Discretionary explore/trade starts while managed farmland remains an owned repair gap | `UNVERIFIED` — V3-C |
+| **VR-T3c** | Seed/support/crop changes before commit or replacement fails inside the staged transaction | Preflight aborts with zero mutation, or failed replacement restores escrow and grants no loot | Partial harvest/replant mutation, false success, or an invented repair phase | **CLOSURE SATISFIED — STATIC/TRANSACTION CONFIRMED** by `CropHarvestTransactionBehaviorTest` atomicity, rollback, and mutation controls |
 | **VR-T3d** | Proven disposable compostable and loaded known composter at level `< 7` | Exactly one unit is consumed; both advanced and unchanged levels terminate/back off; later level-8 readiness remains vanilla world truth | Double debit; unchanged level loops; higher reserve is composted; insertion is claimed to produce bone meal; manufactured compostable demand | `UNVERIFIED` — V3-F (task-58) |
 | **VR-T3e** | Population food deficit and eligible villager | Disposable food is delivered once, then deficit/target/inventory are re-resolved | Direct breeding command, bed claim, reserve violation, or endless gifting | `UNVERIFIED` runtime — V3-E **STATIC-BEHAVIORAL ACCEPT** (task-57) |
 | **VR-T3f** | Farmer workstation claimed/unclaimed, villager sleeps/restocks, POI unloads | *(Broad D2 deferred)* When implemented, shared bounded evidence records provenance/age/completeness | Chunk load, parallel block scanner, workstation mutation | `DEFERRED` — broad V3-D2 post-V3-F |
 | **VR-T3g** | `VILLAGE_ALLY` + `VILLAGE_PUBLIC` container | Host `RaidContainersGoal` cannot admit or continue looting it | HOME/HIGH alone is used as permission; container opens/continues looting | `UNVERIFIED` — V3-A/B; supersedes old VR-T1.5d wording |
-| **VR-T3h** | `VILLAGE_ALLY` + `UNKNOWN` ownership | Fail closed and leave container untouched | Missing evidence is interpreted as public access or permission | `UNVERIFIED` — V3-B |
+| **VR-T3h** | `VILLAGE_ALLY` + `UNKNOWN` ownership | Fail closed and leave container untouched | Missing evidence is interpreted as public access or permission | **CLOSURE SATISFIED — STATIC-SUBSUMED** by task-54 tri-state/UNKNOWN tests; VR-T3g remains the representative live host deny-hook proof |
 | **VR-T3i** | Explicit mob-owned/shared storage and non-ally control | Explicitly permitted ally access may proceed; non-ally host behavior remains unchanged | Blanket goal strip or ally denial despite positive permission | `UNVERIFIED` — V3-B |
 | **VR-T3j** | Live/pending mandatory progression while village work is available | Mandatory work retains authority; village work waits and later re-resolves | Idle observation or Opinion preference displaces pending mandatory work | **`RUNTIME PASS`** on `BDAA788C...A0B2BDC` — `LIVE_CLAIM`, pig-combat preemption, Gather resume, running `SCAVENGE_WORK`, no Village Work displacement |
 | **VR-T3k** | Two mobs select one crop; first changes it | First commits; second detects invalidation and reacquires/abandons without mutation | Double break/replant, stale target loop, or persistent global crop reservation | `UNVERIFIED` — V3-C |
-| **VR-T3l** | Managed-domain crop, mob hungry (`wantsFood()`), V3 admission refused | Host `HarvestCropsGoal` is vetoed at that position; the field stays planted; the mob's own food behaviour (`HuntForFoodGoal`, foraging) is unaffected | Host destructive harvest runs inside the managed domain; or the veto extends to wilderness crops and suppresses stock SPM food behaviour | `UNVERIFIED` — V3-C (D-VR-079-A1) |
-| **VR-T3m** | Repeated managed harvest episodes over many cycles | Replant stock is sustained by the episode's **own** banked drops; a crop whose pinned drops cannot guarantee a planting item pauses managed harvest instead of draining the reserve | Planting supply is recovered via floor-item pickup; a field is harvested down to a barren state because the reserve ran out mid-episode | `UNVERIFIED` — V3-C (F8) |
+| **VR-T3l** | SPM 0.89 host `HarvestCropsGoal` evaluates a managed crop and a wilderness/fail-open control | The optional `@Pseudo(require=0)` hook is demonstrably attached; it refuses the managed crop while leaving the wilderness/fail-open boundary unchanged | Missing attachment silently permits managed stripping, or the veto suppresses stock wilderness food harvesting | **RUNTIME REQUIRED / FIXTURE REDESIGN REQUIRED** — smallest passive host-mixin attachment witness only; the invalid nearby-oak/mandatory-claim fixture is superseded |
+| **VR-T3m** | Repeated managed harvest episodes over many cycles | Replant stock is sustained by the episode's **own** banked drops; a crop whose pinned drops cannot guarantee a planting item pauses managed harvest instead of draining the reserve | Planting supply is recovered via floor-item pickup; a field is harvested down to a barren state because the reserve ran out mid-episode | **STATIC SUBSTITUTION LOCKED** — VR-T3a supplies representative live crop-episode integration; deterministic banking/conservation tests prove repetition. No two-natural-generation standalone runtime obligation |
 
-**Phase closure (`LOCKED` 2026-08-22):** V3 requires V3-A…G plus all **applicable** VR-T3a–m rows.
-**VR-T3f is NOT applicable** to V3-G closure while broad V3-D2 workstation awareness remains
-**DEFERRED** — Task-59 must not pull D2 back in via closure wording. No subset consisting only of
-replant + storage may close the phase.
+**Phase closure (`D-VR-088`, `LOCKED` 2026-08-26; supersedes the blanket standalone-runtime reading
+of the 2026-08-22 rule):** every scoped invariant requires the proof class appropriate to its
+failure mode. Unique host-mixin, GoalSelector, navigation, world-mutation, entity-handoff, and
+multi-mob integration seams require representative runtime evidence. Deterministic policy,
+transaction, lifecycle, and conservation invariants may close from mutation-tested behavioral
+evidence. One runtime observation may satisfy multiple rows only when it directly observes their
+exact conditions. A broken fixture or contradictory observation window creates a fixture/matrix
+repair, not another product runtime obligation. **VR-T3f remains non-applicable** while broad V3-D2
+is deferred; no subset consisting only of replant + storage may close the phase.
+
+**Closure disposition (`LOCKED`):** VR-T3j is already runtime-accepted and must not be rerun.
+D-VR-084 closes compositionally from that exact live authority sequence plus task-52's deterministic
+expiry/no-renewal/release evidence. VR-T3c closes from deterministic transaction evidence. VR-T3h
+is static-subsumed, with VR-T3g retaining the representative live host deny-hook obligation. VR-T3m
+uses VR-T3a as the representative live episode seam plus deterministic banking/conservation tests.
+Remaining runtime-required rows are **T3a, T3b, T3d, T3e, T3g, T3i, T3k, and the minimal T3l host
+hook witness**.
 
 #### Pre-lock decisions — `LOCKED` (`D-VR-080…083`, User peer review 2026-08-19), amended 2026-08-19
 
@@ -5279,12 +5292,13 @@ User): `D-VR-082` → `D-VR-082-A1`, `D-VR-079` → `D-VR-079-A1`, plus new `D-V
 | **D-VR-082** | V3 executor goals at **priority 4**. `VillageWorkAdmission` blocks when **any live mandatory owner** exists (not merely `MaterialDemand`). Optional `VillageWorkSelector` chooses among V3 intents — **not** a parallel `VillageWorkDirector`; subordinate to village orchestration (`VillageInteractionDirector` when shipped). |
 | **D-VR-083** | **Budget contract `LOCKED`**; numeric constants **`PROVISIONAL` / `UNVERIFIED`** until profiling. Population food support candidate when `adultVillagerCount ≥ 2` **and** `currentFreeHomeCapacity > 0` on **FRESH + COMPLETE** facts (**D-VR-083-A1** — vanilla vacancy, not `totalBeds − villagers`). |
 | **D-VR-084** | **NEW.** `MandatoryOwnership` — one shared discretionary-permission authority with two inputs (running-activity truth + **published** pending claims) and two consumers (`DiscretionaryActivityDirector`, `VillageWorkAdmission`). Demand never creates authority; a claim does, and **a claim may never be refreshed by the continued existence of the same demand**. |
+| **D-VR-088** | **LOCKED.** V3 closes by proof class, not one standalone runtime per row. D-VR-084/T3c/T3h are satisfied without standalone sessions; T3m composes T3a runtime with deterministic conservation; T3j is accepted/no-rerun; remaining runtime rows are a/b/d/e/g/i/k/l, with T3l narrowed to the optional SPM host-mixin attachment seam. |
 | **D-VR-082-A1** | **AMENDS D-VR-082.** Admission **consumes** `DiscretionaryEligibility` rather than re-deriving mandatory truth from a five-source list. `VILLAGE_TRADE` joins `blocksDiscretionaryChoice`. New `ActivityClass.VILLAGE_WORK` blocks a fresh discretionary selection while running. Priority 4 is **shared with `PlaceTorchGoal`**, and the `MAINTENANCE`/`VILLAGE_WORK` blocking asymmetry is deliberate. |
 | **D-VR-079-A1** | **AMENDS D-VR-079.** Defines the **managed crop domain** without `SettlementRelationship`; requires a continuous host-`HarvestCropsGoal` veto inside it that **fails toward stock** when the domain cannot be positively established; requires the episode to bank its own replant-capable drops (F8), with crop-specific reserve accounting. |
 
 **Phase architecture status:** shared authority and V3-A/B/C/D1/E/F are **IMPLEMENTED /
-STATIC-BEHAVIORAL ACCEPT** in tasks 52–58. Canonical V3 runtime closure (V3-G) remains
-**UNVERIFIED** until the batched campaign.
+STATIC-BEHAVIORAL ACCEPT** in tasks 52–58. V3-G remains **OPEN** until the eight representative
+runtime rows complete; the closure map is locked by D-VR-088.
 
 **Task numbering history (User, 2026-08-19; synchronized 2026-08-22).** The shared authority repair
 remained its own task because it has two consumers. Tasks 52–58 are completed static slices:
@@ -7730,8 +7744,17 @@ separately (Gate AV-1):
 Gather-owned observed path      REPAIRED / STATIC-BEHAVIORAL ACCEPT
 shared MandatoryOwnership seam  IMPLEMENTED
 unwired mandatory publishers    DEFERRED - fail-open coverage, by design
-runtime witness                 DEFERRED - batched V3 campaign
+runtime witness                 SATISFIED COMPOSITIONALLY - VR-T3j + task-52 evidence
 ```
+
+**Closure synchronization (`D-VR-088`, 2026-08-26):** the original Task-52 rule above controls:
+D-VR-084 was folded into the batched V3 campaign and never required an independent Minecraft
+session. Accepted VR-T3j runtime directly observed the live claim, urgent combat preemption,
+continued Village Work denial, Gather resumption, and running mandatory ownership. Task-52's
+mutation-tested scenarios independently prove expiry deletion, no same-demand renewal, immediate
+release, lifecycle cleanup, and the unclaimed-demand fail-open boundary. Together these satisfy the
+decision's distinct live-integration and deterministic-lifecycle failure modes. No standalone
+`mandatory_ownership_witness` rerun is required.
 
 The third line must survive a green suite: the first slice wires **one** publisher, so the defect
 general form outlives it. The deferred witness is one observation folded into the later
@@ -8723,9 +8746,9 @@ debug/datapack **68/68 PASS**; `clean build` **1669 tests / 0 failures/errors/sk
 SHA-256: `8C2DBBA590B55AB55E80A96A84C88C28583F8700A151D90AD3EEFEA4A6CA69F2`. No Minecraft launch or
 commit occurred; corrected ownership behavior remains runtime `UNVERIFIED`.
 
-**Separate unresolved fixture risk:** VR-T3l still assumes nearby world oak logs create a mandatory
-claim. It was not changed in this two-preset repair and must not be used for a product verdict until
-its own compatible `wantsFood + mandatory route` fixture contract is repaired and reviewed.
+**Historical fixture risk (superseded by `D-VR-088`):** VR-T3l assumed nearby world oak logs create
+a mandatory claim. `D-VR-088` rejects repairing that premise: T3l is now only a minimal passive host
+`HarvestCropsGoal` mixin-attachment/veto witness with a wilderness/fail-open control.
 
 ### Contribution — `Agent_Codex` (Task-59 live-claim stopping-rule repair, 2026-08-24)
 
@@ -8786,9 +8809,71 @@ LIVE_CLAIM opens window
 ```
 
 This confirms authority continuity across pending ownership, legitimate urgent/combat preemption,
-executor resumption, and running mandatory ownership for VR-T3j. It does not independently close the
-D-VR-084 witness row or any other VR-T3 scenario. The local workspace does not contain the external
-session's raw `latest.log`, so the evidence record explicitly preserves its user-supplied provenance.
+executor resumption, and running mandatory ownership for VR-T3j. The original statement that this
+did not independently close D-VR-084 is retained as historical evidence scope, but its implication
+that an independent D-VR-084 session remained mandatory is **SUPERSEDED by D-VR-088**: the runtime
+observation composes with task-52's mutation-tested lifecycle evidence. It does not close unrelated
+VR-T3 scenarios. The local workspace does not contain the external session's raw `latest.log`, so
+the evidence record explicitly preserves its user-supplied provenance.
 
 **Frontier before -> after:** VR-T3j official window unverified -> **VR-T3j RUNTIME PASS**. Task-59
 campaign remains open for the other applicable rows; Tasks 52–58 are not reopened.
+
+### D-VR-088: Proof-class V3 closure minimization (`User` + `Agent_Codex`, 2026-08-26)
+
+**Status:** **LOCKED** — user product decision after a no-edit evidence review.
+
+**Decision:** replace the blanket “every applicable row needs a standalone runtime PASS” reading
+with proof matched to the invariant's actual failure mode. Representative runtime remains mandatory
+for unique host-mixin attachment, GoalSelector/preemption, navigation, world mutation,
+entity-handoff, and multi-mob contention. Mutation-tested deterministic policy, transaction,
+lifecycle, and conservation behavior may close without duplicative Minecraft sessions. A single
+runtime observation may satisfy multiple rows only when it directly witnesses each exact condition;
+fixture defects and matrix contradictions must be repaired or substituted honestly, never converted
+into repeated runtime obligations.
+
+**Alternatives considered:**
+
+| Option | Benefit | Failure / cost | Disposition |
+| --- | --- | --- | --- |
+| Standalone runtime for every letter row and D-VR-084 | Uniform checklist | Repeats already-proven deterministic seams; invalid fixtures manufacture work; T3m timing is infeasible | **SUPERSEDED** |
+| Static-only closure for all remaining rows | Minimal operator time | Cannot prove optional mixin attachment, navigation, GoalSelector, handoff, mutation, or contention in SPM 0.89 | **REJECTED** |
+| Proof-class closure with representative integration rows | Tests each unique failure seam once and preserves deterministic negative controls | Requires careful evidence mapping; one runtime cannot be generalized beyond observed conditions | **LOCKED** |
+
+**Exact dispositions:**
+
+- **D-VR-084:** satisfied compositionally by accepted VR-T3j runtime plus task-52 deterministic and
+  mutation evidence. The later independent-witness wording is explicitly superseded by the original
+  Task-52 batched-witness decision.
+- **VR-T3c:** closure satisfied by `CropHarvestTransactionBehaviorTest` preflight, rollback,
+  no-loot-on-failure, and conservation evidence.
+- **VR-T3h:** static-subsumed by task-54 tri-state/UNKNOWN evidence; **VR-T3g** remains runtime for
+  the live `RaidContainersGoal` deny-hook integration.
+- **VR-T3m:** static substitution. **VR-T3a** supplies representative live crop-episode/world-
+  mutation integration; deterministic bank/conservation tests prove the repeated invariant. The
+  two unaccelerated same-cell generations within 4000 ticks requirement is removed as a closure
+  obligation, not weakened into a shorter false witness.
+- **VR-T3l:** runtime-required only for the unique optional `@Pseudo(require=0)` attachment seam.
+  Redesign as the smallest passive witness showing SPM 0.89 `HarvestCropsGoal` actually reaches the
+  hook, a managed crop is refused, and a wilderness/unresolved control remains fail-open. Nearby
+  oak logs and mandatory ownership are neither prerequisites nor proof.
+- **VR-T3j:** **RUNTIME PASS**; no rerun.
+- **Remaining runtime set:** **T3a, T3b, T3d, T3e, T3g, T3i, T3k, T3l**.
+
+**MAIBS prediction for the redesigned T3l witness:** at `T0`, the host goal receives an ordinary
+food-harvest opportunity in a bounded fixture; the passive witness records host admission/target
+evaluation and crop state. For the positively established managed target, the attached mixin veto
+prevents destructive host harvest. A separate wilderness or unresolved-domain control remains stock
+SPM behavior/fail-open. The witness never creates mandatory authority, invokes Goal methods, steers
+the mob, or awards a verdict. Visible failure classes are: managed crop stripped (**attachment/veto
+failure**), wilderness crop suppressed (**over-broad veto**), or neither host seam becoming
+observable (**FIXTURE_INCOMPLETE**, not product PASS/FAIL). Interruption invalidates the current
+observation; reacquisition must come from normal host scheduling.
+
+**Must happen:** the minimal live witness demonstrates actual host-hook attachment and managed-crop
+refusal, with a valid fail-open/wilderness control. **Must not happen:** another mandatory-claim
+campaign, fake Goal state, or a static mixin-registration check relabeled as runtime attachment.
+
+**Frontier:** redesign and statically review the T3l fixture/witness, then run only the eight
+remaining representative integration rows under separate runtime approval. No Tasks 52–58 semantic
+change is authorized by this decision.

@@ -378,7 +378,7 @@ No Minecraft launch or commit occurred.
 ## VR-T3j runtime acceptance — 2026-08-24
 
 **Status:** VR-T3j `RUNTIME PASS`; Task-59 remains `DONE_WITH_CONCERNS` at campaign level because the
-remaining applicable rows are independently unverified.
+reduced representative runtime set defined by `D-VR-088` is incomplete.
 
 User-adjudicated evidence from exact artifact `BDAA788C...A0B2BDC` records a matching `LIVE_CLAIM`
 opening, a full 1000-tick official window, autonomous pig-combat preemption, Village Work remaining
@@ -387,6 +387,49 @@ displacement. This confirms the must-happen and must-not-happen outcomes for VR-
 interruption/resume path.
 
 The external runtime's raw `latest.log` is not present in the local workspace. Evidence provenance is
-therefore recorded as the user's runtime report rather than falsely citing local logs. D-VR-084 and
-all other rows remain independent; no production change, build, Minecraft relaunch, or commit was
-performed while recording this result.
+therefore recorded as the user's runtime report rather than falsely citing local logs. The statement
+that D-VR-084 remained an independent runtime row is superseded by the closure-minimization decision
+below; no production change, build, Minecraft relaunch, or commit was performed while recording this
+result.
+
+## Closure-minimization decision — 2026-08-26
+
+**Status:** `LOCKED / DOCUMENTATION SYNCHRONIZED` (`D-VR-088`). Task-59 remains
+`DONE_WITH_CONCERNS` until the reduced representative runtime set completes.
+
+The user accepted the evidence review and replaced the blanket standalone-runtime interpretation
+with proof matched to each invariant's failure mode. This explicitly restores the original Task-52
+batched-witness decision and supersedes later wording that made D-VR-084 independent.
+
+| Obligation | Final disposition | Evidence / next proof |
+| --- | --- | --- |
+| D-VR-084 | **CLOSURE SATISFIED COMPOSITIONALLY** | accepted T3j live claim/preemption/resume/deny sequence + task-52 scenarios, temporal simulations, and mutation controls for expiry/no-renewal/release/lifecycle |
+| VR-T3c | **CLOSURE SATISFIED — STATIC/TRANSACTION** | `CropHarvestTransactionBehaviorTest` preflight, escrow rollback, no-loot-on-failure, exact replacement, and conservation |
+| VR-T3h | **CLOSURE SATISFIED — STATIC-SUBSUMED** | task-54 UNKNOWN/tri-state evidence; T3g remains the representative live host deny-hook proof |
+| VR-T3m | **STATIC SUBSTITUTION** | representative T3a live crop episode + deterministic F8 banking/conservation; impossible two-unaccelerated-generation/4000t obligation removed |
+| VR-T3j | **RUNTIME PASS / NO RERUN** | `BDAA788C...A0B2BDC` accepted evidence |
+| VR-T3l | **RUNTIME REQUIRED / FIXTURE REDESIGN REQUIRED** | minimal passive SPM 0.89 `HarvestCropsGoal` optional-mixin attachment/refusal witness with wilderness/unresolved fail-open control |
+
+The existing T3l fixture is invalid because nearby oak logs do not establish mandatory Gather
+authority. Its replacement must not attempt to repair that premise. The witness owns only fixture
+setup and passive observation: production host scheduling must reach `HarvestCropsGoal`; the attached
+hook must refuse a positively managed crop; a wilderness or unresolved-domain control must remain
+fail-open. No fake claim, Goal invocation, steering, target injection, or awarded product verdict is
+permitted.
+
+**Remaining runtime-required rows:** `VR-T3a`, `VR-T3b`, `VR-T3d`, `VR-T3e`, `VR-T3g`, `VR-T3i`,
+`VR-T3k`, and redesigned `VR-T3l`.
+
+**Strongest alternative rejected:** static-only closure would minimize operator work further but
+cannot prove optional host-mixin attachment, GoalSelector/navigation behavior, handoff, world
+mutation, or multi-mob contention in SPM 0.89. The opposite all-standalone policy was also rejected
+because it duplicates mutation-tested deterministic seams and turns fixture defects into artificial
+runtime work.
+
+**Acceptance:** must observe every unique integration seam once under its exact conditions. Must not
+generalize a runtime observation to an unobserved seam, relabel build/static evidence as runtime, or
+rerun T3j/D-VR-084 merely for checklist symmetry.
+
+**This documentation pass changed only:** the RFC, runtime matrix, this report, runtime evidence
+ledger, test matrix, and progress ledger. It did not modify production code, tests, mixins, Gradle,
+configs, or datapack fixtures; it did not build, launch Minecraft, commit, or push.

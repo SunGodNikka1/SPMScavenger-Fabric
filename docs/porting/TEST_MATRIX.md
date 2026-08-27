@@ -628,8 +628,9 @@ S11–S12 static wiring/store tests green.
 ## D-VR-017 / D-VR-081 / task-54 — V3-B storage ownership + ally raid guard (2026-08-20)
 
 **Brief:** `.superpowers/sdd/task-54-brief.md` v3.2. **Report:** `.superpowers/sdd/task-54-report.md`.
-Full clean build after task-54: **1409 tests, 0 failures/errors/skips** (+23 task-54 tests). Runtime
-ally mixin witness (VR-T3g–i live) remains `UNVERIFIED` (AV-1).
+Full clean build after task-54: **1409 tests, 0 failures/errors/skips** (+23 task-54 tests). Under
+`D-VR-088`, VR-T3g and T3i retain representative runtime seams; T3h closes from deterministic
+UNKNOWN/tri-state evidence and T3g's live deny-hook witness.
 
 | ID | Scenario | Must happen | Must not happen | Evidence |
 | --- | --- | --- | --- | --- |
@@ -646,8 +647,9 @@ ally mixin witness (VR-T3g–i live) remains `UNVERIFIED` (AV-1).
 ## D-VR-079 / task-55 — V3-C harvest→replant episode (2026-08-21)
 
 **Brief:** `.superpowers/sdd/task-55-brief.md` v2.1. **Report:** `.superpowers/sdd/task-55-report.md`.
-Full clean build after task-55: **1453 tests, 0 failures** (+18 task-55 tests). Runtime VR-T3a–c/k/l/m
-remain `UNVERIFIED` (AV-1).
+Full clean build after task-55: **1453 tests, 0 failures** (+18 task-55 tests). Runtime remains
+required for T3a, T3b, T3k, and the minimal T3l host-hook attachment seam. T3c closes from the
+deterministic transaction harness; T3m uses T3a plus static banking/conservation substitution.
 
 | ID | Scenario | Must happen | Must not happen | Evidence |
 | --- | --- | --- | --- | --- |
@@ -665,19 +667,25 @@ remain `UNVERIFIED` (AV-1).
 **Preset manifest:** `test-datapacks/phase-village-raid/PRESET-MANIFEST.md`  
 **Executable datapack:** `test-datapacks/phase-village-raid/` (`spm_vr`) — structural test `SpmVrDatapackStructureTest`  
 **Operator/evidence packet:** datapack `README.md` + `docs/porting/VR-T3-RUNTIME-EVIDENCE.md`; temporary one-shot `/spmscavenger debug v3 inspect <mob>` exposes hidden pending-authority truth without mutating it
-**VR-T3f:** **non-applicable** (V3-D2 deferred). Runtime campaign **NOT AUTHORIZED**.
+**VR-T3f:** **non-applicable** (V3-D2 deferred). `D-VR-088` proof-class closure is **LOCKED**.
+Minecraft launches remain separately authorized.
 
 | ID | Static evidence | Runtime |
 | --- | --- | --- |
 | VR-T3a | task-55 `CropHarvestTransactionTest` — `CONFIRMED` | `UNVERIFIED` |
 | VR-T3b | task-55 episode abort — `INFERRED` | `UNVERIFIED` |
-| VR-T3c | `CropHarvestTransactionTest` invariant — `CONFIRMED` | `UNVERIFIED` |
+| VR-T3c | `CropHarvestTransactionBehaviorTest` preflight/rollback/conservation + task-55 mutation controls — `CONFIRMED` | **NOT REQUIRED — CLOSURE SATISFIED (deterministic transaction seam)** |
 | VR-T3d | task-58 `CompostScenarioEvidenceTest` — `CONFIRMED` | `UNVERIFIED` |
 | VR-T3e | task-57 static suite — `CONFIRMED` | `UNVERIFIED` |
 | VR-T3f | **N/A** — deferred | **N/A** |
-| VR-T3g–i | task-54 `StorageOwnershipStructuralTest` — `CONFIRMED` (unit) | `UNVERIFIED` |
+| VR-T3g | task-54 deny policy/wiring — `CONFIRMED` (static) | **REQUIRED** — live `RaidContainersGoal` deny-hook integration |
+| VR-T3h | task-54 UNKNOWN/tri-state tests — `CONFIRMED` | **NOT REQUIRED — STATIC-SUBSUMED by T3g representative hook** |
+| VR-T3i | task-54 explicit grant + non-ally controls — `CONFIRMED` | **REQUIRED** — positive permit/non-ally host integration |
 | VR-T3j | task-52/53 mandatory wiring — `CONFIRMED` (unit) | **`RUNTIME PASS`** on `BDAA788C...A0B2BDC`: full 1000 ticks; live claim opening; pig-combat preemption; Gather resume; no Village Work displacement |
 | VR-T3k | task-55 commit revalidation — `CONFIRMED` | `UNVERIFIED` |
-| VR-T3l | D-VR-079-A1 veto — `INFERRED` | `UNVERIFIED` |
-| VR-T3m | F8 banking tests — `CONFIRMED` | `UNVERIFIED` |
-| D-VR-084 witness | task-52 scenarios — `CONFIRMED` (static) | `UNVERIFIED` |
+| VR-T3l | D-VR-079-A1 veto + continuation policy — `CONFIRMED` for local logic; optional host attachment `UNVERIFIED` | **REQUIRED after fixture redesign** — minimal SPM 0.89 host-hook attachment/refusal + wilderness/fail-open witness; no mandatory claim |
+| VR-T3m | F8 banking/conservation tests — `CONFIRMED` | **STATIC SUBSTITUTION** — closes with representative T3a runtime; no two-natural-generation standalone run |
+| D-VR-084 witness | task-52 scenarios/temporal simulations/mutations + accepted T3j runtime | **CLOSURE SATISFIED COMPOSITIONALLY; no standalone rerun** |
+
+**Remaining runtime set:** `VR-T3a`, `VR-T3b`, `VR-T3d`, `VR-T3e`, `VR-T3g`, `VR-T3i`,
+`VR-T3k`, and redesigned `VR-T3l`. VR-T3j is already `RUNTIME PASS` and must not be rerun.
