@@ -323,7 +323,7 @@ class VillagePerceptionContractTest {
 
     /**
      * V1-R2. Memory age is not an owner-liveness signal: an alive PlayerMob that spends a month
-     * mining must not lose its HOME_VILLAGE at the next restart. If village forgetting is ever
+     * mining must not lose its designated home at the next restart. If village forgetting is ever
      * wanted it is a cognition/memory-decay feature with its own design — not garbage collection.
      */
     @Test

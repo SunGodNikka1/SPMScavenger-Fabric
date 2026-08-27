@@ -12,8 +12,8 @@ import net.minecraft.core.BlockPos;
  * conflates two genuinely different questions, and the cost is not hypothetical:
  *
  * <pre>
- * Village A  — HOME_VILLAGE, where the mob sleeps and stores
- * Village B  — 85 blocks away, TRADING_POST, has the good librarian
+ * Village A  — independently designated home, where the mob sleeps and stores
+ * Village B  — 85 blocks away, remembered separately for later trader evidence
  * </pre>
  *
  * Under a 96-block identity radius those are **one** {@code KnownVillage} and the model cannot hold

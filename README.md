@@ -180,12 +180,12 @@ Install the production JAR for normal play. The validation JAR is a non-distribu
 certification sidecar; it depends on the matching production mod and is only needed for approved
 Village/Raid runtime campaigns.
 
-The latest verified clean build completed with **1,624 production tests and 57 validation tests,
+The latest verified clean build completed with **1,635 production tests and 57 validation tests,
 zero failures, zero errors, and zero skips**. SHA-256 values were:
 
 ```text
 spmscavenger-1.11.0.jar
-4A742B531C0518CA06E53045D7EB571FB7E50443BCC1C74CE289E42E2B1A99D0
+05E77B7F9ACC29B0459FA8F4B5908082546188591A9AD4AFB6D024A4E00A930B
 
 spmscavenger-1.11.0-validation.jar
 BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0

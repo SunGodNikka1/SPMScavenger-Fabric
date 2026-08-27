@@ -94,8 +94,9 @@ public final class VillageAnchorPolicy {
     }
 
     // V1-R1: settlement identity used to live here, answered with vanilla's 96-block raid radius.
-    // That conflated "one raid neighbourhood" with "one place I remember" and made a HOME_VILLAGE and
-    // a TRADING_POST 85 blocks apart unrepresentable. Split into VillageIdentityPolicy (cognitive,
+    // That conflated "one raid neighbourhood" with "one place I remember" and made a designated
+    // home and a separately useful village 85 blocks apart unrepresentable. Split into
+    // VillageIdentityPolicy (cognitive,
     // ours) and RaidAssociationPolicy (vanilla-compatible, must not drift). This class is now purely
     // the anchor derivation, which is the one thing that must match vanilla exactly.
 }

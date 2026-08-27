@@ -9,9 +9,9 @@ import java.util.Objects;
 /**
  * V1 — a settlement this mob has actually been to.
  *
- * <p>Answers the four questions every later village feature is built on: <i>what village is this,
- * have I seen it, is it my home, where is its canonical anchor</i>. Nothing else. No villagers, no
- * offers, no containers, no affinity — those are V2/V4 and each needs its own perception first.
+ * <p>Answers the factual questions every later village feature is built on: <i>what village is
+ * this, have I seen it, and where is its canonical anchor</i>. Home belongs to the owning
+ * {@link MobVillageMemory}; villagers, offers, containers, and affinity have separate owners.
  *
  * <p>The anchor is {@link VillageAnchorPolicy#anchorOf} output, so it is comparable with
  * {@code Raid.getCenter()} by construction rather than by coincidence (D-VR-019).
@@ -19,7 +19,6 @@ import java.util.Objects;
 public final class KnownVillage {
 
     private final BlockPos anchor;
-    private SettlementTier tier;
     private final long firstSeenTick;
     private long lastSeenTick;
 
@@ -32,25 +31,20 @@ public final class KnownVillage {
      */
     private ObservationQuality quality;
 
-    public KnownVillage(BlockPos anchor, SettlementTier tier, long firstSeenTick, long lastSeenTick,
+    public KnownVillage(BlockPos anchor, long firstSeenTick, long lastSeenTick,
             ObservationQuality quality) {
         this.anchor = Objects.requireNonNull(anchor, "anchor").immutable();
-        this.tier = Objects.requireNonNull(tier, "tier");
         this.firstSeenTick = firstSeenTick;
         this.lastSeenTick = lastSeenTick;
         this.quality = Objects.requireNonNull(quality, "quality");
     }
 
     public static KnownVillage discovered(BlockPos anchor, long tick, ObservationQuality quality) {
-        return new KnownVillage(anchor, SettlementTier.PASSING_THROUGH, tick, tick, quality);
+        return new KnownVillage(anchor, tick, tick, quality);
     }
 
     public BlockPos anchor() {
         return anchor;
-    }
-
-    public SettlementTier tier() {
-        return tier;
     }
 
     public long firstSeenTick() {
@@ -68,14 +62,6 @@ public final class KnownVillage {
     /** POIs admitted when the anchor was derived — the settlement's perceived size. */
     public int poiCount() {
         return quality.admitted();
-    }
-
-    public boolean isHome() {
-        return tier == SettlementTier.HOME_VILLAGE;
-    }
-
-    void setTier(SettlementTier next) {
-        this.tier = Objects.requireNonNull(next, "tier");
     }
 
     void observedAt(long tick) {
@@ -106,13 +92,12 @@ public final class KnownVillage {
             return this;
         }
         return new KnownVillage(
-                newAnchor, tier, firstSeenTick, Math.max(tick, previousSeen), newQuality);
+                newAnchor, firstSeenTick, Math.max(tick, previousSeen), newQuality);
     }
 
     public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
         tag.put("anchor", NbtUtils.writeBlockPos(anchor));
-        tag.putString("tier", tier.name());
         tag.putLong("firstSeen", firstSeenTick);
         tag.putLong("lastSeen", lastSeenTick);
         tag.put("quality", quality.save());
@@ -120,10 +105,9 @@ public final class KnownVillage {
     }
 
     /**
-     * @return {@code null} when the entry cannot be trusted. An unreadable anchor or an unknown tier
-     *     name (a tier removed in a later version, or a hand-edited save) must not resurrect as a
-     *     village at the world origin with an arbitrary tier — dropping the row is the safe
-     *     direction, since the mob will simply rediscover the settlement on its next visit.
+     * @return {@code null} when the factual entry cannot be trusted. An unreadable anchor must not
+     *     resurrect as a village at the world origin. Legacy role text is deliberately ignored:
+     *     V4-R0 migrates HOME at the owning-memory layer and drops unevidenced economic/safety roles.
      */
     public static KnownVillage load(CompoundTag tag) {
         if (tag == null || !tag.contains("anchor")) {
@@ -131,12 +115,6 @@ public final class KnownVillage {
         }
         BlockPos anchor = NbtUtils.readBlockPos(tag, "anchor").orElse(null);
         if (anchor == null) {
-            return null;
-        }
-        SettlementTier tier;
-        try {
-            tier = SettlementTier.valueOf(tag.getString("tier"));
-        } catch (IllegalArgumentException unknownTier) {
             return null;
         }
         // Rows written before V1-R1 carry a bare poiCount. Load them as a complete observation of
@@ -147,12 +125,12 @@ public final class KnownVillage {
                 ? ObservationQuality.load(tag.getCompound("quality"))
                 : ObservationQuality.fullCoverage(tag.getInt("poiCount"));
         return new KnownVillage(
-                anchor, tier, tag.getLong("firstSeen"), tag.getLong("lastSeen"), quality);
+                anchor, tag.getLong("firstSeen"), tag.getLong("lastSeen"), quality);
     }
 
     @Override
     public String toString() {
-        return "KnownVillage[" + anchor.toShortString() + " " + tier
+        return "KnownVillage[" + anchor.toShortString()
                 + " poi=" + quality.admitted()
                 + " cov=" + quality.loadedColumns() + "/" + quality.totalColumns() + "]";
     }

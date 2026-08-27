@@ -10,7 +10,8 @@
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
 | **V3 Village Work** | Implementation complete; certification partially complete/open. Gate 0 + T3j **RUNTIME PASS**; `D-VR-088` closure minimization **LOCKED**. Remaining runtime rows a/b/d/e/g/i/k/l will resume from the future validation artifact and do not block V4 | `task-58-report.md`, `task-59-report.md`, `VR-T3-RUNTIME-MATRIX.md` |
 | **V4-P0 tooling extraction** | **DONE_WITH_CONCERNS / STATIC+PACKAGE ACCEPTED (`D-VR-096`)** — production/validation split built and audited; live sidecar loading remains unverified without runtime approval | `task-60-report.md` |
-| **V4 Architecture** | `D-VR-089…096` + `D-VR-042-A1` **LOCKED**; **V4-R0 is next** now that P0's clean dual-artifact gate passed | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
+| **V4-R0 settlement representation** | **DONE / STATIC+PACKAGE ACCEPTED (`D-VR-089`)** — independent `homeAnchor`, deterministic tier migration, rekey/eviction/save-load coverage; no V4 behavior producer | `task-61-report.md` |
+| **V4 Architecture** | `D-VR-089…096` + `D-VR-042-A1` **LOCKED**; **V4-A is next only when separately authorized** | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
 
 **Task-59 authorization scope (2026-08-22):**
 
@@ -118,5 +119,7 @@ Task 58: complete — V3-F STATIC-BEHAVIORAL ACCEPT (`task-58-report.md`, CLOSE-
 Task 59: Gate 0 + VR-T3j **RUNTIME PASS** on `BDAA788C...A0B2BDC`; `D-VR-088` closure policy LOCKED — D-VR-084/T3c/T3h satisfied without standalone runtime, T3m static substitution paired with T3a, remaining runtime a/b/d/e/g/i/k/l. Harness preservation moves to the `D-VR-096` validation artifact; certification remains open (`task-59-report.md`)
 
 Task 60: **DONE_WITH_CONCERNS / STATIC+PACKAGE ACCEPTED** — V4-P0 extracted Task-59 into `spmscavenger_validation`, retained passive General Debug, and passed the normal dual-artifact build/audits (1,624 production + 57 validation tests; zero failures). Live sidecar loading remains UNVERIFIED without launch approval (`task-60-report.md`)
+
+Task 61: **DONE / STATIC+PACKAGE ACCEPTED** — V4-R0 removed `SettlementTier`, moved exactly one optional home to `MobVillageMemory.homeAnchor`, added deterministic legacy migration/dirty rewrite, rekey/eviction/corruption/save-load tests, and passed 1,635 production + 57 validation tests (`task-61-report.md`)
 
 No commits unless user requests. No Minecraft launches unless separately approved.

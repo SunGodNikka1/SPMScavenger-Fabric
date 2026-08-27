@@ -29,9 +29,9 @@ class VillageLifecycleAndIdentityTest {
     // ------------------------------------------------------------------ P1a: identity vs raid
 
     /**
-     * The failure the collapsed radius could not represent: a home and a trading post 85 blocks
-     * apart. Under the old 96-block identity radius these were one {@code KnownVillage} and could not
-     * hold two tiers at once.
+     * The failure the collapsed radius could not represent: a home and another useful settlement
+     * 85 blocks apart. Under the old 96-block identity radius these were one {@code KnownVillage}
+     * and could not hold independent facts.
      */
     @Test
     void mustHappen_twoSettlements85BlocksApartStaySeparate() {

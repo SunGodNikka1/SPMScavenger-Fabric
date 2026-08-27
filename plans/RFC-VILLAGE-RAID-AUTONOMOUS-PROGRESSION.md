@@ -9,10 +9,10 @@
 | **Host baseline sync** | **CLOSED** (2026-08-22) — doc + authorization; runtime matrix pin is a Task-59 deliverable before launch |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0 implemented without V4 product behavior |
-| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** Task-59 closure policy is **LOCKED** by `D-VR-088`; VR-T3j is **RUNTIME PASS**. V4-P0 / `D-VR-096` is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4 product decisions `D-VR-089…095` and first-home amendment `D-VR-042-A1` remain locked and unimplemented. |
-| **Nearest frontier** | **V4-R0 — settlement representation decomposition (`D-VR-089`)**. Remaining V3 runtime rows stay open and resumable from the separately packaged validation artifact; they do not block V4. Any Minecraft launch still requires separate approval. |
-| **Last update** | 2026-08-26 (`Agent_Codex`, V4-P0 implementation/build/package acceptance) |
+| **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0 and V4-R0 implemented |
+| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** VR-T3j is **RUNTIME PASS**. V4-P0 / `D-VR-096` and V4-R0 / `D-VR-089` are **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-A onward and first-home behavior remain locked but unimplemented. |
+| **Nearest frontier** | **V4-A — bounded positive known-trader capability evidence (`D-VR-090`)**, only when separately authorized. Remaining V3 runtime rows stay open and resumable from the validation artifact. Any Minecraft launch still requires separate approval. |
+| **Last update** | 2026-08-26 (`Agent_Codex`, V4-R0 implementation/static-package acceptance) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -353,7 +353,7 @@ A PlayerMob that stumbles into three bed clusters has no principled way to pick 
 a **trade run target**, or a **raid-defend priority** without hardcoding nearest chunk. Humans pick by
 safety, remembered traders, distance, and prior outcomes — not Euclidean distance alone.
 
-### Settlement representation (`LOCKED FOR V4-R0` — `D-VR-089`)
+### Settlement representation (`IMPLEMENTED / STATIC ACCEPT` — `D-VR-089`, Task 61)
 
 ```text
 KnownVillage
@@ -370,20 +370,22 @@ economic usefulness = derived from unexpired positive capability evidence
 safety standing      = separate evidence only when a real producer exists
 ```
 
-`SettlementTier` currently compresses facts that can coexist. A settlement may simultaneously be
-home, economically useful, and temporarily unsafe. V4-R0 therefore decomposes it before any new V4
-writer ships.
+The former `SettlementTier` compressed facts that can coexist. V4-R0 removed it from current
+production representation before any new V4 writer shipped. `KnownVillage` is now factual-only;
+`MobVillageMemory.homeAnchor` owns exactly one optional canonical home.
 
 | Option | Shape | Benefit | Failure mode | Disposition |
 | --- | --- | --- | --- | --- |
 | Keep one tier enum | Existing `PASSING_THROUGH / TRADING_POST / HOME_VILLAGE / AVOID` | No migration; simple ranking | Mutually excludes states that can coexist; demotion may erase unrelated home/economic meaning | **REJECTED for V4** |
 | Decompose only evidenced facts | `homeAnchor?`; economic usefulness derived from trader evidence; safety separated when a producer exists | Truthful combinations without speculative parallel enums | Requires saved-data migration and consumer audit | **LOCKED** |
 
-**Migration:** legacy `HOME_VILLAGE` becomes `homeAnchor`; `PASSING_THROUGH` becomes no special role;
-`TRADING_POST` capability must be rediscovered because no production writer was found; preserve
-legacy `AVOID` only if the V4-R0 implementation audit finds a real producer, otherwise record the
-three required NOT-FOUND probes and migrate without inventing safety evidence. Anchor supersession
-rekeys `homeAnchor` and trader evidence just as relationship identity already rekeys.
+**Implemented migration:** valid legacy `HOME_VILLAGE` becomes root `homeAnchor`; multiple legacy
+homes choose the first valid village row deterministically. Explicit new-schema `homeAnchor` takes
+precedence; malformed/orphan explicit state fails safe to no home and never creates a village.
+`PASSING_THROUGH`, `TRADING_POST`, `AVOID`, and unknown legacy role text preserve factual village
+memory but create no role. No production writer for `TRADING_POST`, `AVOID`, or another tier was
+found. Legacy loads mark owning SavedData dirty for canonical rewrite. Anchor supersession rekeys
+home and relationship identity together; ordinary identity merge preserves the canonical home.
 
 **Must happen:** a home may also be economically useful or temporarily unsafe without losing home.
 **Must not happen:** trader observation, utility changes, or safety evidence silently changes home.
@@ -4988,7 +4990,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | `KnownVillager` held until V4+ consumer; other work moved to V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains**, relationship credit, finished-output projection, optional Trade Everything source | **IMPLEMENTED + CLOSED** — VR-T2 vanilla path and V2-TE positive path runtime-confirmed to recorded scope | **VR-T2 PASS**; **VR-T2k PASS (`V2-DEF-003c-R1`)**. VR-T2l, V2-I, and profiling are **DEFERRED / NON-BLOCKING** |
 | **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | Tasks 52–58 **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT**. Certification remains **PARTIALLY COMPLETE / OPEN** under `D-VR-088`; the Task-59 harness is preserved through the validation-mod extraction, not shipped as production architecture. | VR-T3j **RUNTIME PASS**; remaining representative runtime rows a/b/d/e/g/i/k/l stay open and do not block V4 |
-| **V4** | Settlement fact decomposition; bounded positive trader-capability memory; bounded Opinion bridge; destination intent; existing COMMUTE integration; first-home-only promotion | **ARCHITECTURE LOCKED — D-VR-089…096 + D-VR-042-A1. IMPLEMENTATION NOT STARTED.** | One realistic single-village capability→leave→blocking demand→return COMMUTE→changed live offer→V2 revalidation/transaction witness; multi-village ranking deterministic |
+| **V4** | Settlement fact decomposition; bounded positive trader-capability memory; bounded Opinion bridge; destination intent; existing COMMUTE integration; first-home-only promotion | **IMPLEMENTING:** V4-P0 + V4-R0 static/package accepted; V4-A onward unimplemented | One realistic single-village capability→leave→blocking demand→return COMMUTE→changed live offer→V2 revalidation/transaction witness; multi-village ranking deterministic |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
 | **V6** | Player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup, **zombie-villager curing** | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup; curing scenarios to be defined in V6 |
 | **V7** | Advanced community: rescue, repair, transport, settlement projects, group coop, founding through world truth + ordinary perception, repair/build golem | **NOT PRACTICAL** gen-1 | Deferred |
@@ -4998,7 +5000,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | Slice | Objective | Dependency | Closure class |
 | --- | --- | --- | --- |
 | **V4-P0 — Task-59 tooling extraction / General Debug** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — separate validation mod and clean production artifact per `D-VR-096`; passive General Debug/truth reads retained | `D-VR-088`, `D-VR-096` | `clean build`: 1,624 production + 57 validation tests, zero failures/errors/skips; dual package audits PASS; no Minecraft |
-| **V4-R0 — settlement representation** | Replace `SettlementTier` coupling with explicit single home and migration/rekey rules | V4-P0, `D-VR-089` | Deterministic migration, lifecycle, and negative producer probes |
+| **V4-R0 — settlement representation** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — `SettlementTier` removed; explicit single home with deterministic legacy migration/rekey | V4-P0, `D-VR-089` | 12 focused migration/home tests plus retained lifecycle/relationship suite; full dual build PASS |
 | **V4-A — known trader evidence** | Bounded trader identity + component-aware positive capability descriptors and expiry | V4-R0, `D-VR-090` | Deterministic bounds/TTL/invalidation/lifecycle tests |
 | **V4-B — Opinion bridge** | Implement `SettlementOpinionBias` in Opinion package; village consumes bounded bias | V4-R0, `D-VR-025` | Deterministic boundary and cap tests |
 | **V4-C — factual destination ranking** | Capability-evidence-class-first ranking; cheap remote distance; transient demotion | V4-A/B, `D-VR-092/093` | Multi-village deterministic matrix |
@@ -9106,3 +9108,47 @@ claims remain **UNVERIFIED** because no Minecraft launch was authorized.
 
 **Frontier after:** V4-P0 is **STATIC/PACKAGE ACCEPTED**. V3 certification stays open and resumable
 from an exact approved artifact pair. V4-R0 is the next product slice.
+
+### Contribution — `Agent_Codex` (V4-R0 settlement representation, 2026-08-26)
+
+**Authorization:** implement `D-VR-089` only; no KnownVillager, destination ranking, director,
+General Debug expansion, first-home producer, Minecraft launch, or commit.
+
+**Audit (`CODE_CONFIRMED`):** `SettlementTier` was read/written only by `KnownVillage` and
+`MobVillageMemory`; every other production home consumer already used `memory.home()`. Production
+writers for `TRADING_POST` — **NOT FOUND**; production writers for `AVOID` — **NOT FOUND**;
+independent tier producers/config/serialization paths — **NOT FOUND**. A reduced enum would therefore
+retain unevidenced roles rather than preserve behavior.
+
+**Implementation:** `KnownVillage` now persists only anchor, first/last observation, and observation
+quality. `MobVillageMemory` owns one canonical optional `homeAnchor`. Designation canonicalizes to an
+already remembered settlement; stronger observation rekeys home and relationship together; weaker
+identity merge leaves both canonical identities unchanged; eviction exempts only the home anchor.
+
+Legacy per-village role text is load-only migration input. First valid `HOME_VILLAGE` becomes home;
+duplicate legacy homes choose the first valid list row. A present root `homeAnchor` takes precedence,
+and malformed/orphan explicit state fails safe to no home without legacy fallback or village
+creation. All other/unknown role text preserves factual village rows but creates no role. The owning
+SavedData marks a legacy load dirty so its next save writes only canonical root home state.
+
+**RED→GREEN evidence:** the new 12-test migration suite initially failed compilation on the absent
+`homeAnchor()` API. It now passes together with retained memory, relationship, return, lifecycle,
+identity, corruption, rekey, eviction, and save/load tests.
+
+**Final build/package (`CONFIRMED`):** `gradlew.bat clean build` passed in 42 seconds with **1,635
+production + 57 validation tests**, zero failures/errors/skips. Production JAR contains zero
+`SettlementTier.class`, validation namespace, legacy `debug/V3*`, or Task-59 scenario resources;
+validation contains zero classes outside its namespace and zero production duplicates.
+
+- production SHA-256: `05E77B7F9ACC29B0459FA8F4B5908082546188591A9AD4AFB6D024A4E00A930B`;
+- validation SHA-256: `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0`.
+
+**Semantic-drift review:** planned → implemented is exact for current-schema home, legacy HOME
+migration, rekey, and eviction. Existing return/compost/population consumers still receive the same
+`KnownVillage` from `memory.home()`; no Goal, priority, movement, authority, inventory, or world
+mutation changed. The intentional migration change is that unknown/obsolete tier text no longer
+destroys factual settlement evidence. Live upgrade of a real old world remains **UNVERIFIED** because
+runtime was forbidden, but no runtime claim is required for this deterministic representation gate.
+
+**Frontier after:** V4-R0 is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-A is dependency-ready but
+requires separate authorization.

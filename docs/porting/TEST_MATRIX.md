@@ -706,3 +706,17 @@ function resources, zero classes outside its namespace, and zero production-clas
 Production SHA-256: `4A742B531C0518CA06E53045D7EB571FB7E50443BCC1C74CE289E42E2B1A99D0`.
 Validation SHA-256: `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0`.
 Runtime loading of the pair remains **UNVERIFIED**; no Minecraft launch occurred.
+
+**V4-R0 settlement representation (`D-VR-089`, STATIC/PACKAGE PASS, 2026-08-26):**
+`KnownVillage` persists only anchor/observation facts. `MobVillageMemory` persists one optional root
+`homeAnchor`; legacy `HOME_VILLAGE` migrates deterministically, duplicate legacy homes choose the
+first valid row, and malformed/orphan explicit home fails safe without manufacturing a village.
+Anchor supersession rekeys home plus relationship identity; identity merge preserves home; home
+remains LRU-exempt while non-home/relationship eviction is unchanged. Legacy roles other than HOME
+create no persisted economic or safety state. Focused RED→GREEN migration/home/relationship suite
+passed; final `clean build` passed **1,635 production + 57 validation tests**, zero failures/errors/
+skips. Production JAR contains zero `SettlementTier.class`, validation namespace, legacy V3 classes,
+or Task-59 resources; validation duplicate-class audit remains zero. Minecraft was not launched.
+
+Production SHA-256: `05E77B7F9ACC29B0459FA8F4B5908082546188591A9AD4AFB6D024A4E00A930B`.
+Validation SHA-256: `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0`.

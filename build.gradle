@@ -138,6 +138,7 @@ def auditProductionJar = tasks.register('auditProductionJar') {
                 it.startsWith('com/noobk/spmscavenger/validation/')
                         || it.startsWith('com/noobk/spmscavenger/debug/V3')
                         || it.startsWith('data/spm_vr/')
+                        || it.endsWith('/SettlementTier.class')
                         || it.contains('V3RuntimeCampaignController')
                         || it.contains('V3RuntimeWitnessCommands')
                         || it.contains('V3CampaignScenario')

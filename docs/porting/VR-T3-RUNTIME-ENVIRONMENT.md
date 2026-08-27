@@ -31,7 +31,7 @@ RUNTIME-AUTHORIZED**. Any further launch requires exact pair approval.
 
 | Mod | File | SHA-256 | Evidence status |
 | --- | --- | --- | --- |
-| Production Scavenger | `spmscavenger-1.11.0.jar` | `4A742B531C0518CA06E53045D7EB571FB7E50443BCC1C74CE289E42E2B1A99D0` | `clean build` + production package audit **CONFIRMED**; runtime loading **UNVERIFIED** |
+| Production Scavenger | `spmscavenger-1.11.0.jar` | `05E77B7F9ACC29B0459FA8F4B5908082546188591A9AD4AFB6D024A4E00A930B` | V4-R0 `clean build` + production package audit **CONFIRMED**; runtime loading **UNVERIFIED** |
 | Task-59 validation sidecar | `spmscavenger-1.11.0-validation.jar` | `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0` | compile/test/package audit **CONFIRMED**; sidecar initialization/commands **UNVERIFIED** |
 
 **SPM source tag (audit):** `v0.89.0` on `https://github.com/bh679/playermob-mc` (`mod_version=0.89.0` in tag `gradle.properties`).
@@ -75,6 +75,7 @@ Structural validation (no Minecraft): `SpmVrDatapackStructureTest`.
 
 | Date | Change |
 | --- | --- |
+| 2026-08-26 | V4-R0 changed only settlement-memory representation; prepared replacement production hash after 1,635 production + 57 validation tests; validation sidecar unchanged; no Minecraft launch |
 | 2026-08-26 | V4-P0 extracted Task-59 into the separately packaged validation sidecar; prepared exact replacement pair after 1,624 production + 57 validation tests and package audits; no Minecraft launch |
 | 2026-08-24 | Exact `BDAA788C...A0B2BDC` artifact produced VR-T3j RUNTIME PASS over the full 1000-tick window, including autonomous pig-combat preemption and Gather resumption; remaining rows not implied |
 | 2026-08-24 | T3j/D-VR-084 live-claim stopping rule — matching live production ownership now supersedes duplicate geometry while exact policy remains required; 1675-test clean build; SHA `BDAA788C...A0B2BDC`; no Minecraft relaunch |

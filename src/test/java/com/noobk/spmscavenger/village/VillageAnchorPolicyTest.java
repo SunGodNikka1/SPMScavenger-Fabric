@@ -131,7 +131,7 @@ class VillageAnchorPolicyTest {
      * V1-R1: settlement identity is no longer this class's business.
      *
      * <p>It used to answer "same village?" with vanilla's 96-block raid radius, which collapsed a
-     * HOME_VILLAGE and a TRADING_POST 85 blocks apart into a single entry that could not hold both
+     * designated home and another useful village 85 blocks apart into a single entry that could not hold both
      * tiers. Identity moved to {@code VillageIdentityPolicy} and raid compatibility to
      * {@code RaidAssociationPolicy}; this class is now purely the anchor derivation, which is the one
      * thing that must match vanilla exactly. Asserted structurally so the two cannot silently

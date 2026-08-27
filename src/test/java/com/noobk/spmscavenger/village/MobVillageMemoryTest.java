@@ -2,6 +2,7 @@ package com.noobk.spmscavenger.village;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -120,7 +121,7 @@ class MobVillageMemoryTest {
         memory.designateHome(far(0));
         memory.designateHome(far(1));
 
-        assertEquals(1, memory.villages().stream().filter(KnownVillage::isHome).count());
+        assertTrue(memory.homeAnchor().isPresent(), "home has one independent optional slot");
         assertEquals(far(1), memory.home().orElseThrow().anchor());
     }
 
@@ -157,7 +158,8 @@ class MobVillageMemoryTest {
         KnownVillage good = KnownVillage.discovered(far(0), 5L, complete(3));
         CompoundTag unknownTier = good.save();
         unknownTier.putString("tier", "MARKET_TOWN");
-        assertEquals(null, KnownVillage.load(unknownTier), "a tier we no longer have is not a default");
+        assertNotNull(KnownVillage.load(unknownTier),
+                "obsolete role text must not invalidate factual settlement evidence");
     }
 
     @Test
@@ -171,21 +173,15 @@ class MobVillageMemoryTest {
         tag.getList("villages", 10).getCompound(1).putString("tier", "HOME_VILLAGE");
 
         MobVillageMemory reloaded = MobVillageMemory.load(tag);
-        assertEquals(1, reloaded.villages().stream().filter(KnownVillage::isHome).count());
-    }
-
-    /** V1 ships the tier vocabulary; only HOME_VILLAGE has a producer, and only it gates D-VR-010. */
-    @Test
-    void mustHappen_onlyHomeWarrantsTheRaidInterrupt() {
-        assertTrue(SettlementTier.HOME_VILLAGE.warrantsRaidInterrupt());
-        assertFalse(SettlementTier.PASSING_THROUGH.warrantsRaidInterrupt());
-        assertFalse(SettlementTier.TRADING_POST.warrantsRaidInterrupt());
-        assertFalse(SettlementTier.AVOID.warrantsRaidInterrupt());
+        assertEquals(far(0), reloaded.homeAnchor().orElseThrow(),
+                "corrupt legacy duplicates choose the first valid list row");
     }
 
     @Test
-    void mustHappen_discoveryStartsAsPassingThrough() {
+    void mustHappen_discoveryDoesNotManufactureHomeOrAnotherRole() {
         MobVillageMemory memory = new MobVillageMemory();
-        assertEquals(SettlementTier.PASSING_THROUGH, memory.remember(far(0), 1L, complete(5)).tier());
+        memory.remember(far(0), 1L, complete(5));
+        assertTrue(memory.home().isEmpty());
+        assertFalse(memory.save().contains("homeAnchor"));
     }
 }

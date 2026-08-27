@@ -1757,3 +1757,21 @@ returns ownership to `EXISTING_WORK` as V2-C's convergence requires.
 **Amendment recorded (User):** `TradeDemandGate` provides mutual exclusion for **acquisition routes
 competing to satisfy the same selected demand** - not for unrelated P3 activities. A band-level owner
 over CRAFT/GATHER/SMELT/TRADE/DESCENT/TUNNEL would be another activity scheduler, and is not built.
+
+## 2026-08-26 - V4-R0: home is independent settlement memory, not a tier
+
+`D-VR-089` is implemented. `SettlementTier` was removed rather than reduced: no production writer
+for `TRADING_POST`, `AVOID`, or another non-home role exists, so retaining those persisted labels
+would preserve a dead mutually exclusive model and invite future economic/safety writers into the
+wrong owner. `KnownVillage` now persists factual observation only; `MobVillageMemory` owns exactly
+one optional canonical `homeAnchor`.
+
+Legacy `HOME_VILLAGE` migrates to the root home slot; the first valid legacy home wins deterministic
+duplicate corruption. New explicit home takes precedence and malformed/orphan explicit state fails
+safe to no home. Other/unknown legacy roles preserve the factual village but create no economic or
+safety state. Anchor supersession rekeys home and relationship together; home stays LRU-exempt.
+
+Alternative retained enum rejected: smaller diff, but it would keep unevidenced roles and the same
+future coupling risk. Switch only if evidence reveals a real persisted producer/consumer that the
+audit missed. Final static/package evidence: 1,635 production + 57 validation tests, zero failures;
+production JAR contains zero `SettlementTier.class`. Runtime world migration remains unclaimed.

@@ -48,6 +48,10 @@ public final class MobVillageMemory {
 
     private final List<KnownVillage> villages = new ArrayList<>();
     private final Map<BlockPos, SettlementRelationship> relationships = new HashMap<>();
+    /** D-VR-089 — one factual home, independent of every settlement's other facts. */
+    private BlockPos homeAnchor;
+    /** Load-only signal used by the owning SavedData to schedule canonical schema rewrite. */
+    private boolean legacySchemaLoaded;
 
     public List<KnownVillage> villages() {
         return List.copyOf(villages);
@@ -125,7 +129,14 @@ public final class MobVillageMemory {
     }
 
     public Optional<KnownVillage> home() {
-        return villages.stream().filter(KnownVillage::isHome).findFirst();
+        if (homeAnchor == null) {
+            return Optional.empty();
+        }
+        return villages.stream().filter(village -> village.anchor().equals(homeAnchor)).findFirst();
+    }
+
+    public Optional<BlockPos> homeAnchor() {
+        return Optional.ofNullable(homeAnchor);
     }
 
     public Optional<KnownVillage> at(BlockPos anchor) {
@@ -147,6 +158,9 @@ public final class MobVillageMemory {
             if (updated != existing) {
                 villages.set(villages.indexOf(existing), updated);
                 rekeyRelationship(oldAnchor, updated.anchor());
+                if (oldAnchor.equals(homeAnchor)) {
+                    homeAnchor = updated.anchor();
+                }
             } else {
                 mergeRelationshipOnIdentity(anchor, existing.anchor());
             }
@@ -161,9 +175,8 @@ public final class MobVillageMemory {
     }
 
     /**
-     * Designate this mob's home settlement. Exactly one at a time — a second home is not a richer
-     * model, it is an ambiguous answer to "is this my home", and D-VR-010 asks that question to
-     * decide whether to abandon what it is doing.
+     * Designate this mob's home settlement. The single canonical anchor belongs to this memory, not
+     * to a mutually exclusive role stored on the settlement (D-VR-089).
      *
      * @return {@code false} when the anchor names no remembered settlement
      */
@@ -172,12 +185,7 @@ public final class MobVillageMemory {
         if (target == null) {
             return false;
         }
-        for (KnownVillage village : villages) {
-            if (village.isHome()) {
-                village.setTier(SettlementTier.PASSING_THROUGH);
-            }
-        }
-        target.setTier(SettlementTier.HOME_VILLAGE);
+        homeAnchor = target.anchor();
         return true;
     }
 
@@ -192,7 +200,7 @@ public final class MobVillageMemory {
         while (villages.size() > MAX_KNOWN_VILLAGES) {
             KnownVillage stalest = null;
             for (KnownVillage village : villages) {
-                if (village.isHome()) {
+                if (village.anchor().equals(homeAnchor)) {
                     continue;
                 }
                 if (stalest == null || village.lastSeenTick() < stalest.lastSeenTick()) {
@@ -200,8 +208,8 @@ public final class MobVillageMemory {
                 }
             }
             if (stalest == null) {
-                // Every entry is home — impossible while designateHome keeps exactly one, but a
-                // corrupt save could produce it. Breaking beats spinning forever.
+                // Exactly one entry can be home, so this is unreachable unless the in-memory
+                // invariant is broken. Breaking beats spinning forever.
                 return;
             }
             relationships.remove(stalest.anchor());
@@ -242,6 +250,9 @@ public final class MobVillageMemory {
             list.add(village.save());
         }
         tag.put("villages", list);
+        if (homeAnchor != null) {
+            tag.put("homeAnchor", NbtUtils.writeBlockPos(homeAnchor));
+        }
         ListTag relationshipList = new ListTag();
         for (Map.Entry<BlockPos, SettlementRelationship> entry : relationships.entrySet()) {
             CompoundTag row = new CompoundTag();
@@ -259,22 +270,31 @@ public final class MobVillageMemory {
             return memory;
         }
         ListTag list = tag.getList("villages", Tag.TAG_COMPOUND);
-        boolean homeSeen = false;
+        boolean explicitHomePresent = tag.contains("homeAnchor");
+        BlockPos explicitHome = explicitHomePresent
+                ? NbtUtils.readBlockPos(tag, "homeAnchor").orElse(null)
+                : null;
+        BlockPos firstLegacyHome = null;
         for (int i = 0; i < list.size(); i++) {
-            KnownVillage village = KnownVillage.load(list.getCompound(i));
+            CompoundTag row = list.getCompound(i);
+            if (row.contains("tier")) {
+                memory.legacySchemaLoaded = true;
+            }
+            KnownVillage village = KnownVillage.load(row);
             if (village == null) {
                 continue;
             }
-            if (village.isHome()) {
-                if (homeSeen) {
-                    // A save with two homes is corrupt; demote the later one rather than load an
-                    // ambiguous answer to "is this my home".
-                    village.setTier(SettlementTier.PASSING_THROUGH);
-                } else {
-                    homeSeen = true;
-                }
+            if (!explicitHomePresent && firstLegacyHome == null
+                    && "HOME_VILLAGE".equals(row.getString("tier"))) {
+                firstLegacyHome = village.anchor();
             }
             memory.villages.add(village);
+        }
+        BlockPos requestedHome = explicitHomePresent ? explicitHome : firstLegacyHome;
+        if (requestedHome != null) {
+            memory.homeAnchor = memory.at(requestedHome)
+                    .map(KnownVillage::anchor)
+                    .orElse(null);
         }
         ListTag relationshipList = tag.getList("relationships", Tag.TAG_COMPOUND);
         for (int i = 0; i < relationshipList.size(); i++) {
@@ -289,5 +309,9 @@ public final class MobVillageMemory {
         }
         memory.evictBeyondBound();
         return memory;
+    }
+
+    boolean migratedLegacySchema() {
+        return legacySchemaLoaded;
     }
 }

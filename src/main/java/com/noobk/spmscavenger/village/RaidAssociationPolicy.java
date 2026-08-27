@@ -18,8 +18,8 @@ import java.util.List;
  * which reuses any raid found within that radius rather than creating a second one.
  *
  * <p>{@link VillageIdentityPolicy} owns the different, smaller question of what the mob considers one
- * place. Keeping them apart is what lets a raid legitimately cover a HOME_VILLAGE and a nearby
- * TRADING_POST without those two becoming one remembered settlement.
+ * place. Keeping them apart is what lets a raid legitimately cover the independently designated
+ * home and another nearby remembered settlement without those two becoming one identity.
  *
  * <p>Consequently {@link #associatedVillages} returns <b>every</b> match rather than the nearest one.
  * A single vanilla raid covering two remembered villages is a normal, representable situation now; the

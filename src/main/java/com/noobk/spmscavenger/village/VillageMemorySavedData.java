@@ -58,7 +58,7 @@ import java.util.UUID;
  * newest sighting was over 30 in-game days old. That was <b>the same mistake in a new place</b>. Time
  * since a mob last saw a village measures <i>memory freshness</i>; it says nothing about whether the
  * mob still exists. An alive PlayerMob that spends thirty days mining and then crosses a server
- * restart would lose every settlement it knew — including its {@code HOME_VILLAGE}.
+ * restart would lose every settlement it knew — including its designated home.
  *
  * <p>The correct signal is the owner's own lifecycle, and vanilla publishes it.
  * {@code Entity.RemovalReason.shouldDestroy()} is {@code true} for {@code KILLED} and
@@ -318,6 +318,7 @@ public final class VillageMemorySavedData extends SavedData {
 
     public static VillageMemorySavedData load(CompoundTag tag, HolderLookup.Provider registries) {
         VillageMemorySavedData data = new VillageMemorySavedData();
+        boolean migratedLegacySchema = false;
         ListTag list = tag.getList("mobs", Tag.TAG_COMPOUND);
         for (int i = 0; i < list.size(); i++) {
             CompoundTag entry = list.getCompound(i);
@@ -325,9 +326,13 @@ public final class VillageMemorySavedData extends SavedData {
                 continue;
             }
             MobVillageMemory memory = MobVillageMemory.load(entry.getCompound("memory"));
+            migratedLegacySchema |= memory.migratedLegacySchema();
             if (memory.size() > 0) {
                 data.byMob.put(entry.getUUID("mob"), memory);
             }
+        }
+        if (migratedLegacySchema) {
+            data.setDirty();
         }
         return data;
     }
