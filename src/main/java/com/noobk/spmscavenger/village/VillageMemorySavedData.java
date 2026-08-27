@@ -1,16 +1,22 @@
 package com.noobk.spmscavenger.village;
 
+import com.noobk.spmscavenger.village.routing.CapabilityEvidenceClass;
+import com.noobk.spmscavenger.village.routing.SettlementDestinationFacts;
+import com.noobk.spmscavenger.village.routing.SettlementKey;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.datafix.DataFixTypes;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.DimensionDataStorage;
-
-import net.minecraft.server.MinecraftServer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,8 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
 
 /**
  * V1 — per-dimension, per-mob settlement memory (mirrors {@code MiningProjectSavedData}).
@@ -170,6 +174,44 @@ public final class VillageMemorySavedData extends SavedData {
             setDirty();
         }
         return memory.knownTrader(villager);
+    }
+
+    /**
+     * V4-C non-allocating ranking fact boundary over already remembered settlements.
+     *
+     * <p>Capability expiry is the only mutation: this SavedData owner persists physical pruning.
+     * No level, chunk, entity, perception, offer, or path state participates.
+     */
+    public List<SettlementDestinationFacts> rankingFacts(
+            UUID mob,
+            ResourceKey<Level> dimension,
+            TradeOutputCapability desiredOutput,
+            long now) {
+        MobVillageMemory memory = byMob.get(mob);
+        if (memory == null) {
+            return List.of();
+        }
+        if (memory.pruneExpiredTraderCapabilities(now)) {
+            setDirty();
+        }
+        return memory.villages().stream().map(village -> {
+            boolean positive = memory.knownTradersAt(village.anchor()).stream()
+                    .flatMap(trader -> trader.capabilityHints().stream())
+                    .anyMatch(hint -> hint.capability().equals(desiredOutput));
+            int familiarity = memory.relationshipAt(village.anchor())
+                    .map(SettlementRelationship::familiarityScore)
+                    .orElse(0);
+            boolean home = memory.homeAnchor()
+                    .map(village.anchor()::equals)
+                    .orElse(false);
+            return new SettlementDestinationFacts(
+                    new SettlementKey(dimension, village.anchor()),
+                    village,
+                    positive ? CapabilityEvidenceClass.POSITIVE_HINT
+                            : CapabilityEvidenceClass.UNKNOWN,
+                    home,
+                    familiarity);
+        }).toList();
     }
 
     /**
