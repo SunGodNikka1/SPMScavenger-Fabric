@@ -1,6 +1,7 @@
 package com.noobk.spmscavenger.opinion;
 
 import com.noobk.spmscavenger.experience.ActivityKind;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,7 @@ class PlaceOpinionRouteRankerTest {
     void mustHappen_negativeDestinationLosesToNeutralWhenBaseScoresEqual() {
         OpinionFeatureGate.setTestOverride(true);
         PlaceOpinionMemory places = new PlaceOpinionMemory();
-        places.recordOutcome(new ChunkPos(100, 0).toLong(), -80f);
+        places.recordOutcome(new ChunkPos(new BlockPos(100, 0, 0)).toLong(), -80f);
 
         int base = 50;
         int disliked = base + PlaceOpinionRouteRanker.routeBias(places, 100, 0);
@@ -35,7 +36,7 @@ class PlaceOpinionRouteRankerTest {
     void mustHappen_opinionOffReturnsZeroBias() {
         OpinionFeatureGate.setTestOverride(false);
         PlaceOpinionMemory places = new PlaceOpinionMemory();
-        places.recordOutcome(new ChunkPos(0, 0).toLong(), -100f);
+        places.recordOutcome(new ChunkPos(new BlockPos(0, 0, 0)).toLong(), -100f);
 
         assertEquals(0, PlaceOpinionRouteRanker.routeBias(places, 0, 0));
     }
@@ -58,7 +59,7 @@ class PlaceOpinionRouteRankerTest {
     void mustNotHappen_extremeDislikeCannotVetoAllRoutes() {
         OpinionFeatureGate.setTestOverride(true);
         PlaceOpinionMemory places = new PlaceOpinionMemory();
-        places.recordOutcome(new ChunkPos(0, 0).toLong(), -100f);
+        places.recordOutcome(new ChunkPos(new BlockPos(0, 0, 0)).toLong(), -100f);
 
         int worstBias = PlaceOpinionRouteRanker.routeBias(places, 0, 0);
         assertTrue(worstBias >= -PlaceOpinionRouteRanker.MAX_ROUTE_BIAS);

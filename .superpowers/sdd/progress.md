@@ -125,4 +125,6 @@ Task 61: **DONE / STATIC+PACKAGE ACCEPTED** — V4-R0 removed `SettlementTier`, 
 
 Task 62: **DONE / STATIC+PACKAGE ACCEPTED** — V4-A added bounded `KnownVillager` positive capability evidence inside `MobVillageMemory`, component-exact registry-aware persistence, 168,000-tick physical pruning, selective live-board invalidation, simultaneous 16/64/16 bounds, rekey/eviction/permanent-cleanup coverage, and passive observation of the already-read vanilla V2 board. No ranking/director/COMMUTE/home promotion (`task-62-report.md`).
 
+Task 63: **DONE / STATIC+PACKAGE ACCEPTED** — V4-B added immutable `SettlementOpinionContext` + bounded `SettlementOpinionBias` (±15), current-anchor geographic Place lookup, neutral undefined contributions, and corrected the existing block-coordinate→chunk conversion. 1,658 production + 57 validation tests; no V4-C+ consumer or runtime (`task-63-report.md`).
+
 No commits unless user requests. No Minecraft launches unless separately approved.

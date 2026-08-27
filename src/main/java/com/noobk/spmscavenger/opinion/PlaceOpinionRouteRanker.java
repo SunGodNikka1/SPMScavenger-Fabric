@@ -1,6 +1,9 @@
 package com.noobk.spmscavenger.opinion;
 
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.core.BlockPos;
+
+import java.util.Map;
 
 /**
  * GAO-5B — soft place-opinion bias for expedition route ranking.
@@ -29,7 +32,23 @@ public final class PlaceOpinionRouteRanker {
         if (!OpinionFeatureGate.isEnabled()) {
             return 0;
         }
-        return scaledBias(places.preference(new ChunkPos(blockX, blockZ)));
+        return scaledBias(places.preference(new ChunkPos(new BlockPos(blockX, 0, blockZ))));
+    }
+
+    /**
+     * Soft bias from an immutable, already-resolved Place snapshot.
+     *
+     * <p>Settlement ranking uses this overload so evaluating a candidate cannot touch the
+     * access-order of the live bounded memory. Coordinates still select the current geographic
+     * chunk at request time; the snapshot contains no settlement-specific frozen key.
+     */
+    public static int destinationBias(
+            Map<Long, Float> placePreferences, int blockX, int blockZ) {
+        if (!OpinionFeatureGate.isEnabled()) {
+            return 0;
+        }
+        long chunkKey = new ChunkPos(new BlockPos(blockX, 0, blockZ)).toLong();
+        return scaledBias(placePreferences.getOrDefault(chunkKey, 0f));
     }
 
     /** Bias from the final waypoint of a candidate route (where the expedition is headed). */

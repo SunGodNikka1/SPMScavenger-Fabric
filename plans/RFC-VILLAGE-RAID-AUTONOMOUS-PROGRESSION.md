@@ -9,10 +9,10 @@
 | **Host baseline sync** | **CLOSED** (2026-08-22) — doc + authorization; runtime matrix pin is a Task-59 deliverable before launch |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0, V4-R0, and V4-A implemented |
-| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** VR-T3j is **RUNTIME PASS**. V4-P0 / `D-VR-096`, V4-R0 / `D-VR-089`, and V4-A / `D-VR-090` are **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-B onward and first-home behavior remain locked but unimplemented. |
-| **Nearest frontier** | **V4-B — locked SettlementOpinionBias**, only when separately authorized. Remaining V3 runtime rows stay open and resumable from the validation artifact. Any Minecraft launch still requires separate approval. |
-| **Last update** | 2026-08-26 (`Agent_Codex`, V4-A implementation/static-package acceptance) |
+| **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0 through V4-B implemented |
+| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** VR-T3j is **RUNTIME PASS**. V4-P0 / `D-VR-096`, V4-R0 / `D-VR-089`, V4-A / `D-VR-090`, and V4-B / `D-VR-025` are **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-C onward and first-home behavior remain locked but unimplemented. |
+| **Nearest frontier** | **V4-C — factual destination ranking**, only when separately authorized. Remaining V3 runtime rows stay open and resumable from the validation artifact. Any Minecraft launch still requires separate approval. |
+| **Last update** | 2026-08-26 (`Agent_Codex`, V4-B implementation/static-package acceptance) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -4999,7 +4999,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | `KnownVillager` held until V4+ consumer; other work moved to V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains**, relationship credit, finished-output projection, optional Trade Everything source | **IMPLEMENTED + CLOSED** — VR-T2 vanilla path and V2-TE positive path runtime-confirmed to recorded scope | **VR-T2 PASS**; **VR-T2k PASS (`V2-DEF-003c-R1`)**. VR-T2l, V2-I, and profiling are **DEFERRED / NON-BLOCKING** |
 | **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | Tasks 52–58 **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT**. Certification remains **PARTIALLY COMPLETE / OPEN** under `D-VR-088`; the Task-59 harness is preserved through the validation-mod extraction, not shipped as production architecture. | VR-T3j **RUNTIME PASS**; remaining representative runtime rows a/b/d/e/g/i/k/l stay open and do not block V4 |
-| **V4** | Settlement fact decomposition; bounded positive trader-capability memory; bounded Opinion bridge; destination intent; existing COMMUTE integration; first-home-only promotion | **IMPLEMENTING:** V4-P0 + V4-R0 + V4-A static/package accepted; V4-B onward unimplemented | One realistic single-village capability→leave→blocking demand→return COMMUTE→changed live offer→V2 revalidation/transaction witness; multi-village ranking deterministic |
+| **V4** | Settlement fact decomposition; bounded positive trader-capability memory; bounded Opinion bridge; destination intent; existing COMMUTE integration; first-home-only promotion | **IMPLEMENTING:** V4-P0 through V4-B static/package accepted; V4-C onward unimplemented | One realistic single-village capability→leave→blocking demand→return COMMUTE→changed live offer→V2 revalidation/transaction witness; multi-village ranking deterministic |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
 | **V6** | Player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup, **zombie-villager curing** | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup; curing scenarios to be defined in V6 |
 | **V7** | Advanced community: rescue, repair, transport, settlement projects, group coop, founding through world truth + ordinary perception, repair/build golem | **NOT PRACTICAL** gen-1 | Deferred |
@@ -5010,8 +5010,8 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | --- | --- | --- | --- |
 | **V4-P0 — Task-59 tooling extraction / General Debug** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — separate validation mod and clean production artifact per `D-VR-096`; passive General Debug/truth reads retained | `D-VR-088`, `D-VR-096` | `clean build`: 1,624 production + 57 validation tests, zero failures/errors/skips; dual package audits PASS; no Minecraft |
 | **V4-R0 — settlement representation** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — `SettlementTier` removed; explicit single home with deterministic legacy migration/rekey | V4-P0, `D-VR-089` | 12 focused migration/home tests plus retained lifecycle/relationship suite; full dual build PASS |
-| **V4-A — known trader evidence** | Bounded trader identity + component-aware positive capability descriptors and expiry | V4-R0, `D-VR-090` | Deterministic bounds/TTL/invalidation/lifecycle tests |
-| **V4-B — Opinion bridge** | Implement `SettlementOpinionBias` in Opinion package; village consumes bounded bias | V4-R0, `D-VR-025` | Deterministic boundary and cap tests |
+| **V4-A — known trader evidence** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — bounded trader identity + component-aware positive capability descriptors and expiry | V4-R0, `D-VR-090` | Deterministic bounds/TTL/invalidation/lifecycle tests; full dual build PASS |
+| **V4-B — Opinion bridge** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — `SettlementOpinionBias` in Opinion package; immutable Place snapshot; village receives bounded integer only | V4-R0, `D-VR-025` | 9 deterministic boundary/cap tests plus retained Place-ranker suite; full dual build PASS |
 | **V4-C — factual destination ranking** | Capability-evidence-class-first ranking; cheap remote distance; transient demotion | V4-A/B, `D-VR-092/093` | Multi-village deterministic matrix |
 | **V4-D — VillageIntent** | Persist reason/destination only; continuously revalidate demand and existing route authority | V4-C, `D-VR-091` | Authority-loss/interruption/expiry tests |
 | **V4-E — COMMUTE integration** | Feed destination intent into existing multi-leg COMMUTE; arrival returns to live V2 discovery | V4-D | Navigation integration runtime represented by V4-G |
@@ -9193,3 +9193,37 @@ would manufacture false negatives. Live restart remains **UNVERIFIED** because r
 
 **Frontier after:** V4-A is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-B is the next locked,
 unimplemented slice and requires separate authorization.
+
+### Contribution — `Agent_Codex` (V4-B SettlementOpinionBias, 2026-08-26)
+
+**Authorization:** implement locked `D-VR-025` only; no factual utility, destination ranking,
+director/intent, COMMUTE, first-home producer, new learning producer, runtime witness, launch, or
+commit.
+
+**Implementation (`CODE_CONFIRMED`):** `SettlementOpinionBias.request(KnownVillage,
+DiscretionaryScoringInput, SettlementOpinionContext)` is the sole Opinion-owned settlement
+composition facade. `SettlementOpinionContext` defensively captures existing Place preferences as
+an immutable value snapshot; it owns no level/entity/service reference and performs no discovery,
+creation, scan, or mutation. The request selects geography from the village's current anchor and
+delegates normalization to `PlaceOpinionRouteRanker`, then hard-clamps the result to ±15. Global or
+per-input Opinion disablement returns zero. Personality, affect, relationship, and trader terms are
+neutral because no locked coefficient currently maps them to settlement preference.
+
+Focused RED exposed a pre-existing unit mismatch: `PlaceOpinionRouteRanker.destinationBias` named
+its inputs block coordinates but passed them to `ChunkPos(int,int)`, which treats them as chunk
+coordinates. Both live-memory and immutable-snapshot overloads now convert block positions to the
+containing chunk. This is required by D-VR-025/026 current-anchor geography, not V4-C ranking.
+
+**Final gate (`CONFIRMED`):** focused facade/boundary/retained-ranker tests pass. `clean build`
+passed **1,658 production + 57 validation tests**, zero failures/errors/skips, including both JAR
+audits. Production SHA-256 is
+`F977525349F9298D4616E3ECCBC0449839CB0E89F39ED54BAC8396E022A7C355`; validation remains
+`BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0`, with zero class duplicates.
+
+**Semantic drift:** none in authority or behavior scope. No V4 consumer exists yet, so this slice
+cannot alter movement, eligibility, scheduling, or market behavior. The only correction outside the
+new facade is the documented block→chunk conversion in the existing soft Place ranker. Runtime
+destination effects remain **UNVERIFIED / NOT APPLICABLE YET** until V4-C/E provide a consumer.
+
+**Frontier after:** V4-B is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-C remains unimplemented
+and requires separate authorization.
