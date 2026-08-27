@@ -436,7 +436,7 @@ configs, or datapack fixtures; it did not build, launch Minecraft, commit, or pu
 
 ## Certification-tooling disposition — D-VR-096 (2026-08-26)
 
-**Status:** architecture **LOCKED**; extraction **NOT IMPLEMENTED**. Task-59 certification remains
+**Status:** architecture **LOCKED**; extraction **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** by Task 60. Task-59 certification remains
 partially complete/open and its remaining rows are not awarded or deferred by this decision.
 
 The temporary controller, Gate-0/bootstrap/contamination machinery, scenario commands, temporal
@@ -457,6 +457,24 @@ The production JAR must contain zero Task-59 controller/scenario/Gate0/contamina
 classes or validation resources. The installable validation JAR must declare mod id
 `spmscavenger_validation` and depend on `spmscavenger`.
 
-**Next:** implement the extraction as V4-P0, obtain a clean dual-artifact build/package audit, then
-begin V4-R0. Remaining VR-T3 runtime certification can resume later from the validation artifact and
-does not block V4 implementation.
+Task 60 moved all 18 Task-59 production classes and their 15 tests into the dedicated validation
+source/test surfaces, added the `spmscavenger_validation` initializer/metadata, and removed every
+controller command/tick/unload/death/shutdown hook from `SpmScavenger`. Production retains only the
+one-shot passive `/spmscavenger debug inspect <mob>` readout and non-creating truth peeks.
+
+`gradlew.bat clean build` passed with **1,624 production tests + 57 validation tests**, zero
+failures/errors/skips. The production JAR contains zero validation-namespace or legacy `debug/V3*`
+classes and zero `spm_vr` scenario resources; the validation JAR contains 60 validation-namespace
+classes, 24 scenario function resources, and zero production-class duplicates. Packaged upstream
+Trade Everything classes remain zero.
+
+Artifacts:
+
+- production `build/libs/spmscavenger-1.11.0.jar` — SHA-256
+  `4A742B531C0518CA06E53045D7EB571FB7E50443BCC1C74CE289E42E2B1A99D0`;
+- validation `build/libs/spmscavenger-1.11.0-validation.jar` — SHA-256
+  `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0`.
+
+**Next:** V4-R0 may begin independently. Remaining VR-T3 certification resumes only from an exact
+approved production/validation artifact pair. Sidecar loading/runtime command registration remains
+**UNVERIFIED** because P0 did not authorize a Minecraft launch.

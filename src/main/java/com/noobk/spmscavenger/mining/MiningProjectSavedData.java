@@ -424,6 +424,11 @@ public final class MiningProjectSavedData extends SavedData {
                 DATA_NAME);
     }
 
+    /** Passive diagnostic lookup; never materializes a SavedData file. */
+    public static MiningProjectSavedData peekReadOnly(ServerLevel level) {
+        return level == null ? null : peekIn(level);
+    }
+
     public void clearProject(UUID mobId) {
         if (byMob.remove(mobId) != null) {
             setDirty();

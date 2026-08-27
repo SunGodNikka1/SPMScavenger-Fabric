@@ -130,6 +130,21 @@ public final class MandatoryOwnershipRegistry {
     }
 
     /**
+     * Passive diagnostic read. Unlike {@link #liveClaim}, this never rewrites an expired slot;
+     * expired claims are simply absent from the returned view.
+     */
+    public static Optional<MandatoryOwnershipClaim> peekLiveClaim(UUID mobId, long now) {
+        if (mobId == null) {
+            return Optional.empty();
+        }
+        Slot slot = SLOTS.get(mobId);
+        if (slot == null || slot.claim() == null || slot.claim().expired(now)) {
+            return Optional.empty();
+        }
+        return Optional.of(slot.claim());
+    }
+
+    /**
      * Release the current claim (the claim half is deleted; the terminal is retained so the
      * anti-self-renewal memory survives abandonment, handoff, expiry, and ordinary end). Safe to
      * call when none exists. The reason is semantics for the owner (only

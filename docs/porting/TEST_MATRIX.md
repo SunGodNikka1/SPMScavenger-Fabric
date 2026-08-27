@@ -689,7 +689,7 @@ Minecraft launches remain separately authorized.
 
 **Remaining runtime set:** `VR-T3a`, `VR-T3b`, `VR-T3d`, `VR-T3e`, `VR-T3g`, `VR-T3i`,
 `VR-T3k`, and redesigned `VR-T3l`. VR-T3j is already `RUNTIME PASS` and must not be rerun.
-**Task-59 tooling extraction gate (`D-VR-096`, design locked / implementation pending):** normal
+**Task-59 tooling extraction gate (`D-VR-096`, `STATIC/PACKAGE PASS`, 2026-08-26):** normal
 `clean build` must compile/test/package both `spmscavenger-1.11.0.jar` and the separately installable
 `spmscavenger-1.11.0-validation.jar`. Production-package audit must find zero Task-59 controller,
 scenario, Gate0, contamination, temporal-witness, validation-mixin/resource, validation manifest, or
@@ -697,3 +697,12 @@ fixture-command entries and zero production references to the validation mod. Va
 `com.noobk.spmscavenger.validation.*`, declare mod id `spmscavenger_validation`, depend on
 `spmscavenger`, and compile only against public passive production truth surfaces. Both test suites
 must run in the normal build. Extraction does not change any VR-T3 runtime verdict.
+
+Observed gate result: `gradlew.bat clean build` passed **1,624 production + 57 validation tests**
+with zero failures/errors/skips. Production audit found zero validation-namespace classes, zero
+legacy `debug/V3*` classes, zero Task-59 scenario resources, and zero packaged upstream Trade
+Everything classes. Validation audit found 60 validation-namespace classes, 24 `spm_vr` scenario
+function resources, zero classes outside its namespace, and zero production-class duplicates.
+Production SHA-256: `4A742B531C0518CA06E53045D7EB571FB7E50443BCC1C74CE289E42E2B1A99D0`.
+Validation SHA-256: `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0`.
+Runtime loading of the pair remains **UNVERIFIED**; no Minecraft launch occurred.

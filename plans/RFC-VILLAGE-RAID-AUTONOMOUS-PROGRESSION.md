@@ -9,10 +9,10 @@
 | **Host baseline sync** | **CLOSED** (2026-08-22) — doc + authorization; runtime matrix pin is a Task-59 deliverable before launch |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `PLANNING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; no V4 implementation authorized by this pass |
-| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** Task-59 closure policy is **LOCKED** by `D-VR-088`; VR-T3j is **RUNTIME PASS**. V4 architecture decisions `D-VR-089…096` and first-home amendment `D-VR-042-A1` are **LOCKED**. |
-| **Nearest frontier** | **Task-59 tooling extraction / General Debug split (`D-VR-096`)**: move certification machinery into a separately packaged validation/test mod while preserving passive production truth APIs. Then produce a clean production artifact before **V4-R0**. Remaining V3 runtime rows stay open and resumable from the validation artifact; they do not block V4. |
-| **Last update** | 2026-08-26 (`User` + `Agent_Codex`, V4 synchronization/lock pass) |
+| **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0 implemented without V4 product behavior |
+| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** Task-59 closure policy is **LOCKED** by `D-VR-088`; VR-T3j is **RUNTIME PASS**. V4-P0 / `D-VR-096` is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4 product decisions `D-VR-089…095` and first-home amendment `D-VR-042-A1` remain locked and unimplemented. |
+| **Nearest frontier** | **V4-R0 — settlement representation decomposition (`D-VR-089`)**. Remaining V3 runtime rows stay open and resumable from the separately packaged validation artifact; they do not block V4. Any Minecraft launch still requires separate approval. |
+| **Last update** | 2026-08-26 (`Agent_Codex`, V4-P0 implementation/build/package acceptance) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -4997,7 +4997,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 
 | Slice | Objective | Dependency | Closure class |
 | --- | --- | --- | --- |
-| **V4-P0 — Task-59 tooling extraction / General Debug** | Separate validation mod and production artifact per `D-VR-096`; retain only passive production truth/readout | `D-VR-088`, `D-VR-096` | Clean dual-artifact build + package audits; no Minecraft |
+| **V4-P0 — Task-59 tooling extraction / General Debug** | **IMPLEMENTED + STATIC/PACKAGE ACCEPTED** — separate validation mod and clean production artifact per `D-VR-096`; passive General Debug/truth reads retained | `D-VR-088`, `D-VR-096` | `clean build`: 1,624 production + 57 validation tests, zero failures/errors/skips; dual package audits PASS; no Minecraft |
 | **V4-R0 — settlement representation** | Replace `SettlementTier` coupling with explicit single home and migration/rekey rules | V4-P0, `D-VR-089` | Deterministic migration, lifecycle, and negative producer probes |
 | **V4-A — known trader evidence** | Bounded trader identity + component-aware positive capability descriptors and expiry | V4-R0, `D-VR-090` | Deterministic bounds/TTL/invalidation/lifecycle tests |
 | **V4-B — Opinion bridge** | Implement `SettlementOpinionBias` in Opinion package; village consumes bounded bias | V4-R0, `D-VR-025` | Deterministic boundary and cap tests |
@@ -5007,8 +5007,9 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | **V4-F — first-home promotion** | Event-bound first home after real associated sleep at HIGH; never autonomous re-home | V4-R0, `D-VR-042-A1/094` | Deterministic sleep-event and persistence tests |
 | **V4-G — closure** | Single-village leave/return/live-offer-change integration witness | V4-A–F, `D-VR-095` | One approved representative runtime session |
 
-V4-P0 is documentation-locked but **not implemented by this pass**. V3 certification stays open and
-resumable from the future validation artifact; extraction does not award any remaining VR-T3 result.
+V4-P0 is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V3 certification stays open and resumable from
+the validation artifact; extraction awards no remaining VR-T3 result. Loading the sidecar with the
+production mod remains **UNVERIFIED** until a separately approved certification runtime.
 
 ### Canonical V3 implementation contract (A/B/C/D1/E/F static-accepted; G next)
 
@@ -9058,3 +9059,50 @@ implementation/runtime gates; this design lock is not a behavioral implementatio
 **Frontier after:** V4 design is synchronized and locked. Implement **V4-P0 Task-59 tooling
 extraction / General Debug split** only when separately authorized; clean dual-artifact acceptance is
 the dependency for V4-R0. Do not add more V4 scope before that boundary.
+
+### Contribution — `Agent_Codex` (V4-P0 Task-59 extraction + General Debug, 2026-08-26)
+
+**Authorization:** implement `D-VR-096` only; no KnownVillager, director, ranking, first-home, or
+other V4 product behavior; no Minecraft launch and no commit.
+
+**Implemented boundary (`CODE_CONFIRMED`):** all 18 Task-59 `V3*` controller/scenario/Gate-0/
+contamination/temporal-witness classes moved from production into
+`src/validation/java/com/noobk/spmscavenger/validation/`; their 15 tests moved to the dedicated
+validation-test source set. `SpmScavengerValidation` now owns the validation commands plus tick,
+unload, death, and stop lifecycle. Production `SpmScavenger` contains none of those hooks and
+registers only the permanent one-shot `/spmscavenger debug inspect <mob>` command.
+
+Production truth reads added for the inspector are passive only:
+`MandatoryOwnershipRegistry.peekLiveClaim` never deletes an expired entry, and
+`MiningProjectSavedData.peekReadOnly` never creates SavedData. Existing village-memory and
+`VillageWorkFactsService.peekReadOnly` paths remain non-creating. No mutation/authority API was
+widened for fixture execution.
+
+**Build/package evidence (`CONFIRMED`):** `gradlew.bat clean build` passed in 44 seconds with
+**1,624 production + 57 validation tests**, zero failures/errors/skips. It built:
+
+- `spmscavenger-1.11.0.jar` —
+  `4A742B531C0518CA06E53045D7EB571FB7E50443BCC1C74CE289E42E2B1A99D0`;
+- `spmscavenger-1.11.0-validation.jar` —
+  `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0`.
+
+Production audit: zero validation-namespace classes, zero legacy `debug/V3*` classes, zero Task-59
+scenario resources, zero packaged upstream Trade Everything classes. Validation audit: mod id
+`spmscavenger_validation`, declared production dependency, 60 validation-namespace classes, 24
+scenario function resources, zero classes outside the namespace, and zero production-class
+duplicates. Synthetic forbidden-entry and duplicate-class negative controls passed in the focused
+suite.
+
+**Three absence probes:** production source import/reference to
+`com.noobk.spmscavenger.validation` — **NOT FOUND**; production source reference to
+`V3RuntimeCampaignController`/`V3RuntimeWitnessCommands` — **NOT FOUND**; production JAR legacy
+`debug/V3*`, validation namespace, or `data/spm_vr` entry — **NOT FOUND**.
+
+**MAIBS-1 disposition:** this slice removes temporary certification scheduling from normal play and
+does not alter production GoalSelector, activity authority, movement, inventory, or village-work
+semantics. Production-only runtime should therefore expose the same AI plus passive General Debug;
+installing the sidecar should restore Task-59 orchestration. Those live classloading/registration
+claims remain **UNVERIFIED** because no Minecraft launch was authorized.
+
+**Frontier after:** V4-P0 is **STATIC/PACKAGE ACCEPTED**. V3 certification stays open and resumable
+from an exact approved artifact pair. V4-R0 is the next product slice.

@@ -108,5 +108,6 @@ then adjudicate PASS/FAIL/WEIRD separately against the matrix.
 | Weird/runtime questions | autonomous pig combat was a valid interruption witness, not a failure |
 | V3-G closure recommendation | **OPEN** — run only the eight representative integration rows after T3l fixture review and separate runtime approval |
 
-Temporary `V3RuntimeWitnessCommands` must be removed and the clean production JAR rebuilt after
-accepted evidence. Preserve this record and the RFC contribution when removing instrumentation.
+Task 60 extracted `V3RuntimeWitnessCommands` and all Task-59 lifecycle/scenario machinery from the
+production JAR into the separately packaged validation mod while preserving this evidence record.
+No row verdict changed. Resume only with an exact approved production/validation artifact pair.

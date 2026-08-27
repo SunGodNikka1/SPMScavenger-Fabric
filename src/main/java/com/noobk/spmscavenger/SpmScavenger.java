@@ -99,7 +99,7 @@ public class SpmScavenger implements ModInitializer {
                         VillageProfileCommands.register(dispatcher));
         CommandRegistrationCallback.EVENT.register(
                 (dispatcher, registryAccess, environment) ->
-                        com.noobk.spmscavenger.debug.V3RuntimeWitnessCommands.register(dispatcher));
+                        com.noobk.spmscavenger.debug.GeneralDebugCommands.register(dispatcher));
         ScavengerConfig cfg = ScavengerConfig.get();
 
         switch (PlayerMobs.state()) {
@@ -119,7 +119,6 @@ public class SpmScavenger implements ModInitializer {
                     VillagePerceptionScheduler.forServer(server).onServerTick(server);
                     com.noobk.spmscavenger.village.storage.StorageGuardCompatibility.onServerTick();
                     com.noobk.spmscavenger.village.crop.HarvestCropGuardCompatibility.onServerTick();
-                    com.noobk.spmscavenger.debug.V3RuntimeCampaignController.onServerTick(server);
                 });
         // Optional market source. Guarded and reflective: nothing on the common trade path names a
         // Trade Everything class, so common classes load normally when the mod is absent.
@@ -146,8 +145,6 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.village.population.PopulationFoodEpisodeCooldown.release(mob.getUUID());
                 com.noobk.spmscavenger.village.compost.CompostEpisodeCooldown.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.clear(mob.getUUID());
-                com.noobk.spmscavenger.debug.V3RuntimeCampaignController.onSubjectUnavailable(
-                        world.getServer(), mob.getUUID(), "entity_unload", world.getGameTime());
                 // D-VR-084 / RET-1: the pending-claim store is runtime-only; unload (chunk or
                 // dimension) releases the claim so no claim outlives its owner's presence. The
                 // remembered terminal survives ordinary unload (the mob may return); permanent
@@ -215,7 +212,6 @@ public class SpmScavenger implements ModInitializer {
                     com.noobk.spmscavenger.village.crop.HarvestCropGuardCompatibility.shutdownServerState();
                     VillagePerceptionScheduler.shutdown(server);
                     com.noobk.spmscavenger.village.work.VillageWorkFactsService.shutdown(server);
-                    com.noobk.spmscavenger.debug.V3RuntimeCampaignController.shutdownServerState(server);
                 });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
@@ -229,8 +225,6 @@ public class SpmScavenger implements ModInitializer {
                 com.noobk.spmscavenger.village.population.PopulationFoodEpisodeCooldown.release(mob.getUUID());
                 com.noobk.spmscavenger.village.compost.CompostEpisodeCooldown.release(mob.getUUID());
                 com.noobk.spmscavenger.village.trade.RouteExhaustionEvidence.clear(mob.getUUID());
-                com.noobk.spmscavenger.debug.V3RuntimeCampaignController.onSubjectUnavailable(
-                        mob.level().getServer(), mob.getUUID(), "death", mob.level().getGameTime());
                 com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.release(
                         mob.getUUID(),
                         com.noobk.spmscavenger.activity.MandatoryOwnershipRegistry.ReleaseReason.ORDINARY);

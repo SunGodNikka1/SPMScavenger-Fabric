@@ -290,8 +290,9 @@ Before marking V3 **runtime closed**, review:
 | 2026-08-22 | Initial matrix — task-59 prep; `playermob` 0.89.0; VR-T3f excluded |
 | 2026-08-23 | Remove fake HOME/sleep NBT from bootstrap; settlement preflight gate 0; structural test inverted |
 | 2026-08-22 | Pre-launch repair — VR-T3c atomic contract; per-row observation windows; fixture gate COMPLETE; environment pin |
-**Harness disposition (`D-VR-096`, LOCKED / NOT YET IMPLEMENTED):** before another VR-T3 launch,
-move the Task-59 controller, scenarios, Gate-0/contamination/temporal witnesses, and validation-only
-commands/resources into the separately packaged `spmscavenger_validation` mod. The production mod
-retains passive truth APIs and General Debug only. This extraction preserves every remaining row and
-does not change its evidence status. Runtime resumes only from an exact approved validation artifact.
+**Harness disposition (`D-VR-096`, IMPLEMENTED / STATIC+PACKAGE ACCEPTED):** the Task-59 controller,
+scenarios, Gate-0/contamination/temporal witnesses, and validation-only commands/resources now ship
+only in `spmscavenger-1.11.0-validation.jar`. The production mod retains passive truth APIs and the
+one-shot General Debug inspector only. This extraction preserves every remaining row and changes no
+runtime verdict. Runtime resumes only from an exact approved production/validation artifact pair;
+live loading of the new sidecar remains **UNVERIFIED** pending separate launch approval.

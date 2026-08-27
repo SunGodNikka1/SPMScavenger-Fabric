@@ -1,6 +1,8 @@
 # VR-T3 runtime environment pin (pre-launch)
 
-**Status:** pinned to the temporary Task-59 V3 witness artifact — VR-T3j runtime accepted; campaign remains in progress and any further launch requires separate approval.
+**Status:** the last runtime-confirmed pair remains pinned below for historical VR-T3j evidence. V4-P0
+has produced a clean production + validation-sidecar pair, but that replacement is **PREPARED / NOT
+RUNTIME-AUTHORIZED**. Any further launch requires exact pair approval.
 
 **Matrix:** `docs/porting/VR-T3-RUNTIME-MATRIX.md`  
 **Datapack:** `test-datapacks/phase-village-raid/` (`spm_vr`)
@@ -24,6 +26,13 @@
 | --- | --- | --- | --- |
 | **Social Player Mobs** (`playermob`) | `playermob-fabric-0.89.0+1.21.1.jar` | `C8DC0E89C3FD632B6DCC7F8E46D3AE4955DD5504CBA53F72B62314850A64E612` | Downloaded from GitHub release `bh679/playermob-mc` tag `v0.89.0` (485 500 bytes); cached at `Projects/references/artifacts/playermob-fabric-0.89.0+1.21.1.jar` |
 | **SPM Scavenger** (`spmscavenger`) | `spmscavenger-1.11.0.jar` | `BDAA788CAE2126FDE46F858A4076DF69FF0590F151CD3A6B88A32A580A0B2BDC` | Task-59 live-claim stopping-rule repair at `build/libs/spmscavenger-1.11.0.jar`; the exact production frontier plus a matching live claim opens as `source=LIVE_CLAIM` without the superseded geometry veto. No-claim cases retain the passive target fallback. `8C2D...A69F2` is superseded after three runtime reproductions showed a real claim could be rejected by duplicate geometry. |
+
+### Prepared replacement pair — do not install/launch without separate approval
+
+| Mod | File | SHA-256 | Evidence status |
+| --- | --- | --- | --- |
+| Production Scavenger | `spmscavenger-1.11.0.jar` | `4A742B531C0518CA06E53045D7EB571FB7E50443BCC1C74CE289E42E2B1A99D0` | `clean build` + production package audit **CONFIRMED**; runtime loading **UNVERIFIED** |
+| Task-59 validation sidecar | `spmscavenger-1.11.0-validation.jar` | `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0` | compile/test/package audit **CONFIRMED**; sidecar initialization/commands **UNVERIFIED** |
 
 **SPM source tag (audit):** `v0.89.0` on `https://github.com/bh679/playermob-mc` (`mod_version=0.89.0` in tag `gradle.properties`).
 
@@ -66,6 +75,7 @@ Structural validation (no Minecraft): `SpmVrDatapackStructureTest`.
 
 | Date | Change |
 | --- | --- |
+| 2026-08-26 | V4-P0 extracted Task-59 into the separately packaged validation sidecar; prepared exact replacement pair after 1,624 production + 57 validation tests and package audits; no Minecraft launch |
 | 2026-08-24 | Exact `BDAA788C...A0B2BDC` artifact produced VR-T3j RUNTIME PASS over the full 1000-tick window, including autonomous pig-combat preemption and Gather resumption; remaining rows not implied |
 | 2026-08-24 | T3j/D-VR-084 live-claim stopping rule — matching live production ownership now supersedes duplicate geometry while exact policy remains required; 1675-test clean build; SHA `BDAA788C...A0B2BDC`; no Minecraft relaunch |
 | 2026-08-24 | T3j live fixture falsification — replaced world-log assumption in T3j/D-VR-084 with controller-seeded iron-pick frontier, exposed reachable iron, and passive `MANDATORY_ROUTE_READY`; repinned after 1669-test clean build; no Minecraft relaunch |

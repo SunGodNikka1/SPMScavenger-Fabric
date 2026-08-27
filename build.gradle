@@ -1,3 +1,5 @@
+import net.fabricmc.loom.task.RemapJarTask
+
 plugins {
     id 'fabric-loom' version "${loom_version}"
 }
@@ -13,6 +15,48 @@ repositories {
     mavenCentral()
     maven { url = 'https://maven.shedaniel.me/' }
     maven { url = 'https://maven.terraformersmc.com/releases/' }
+}
+
+sourceSets {
+    validation {
+        java.srcDir 'src/validation/java'
+        resources.srcDirs = ['src/validation/resources', 'test-datapacks/phase-village-raid']
+        compileClasspath += sourceSets.main.output
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += output
+        runtimeClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+
+    validationTest {
+        java.srcDir 'src/validationTest/java'
+        resources.srcDir 'src/validationTest/resources'
+        compileClasspath += sourceSets.validation.output
+        compileClasspath += sourceSets.validation.compileClasspath
+        compileClasspath += sourceSets.test.compileClasspath
+        runtimeClasspath += output
+        runtimeClasspath += sourceSets.validation.output
+        runtimeClasspath += sourceSets.validation.runtimeClasspath
+        runtimeClasspath += sourceSets.test.runtimeClasspath
+    }
+}
+
+configurations {
+    validationTestImplementation.extendsFrom testImplementation
+    validationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+loom {
+    createRemapConfigurations(sourceSets.validation)
+
+    mods {
+        spmscavenger {
+            sourceSet sourceSets.main
+        }
+        spmscavenger_validation {
+            sourceSet sourceSets.validation
+        }
+    }
 }
 
 dependencies {
@@ -31,12 +75,23 @@ dependencies {
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    validationImplementation sourceSets.main.output
+    validationTestImplementation sourceSets.main.output
+    validationTestImplementation sourceSets.validation.output
 }
 
 processResources {
     inputs.property "version", project.version
     filesMatching("fabric.mod.json") {
         expand "version": project.version
+    }
+}
+
+tasks.named('processValidationResources') {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') {
+        expand 'version': project.version
     }
 }
 
@@ -47,6 +102,112 @@ tasks.withType(JavaCompile).configureEach {
 
 test {
     useJUnitPlatform()
+}
+
+def validationTestTask = tasks.register('validationTest', Test) {
+    description = 'Runs validation/test-mod structural tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.validationTest.output.classesDirs
+    classpath = sourceSets.validationTest.runtimeClasspath
+    useJUnitPlatform()
+    shouldRunAfter tasks.named('test')
+}
+
+def validationDevJar = tasks.register('validationDevJar', Jar) {
+    dependsOn tasks.named('validationClasses')
+    from sourceSets.validation.output
+    archiveClassifier.set('validation-dev')
+    destinationDirectory.set(layout.buildDirectory.dir('devlibs'))
+}
+
+def remapValidationJar = tasks.register('remapValidationJar', RemapJarTask) {
+    dependsOn validationDevJar
+    inputFile.set(validationDevJar.flatMap { it.archiveFile })
+    archiveClassifier.set('validation')
+    addNestedDependencies.set(false)
+}
+
+def auditProductionJar = tasks.register('auditProductionJar') {
+    dependsOn tasks.named('remapJar')
+    inputs.file(tasks.named('remapJar').flatMap { it.archiveFile })
+    doLast {
+        def jarFile = tasks.named('remapJar').get().archiveFile.get().asFile
+        new java.util.zip.ZipFile(jarFile).withCloseable { zip ->
+            def names = zip.entries().collect { it.name } as Set
+            def forbidden = names.findAll {
+                it.startsWith('com/noobk/spmscavenger/validation/')
+                        || it.startsWith('com/noobk/spmscavenger/debug/V3')
+                        || it.startsWith('data/spm_vr/')
+                        || it.contains('V3RuntimeCampaignController')
+                        || it.contains('V3RuntimeWitnessCommands')
+                        || it.contains('V3CampaignScenario')
+                        || it.contains('V3Gate0')
+                        || it.contains('V3Contamination')
+                        || it.contains('V3CampaignProgress')
+                        || it.contains('V3ScenarioEvidence')
+                        || it.contains('V3HarvestEpisodeProbe')
+                        || it == 'spmscavenger.validation.mixins.json'
+            }
+            if (!forbidden.empty) {
+                throw new GradleException("Production JAR contains validation entries: ${forbidden}")
+            }
+            def metadata = new groovy.json.JsonSlurper()
+                    .parse(zip.getInputStream(zip.getEntry('fabric.mod.json')))
+            if (metadata.id != 'spmscavenger') {
+                throw new GradleException("Production metadata ID is ${metadata.id}")
+            }
+        }
+    }
+}
+
+def auditValidationJar = tasks.register('auditValidationJar') {
+    dependsOn tasks.named('remapJar')
+    dependsOn remapValidationJar
+    inputs.file(tasks.named('remapJar').flatMap { it.archiveFile })
+    inputs.file(remapValidationJar.flatMap { it.archiveFile })
+    doLast {
+        def productionFile = tasks.named('remapJar').get().archiveFile.get().asFile
+        def validationFile = remapValidationJar.get().archiveFile.get().asFile
+        Set<String> productionClasses
+        new java.util.zip.ZipFile(productionFile).withCloseable { zip ->
+            productionClasses = zip.entries()
+                    .findAll { !it.directory && it.name.endsWith('.class') }
+                    .collect { it.name } as Set
+        }
+        new java.util.zip.ZipFile(validationFile).withCloseable { zip ->
+            def names = zip.entries().collect { it.name } as Set
+            def validationClasses = names.findAll { it.endsWith('.class') } as Set
+            def duplicates = validationClasses.intersect(productionClasses)
+            if (!duplicates.empty) {
+                throw new GradleException("Validation JAR duplicates production classes: ${duplicates}")
+            }
+            def outsideNamespace = validationClasses.findAll {
+                !it.startsWith('com/noobk/spmscavenger/validation/')
+            }
+            if (!outsideNamespace.empty) {
+                throw new GradleException(
+                        "Validation classes outside validation namespace: ${outsideNamespace}")
+            }
+            def metadata = new groovy.json.JsonSlurper()
+                    .parse(zip.getInputStream(zip.getEntry('fabric.mod.json')))
+            if (metadata.id != 'spmscavenger_validation') {
+                throw new GradleException("Validation metadata ID is ${metadata.id}")
+            }
+            if (!metadata.depends?.containsKey('spmscavenger')) {
+                throw new GradleException('Validation metadata lacks spmscavenger dependency')
+            }
+        }
+    }
+}
+
+tasks.named('assemble') {
+    dependsOn remapValidationJar
+}
+
+tasks.named('check') {
+    dependsOn validationTestTask
+    dependsOn auditProductionJar
+    dependsOn auditValidationJar
 }
 
 java {

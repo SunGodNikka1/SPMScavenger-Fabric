@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "spmscavenger_validation",
+  "version": "${version}",
+  "name": "SPM Scavenger Validation",
+  "description": "Development-only runtime certification surface for SPM Scavenger.",
+  "authors": ["noobk"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.noobk.spmscavenger.validation.SpmScavengerValidation"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*",
+    "spmscavenger": ">=1.11.0"
+  },
+  "recommends": {
+    "playermob": "*"
+  }
+}

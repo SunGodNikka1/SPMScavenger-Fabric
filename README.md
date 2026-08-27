@@ -169,17 +169,26 @@ On Linux or macOS:
 ./gradlew clean build
 ```
 
-The installable artifact is written to:
+The normal build produces two independently installable artifacts:
 
 ```text
-build/libs/spmscavenger-1.9.4.jar
+build/libs/spmscavenger-1.11.0.jar
+build/libs/spmscavenger-1.11.0-validation.jar
 ```
 
-The latest verified clean build completed with **800 tests, zero failures, zero errors, and zero
-skips**. Its SHA-256 was:
+Install the production JAR for normal play. The validation JAR is a non-distributed Task-59
+certification sidecar; it depends on the matching production mod and is only needed for approved
+Village/Raid runtime campaigns.
+
+The latest verified clean build completed with **1,624 production tests and 57 validation tests,
+zero failures, zero errors, and zero skips**. SHA-256 values were:
 
 ```text
-429E212164B0116E9F68DBB13066CAA9AC35B69B311B6F0FE4C74ABC0EEED550
+spmscavenger-1.11.0.jar
+4A742B531C0518CA06E53045D7EB571FB7E50443BCC1C74CE289E42E2B1A99D0
+
+spmscavenger-1.11.0-validation.jar
+BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0
 ```
 
 That hash changes whenever source or packaged resources change.
