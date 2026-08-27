@@ -776,12 +776,20 @@ public class TradeWithVillagerGoal extends Goal {
         com.noobk.spmscavenger.village.trade.TradeOpportunityQuery query =
                 authorizedSellQuery(backpack);
         for (Villager villager : nearby) {
+            List<OfferSnapshot> vanillaBoard = null;
             // One source today, so the candidate set and its order are unchanged. Iterating the
             // registry rather than calling the vanilla source directly is what makes step 6 a
             // registry entry instead of another edit here.
             for (com.noobk.spmscavenger.village.trade.TradeOpportunitySource source
                     : com.noobk.spmscavenger.village.trade.TradeSources.all()) {
-            for (OfferSnapshot offer : source.offers(villager, query)) {
+            List<OfferSnapshot> sourceOffers = source.offers(villager, query);
+            if (source.key() == com.noobk.spmscavenger.village.trade.TradeSourceKey.VANILLA) {
+                // V4-A observes the complete board we already paid to read. It neither performs a
+                // second getOffers() call nor records query-shaped synthetic quotes as stable board
+                // capability. The observation result is never consulted by this planning round.
+                vanillaBoard = sourceOffers;
+            }
+            for (OfferSnapshot offer : sourceOffers) {
                 // D-VR-077: one snapshot now carries both coordinates - its own board ref
                 // for execution, and this round's flat ordinal for ranking. The old code built a
                 // SECOND snapshot whose index field held the slot, and kept the real one in
@@ -792,6 +800,10 @@ public class TradeWithVillagerGoal extends Goal {
                         demand.get().consumerKey(), demand.get().materialKey()));
                 slot++;
             }
+            }
+            if (vanillaBoard != null) {
+                com.noobk.spmscavenger.village.KnownTraderMarketObservation.recordVanillaBoard(
+                        level, mob.getUUID(), villager, vanillaBoard);
             }
         }
 

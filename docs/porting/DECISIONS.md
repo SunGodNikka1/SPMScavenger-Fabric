@@ -1775,3 +1775,23 @@ Alternative retained enum rejected: smaller diff, but it would keep unevidenced 
 future coupling risk. Switch only if evidence reveals a real persisted producer/consumer that the
 audit missed. Final static/package evidence: 1,635 production + 57 validation tests, zero failures;
 production JAR contains zero `SettlementTier.class`. Runtime world migration remains unclaimed.
+
+## 2026-08-26 - V4-A: remembered traders are positive output evidence, never market authority
+
+`D-VR-090` is implemented inside the existing per-mob `MobVillageMemory`; no new SavedData owner or
+runtime registry was introduced. Each row is associated with a canonical remembered settlement and
+stores villager UUID, last observed profession/level/tick, and at most 16 count-normalized
+item-and-components output hints. It stores no price, cost, board index, uses, affordability,
+`MerchantOffer`, `OfferSnapshot`, or prior authorization.
+
+Both trader bounds apply: 16 per settlement and 64 per mob, evicted by oldest observation then UUID.
+Hints physically expire after 168,000 ticks during production observation/read. A complete live
+vanilla-board revisit refreshes present outputs and removes only absent outputs; an unloaded/missing
+trader erases nothing. Settlement supersession rekeys rows, settlement eviction deletes them, and
+permanent owner removal deletes the containing memory while ordinary unload/restart preserve it.
+
+Alternative item-ID-only memory was rejected because component-bearing useful outputs would collapse.
+Full offer persistence was rejected because stale market facts could become counterfeit authority.
+Production therefore passively consumes only the complete vanilla board V2 already read; it performs
+no new scan and does not persist query-shaped TE synthetic quotes as stable board facts. Live V2
+discovery, authorization, Q1/Q2, and transaction revalidation remain unchanged.

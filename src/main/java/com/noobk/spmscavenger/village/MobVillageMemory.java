@@ -1,6 +1,9 @@
 package com.noobk.spmscavenger.village;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
@@ -11,6 +14,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * V1 — one mob's settlement memory.
@@ -18,10 +24,12 @@ import java.util.Optional;
  * <h2>Gate RET-1</h2>
  *
  * <table>
- *   <tr><th>Key</th><td>settlement anchor, merged at {@link VillageIdentityPolicy#SAME_SETTLEMENT_RADIUS_SQR}</td></tr>
- *   <tr><th>Bound</th><td>{@link #MAX_KNOWN_VILLAGES}, LRU by {@code lastSeenTick}</td></tr>
+ *   <tr><th>Key</th><td>settlement anchor, plus stable villager UUID within a settlement</td></tr>
+ *   <tr><th>Bound</th><td>{@link #MAX_KNOWN_VILLAGES}; 16 traders/settlement, 64/mob,
+ *       16 capability hints/trader; hints expire after 168,000 ticks</td></tr>
  *   <tr><th>Eviction owner</th><td>{@link #remember} (LRU, every call) and
- *       {@code VillageMemorySavedData#forget} on <b>death only</b></td></tr>
+ *       {@link #observeTrader} (trader bounds + physical TTL pruning), plus
+ *       {@code VillageMemorySavedData#forget} on permanent removal</td></tr>
  *   <tr><th>Death</th><td>deleted — the mob is permanently gone</td></tr>
  *   <tr><th>Unload</th><td><b>preserved</b>. V1-R1: this is persistent semantic memory, not runtime
  *       state. Deleting it on a generic unload meant a mob could remember villages through NBT and
@@ -45,9 +53,13 @@ public final class MobVillageMemory {
      * in a long time and can rediscover in a single pass — cheap to lose, unbounded to keep.
      */
     public static final int MAX_KNOWN_VILLAGES = 16;
+    public static final int MAX_KNOWN_TRADERS_PER_SETTLEMENT = 16;
+    public static final int MAX_KNOWN_TRADERS_PER_MOB = 64;
 
     private final List<KnownVillage> villages = new ArrayList<>();
     private final Map<BlockPos, SettlementRelationship> relationships = new HashMap<>();
+    /** D-VR-090 — bounded positive evidence, owned by the same lifecycle as settlement memory. */
+    private final Map<UUID, KnownVillager> knownTraders = new HashMap<>();
     /** D-VR-089 — one factual home, independent of every settlement's other facts. */
     private BlockPos homeAnchor;
     /** Load-only signal used by the owning SavedData to schedule canonical schema rewrite. */
@@ -55,6 +67,62 @@ public final class MobVillageMemory {
 
     public List<KnownVillage> villages() {
         return List.copyOf(villages);
+    }
+
+    public List<KnownVillager> knownTraders() {
+        return knownTraders.values().stream()
+                .sorted(java.util.Comparator.comparing(KnownVillager::villagerId))
+                .toList();
+    }
+
+    public Optional<KnownVillager> knownTrader(UUID villagerId) {
+        return Optional.ofNullable(knownTraders.get(villagerId));
+    }
+
+    public List<KnownVillager> knownTradersAt(BlockPos anchor) {
+        KnownVillage settlement = at(anchor).orElse(null);
+        if (settlement == null) {
+            return List.of();
+        }
+        return knownTraders.values().stream()
+                .filter(trader -> trader.settlementAnchor().equals(settlement.anchor()))
+                .sorted(java.util.Comparator.comparing(KnownVillager::villagerId))
+                .toList();
+    }
+
+    /**
+     * Records one complete live board against an already remembered settlement.
+     *
+     * @return whether persistent state changed; unknown settlements fail closed and allocate nothing
+     */
+    public boolean observeTrader(BlockPos settlementAnchor, UUID villagerId,
+            ResourceLocation profession, int level, List<ItemStack> outputs, long tick) {
+        KnownVillage settlement = at(settlementAnchor).orElse(null);
+        if (settlement == null || villagerId == null) {
+            return false;
+        }
+        boolean changed = pruneExpiredTraderCapabilities(tick);
+        KnownVillager trader = knownTraders.get(villagerId);
+        if (trader == null) {
+            trader = new KnownVillager(villagerId, settlement.anchor(), profession, level, tick);
+            knownTraders.put(villagerId, trader);
+            changed = true;
+        } else if (!trader.settlementAnchor().equals(settlement.anchor())) {
+            trader.rekey(settlement.anchor());
+            changed = true;
+        }
+        changed |= trader.observe(profession, level, outputs, tick);
+        changed |= evictKnownTraderBounds();
+        return changed;
+    }
+
+    /** Physical TTL pruning; trader identity deliberately survives with no hints. */
+    public boolean pruneExpiredTraderCapabilities(long now) {
+        boolean changed = false;
+        for (KnownVillager trader : knownTraders.values()) {
+            changed |= trader.pruneExpired(now);
+        }
+        return changed;
     }
 
     public Optional<SettlementRelationship> relationshipAt(BlockPos anchor) {
@@ -158,6 +226,7 @@ public final class MobVillageMemory {
             if (updated != existing) {
                 villages.set(villages.indexOf(existing), updated);
                 rekeyRelationship(oldAnchor, updated.anchor());
+                rekeyKnownTraders(oldAnchor, updated.anchor());
                 if (oldAnchor.equals(homeAnchor)) {
                     homeAnchor = updated.anchor();
                 }
@@ -213,6 +282,7 @@ public final class MobVillageMemory {
                 return;
             }
             relationships.remove(stalest.anchor());
+            removeKnownTradersAt(stalest.anchor());
             villages.remove(stalest);
         }
         pruneOrphanRelationships();
@@ -227,6 +297,51 @@ public final class MobVillageMemory {
                 .noneMatch(village -> VillageIdentityPolicy.sameSettlement(village.anchor(), anchor)));
     }
 
+    private void rekeyKnownTraders(BlockPos oldAnchor, BlockPos newAnchor) {
+        if (oldAnchor == null || newAnchor == null || oldAnchor.equals(newAnchor)) {
+            return;
+        }
+        for (KnownVillager trader : knownTraders.values()) {
+            if (trader.settlementAnchor().equals(oldAnchor)) {
+                trader.rekey(newAnchor);
+            }
+        }
+    }
+
+    private void removeKnownTradersAt(BlockPos anchor) {
+        knownTraders.values().removeIf(trader -> trader.settlementAnchor().equals(anchor));
+    }
+
+    /** Enforces local and global bounds independently, oldest observation then UUID. */
+    private boolean evictKnownTraderBounds() {
+        boolean changed = false;
+        for (KnownVillage village : villages) {
+            while (knownTradersAt(village.anchor()).size() > MAX_KNOWN_TRADERS_PER_SETTLEMENT) {
+                KnownVillager victim = knownTradersAt(village.anchor()).stream()
+                        .min(KNOWN_TRADER_EVICTION_ORDER).orElse(null);
+                if (victim == null) {
+                    break;
+                }
+                knownTraders.remove(victim.villagerId());
+                changed = true;
+            }
+        }
+        while (knownTraders.size() > MAX_KNOWN_TRADERS_PER_MOB) {
+            KnownVillager victim = knownTraders.values().stream()
+                    .min(KNOWN_TRADER_EVICTION_ORDER).orElse(null);
+            if (victim == null) {
+                break;
+            }
+            knownTraders.remove(victim.villagerId());
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static final java.util.Comparator<KnownVillager> KNOWN_TRADER_EVICTION_ORDER =
+            java.util.Comparator.comparingLong(KnownVillager::lastSeenTick)
+                    .thenComparing(KnownVillager::villagerId);
+
     /**
      * Newest sighting across all remembered settlements.
      *
@@ -240,10 +355,19 @@ public final class MobVillageMemory {
         for (KnownVillage village : villages) {
             newest = Math.max(newest, village.lastSeenTick());
         }
+        for (KnownVillager trader : knownTraders.values()) {
+            newest = Math.max(newest, trader.lastSeenTick());
+        }
         return newest == Long.MIN_VALUE ? 0L : newest;
     }
 
     public CompoundTag save() {
+        return knownTraders.isEmpty()
+                ? save(null)
+                : save(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+    }
+
+    public CompoundTag save(HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
         ListTag list = new ListTag();
         for (KnownVillage village : villages) {
@@ -261,10 +385,23 @@ public final class MobVillageMemory {
             relationshipList.add(row);
         }
         tag.put("relationships", relationshipList);
+        ListTag traderList = new ListTag();
+        if (registries != null) {
+            for (KnownVillager trader : knownTraders()) {
+                traderList.add(trader.save(registries));
+            }
+        }
+        tag.put("knownTraders", traderList);
         return tag;
     }
 
     public static MobVillageMemory load(CompoundTag tag) {
+        return tag == null || tag.getList("knownTraders", Tag.TAG_COMPOUND).isEmpty()
+                ? load(tag, null)
+                : load(tag, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+    }
+
+    public static MobVillageMemory load(CompoundTag tag, HolderLookup.Provider registries) {
         MobVillageMemory memory = new MobVillageMemory();
         if (tag == null) {
             return memory;
@@ -307,7 +444,24 @@ public final class MobVillageMemory {
                     anchor,
                     SettlementRelationship.load(row.getCompound("relationship")));
         }
+        ListTag traderList = tag.getList("knownTraders", Tag.TAG_COMPOUND);
+        for (int i = 0; registries != null && i < traderList.size(); i++) {
+            KnownVillager trader = KnownVillager.load(traderList.getCompound(i), registries);
+            if (trader == null) {
+                continue;
+            }
+            KnownVillage settlement = memory.at(trader.settlementAnchor()).orElse(null);
+            if (settlement == null) {
+                continue;
+            }
+            trader.rekey(settlement.anchor());
+            KnownVillager previous = memory.knownTraders.get(trader.villagerId());
+            if (previous == null || KNOWN_TRADER_EVICTION_ORDER.compare(previous, trader) < 0) {
+                memory.knownTraders.put(trader.villagerId(), trader);
+            }
+        }
         memory.evictBeyondBound();
+        memory.evictKnownTraderBounds();
         return memory;
     }
 

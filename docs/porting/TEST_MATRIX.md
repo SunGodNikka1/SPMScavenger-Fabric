@@ -705,6 +705,7 @@ Everything classes. Validation audit found 60 validation-namespace classes, 24 `
 function resources, zero classes outside its namespace, and zero production-class duplicates.
 Production SHA-256: `4A742B531C0518CA06E53045D7EB571FB7E50443BCC1C74CE289E42E2B1A99D0`.
 Validation SHA-256: `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0`.
+
 Runtime loading of the pair remains **UNVERIFIED**; no Minecraft launch occurred.
 
 **V4-R0 settlement representation (`D-VR-089`, STATIC/PACKAGE PASS, 2026-08-26):**
@@ -719,4 +720,18 @@ skips. Production JAR contains zero `SettlementTier.class`, validation namespace
 or Task-59 resources; validation duplicate-class audit remains zero. Minecraft was not launched.
 
 Production SHA-256: `05E77B7F9ACC29B0459FA8F4B5908082546188591A9AD4AFB6D024A4E00A930B`.
+Validation SHA-256: `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0`.
+
+**V4-A KnownVillager evidence (`D-VR-090`, STATIC/PACKAGE PASS, 2026-08-26):**
+`KnownVillagerTest` deterministically proves simultaneous 16 traders/settlement and 64/mob bounds,
+16 hints/trader, oldest-observation/UUID eviction, count-normalized component-exact identity,
+168,000-tick TTL boundary with physical pruning, selective POSITIVE→UNKNOWN live invalidation,
+missing-trader preservation, canonical anchor rekey, settlement eviction, registry-aware save/load,
+orphan fail-closed behavior, and containing-memory permanent cleanup.
+`KnownVillagerObservationContractTest` proves the production writer consumes the vanilla board already
+read by V2, performs no second `getOffers`, and cannot gate/rank/execute trade. Final `clean build`
+passed **1,649 production + 57 validation tests**, zero failures/errors/skips. No Minecraft launch
+occurred; destination behavior is out of V4-A scope and remains unclaimed.
+
+Production SHA-256: `9FEF386814C1ABCFD34CC4B7813E2FD44EA524192335E9529762ED34B25C34C4`.
 Validation SHA-256: `BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0`.

@@ -9,10 +9,10 @@
 | **Host baseline sync** | **CLOSED** (2026-08-22) — doc + authorization; runtime matrix pin is a Task-59 deliverable before launch |
 | **Target system** | **Vanilla Minecraft 1.21.1** — Village / Villager economy + **Raid** event (not SPM “raiding chests”) |
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
-| **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0 and V4-R0 implemented |
-| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** VR-T3j is **RUNTIME PASS**. V4-P0 / `D-VR-096` and V4-R0 / `D-VR-089` are **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-A onward and first-home behavior remain locked but unimplemented. |
-| **Nearest frontier** | **V4-A — bounded positive known-trader capability evidence (`D-VR-090`)**, only when separately authorized. Remaining V3 runtime rows stay open and resumable from the validation artifact. Any Minecraft launch still requires separate approval. |
-| **Last update** | 2026-08-26 (`Agent_Codex`, V4-R0 implementation/static-package acceptance) |
+| **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0, V4-R0, and V4-A implemented |
+| **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** VR-T3j is **RUNTIME PASS**. V4-P0 / `D-VR-096`, V4-R0 / `D-VR-089`, and V4-A / `D-VR-090` are **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-B onward and first-home behavior remain locked but unimplemented. |
+| **Nearest frontier** | **V4-B — locked SettlementOpinionBias**, only when separately authorized. Remaining V3 runtime rows stay open and resumable from the validation artifact. Any Minecraft launch still requires separate approval. |
+| **Last update** | 2026-08-26 (`Agent_Codex`, V4-A implementation/static-package acceptance) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
 | **Peer review** | `Agent_Cursor` · `Agent_ChatGPT` · `Agent_Claude` |
@@ -283,7 +283,8 @@ locked village predicate (D-VR-032).
 villagers, offers, or affinity (`KnownVillage.java` class javadoc). `MobVillageMemory.designateHome()`
 is the factual **HOME_VILLAGE** designation (`MobVillageMemory.java` L87–105).
 
-**`KnownVillager`** — bounded positive capability evidence (**V4**, `D-VR-090`; supersedes the
+**`KnownVillager`** — bounded positive capability evidence (**V4-A IMPLEMENTED / STATIC+PACKAGE
+ACCEPTED**, `D-VR-090`; supersedes the
 older V2-deferred offer-cache sketch in `D-VR-056`):
 
 ```text
@@ -301,6 +302,14 @@ It stores **no** remembered `OfferSnapshot`, price, board slot, remaining uses, 
 authorization. A positive hint means *worth visiting*; absence or expiry means **UNKNOWN**, never a
 persistent negative. Live V2 discovery and Q1/Q2 revalidation remain the only current market and
 transaction authority.
+
+**V4-A production seam (`CODE_CONFIRMED`, Task 62):** when V2 has already passed its route/cooldown
+gates and reads a villager's complete vanilla board, `KnownTraderMarketObservation` passively records
+the count-normalized item-and-components outputs. It performs no second entity/board scan and its
+return value is not consulted by planning. Query-shaped Trade Everything synthetic quotes are not
+treated as a complete stable board. Registry-aware NBT preserves components; the memory row contains
+only villager UUID, canonical settlement, observed profession/level/tick, capability output, and
+capability observation tick.
 
 **Locked bounds/lifecycle:** at most **16 traders per settlement**, **64 per mob**, and **16 hints per
 trader**. Capability participation expires after **168,000 ticks (7 Minecraft days)** without a
@@ -4990,7 +4999,7 @@ hook on server tick end (or shared phased clock — **not** inside `ExplorationA
 | ~~V1 (dropped from V1)~~ | `KnownVillager`, `RingVillageBellGoal`, `VillageSiteScore` | `KnownVillager` held until V4+ consumer; other work moved to V4 | V1 got *smaller* under review — it ships the ontology every later phase depends on, and nothing that acts on it |
 | **V2** | Trading: `VillagerTradeAdapter`, `TradeEvaluationPolicy`, `TradeWithVillagerGoal`, **two-step sell→buy chains**, relationship credit, finished-output projection, optional Trade Everything source | **IMPLEMENTED + CLOSED** — VR-T2 vanilla path and V2-TE positive path runtime-confirmed to recorded scope | **VR-T2 PASS**; **VR-T2k PASS (`V2-DEF-003c-R1`)**. VR-T2l, V2-I, and profiling are **DEFERRED / NON-BLOCKING** |
 | **V3** | **Village Work (canonical):** committed harvest→replant, composting, population food support, read-only workstation awareness, and ally/public storage safety | Tasks 52–58 **IMPLEMENTED / STATIC-BEHAVIORAL ACCEPT**. Certification remains **PARTIALLY COMPLETE / OPEN** under `D-VR-088`; the Task-59 harness is preserved through the validation-mod extraction, not shipped as production architecture. | VR-T3j **RUNTIME PASS**; remaining representative runtime rows a/b/d/e/g/i/k/l stay open and do not block V4 |
-| **V4** | Settlement fact decomposition; bounded positive trader-capability memory; bounded Opinion bridge; destination intent; existing COMMUTE integration; first-home-only promotion | **IMPLEMENTING:** V4-P0 + V4-R0 static/package accepted; V4-A onward unimplemented | One realistic single-village capability→leave→blocking demand→return COMMUTE→changed live offer→V2 revalidation/transaction witness; multi-village ranking deterministic |
+| **V4** | Settlement fact decomposition; bounded positive trader-capability memory; bounded Opinion bridge; destination intent; existing COMMUTE integration; first-home-only promotion | **IMPLEMENTING:** V4-P0 + V4-R0 + V4-A static/package accepted; V4-B onward unimplemented | One realistic single-village capability→leave→blocking demand→return COMMUTE→changed live offer→V2 revalidation/transaction witness; multi-village ranking deterministic |
 | **V5** | Raid awareness: `RaidTask` state, bell alarm, **TaskLifecycle interrupt/resume**, shelter EVACUATE, **day/night arbitration**, **`OminousBottlePolicy` pickup** | **PARTIAL** | VR-T5: iron demand interrupted → defend → resume; **VR-T5b:** dusk raid vs shelter |
 | **V6** | Player-parity bridges: cross-domain Ominous Event RAID intent, self-drink executor, Bad Omen/Raid Omen bridges, participation credit, hero recognition gift bridge + host pickup, **zombie-villager curing** | **REQUIRES MIXIN/BRIDGE** | VR-T6: bottle → Bad Omen → Raid Omen commit/abort → raid; VR-T6b: villager gift recognition + host pickup; curing scenarios to be defined in V6 |
 | **V7** | Advanced community: rescue, repair, transport, settlement projects, group coop, founding through world truth + ordinary perception, repair/build golem | **NOT PRACTICAL** gen-1 | Deferred |
@@ -9152,3 +9161,35 @@ runtime was forbidden, but no runtime claim is required for this deterministic r
 
 **Frontier after:** V4-R0 is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-A is dependency-ready but
 requires separate authorization.
+
+### Contribution — `Agent_Codex` (V4-A KnownVillager evidence, 2026-08-26)
+
+**Authorization:** implement `D-VR-090` only; no ranking, SettlementOpinionBias, director, COMMUTE,
+first-home producer, runtime witness, Minecraft launch, or commit.
+
+**Implementation (`CODE_CONFIRMED`):** `KnownVillager` now lives inside each `MobVillageMemory` and
+retains only stable UUID, canonical settlement, observed profession/level/tick, and count-normalized
+item-and-components output hints. Limits are 16 traders/settlement, 64/mob, and 16 hints/trader;
+trader eviction is oldest observation then UUID. Hint TTL is 168,000 ticks with physical pruning.
+Anchor replacement rekeys trader rows; settlement eviction removes them; unload/restart preserve
+them; permanent owner removal deletes the containing memory.
+
+The production writer piggy-backs on the complete vanilla board V2 already read after route/cooldown
+admission. It performs no new villager/board scan, ignores query-dependent synthetic TE quotes, and
+its return value cannot affect current planning. Live revisit replaces only the positive capability
+set; a missing trader leaves identity/evidence untouched until ordinary TTL. No price, cost, slot,
+uses, affordability, `MerchantOffer`, `OfferSnapshot`, or old authorization is serialized.
+
+**RED→GREEN / final gate (`CONFIRMED`):** the new suite first failed compilation on the absent V4-A
+model/APIs. Final `clean build` passed **1,649 production + 57 validation tests**, zero failures,
+including both artifact audits. Production SHA-256 is
+`9FEF386814C1ABCFD34CC4B7813E2FD44EA524192335E9529762ED34B25C34C4`; validation remains
+`BB02D551AEED4733434A3756401A9B520091C4056477A7C347CD656CC5F546A0` with zero class duplicates.
+
+**Semantic drift:** none in authority or persistence semantics. The source-specific observation
+boundary was tightened to vanilla's complete stable board because TE synthetic opportunities are
+query-shaped by current authorized inventory; persisting their absence as a complete-board disproof
+would manufacture false negatives. Live restart remains **UNVERIFIED** because runtime was forbidden.
+
+**Frontier after:** V4-A is **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. V4-B is the next locked,
+unimplemented slice and requires separate authorization.

@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * V1 — per-dimension, per-mob settlement memory (mirrors {@code MiningProjectSavedData}).
@@ -138,6 +140,36 @@ public final class VillageMemorySavedData extends SavedData {
     /** Allocating: only call when there is something to record. */
     public MobVillageMemory memoryOf(UUID mob) {
         return byMob.computeIfAbsent(mob, ignored -> new MobVillageMemory());
+    }
+
+    /**
+     * V4-A production write boundary. Records a board only for an existing mob memory and an
+     * already remembered settlement; market observation must never manufacture settlement memory.
+     */
+    public boolean recordTraderObservation(UUID mob, BlockPos settlementPosition, UUID villager,
+            ResourceLocation profession, int level, List<ItemStack> outputs, long tick) {
+        MobVillageMemory memory = byMob.get(mob);
+        if (memory == null) {
+            return false;
+        }
+        boolean changed = memory.observeTrader(
+                settlementPosition, villager, profession, level, outputs, tick);
+        if (changed) {
+            setDirty();
+        }
+        return changed;
+    }
+
+    /** Future-facing non-allocating read seam; expiry deletion is persisted by this owner. */
+    public Optional<KnownVillager> activeKnownTrader(UUID mob, UUID villager, long now) {
+        MobVillageMemory memory = byMob.get(mob);
+        if (memory == null) {
+            return Optional.empty();
+        }
+        if (memory.pruneExpiredTraderCapabilities(now)) {
+            setDirty();
+        }
+        return memory.knownTrader(villager);
     }
 
     /**
@@ -325,7 +357,7 @@ public final class VillageMemorySavedData extends SavedData {
             if (!entry.hasUUID("mob")) {
                 continue;
             }
-            MobVillageMemory memory = MobVillageMemory.load(entry.getCompound("memory"));
+            MobVillageMemory memory = MobVillageMemory.load(entry.getCompound("memory"), registries);
             migratedLegacySchema |= memory.migratedLegacySchema();
             if (memory.size() > 0) {
                 data.byMob.put(entry.getUUID("mob"), memory);
@@ -346,7 +378,7 @@ public final class VillageMemorySavedData extends SavedData {
             }
             CompoundTag wrapped = new CompoundTag();
             wrapped.putUUID("mob", entry.getKey());
-            wrapped.put("memory", entry.getValue().save());
+            wrapped.put("memory", entry.getValue().save(registries));
             list.add(wrapped);
         }
         tag.put("mobs", list);

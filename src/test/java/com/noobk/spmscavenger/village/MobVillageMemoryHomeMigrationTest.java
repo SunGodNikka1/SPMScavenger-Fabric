@@ -229,7 +229,7 @@ class MobVillageMemoryHomeMigrationTest {
     }
 
     @Test
-    void structuralModelContainsNoTierOrFutureV4Producers() throws IOException {
+    void structuralModelContainsNoTierOrPostV4aProducers() throws IOException {
         Path villageSource = Path.of("src/main/java/com/noobk/spmscavenger/village");
         assertFalse(Files.exists(villageSource.resolve("SettlementTier.java")));
         String known = Files.readString(villageSource.resolve("KnownVillage.java"));
@@ -238,10 +238,10 @@ class MobVillageMemoryHomeMigrationTest {
         assertFalse(known.contains("putString(\"tier\""));
         assertFalse(memory.contains("TRADING_POST"));
         assertFalse(memory.contains("AVOID"));
-        assertFalse(memory.contains("KnownVillager"));
         assertFalse(memory.contains("VillageInteractionDirector"));
         assertFalse(memory.contains("startSleeping"));
-        assertNull(findProductionSource("KnownVillager"));
+        assertTrue(findProductionSource("KnownVillager") != null,
+                "V4-A KnownVillager evidence is now the authorized frontier");
         assertNull(findProductionSource("VillageInteractionDirector"));
     }
 

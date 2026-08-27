@@ -11,7 +11,8 @@
 | **V3 Village Work** | Implementation complete; certification partially complete/open. Gate 0 + T3j **RUNTIME PASS**; `D-VR-088` closure minimization **LOCKED**. Remaining runtime rows a/b/d/e/g/i/k/l will resume from the future validation artifact and do not block V4 | `task-58-report.md`, `task-59-report.md`, `VR-T3-RUNTIME-MATRIX.md` |
 | **V4-P0 tooling extraction** | **DONE_WITH_CONCERNS / STATIC+PACKAGE ACCEPTED (`D-VR-096`)** — production/validation split built and audited; live sidecar loading remains unverified without runtime approval | `task-60-report.md` |
 | **V4-R0 settlement representation** | **DONE / STATIC+PACKAGE ACCEPTED (`D-VR-089`)** — independent `homeAnchor`, deterministic tier migration, rekey/eviction/save-load coverage; no V4 behavior producer | `task-61-report.md` |
-| **V4 Architecture** | `D-VR-089…096` + `D-VR-042-A1` **LOCKED**; **V4-A is next only when separately authorized** | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
+| **V4-A known trader evidence** | **DONE / STATIC+PACKAGE ACCEPTED (`D-VR-090`)** — bounded component-exact positive capabilities in existing village-memory lifecycle; live vanilla-board observation only; no market authority | `task-62-report.md` |
+| **V4 Architecture** | `D-VR-089…096` + `D-VR-042-A1` **LOCKED**; V4-B is the next unimplemented slice | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
 
 **Task-59 authorization scope (2026-08-22):**
 
@@ -121,5 +122,7 @@ Task 59: Gate 0 + VR-T3j **RUNTIME PASS** on `BDAA788C...A0B2BDC`; `D-VR-088` cl
 Task 60: **DONE_WITH_CONCERNS / STATIC+PACKAGE ACCEPTED** — V4-P0 extracted Task-59 into `spmscavenger_validation`, retained passive General Debug, and passed the normal dual-artifact build/audits (1,624 production + 57 validation tests; zero failures). Live sidecar loading remains UNVERIFIED without launch approval (`task-60-report.md`)
 
 Task 61: **DONE / STATIC+PACKAGE ACCEPTED** — V4-R0 removed `SettlementTier`, moved exactly one optional home to `MobVillageMemory.homeAnchor`, added deterministic legacy migration/dirty rewrite, rekey/eviction/corruption/save-load tests, and passed 1,635 production + 57 validation tests (`task-61-report.md`)
+
+Task 62: **DONE / STATIC+PACKAGE ACCEPTED** — V4-A added bounded `KnownVillager` positive capability evidence inside `MobVillageMemory`, component-exact registry-aware persistence, 168,000-tick physical pruning, selective live-board invalidation, simultaneous 16/64/16 bounds, rekey/eviction/permanent-cleanup coverage, and passive observation of the already-read vanilla V2 board. No ranking/director/COMMUTE/home promotion (`task-62-report.md`).
 
 No commits unless user requests. No Minecraft launches unless separately approved.
