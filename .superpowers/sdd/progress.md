@@ -8,7 +8,9 @@
 | **V1-D village perception driver** | **DONE** — VR-T1A **PASS**; diagnostics removed | `task-45-report.md` |
 | **V1.5 Settlement attachment & return** | **CLOSED** — VR-T1.5a–c PASS; task-46 **DONE** | `task-46-report.md` |
 | **V2 Trading** | **CLOSED** — VR-T2 PASS | `task-47-report.md` + V2-TE |
-| **V3 Village Work** | **V3-F CLOSED**; V3-G Gate 0 + T3j **RUNTIME PASS**; `D-VR-088` closure minimization **LOCKED**. Remaining runtime rows: a/b/d/e/g/i/k/l; T3l fixture redesign required | `task-58-report.md`, `task-59-report.md`, `VR-T3-RUNTIME-MATRIX.md` |
+| **V3 Village Work** | Implementation complete; certification partially complete/open. Gate 0 + T3j **RUNTIME PASS**; `D-VR-088` closure minimization **LOCKED**. Remaining runtime rows a/b/d/e/g/i/k/l will resume from the future validation artifact and do not block V4 | `task-58-report.md`, `task-59-report.md`, `VR-T3-RUNTIME-MATRIX.md` |
+| **V4-P0 tooling extraction** | **NEXT / DESIGN LOCKED (`D-VR-096`)** — validation depends on production; separate `com.noobk.spmscavenger.validation.*`; dual artifacts; passive General Debug remains production. Implementation not yet started | Village/Raid RFC V4 locked sequence |
+| **V4 Architecture** | `D-VR-089…096` + `D-VR-042-A1` **LOCKED**; V4-R0 waits on clean production/validation artifact split | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
 
 **Task-59 authorization scope (2026-08-22):**
 
@@ -19,9 +21,10 @@
 | Pre-launch fixture sub-slice (`spm_vr` bodies, structural test, env pin) | **DONE** (2026-08-22) |
 | Minecraft / `runClient` / batched VR-T3 execution | **NOT AUTHORIZED** |
 
-**Checkpoint before further runtime:** redesign and statically review only the minimal T3l host-hook
-witness, then obtain exact-artifact approval for the reduced eight-row campaign. T3j and D-VR-084
-must not be rerun; standalone T3c/T3h/T3m sessions are not closure obligations.
+**Checkpoint before further runtime:** first extract the existing Task-59 certification machinery to
+the separately packaged validation mod. Then redesign/statically review the minimal T3l host-hook
+witness and obtain exact validation-artifact approval for the reduced eight-row campaign. T3j and
+D-VR-084 must not be rerun; standalone T3c/T3h/T3m sessions are not closure obligations.
 | **GAO-6** | **CLOSED** (GAO-6R repair) — SPM entity bridge + social sub-episodes; 574 tests | `task-37-report.md` (GAO-6R section) |
 | **GAO-7** | **CLOSED / STATIC ACCEPT** — PersonalityModel; 581 tests | `task-39-report.md` |
 | **GAO-8A** | **CLOSED / STATIC ACCEPT** — passive physical expression; 593 tests | `task-40-report.md` |
@@ -112,6 +115,6 @@ Task 58: brief v1.1 — `task-58-brief.md` (V3-F unified ComposterWorkFacts + Co
 Task 58: Gate 0 PASS — `task-58-gate0-report.md`
 Task 58: complete — V3-F STATIC-BEHAVIORAL ACCEPT (`task-58-report.md`, CLOSE-58-1…3)
 
-Task 59: Gate 0 + VR-T3j **RUNTIME PASS** on `BDAA788C...A0B2BDC`; `D-VR-088` closure policy LOCKED — D-VR-084/T3c/T3h satisfied without standalone runtime, T3m static substitution paired with T3a, remaining runtime a/b/d/e/g/i/k/l, T3l fixture redesign required (`task-59-report.md`)
+Task 59: Gate 0 + VR-T3j **RUNTIME PASS** on `BDAA788C...A0B2BDC`; `D-VR-088` closure policy LOCKED — D-VR-084/T3c/T3h satisfied without standalone runtime, T3m static substitution paired with T3a, remaining runtime a/b/d/e/g/i/k/l. Harness preservation moves to the `D-VR-096` validation artifact; certification remains open (`task-59-report.md`)
 
 No commits unless user requests. No Minecraft launches unless separately approved.

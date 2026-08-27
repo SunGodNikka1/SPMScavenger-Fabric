@@ -433,3 +433,30 @@ rerun T3j/D-VR-084 merely for checklist symmetry.
 **This documentation pass changed only:** the RFC, runtime matrix, this report, runtime evidence
 ledger, test matrix, and progress ledger. It did not modify production code, tests, mixins, Gradle,
 configs, or datapack fixtures; it did not build, launch Minecraft, commit, or push.
+
+## Certification-tooling disposition — D-VR-096 (2026-08-26)
+
+**Status:** architecture **LOCKED**; extraction **NOT IMPLEMENTED**. Task-59 certification remains
+partially complete/open and its remaining rows are not awarded or deferred by this decision.
+
+The temporary controller, Gate-0/bootstrap/contamination machinery, scenario commands, temporal
+witnesses, validation mixins/accessors, and fixtures will move to a separately packaged validation
+mod. Dependency direction is strict:
+
+```text
+spmscavenger_validation -> spmscavenger -> Minecraft / SPM
+```
+
+Validation source uses `com.noobk.spmscavenger.validation.*`, never production package names, and may
+consume only public passive production truth surfaces. Production must not depend on validation or
+widen mutation/authority APIs for certification. General Debug and legitimate non-creating reads
+remain production; scenario construction/adjudication remains validation-only.
+
+The normal clean build must compile/test/package/audit both the production and validation artifacts.
+The production JAR must contain zero Task-59 controller/scenario/Gate0/contamination/temporal-witness
+classes or validation resources. The installable validation JAR must declare mod id
+`spmscavenger_validation` and depend on `spmscavenger`.
+
+**Next:** implement the extraction as V4-P0, obtain a clean dual-artifact build/package audit, then
+begin V4-R0. Remaining VR-T3 runtime certification can resume later from the validation artifact and
+does not block V4 implementation.

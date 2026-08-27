@@ -689,3 +689,11 @@ Minecraft launches remain separately authorized.
 
 **Remaining runtime set:** `VR-T3a`, `VR-T3b`, `VR-T3d`, `VR-T3e`, `VR-T3g`, `VR-T3i`,
 `VR-T3k`, and redesigned `VR-T3l`. VR-T3j is already `RUNTIME PASS` and must not be rerun.
+**Task-59 tooling extraction gate (`D-VR-096`, design locked / implementation pending):** normal
+`clean build` must compile/test/package both `spmscavenger-1.11.0.jar` and the separately installable
+`spmscavenger-1.11.0-validation.jar`. Production-package audit must find zero Task-59 controller,
+scenario, Gate0, contamination, temporal-witness, validation-mixin/resource, validation manifest, or
+fixture-command entries and zero production references to the validation mod. Validation must use
+`com.noobk.spmscavenger.validation.*`, declare mod id `spmscavenger_validation`, depend on
+`spmscavenger`, and compile only against public passive production truth surfaces. Both test suites
+must run in the normal build. Extraction does not change any VR-T3 runtime verdict.
