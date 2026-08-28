@@ -13,7 +13,7 @@
 | **V4-R0 settlement representation** | **DONE / STATIC+PACKAGE ACCEPTED (`D-VR-089`)** — independent `homeAnchor`, deterministic tier migration, rekey/eviction/save-load coverage; no V4 behavior producer | `task-61-report.md` |
 | **V4-A known trader evidence** | **DONE / STATIC+PACKAGE ACCEPTED (`D-VR-090`)** — bounded component-exact positive capabilities in existing village-memory lifecycle; live vanilla-board observation only; no market authority | `task-62-report.md` |
 | **V4-D VillageIntent** | **DONE / STATIC+PACKAGE ACCEPTED (`D-VR-091`)** — transient reason/destination only; stable material+consumer identity, live route/destination revalidation, interruption suspension, lifecycle cleanup; no authority or movement | `task-65-report.md` |
-| **V4 Architecture** | `D-VR-089…096` + `D-VR-042-A1` **LOCKED**; V4-P0 through V4-F are static/package accepted on SPM v0.96; V4-G representative runtime is next and remains launch-gated | `RFC-VILLAGE-RAID-AUTONOMOUS-PROGRESSION.md` |
+| **V4 Architecture** | `D-VR-089…096` + `D-VR-042-A1` **LOCKED**; V4-P0 through V4-F are static/package accepted on SPM v0.96; V4-G validation sidecar/runtime fixture is **PREPARED**, physical closure remains launch-gated and `UNVERIFIED` | `task-68-report.md`, `docs/porting/V4-G-RUNTIME-RUNBOOK.md` |
 
 **Task-59 authorization scope (2026-08-22):**
 

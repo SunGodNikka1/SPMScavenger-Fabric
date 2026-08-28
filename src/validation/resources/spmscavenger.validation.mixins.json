@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.noobk.spmscavenger.validation.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "V4KnownTraderObservationMixin",
+    "V4VillageInteractionDirectorMixin",
+    "V4ExploringGoalWitnessMixin",
+    "V4VillagerTradeAdapterMixin",
+    "V4FirstHomePromotionMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

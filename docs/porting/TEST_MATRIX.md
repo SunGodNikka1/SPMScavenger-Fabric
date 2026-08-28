@@ -722,6 +722,21 @@ Runtime loading of the pair remains **UNVERIFIED**; no Minecraft launch occurred
 next representative integration witness and still requires separately prepared fixture evidence and
 explicit Minecraft launch approval.
 
+## V4-G representative runtime preparation — Task 68 (2026-08-27)
+
+| Proof | Must happen | Must not happen | Preparation evidence |
+| --- | --- | --- | --- |
+| Pre-HOME causality | Phase A opens with HOME absent; remembered capability selects the single village | V1.5 HOME return can independently explain travel | Controller hard-fails any pre-Phase-B HOME; validation tests `CONFIRMED`; runtime `UNVERIFIED` |
+| Stale-memory boundary | Initial 8-emerald board is remembered, live board changes to 10, exact executed fingerprint is 10 | Cached 8-emerald terms authorize/execute | Passive board + transaction mixins and negative fingerprint test `CONFIRMED`; runtime `UNVERIFIED` |
+| Progression/COMMUTE integration | Same live demand is canonically INFEASIBLE; director intent binds existing REQUIRED_TRADE COMMUTE; anchor arrival releases travel | Fixture opens intent, ranks, steers after window, or calls transaction | Validation authority scan + observer wiring tests `CONFIRMED`; runtime `UNVERIFIED` |
+| Interruption sub-proof | If natural target acquisition occurs, navigation is discarded, exact binding resumes after revalidation, failure count remains zero | Fixture awards interruption PASS or publishes route failure | Tracker negative controls `CONFIRMED`; runtime sub-proof `UNVERIFIED/OPTIONAL` |
+| First HOME | After Phase A only, real SeekShelter sleep promotes the canonical remembered anchor | Fixture calls sleep/promotion/designation or HOME contaminates Phase A | First-home observer and authority scan `CONFIRMED`; runtime `UNVERIFIED` |
+| Packaging | Normal build compiles/tests both artifacts; production contains no validation code/resources | Sidecar duplicates production/upstream classes | `clean build`: 1,719 production + 65 validation tests, zero failures/errors/skips; both audits PASS |
+
+Prepared production SHA-256: `918CA885EBD5FA985FBE234DE11D05E983DFAF882A4092921BA15F46B59E089B`.
+Prepared validation SHA-256: `267381CE2A0255091428FF73621252AB283D448DD9D0E2F6B0AE2AD7ED5831C8`.
+Runtime procedure: `docs/porting/V4-G-RUNTIME-RUNBOOK.md`. Minecraft was not launched.
+
 **V4-R0 settlement representation (`D-VR-089`, STATIC/PACKAGE PASS, 2026-08-26):**
 `KnownVillage` persists only anchor/observation facts. `MobVillageMemory` persists one optional root
 `homeAnchor`; legacy `HOME_VILLAGE` migrates deterministically, duplicate legacy homes choose the

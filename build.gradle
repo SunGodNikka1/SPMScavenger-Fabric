@@ -20,7 +20,8 @@ repositories {
 sourceSets {
     validation {
         java.srcDir 'src/validation/java'
-        resources.srcDirs = ['src/validation/resources', 'test-datapacks/phase-village-raid']
+        resources.srcDirs = ['src/validation/resources', 'test-datapacks/phase-village-raid',
+                             'test-datapacks/v4-settlement-integration']
         compileClasspath += sourceSets.main.output
         compileClasspath += sourceSets.main.compileClasspath
         runtimeClasspath += output
@@ -39,6 +40,12 @@ sourceSets {
         runtimeClasspath += sourceSets.validation.runtimeClasspath
         runtimeClasspath += sourceSets.test.runtimeClasspath
     }
+}
+
+tasks.named('processValidationResources') {
+    // The validation sidecar merges two independently runnable certification datapacks. Their
+    // root pack.mcmeta/README files are equivalent packaging metadata; data namespaces are unique.
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 configurations {

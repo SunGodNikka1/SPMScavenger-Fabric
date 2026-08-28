@@ -10,6 +10,7 @@
   "entrypoints": {
     "main": ["com.noobk.spmscavenger.validation.SpmScavengerValidation"]
   },
+  "mixins": ["spmscavenger.validation.mixins.json"],
   "depends": {
     "fabricloader": ">=0.16.0",
     "minecraft": "~1.21.1",

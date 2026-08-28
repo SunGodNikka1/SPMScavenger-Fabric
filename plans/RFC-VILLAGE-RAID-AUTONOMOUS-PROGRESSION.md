@@ -11,7 +11,7 @@
 | **Reference AI** | **Mineflayer** (bot stack: pathfinder, inventory, plugins) + **human player** interaction parity |
 | **Mode** | `PLANNING + IMPLEMENTATION TRACKING` — V1/V1.5/V2 closed; V3 implementation complete with certification open under `D-VR-088`; V4 architecture locked; V4-P0 through V4-F implemented |
 | **Status** | **V2 CLOSED. V3 implementation complete; certification partially complete/open.** VR-T3j is **RUNTIME PASS on the historical v0.89 artifact**. V4-P0 through V4-F are **IMPLEMENTED + STATIC/PACKAGE ACCEPTED**. Task-66 established v0.96 as the canonical static baseline; V4 runtime integration remains unverified. |
-| **Nearest frontier** | **V4-G — one representative single-village runtime integration witness**, only when separately prepared and authorized. Remaining V3 runtime rows resume against v0.96 from the validation artifact; accepted v0.89 evidence is retained and not relabelled. Any Minecraft launch still requires separate approval. |
+| **Nearest frontier** | **V4-G runtime execution** — the one-session single-village validation sidecar is `PREPARED / STATIC+PACKAGE CONFIRMED`; physical evidence remains `UNVERIFIED` and requires separate launch approval. Remaining V3 runtime rows resume against v0.96 from the validation artifact; accepted v0.89 evidence is retained and not relabelled. |
 | **Last update** | 2026-08-27 (`Agent_Codex`, V4-F first-home promotion static/package acceptance) |
 | **Related** | `RFC-VANILLA-AUTONOMOUS-PROGRESSION.md`, `RFC-TOOL-TIER-UPGRADES.md`, `RFC-FURNACE-SMELTING.md`, `RFC-ACTION-TRANSITIONS.md`, `docs/wiki/Opinion-System.md` |
 | **Gate** | MRFC-1, SPM-1 … SPM-5 |
@@ -9469,3 +9469,40 @@ frequency remain **UNVERIFIED** because Minecraft was not launched.
 **Frontier after:** V4-P0 through V4-F are implemented and static/package accepted. V4-G is the one
 representative single-village runtime integration witness and still requires separate preparation
 and explicit launch approval.
+
+### Contribution — `Agent_Codex` (V4-G runtime preparation, Task 68, 2026-08-27)
+
+**Status:** `PREPARED / STATIC+PACKAGE CONFIRMED`; physical V4-G behavior remains `UNVERIFIED`.
+Minecraft was not launched.
+
+The separate `spmscavenger_validation` artifact now owns a single bounded, sequential V4-G
+campaign. Phase A hard-requires HOME absent, lets production remember an initial live vanilla
+iron-pickaxe offer, changes the live price before departure, then requires canonical route
+`INFEASIBLE`, a production REQUIRED_TRADE intent/directive, the existing multi-leg COMMUTE,
+canonical-anchor arrival/release, V2 changed-board rediscovery, and execution of the changed offer
+fingerprint. Phase B begins only after Phase A passes, prepares familiarity/night/bed prerequisites,
+and requires real `SeekShelterGoal` sleep plus canonical first-HOME promotion.
+
+Five validation-only mixins passively witness the already-existing production board observation,
+director/revalidation/arrival, COMMUTE seed/stop, exact transaction, and first-home event seams. The
+controller never opens an intent, calls ranking, steers after the window opens, transacts, sleeps,
+designates HOME, or publishes route exhaustion/failure. The optional tagged-hostile interruption
+sub-proof may remain `INCOMPLETE`; it cannot manufacture the principal PASS.
+
+**Fixture alternatives:** two sessions were rejected because HOME created by the first could
+contaminate the causal return proof in the second and would increase runtime/operator work. A hard
+mandatory interruption was rejected because nondeterministic host targeting would make V4 closure
+depend on combat-fixture luck. Reconsider only if a deterministic non-authoritative interruption
+seam is proven.
+
+**Static/package acceptance:** `clean build` passes 1,719 production + 65 validation tests with zero
+failures/errors/skips. Production contains zero validation classes/resources and zero upstream SPM
+or Trade Everything classes. Validation contains 76 validation classes and five `spm_v4` resources,
+duplicates zero production classes, and packages no upstream classes. Production SHA-256 is
+`918CA885EBD5FA985FBE234DE11D05E983DFAF882A4092921BA15F46B59E089B`; validation SHA-256 is
+`267381CE2A0255091428FF73621252AB283D448DD9D0E2F6B0AE2AD7ED5831C8`.
+
+**Runtime contract:** exact commands, 2,400 + 2,400 + 2,400 tick bounds, config preflight, verdict
+rules, cleanup, and unresolved fixture risks are in `docs/porting/V4-G-RUNTIME-RUNBOOK.md`. V4 does
+not close until the matching artifact pair produces accepted runtime evidence under separate launch
+authorization.
