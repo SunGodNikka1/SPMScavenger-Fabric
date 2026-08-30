@@ -13,7 +13,7 @@
 | Fabric API | `0.116.4+1.21.1` |
 | Social Player Mobs | `playermob` `0.96.0`; SHA-256 `508EDA58611A2A0738E257F98C2E14C5032C6EFBF5B1A985C9F93EE295131097` |
 | Production addon | `build/libs/spmscavenger-1.11.0.jar`; SHA-256 `918CA885EBD5FA985FBE234DE11D05E983DFAF882A4092921BA15F46B59E089B` |
-| Validation sidecar | `build/libs/spmscavenger-1.11.0-validation.jar`; SHA-256 `267381CE2A0255091428FF73621252AB283D448DD9D0E2F6B0AE2AD7ED5831C8` |
+| Validation sidecar | `build/libs/spmscavenger-1.11.0-validation.jar`; SHA-256 `04497D8F7C2B755A65EF8F638692D8764D533C65FEB6E926BB283FEF5FDA6207` |
 
 The runtime command records the actual relevant Scavenger configuration in `status` and `report`.
 Preflight requires `enabled`, `gatherResources`, `craftTools`, `seekShelter`, and `sleepInBeds`; a
@@ -31,7 +31,14 @@ run:
 /spmscavenger debug v4 run
 ```
 
-The command creates one fixture and then requires no operator babysitting. The controller performs:
+The command creates one fixture and then requires no operator babysitting. Before entity creation,
+the validation sidecar temporarily disables `doMobSpawning`, discards unrelated hostile entities
+already inside the owned arena without damage, creates non-obstructing level-15 Light blocks across
+the settlement/corridor/departure geometry, and verifies representative block-light and hostile
+absence postconditions. It restores the original gamerule during every terminal, stop, and reset
+path. It does not change difficulty or continuously delete entities after bootstrap begins.
+
+The controller then performs:
 
 1. natural settlement/board/route bootstrap, bounded to 2,400 ticks;
 2. Phase A REQUIRED_TRADE return and changed-live-offer transaction, bounded to 2,400 ticks;
@@ -79,6 +86,14 @@ emerald -> 1 iron_pickaxe`, iron-pick demand with route `INFEASIBLE`, a producti
 existing REQUIRED_TRADE COMMUTE, anchor arrival/release, changed-board rediscovery, and transaction
 of the changed fingerprint. Executing the initial fingerprint is immediate `FAIL`.
 
+During bootstrap, a locally bound REQUIRED_TRADE intent is legal even before positive capability
+memory exists. V4-C ranks `UNKNOWN` remembered settlements after positive hints; V4-D does not make
+positive evidence an opening prerequisite. The report therefore records
+`bootstrapLocalRequiredTradeCount`, `bootstrapLocalCommuteSeedCount`,
+`bootstrapLocalArrivalCount`, and `bootstrapLocalIntentReleased`. Those events are bootstrap
+evidence only and cannot become the Phase-A binding. Warm-up completion requires the local intent
+to release/close naturally before the deliberate 180-block departure. Validation never clears it.
+
 Phase B opens only afterward. It requires familiarity 600, exactly one remembered-settlement
 association for the fixture beds, a running production `SeekShelterGoal`, real sleeping state, and
 HOME equal to the canonical remembered anchor. The fixture never calls intent opening, ranking,
@@ -96,6 +111,12 @@ result.
   distance; no stale trader-position navigation is substituted.
 - Natural settlement/board observation or Gather exhaustion absent within bootstrap budget:
   `INCOMPLETE`, not product failure.
+- A bootstrap-local REQUIRED_TRADE that outlives demand resolution: retained as product evidence;
+  validation does not cancel it or let Phase A inherit its binding.
+- The actual production villager query reports zero candidates: the same callback reports direct
+  subject/trader positions, distance, life/sleep/trading-player/availability facts from tracked
+  UUIDs without issuing another query. Unavailable terminal facts render `NOT_MEASURED`, never
+  factual `false` or `0` defaults.
 - Route-exhaustion evidence expires before the remote return completes: `INCOMPLETE` with status
   history; validation never republishes it.
 - Validation mixin attachment and the physical SPM 0.96 scheduler/navigation/sleep sequence remain

@@ -2,6 +2,7 @@ package com.noobk.spmscavenger.validation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.noobk.spmscavenger.WorkDemandPolicy;
@@ -79,6 +80,25 @@ class V4TradeLivenessWitnessTest {
         assertFalse(queryMixin.contains(".getEntitiesOfClass("),
                 "query mixin may observe only the already-produced result");
         assertTrue(queryMixin.contains("CallbackInfoReturnable<List<T>>"));
+        assertTrue(witness.contains("subjectRef"));
+        assertTrue(witness.contains("traderRef"));
+        assertTrue(witness.contains("queryFixtureTraderSleeping"));
+    }
+
+    @Test
+    void unmeasuredTerminalFixtureFactsRemainTriState() {
+        V4TradeLivenessWitness.arm(MOB, TRADER, new Object(), 1L);
+        V4TradeLivenessWitness.observeFixtureFacts(
+                null, null, null, null, null, null, null, 2L);
+
+        V4TradeLivenessWitness.Snapshot snapshot = V4TradeLivenessWitness.snapshot();
+        assertNull(snapshot.fixtureTraderAlive());
+        assertNull(snapshot.fixtureTraderProfession());
+        assertNull(snapshot.fixtureTraderLevel());
+        assertNull(snapshot.terminalFixtureTraderDistance());
+        assertNull(snapshot.terminalFixtureTraderAvailable());
+        assertNull(snapshot.subjectEmeraldCount());
+        assertNull(snapshot.subjectIronPickaxeCount());
     }
 
     @Test

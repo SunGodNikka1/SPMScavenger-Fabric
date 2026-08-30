@@ -9506,3 +9506,31 @@ duplicates zero production classes, and packages no upstream classes. Production
 rules, cleanup, and unresolved fixture risks are in `docs/porting/V4-G-RUNTIME-RUNBOOK.md`. V4 does
 not close until the matching artifact pair produces accepted runtime evidence under separate launch
 authorization.
+
+#### V4-G bootstrap-specification and environment-isolation repair — `Agent_Codex`, 2026-08-30
+
+**Classification:** `VALIDATION_FIXTURE_SPECIFICATION / ENVIRONMENT_ISOLATION`; the latest runtime
+does not falsify V4 production. Production legitimately opened a local REQUIRED_TRADE while the
+bootstrap settlement still had `UNKNOWN` capability evidence. Source inspection confirms V4-C
+ranks `POSITIVE_HINT` before `UNKNOWN` rather than excluding `UNKNOWN`, while V4-D requires live
+demand, displaced route, and compatible destination—not a positive hint.
+
+The validator now treats a pre-departure, locally bounded intent/commute/arrival/release as
+`BOOTSTRAP_LOCAL_REQUIRED_TRADE`. It records unique bootstrap bindings separately and cannot reuse
+one as Phase-A evidence. Warm-up demand resolution must naturally close/release that intent before
+the deliberate departure; validation neither clears nor cancels it.
+
+Bootstrap isolation is validation-owned and bounded: it leases `doMobSpawning=false` for the active
+campaign and restores the captured value on teardown, places and verifies non-obstructing level-15
+Light blocks across the owned settlement/corridor/departure geometry, and performs one synchronous
+non-damaging discard of unrelated hostile entities before fixture entity creation. It does not
+change difficulty, continuously suppress combat, or touch V4 production logic. Actual production
+candidate-query callbacks now capture exact subject/trader physical facts without a second entity
+query, and all terminal branches distinguish measured facts from `NOT_MEASURED`.
+
+**Static/package acceptance:** `clean build` passes 1,719 production + 95 validation tests with zero
+failures/errors/skips. All 32 required validation Mixin injectors resolve against packaged runtime
+targets; production and validation package audits pass. Production SHA-256 remains
+`918CA885EBD5FA985FBE234DE11D05E983DFAF882A4092921BA15F46B59E089B`; replacement validation
+SHA-256 is `04497D8F7C2B755A65EF8F638692D8764D533C65FEB6E926BB283FEF5FDA6207`. Minecraft was not
+launched and V4-G physical closure remains `UNVERIFIED`.

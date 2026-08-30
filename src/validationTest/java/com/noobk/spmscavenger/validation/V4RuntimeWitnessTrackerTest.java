@@ -87,7 +87,7 @@ class V4RuntimeWitnessTrackerTest {
     }
 
     @Test
-    void prePhaseAIntentCommuteAndArrivalAreFixtureContaminationOnly() {
+    void prePhaseAIntentCommuteAndArrivalAreBootstrapLocalEvidenceOnly() {
         VillageIntent intent = requiredTradeIntent();
         V4RuntimeWitnessTracker.arm(MOB, TRADER, new Object(), INITIAL, 10L);
         V4RuntimeWitnessTracker.observeDirective(MOB, intent, 20L);
@@ -95,12 +95,36 @@ class V4RuntimeWitnessTrackerTest {
         V4RuntimeWitnessTracker.observeArrival(MOB, intent, true, 22L);
 
         V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
-        assertTrue(snapshot.prematureRequiredTradeIntent());
-        assertTrue(snapshot.prematureCommuteSeed());
-        assertTrue(snapshot.prematureArrival());
+        assertEquals(1, snapshot.bootstrapLocalRequiredTradeCount());
+        assertEquals(1, snapshot.bootstrapLocalCommuteSeedCount());
+        assertEquals(1, snapshot.bootstrapLocalArrivalCount());
+        assertTrue(snapshot.bootstrapLocalIntentReleased());
         assertEquals(null, snapshot.intentIdentity());
         assertFalse(snapshot.commuteSeeded());
         assertFalse(snapshot.arrivalObserved());
+    }
+
+    @Test
+    void phaseABindingCannotInheritBootstrapLocalIntent() {
+        VillageIntent bootstrap = requiredTradeIntent();
+        VillageIntent phaseA = new VillageIntent(
+                VillageIntent.Kind.REQUIRED_TRADE,
+                bootstrap.destination(),
+                bootstrap.openedAtTick() + 100L,
+                bootstrap.requiredTradeDemand());
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, new Object(), INITIAL, 10L);
+        V4RuntimeWitnessTracker.observeDirective(MOB, bootstrap, 20L);
+        V4RuntimeWitnessTracker.observeCommuteSeed(MOB, bootstrap, true, 21L);
+        V4RuntimeWitnessTracker.observeArrival(MOB, bootstrap, true, 22L);
+        V4RuntimeWitnessTracker.openPhaseA(100L);
+        V4RuntimeWitnessTracker.observeDirective(MOB, phaseA, 101L);
+        V4RuntimeWitnessTracker.observeCommuteSeed(MOB, phaseA, true, 102L);
+
+        V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
+        assertTrue(snapshot.intentIdentity().contains("@200/"));
+        assertFalse(snapshot.intentIdentity().contains("@100/"));
+        assertTrue(snapshot.commuteSeeded());
+        assertEquals(1, snapshot.bootstrapLocalRequiredTradeCount());
     }
 
     @Test

@@ -4,6 +4,8 @@ import com.noobk.spmscavenger.WorkDemandPolicy;
 import com.noobk.spmscavenger.village.intent.VillageIntent;
 import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -82,8 +84,10 @@ public final class V4RuntimeWitnessTracker {
             return;
         }
         if (!active.phaseAOpen) {
-            active.prematureRequiredTradeIntent = true;
-            event(tick, "PREMATURE_REQUIRED_TRADE_INTENT", identity(intent));
+            if (active.bootstrapRequiredTradeIntents.add(intent)) {
+                active.bootstrapLocalRequiredTradeCount++;
+                event(tick, "BOOTSTRAP_LOCAL_REQUIRED_TRADE", identity(intent));
+            }
             return;
         }
         if (active.intent == null) {
@@ -101,8 +105,10 @@ public final class V4RuntimeWitnessTracker {
             return;
         }
         if (!active.phaseAOpen) {
-            active.prematureCommuteSeed = true;
-            event(tick, "PREMATURE_COMMUTE_SEED", identity(intent));
+            if (active.bootstrapCommuteSeeds.add(intent)) {
+                active.bootstrapLocalCommuteSeedCount++;
+                event(tick, "BOOTSTRAP_LOCAL_COMMUTE_SEED", identity(intent));
+            }
             return;
         }
         active.commuteSeeded = true;
@@ -135,8 +141,12 @@ public final class V4RuntimeWitnessTracker {
             return;
         }
         if (!active.phaseAOpen) {
-            active.prematureArrival = true;
-            event(tick, "PREMATURE_ARRIVAL", "binding=" + identity(intent) + " released=" + released);
+            if (active.bootstrapArrivals.add(intent)) {
+                active.bootstrapLocalArrivalCount++;
+                event(tick, "BOOTSTRAP_LOCAL_ARRIVAL",
+                        "binding=" + identity(intent) + " released=" + released);
+            }
+            active.bootstrapLocalIntentReleased |= released;
             return;
         }
         if (!matchingExact(mobId, intent)) {
@@ -148,6 +158,15 @@ public final class V4RuntimeWitnessTracker {
             active.arrivalStamped = true;
             event(tick, "SETTLEMENT_ARRIVAL", "intentReleased=" + released);
         }
+    }
+
+    static synchronized void observeBootstrapIntentClosed(
+            UUID mobId, VillageIntent intent, long tick) {
+        if (!matchingMob(mobId) || active.phaseAOpen || intent == null) {
+            return;
+        }
+        active.bootstrapLocalIntentReleased = true;
+        event(tick, "BOOTSTRAP_LOCAL_INTENT_RELEASED_OR_CLOSED", identity(intent));
     }
 
     static synchronized void stampArrival(long tick) {
@@ -268,9 +287,10 @@ public final class V4RuntimeWitnessTracker {
             long phaseAOpenTick,
             boolean initialBoardObserved,
             boolean initialWarmupOfferExecuted,
-            boolean prematureRequiredTradeIntent,
-            boolean prematureCommuteSeed,
-            boolean prematureArrival,
+            int bootstrapLocalRequiredTradeCount,
+            int bootstrapLocalCommuteSeedCount,
+            int bootstrapLocalArrivalCount,
+            boolean bootstrapLocalIntentReleased,
             boolean changedBoardRediscovered,
             V4OfferFingerprint initialOffer,
             V4OfferFingerprint changedOffer,
@@ -296,7 +316,7 @@ public final class V4RuntimeWitnessTracker {
             int eventCount) {
 
         static Snapshot empty() {
-            return new Snapshot(false, false, -1L, false, false, false, false, false,
+            return new Snapshot(false, false, -1L, false, false, 0, 0, 0, false,
                     false, null, null, null,
                     null, ExistingRouteFeasibility.ExistingRouteStatus.UNKNOWN, null,
                     false, "NONE", false, false, false, false, false, false, 0,
@@ -316,9 +336,16 @@ public final class V4RuntimeWitnessTracker {
         long phaseAOpenTick = -1L;
         boolean initialBoardObserved;
         boolean initialWarmupOfferExecuted;
-        boolean prematureRequiredTradeIntent;
-        boolean prematureCommuteSeed;
-        boolean prematureArrival;
+        final java.util.Set<VillageIntent> bootstrapRequiredTradeIntents =
+                Collections.newSetFromMap(new IdentityHashMap<>());
+        final java.util.Set<VillageIntent> bootstrapCommuteSeeds =
+                Collections.newSetFromMap(new IdentityHashMap<>());
+        final java.util.Set<VillageIntent> bootstrapArrivals =
+                Collections.newSetFromMap(new IdentityHashMap<>());
+        int bootstrapLocalRequiredTradeCount;
+        int bootstrapLocalCommuteSeedCount;
+        int bootstrapLocalArrivalCount;
+        boolean bootstrapLocalIntentReleased;
         boolean changedBoardRediscovered;
         WorkDemandPolicy.MaterialDemandIdentity demandIdentity;
         ExistingRouteFeasibility.ExistingRouteStatus routeStatus =
@@ -356,8 +383,9 @@ public final class V4RuntimeWitnessTracker {
 
         Snapshot snapshot() {
             return new Snapshot(true, phaseAOpen, phaseAOpenTick, initialBoardObserved,
-                    initialWarmupOfferExecuted, prematureRequiredTradeIntent,
-                    prematureCommuteSeed, prematureArrival, changedBoardRediscovered,
+                    initialWarmupOfferExecuted, bootstrapLocalRequiredTradeCount,
+                    bootstrapLocalCommuteSeedCount, bootstrapLocalArrivalCount,
+                    bootstrapLocalIntentReleased, changedBoardRediscovered,
                     initialOffer, changedOffer, executedOffer,
                     demandIdentity, routeStatus, intentIdentity, commuteSeeded, commuteSource,
                     interrupted, navigationDiscarded, resumed, sameBindingResumed, arrivalObserved,

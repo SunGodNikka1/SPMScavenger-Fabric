@@ -8,7 +8,9 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
@@ -44,8 +46,15 @@ public final class V4TradeLivenessWitness {
 
     static synchronized void arm(
             UUID mobId, UUID traderId, Object backpackIdentity, long tick) {
-        active = new Session(mobId, traderId, backpackIdentity);
+        active = new Session(mobId, traderId, backpackIdentity, null, null);
         event(tick, "LIVENESS_ARMED", "bounded=true passive=true");
+    }
+
+    static synchronized void arm(
+            Mob subject, Villager trader, Object backpackIdentity, long tick) {
+        active = new Session(subject.getUUID(), trader.getUUID(), backpackIdentity,
+                subject, trader);
+        event(tick, "LIVENESS_ARMED", "bounded=true passive=true directFixtureRefs=true");
     }
 
     public static synchronized boolean matchesMob(UUID mobId) {
@@ -161,6 +170,7 @@ public final class V4TradeLivenessWitness {
         long observedTick = tick >= 0L ? tick : active.lastTradeCanUseTick;
         active.villagerQueryReached = true;
         active.villagerQueryCandidateCount = candidates.size();
+        active.fixtureTraderIncluded = false;
         for (Villager candidate : candidates) {
             if (candidate.getUUID().equals(active.traderId)) {
                 active.fixtureTraderIncluded = true;
@@ -169,8 +179,16 @@ public final class V4TradeLivenessWitness {
                         && !candidate.isSleeping() && candidate.getTradingPlayer() == null;
             }
         }
+        captureQueryContext(active);
         event(observedTick, "VILLAGER_QUERY", "count=" + candidates.size()
-                + " fixtureIncluded=" + active.fixtureTraderIncluded);
+                + " fixtureIncluded=" + active.fixtureTraderIncluded
+                + " subjectPos=" + measured(active.querySubjectPos)
+                + " traderPos=" + measured(active.queryTraderPos)
+                + " traderDistance=" + measured(active.queryFixtureTraderDistance)
+                + " alive=" + measured(active.queryFixtureTraderAlive)
+                + " sleeping=" + measured(active.queryFixtureTraderSleeping)
+                + " occupied=" + measured(active.queryFixtureTraderTradingPlayerPresent)
+                + " available=" + measured(active.queryFixtureTraderAvailable));
     }
 
     public static synchronized void observeVanillaBoardRead(UUID traderId, long tick) {
@@ -346,8 +364,14 @@ public final class V4TradeLivenessWitness {
         GoalState next = new GoalState(move, normalizePriority(movePriority), look,
                 normalizePriority(lookPriority), List.copyOf(requestedRunning));
         if (!next.equals(active.lastGoalState)) {
+            GoalState previous = active.lastGoalState;
             active.lastGoalState = next;
             event(tick, "GOAL_OWNERSHIP", next.toString());
+            if ("WeaponAwareAttackGoal".equals(next.moveHolderClass)
+                    || previous != null
+                            && "WeaponAwareAttackGoal".equals(previous.moveHolderClass)) {
+                captureCombatTarget(subject, tick);
+            }
         }
         if (active.routeInfeasibleTick >= 0L && !"NONE".equals(move)
                 && !"TradeWithVillagerGoal".equals(move)) {
@@ -370,21 +394,69 @@ public final class V4TradeLivenessWitness {
     }
 
     static synchronized void observeFixtureFacts(
-            boolean alive, String profession, int level, double distance, boolean available,
-            int emeralds, int pickaxes, long tick) {
+            Boolean alive, String profession, Integer level, Double distance, Boolean available,
+            Integer emeralds, Integer pickaxes, long tick) {
         if (active == null) {
             return;
         }
         active.fixtureTraderAlive = alive;
         active.fixtureTraderProfession = profession;
         active.fixtureTraderLevel = level;
-        active.fixtureTraderDistance = distance;
-        active.fixtureTraderAvailable = available;
+        active.terminalFixtureTraderDistance = distance;
+        active.terminalFixtureTraderAvailable = available;
         active.subjectEmeraldCount = emeralds;
         active.subjectIronPickaxeCount = pickaxes;
         event(tick, "FIXTURE_FACTS", "alive=" + alive + " profession=" + profession
                 + " level=" + level + " distance=" + distance + " available=" + available
                 + " emeralds=" + emeralds + " pickaxes=" + pickaxes);
+    }
+
+    private static void captureQueryContext(Session session) {
+        Mob subject = session.subjectRef;
+        Villager trader = session.traderRef;
+        if (subject == null || trader == null) {
+            session.querySubjectPos = null;
+            session.queryTraderPos = null;
+            session.queryFixtureTraderDistance = null;
+            session.queryFixtureTraderAlive = null;
+            session.queryFixtureTraderSleeping = null;
+            session.queryFixtureTraderTradingPlayerPresent = null;
+            session.queryFixtureTraderAvailable = null;
+            return;
+        }
+        session.querySubjectPos = subject.blockPosition().toShortString();
+        session.queryTraderPos = trader.blockPosition().toShortString();
+        session.queryFixtureTraderDistance = (double) subject.distanceTo(trader);
+        session.queryFixtureTraderAlive = trader.isAlive();
+        session.queryFixtureTraderSleeping = trader.isSleeping();
+        session.queryFixtureTraderTradingPlayerPresent = trader.getTradingPlayer() != null;
+        session.queryFixtureTraderAvailable = trader.isAlive()
+                && !trader.isSleeping() && trader.getTradingPlayer() == null;
+        session.fixtureTraderDistance = session.queryFixtureTraderDistance;
+        session.fixtureTraderAvailable = session.queryFixtureTraderAvailable;
+    }
+
+    private static void captureCombatTarget(Mob subject, long tick) {
+        Entity target = subject.getTarget();
+        active.combatTargetUUID = target == null ? null : target.getUUID();
+        active.combatTargetType = target == null ? null
+                : BuiltInRegistries.ENTITY_TYPE.getKey(target.getType()).toString();
+        active.combatTargetFixtureRole = target == null ? null
+                : target.getTags().stream()
+                        .filter(tag -> tag.startsWith("spm_v4.")
+                                && !V4FixtureCleanup.FIXTURE_TAG.equals(tag))
+                        .sorted()
+                        .findFirst()
+                        .orElse(target.getTags().contains(V4FixtureCleanup.FIXTURE_TAG)
+                                ? V4FixtureCleanup.FIXTURE_TAG : "UNRELATED");
+        event(tick, "COMBAT_TARGET_CONTEXT",
+                "uuid=" + measured(active.combatTargetUUID)
+                        + " type=" + measured(active.combatTargetType)
+                        + " fixtureRole=" + measured(active.combatTargetFixtureRole));
+    }
+
+    private static String measured(Object value) {
+        return value == null ? "NOT_MEASURED" : value.toString();
     }
 
     static synchronized Snapshot snapshot() {
@@ -496,6 +568,11 @@ public final class V4TradeLivenessWitness {
             boolean villagerQueryReached, int villagerQueryCandidateCount,
             boolean fixtureTraderIncluded, boolean fixtureTraderAvailable,
             double fixtureTraderDistance,
+            String querySubjectPos, String queryTraderPos,
+            Double queryFixtureTraderDistance,
+            Boolean queryFixtureTraderAlive, Boolean queryFixtureTraderSleeping,
+            Boolean queryFixtureTraderTradingPlayerPresent,
+            Boolean queryFixtureTraderAvailable,
             boolean vanillaBoardReadReached,
             boolean knownTraderObservationReached, boolean knownTraderObservationChanged,
             boolean marketDiscoveryEmptyRecorded, boolean marketDiscoveryCooldownActive,
@@ -515,20 +592,14 @@ public final class V4TradeLivenessWitness {
             boolean tradeSessionClaimOpened, boolean tradeSessionClaimReleased,
             boolean friendlyGreetRunningWhenTradeEligible,
             boolean blockingHolderObservedAfterInfeasible, String lastBlockingHolder,
-            boolean fixtureTraderAlive, String fixtureTraderProfession, int fixtureTraderLevel,
-            int subjectEmeraldCount, int subjectIronPickaxeCount,
+            UUID combatTargetUUID, String combatTargetType, String combatTargetFixtureRole,
+            Boolean fixtureTraderAlive, String fixtureTraderProfession, Integer fixtureTraderLevel,
+            Double terminalFixtureTraderDistance, Boolean terminalFixtureTraderAvailable,
+            Integer subjectEmeraldCount, Integer subjectIronPickaxeCount,
             Diagnosis diagnosis, int eventCount) {
 
         static Snapshot empty() {
-            return new Snapshot(false, 0, 0, 0, -1, -1, false, null,
-                    false, false, false, ExistingRouteFeasibility.ExistingRouteStatus.UNKNOWN,
-                    0, 0, 0, 0, 0, 0,
-                    false, 0, false, false, Double.NaN, false, false, false,
-                    false, false, -1, "NONE", -1, "NONE", -1, List.of(),
-                    false, false, -1, false, false, false, false,
-                    null, 0, null, 0, -1, false, false, false,
-                    false, "NONE", false, "UNAVAILABLE", -1, 0, 0,
-                    Diagnosis.UNKNOWN, 0);
+            return Session.empty().snapshot();
         }
     }
 
@@ -559,6 +630,13 @@ public final class V4TradeLivenessWitness {
         boolean fixtureTraderIncluded;
         boolean fixtureTraderAvailable;
         double fixtureTraderDistance = Double.NaN;
+        String querySubjectPos;
+        String queryTraderPos;
+        Double queryFixtureTraderDistance;
+        Boolean queryFixtureTraderAlive;
+        Boolean queryFixtureTraderSleeping;
+        Boolean queryFixtureTraderTradingPlayerPresent;
+        Boolean queryFixtureTraderAvailable;
         boolean vanillaBoardReadReached;
         boolean knownTraderObservationReached;
         boolean knownTraderObservationChanged;
@@ -588,22 +666,44 @@ public final class V4TradeLivenessWitness {
         boolean friendlyGreetRunningWhenTradeEligible;
         boolean blockingHolderObservedAfterInfeasible;
         String lastBlockingHolder = "NONE";
-        boolean fixtureTraderAlive;
-        String fixtureTraderProfession = "UNAVAILABLE";
-        int fixtureTraderLevel = -1;
-        int subjectEmeraldCount;
-        int subjectIronPickaxeCount;
+        UUID combatTargetUUID;
+        String combatTargetType;
+        String combatTargetFixtureRole;
+        Boolean fixtureTraderAlive;
+        String fixtureTraderProfession;
+        Integer fixtureTraderLevel;
+        Double terminalFixtureTraderDistance;
+        Boolean terminalFixtureTraderAvailable;
+        Integer subjectEmeraldCount;
+        Integer subjectIronPickaxeCount;
+        final Mob subjectRef;
+        final Villager traderRef;
+        final boolean armed;
 
-        Session(UUID mobId, UUID traderId, Object backpackIdentity) {
+        Session(UUID mobId, UUID traderId, Object backpackIdentity,
+                Mob subjectRef, Villager traderRef) {
+            this(mobId, traderId, backpackIdentity, subjectRef, traderRef, true);
+        }
+
+        private Session(UUID mobId, UUID traderId, Object backpackIdentity,
+                Mob subjectRef, Villager traderRef, boolean armed) {
             this.mobId = Objects.requireNonNull(mobId);
             this.traderId = Objects.requireNonNull(traderId);
             this.backpackIdentity = Objects.requireNonNull(backpackIdentity);
+            this.subjectRef = subjectRef;
+            this.traderRef = traderRef;
+            this.armed = armed;
+        }
+
+        static Session empty() {
+            return new Session(new UUID(0L, 0L), new UUID(0L, 1L),
+                    new Object(), null, null, false);
         }
 
         Snapshot snapshot() {
             GoalState goal = lastGoalState == null
                     ? new GoalState("NONE", -1, "NONE", -1, List.of()) : lastGoalState;
-            Snapshot partial = new Snapshot(true, tradeCanUseCalls, tradeCanUseTrue,
+            Snapshot partial = new Snapshot(armed, tradeCanUseCalls, tradeCanUseTrue,
                     tradeCanUseFalse, firstTradeCanUseTick, lastTradeCanUseTick,
                     tradeGateDemandPresent, tradeGateDemandIdentity,
                     tradeGateRouteMayDisplace, tradeGateBackpackPresent,
@@ -612,6 +712,9 @@ public final class V4TradeLivenessWitness {
                     tradeStartCalls, tradeTickCalls, tradeStopCalls,
                     villagerQueryReached, villagerQueryCandidateCount,
                     fixtureTraderIncluded, fixtureTraderAvailable, fixtureTraderDistance,
+                    querySubjectPos, queryTraderPos, queryFixtureTraderDistance,
+                    queryFixtureTraderAlive, queryFixtureTraderSleeping,
+                    queryFixtureTraderTradingPlayerPresent, queryFixtureTraderAvailable,
                     vanillaBoardReadReached, knownTraderObservationReached,
                     knownTraderObservationChanged, marketDiscoveryEmptyRecorded,
                     marketDiscoveryCooldownActive, marketDiscoveryCooldownUntil,
@@ -626,7 +729,9 @@ public final class V4TradeLivenessWitness {
                     tradeSessionClaimOpened, tradeSessionClaimReleased,
                     friendlyGreetRunningWhenTradeEligible,
                     blockingHolderObservedAfterInfeasible, lastBlockingHolder,
+                    combatTargetUUID, combatTargetType, combatTargetFixtureRole,
                     fixtureTraderAlive, fixtureTraderProfession, fixtureTraderLevel,
+                    terminalFixtureTraderDistance, terminalFixtureTraderAvailable,
                     subjectEmeraldCount, subjectIronPickaxeCount,
                     Diagnosis.UNKNOWN, events.size());
             return new Snapshot(partial.armed, partial.tradeCanUseCalls,
@@ -640,7 +745,11 @@ public final class V4TradeLivenessWitness {
                     partial.tradeStartCalls, partial.tradeTickCalls, partial.tradeStopCalls,
                     partial.villagerQueryReached, partial.villagerQueryCandidateCount,
                     partial.fixtureTraderIncluded, partial.fixtureTraderAvailable,
-                    partial.fixtureTraderDistance, partial.vanillaBoardReadReached,
+                    partial.fixtureTraderDistance, partial.querySubjectPos,
+                    partial.queryTraderPos, partial.queryFixtureTraderDistance,
+                    partial.queryFixtureTraderAlive, partial.queryFixtureTraderSleeping,
+                    partial.queryFixtureTraderTradingPlayerPresent,
+                    partial.queryFixtureTraderAvailable, partial.vanillaBoardReadReached,
                     partial.knownTraderObservationReached, partial.knownTraderObservationChanged,
                     partial.marketDiscoveryEmptyRecorded, partial.marketDiscoveryCooldownActive,
                     partial.marketDiscoveryCooldownUntil, partial.moveHolderClass,
@@ -655,8 +764,11 @@ public final class V4TradeLivenessWitness {
                     partial.tradeSessionClaimOpened, partial.tradeSessionClaimReleased,
                     partial.friendlyGreetRunningWhenTradeEligible,
                     partial.blockingHolderObservedAfterInfeasible, partial.lastBlockingHolder,
+                    partial.combatTargetUUID, partial.combatTargetType,
+                    partial.combatTargetFixtureRole,
                     partial.fixtureTraderAlive, partial.fixtureTraderProfession,
-                    partial.fixtureTraderLevel, partial.subjectEmeraldCount,
+                    partial.fixtureTraderLevel, partial.terminalFixtureTraderDistance,
+                    partial.terminalFixtureTraderAvailable, partial.subjectEmeraldCount,
                     partial.subjectIronPickaxeCount, classify(partial), partial.eventCount);
         }
     }

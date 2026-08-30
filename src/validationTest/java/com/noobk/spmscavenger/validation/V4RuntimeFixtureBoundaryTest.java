@@ -175,9 +175,16 @@ class V4RuntimeFixtureBoundaryTest {
         for (String evidence : new String[] {
                 "initialWarmupOfferExecuted()", "countAll(subject, backpack, Items.IRON_PICKAXE)",
                 "bootstrapWarmupDemandResolved", "bootstrapCapabilityPersisted",
-                "bootstrap staging allowed REQUIRED_TRADE before departure"}) {
+                "BOOTSTRAP_LOCAL_INTENT_RELEASED_OR_CLOSED",
+                "bootstrap-local REQUIRED_TRADE remained after warm-up demand resolved"}) {
             assertTrue(bootstrap.contains(evidence), "missing warmup boundary: " + evidence);
         }
+        assertFalse(bootstrap.contains(
+                        "bootstrap staging allowed REQUIRED_TRADE before departure"),
+                "a legal UNKNOWN-backed local intent must not be fixture failure");
+        assertFalse(controller.contains("VillageIntentRegistry.release("));
+        assertFalse(controller.contains("VillageIntentRegistry.releaseIfCurrent("),
+                "bootstrap intent closure must remain production-owned");
 
         int phaseAEnd = controller.indexOf("private static void tickPhaseA(", phaseAStart);
         String open = controller.substring(phaseAStart, phaseAEnd);
@@ -201,7 +208,8 @@ class V4RuntimeFixtureBoundaryTest {
         for (String reportLine : new String[] {
                 "bootstrapInitialBoardObserved=", "bootstrapWarmupTradeExecuted=",
                 "bootstrapWarmupDemandResolved=", "bootstrapCapabilityPersisted=",
-                "bootstrapPrematureRequiredTrade=", "bootstrapPrematureArrival=",
+                "bootstrapLocalRequiredTradeCount=", "bootstrapLocalCommuteSeedCount=",
+                "bootstrapLocalArrivalCount=", "bootstrapLocalIntentReleased=",
                 "departureConfirmed=", "phaseASecondDemandOpened=", "NOT_MEASURED"}) {
             assertTrue(controller.contains(reportLine), "missing report evidence: " + reportLine);
         }
@@ -230,8 +238,11 @@ class V4RuntimeFixtureBoundaryTest {
                         + "V4RuntimeCampaignController.java"));
         int cleanupGate = controller.indexOf("V4FixtureCleanup.prepareForStartup(");
         int geometry = controller.indexOf("V4FixtureGeometryBuilder.createAndVerify(");
+        int environment = controller.indexOf(
+                "V4FixtureEnvironment.prepareBeforeEntityCreation(");
         int entities = controller.indexOf("V4FixtureEntityFactory.createAndVerify(");
-        assertTrue(cleanupGate >= 0 && geometry > cleanupGate && entities > geometry);
+        assertTrue(cleanupGate >= 0 && geometry > cleanupGate
+                && environment > geometry && entities > environment);
         assertFalse(controller.contains("executeFixtureFunction("));
         assertFalse(controller.contains("getFunctions().execute("));
         assertFalse(controller.contains("\"spm_v4:cleanup\""));
@@ -312,7 +323,9 @@ class V4RuntimeFixtureBoundaryTest {
                 "geometryMutationAttempted", "geometryMutationSucceeded",
                 "geometryVerified", "geometryFailureStage",
                 "geometryFailureCoordinate", "expectedBlock", "actualBlock",
-                "verifySpawnGeometry", "isFaceSturdy", "getCollisionShape"}) {
+                "verifySpawnGeometry", "isFaceSturdy", "getCollisionShape",
+                "Blocks.LIGHT", "LightBlock.LEVEL", "runLightUpdates()",
+                "fixtureLightingVerified", "minimumRepresentativeBlockLight"}) {
             assertTrue(builder.contains(required), "missing geometry proof boundary: " + required);
         }
         for (String forbidden : new String[] {
@@ -364,6 +377,101 @@ class V4RuntimeFixtureBoundaryTest {
         assertTrue(checks.values().stream()
                 .filter(check -> check.expected().description().contains("_bed["))
                 .allMatch(check -> check.expected().description().contains("facing=south")));
+        for (int[] range : new int[][] {{-24, 24}, {0, 180}, {158, 202}, {-22, 22}}) {
+            var axis = V4FixtureGeometryBuilder.coveredAxis(range[0], range[1]);
+            assertEquals(range[0], axis.getFirst());
+            assertEquals(range[1], axis.getLast());
+            for (int i = 1; i < axis.size(); i++) {
+                assertTrue(axis.get(i) - axis.get(i - 1) <= 6,
+                        "lighting grid left an uncovered gap");
+            }
+        }
+    }
+
+    @Test
+    void unknownSettlementMayOpenLocalBootstrapIntentWithoutBecomingPhaseAEvidence()
+            throws Exception {
+        String ranker = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/village/routing/"
+                        + "SettlementDestinationRanker.java"));
+        String policy = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/village/intent/"
+                        + "VillageIntentPolicy.java"));
+        assertTrue(ranker.contains("candidate.facts().capabilityEvidence().rank()")
+                        || ranker.contains("selection.facts().capabilityEvidence().rank()"));
+        assertFalse(ranker.contains(
+                "capabilityEvidence() == CapabilityEvidenceClass.POSITIVE_HINT"),
+                "UNKNOWN must remain a rankable investigation candidate");
+        assertFalse(policy.contains("CapabilityEvidenceClass.POSITIVE_HINT"),
+                "intent opening must not acquire an unstated positive-hint gate");
+
+        String tracker = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeWitnessTracker.java"));
+        assertTrue(tracker.contains("BOOTSTRAP_LOCAL_REQUIRED_TRADE"));
+        assertTrue(tracker.contains("BOOTSTRAP_LOCAL_COMMUTE_SEED"));
+        assertFalse(tracker.contains("PREMATURE_REQUIRED_TRADE_INTENT"));
+    }
+
+    @Test
+    void environmentIsolationIsOneShotRestorableAndPrecedesEntityCreation()
+            throws Exception {
+        String environment = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4FixtureEnvironment.java"));
+        for (String required : new String[] {
+                "RULE_DOMOBSPAWNING", ".set(false, level.getServer())",
+                "entity instanceof Enemy", "hostile.discard()",
+                "bootstrapForeignHostilesRemaining", "static boolean restore("}) {
+            assertTrue(environment.contains(required),
+                    "missing environment isolation boundary: " + required);
+        }
+        for (String forbidden : new String[] {
+                ".hurt(", ".damage(", "setHealth(", "heal(", "Difficulty.PEACEFUL",
+                "setDifficulty("}) {
+            assertFalse(environment.contains(forbidden),
+                    "fixture isolation altered gameplay mortality/difficulty: " + forbidden);
+        }
+
+        String controller = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeCampaignController.java"));
+        int geometry = controller.indexOf("V4FixtureGeometryBuilder.createAndVerify(");
+        int isolate = controller.indexOf("V4FixtureEnvironment.prepareBeforeEntityCreation(");
+        int entities = controller.indexOf("V4FixtureEntityFactory.createAndVerify(");
+        assertTrue(geometry >= 0 && isolate > geometry && entities > isolate);
+        assertEquals(1, count(controller,
+                "V4FixtureEnvironment.prepareBeforeEntityCreation("),
+                "ambient hostiles must be removed once, not continuously during bootstrap");
+        assertTrue(controller.contains("V4FixtureEnvironment.restore("));
+        assertTrue(controller.contains("spawnInterrupter("),
+                "the later validation-owned interruption remains available");
+
+        V4FixtureEnvironment.Diagnostics diagnostics =
+                new V4FixtureEnvironment.Diagnostics();
+        diagnostics.doMobSpawningCaptured = true;
+        diagnostics.doMobSpawningDisabled = true;
+        diagnostics.preflightComplete = true;
+        diagnostics.bootstrapForeignHostilesRemaining = 1;
+        assertFalse(diagnostics.readyForEntityCreation());
+        diagnostics.bootstrapForeignHostilesRemaining = 0;
+        assertTrue(diagnostics.readyForEntityCreation());
+    }
+
+    @Test
+    void everyTerminalCapturesTriStateFixtureFactsBeforeReportConstruction()
+            throws Exception {
+        String controller = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeCampaignController.java"));
+        int finish = controller.indexOf("private static void finish(");
+        int capture = controller.indexOf("captureTerminalFixtureFacts(server, session, tick)", finish);
+        int snapshot = controller.indexOf("V4TradeLivenessWitness.snapshot()", finish);
+        assertTrue(capture > finish && snapshot > capture,
+                "terminal facts must be sampled before report snapshot construction");
+        assertTrue(controller.contains("measurement(tradeLiveness.fixtureTraderAlive())"));
+        assertTrue(controller.contains("measurement(tradeLiveness.subjectEmeraldCount())"));
+        assertTrue(controller.contains("return value == null ? \"NOT_MEASURED\""));
     }
 
     @Test

@@ -10,10 +10,12 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+import net.minecraft.world.level.block.LightBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
 
@@ -71,9 +73,12 @@ final class V4FixtureGeometryBuilder {
                 Blocks.WHITE_BED.defaultBlockState(), diagnostics);
         writeChecked(level, origin.offset(-1, 0, 4),
                 Blocks.SMITHING_TABLE.defaultBlockState(), diagnostics);
+        placeArenaLighting(level, origin, diagnostics);
+        level.getLightEngine().runLightUpdates();
         diagnostics.geometryMutationSucceeded = true;
 
         verifyPostconditions(level, origin, diagnostics);
+        verifyArenaLighting(level, origin, diagnostics);
         diagnostics.geometryVerified = true;
         diagnostics.geometryFailureStage = "NONE";
         diagnostics.geometryFailureCoordinate = "NONE";
@@ -241,6 +246,83 @@ final class V4FixtureGeometryBuilder {
         verifySpawnGeometry(level, "helper", origin.offset(-7, 0, -2), diagnostics);
     }
 
+    private static void placeArenaLighting(
+            ServerLevel level, BlockPos origin, Diagnostics diagnostics) {
+        BlockState light = Blocks.LIGHT.defaultBlockState().setValue(LightBlock.LEVEL, 15);
+        placeLightGrid(level, origin, -24, 24, -24, 24, diagnostics, light);
+        for (int x : coveredAxis(0, 180)) {
+            writeChecked(level, origin.offset(x, 2, 0), light, diagnostics);
+            diagnostics.fixtureLightBlocksPlaced++;
+        }
+        placeLightGrid(level, origin, 158, 202, -22, 22, diagnostics, light);
+    }
+
+    private static void placeLightGrid(
+            ServerLevel level, BlockPos origin,
+            int minX, int maxX, int minZ, int maxZ,
+            Diagnostics diagnostics, BlockState light) {
+        for (int x : coveredAxis(minX, maxX)) {
+            for (int z : coveredAxis(minZ, maxZ)) {
+                writeChecked(level, origin.offset(x, 2, z), light, diagnostics);
+                diagnostics.fixtureLightBlocksPlaced++;
+            }
+        }
+    }
+
+    /** Six-block spacing keeps every collision-free floor sample at block light seven or higher. */
+    static List<Integer> coveredAxis(int min, int max) {
+        List<Integer> values = new ArrayList<>();
+        for (int value = min; value <= max; value += 6) {
+            values.add(value);
+        }
+        if (values.isEmpty() || values.getLast() != max) {
+            values.add(max);
+        }
+        return List.copyOf(values);
+    }
+
+    private static void verifyArenaLighting(
+            ServerLevel level, BlockPos origin, Diagnostics diagnostics) {
+        int minimum = 15;
+        minimum = Math.min(minimum,
+                verifyLitWalkableVolume(level, origin, -24, 24, -24, 24, diagnostics));
+        minimum = Math.min(minimum,
+                verifyLitWalkableVolume(level, origin, 0, 180, -2, 2, diagnostics));
+        minimum = Math.min(minimum,
+                verifyLitWalkableVolume(level, origin, 158, 202, -22, 22, diagnostics));
+        diagnostics.minimumRepresentativeBlockLight = minimum;
+        diagnostics.fixtureLightingVerified = minimum >= 7;
+        if (!diagnostics.fixtureLightingVerified) {
+            throw diagnostics.fail("lighting", origin,
+                    "minimum block light >= 7", Integer.toString(minimum));
+        }
+    }
+
+    private static int verifyLitWalkableVolume(
+            ServerLevel level, BlockPos origin,
+            int minX, int maxX, int minZ, int maxZ,
+            Diagnostics diagnostics) {
+        int minimum = 15;
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                BlockPos feet = origin.offset(x, 0, z);
+                if (!level.getBlockState(feet).getCollisionShape(level, feet).isEmpty()
+                        || !level.getBlockState(feet.above())
+                                .getCollisionShape(level, feet.above()).isEmpty()) {
+                    continue;
+                }
+                int blockLight = level.getBrightness(LightLayer.BLOCK, feet);
+                diagnostics.fixtureLightSamplesChecked++;
+                minimum = Math.min(minimum, blockLight);
+                if (blockLight < 7) {
+                    throw diagnostics.fail("lighting", feet,
+                            "block light >= 7", Integer.toString(blockLight));
+                }
+            }
+        }
+        return minimum;
+    }
+
     private static void verifySpawnGeometry(
             ServerLevel level, String role, BlockPos pos, Diagnostics diagnostics) {
         BlockState feet = level.getBlockState(pos);
@@ -339,6 +421,10 @@ final class V4FixtureGeometryBuilder {
         int geometryMutationAlreadyMatched;
         int geometryMutationRejected;
         int geometryPostconditionsChecked;
+        int fixtureLightBlocksPlaced;
+        int fixtureLightSamplesChecked;
+        int minimumRepresentativeBlockLight = -1;
+        boolean fixtureLightingVerified;
         boolean geometryVerified;
         String geometryFailureStage = "NOT_RUN";
         String geometryFailureCoordinate = "UNAVAILABLE";
@@ -351,6 +437,7 @@ final class V4FixtureGeometryBuilder {
                     && geometryMutationAttempted
                     && geometryMutationSucceeded
                     && geometryMutationRejected == 0
+                    && fixtureLightingVerified
                     && geometryVerified;
         }
 
@@ -381,6 +468,11 @@ final class V4FixtureGeometryBuilder {
                             + " rejected=" + geometryMutationRejected,
                     "geometryVerified=" + yesNo(geometryVerified)
                             + " postconditionsChecked=" + geometryPostconditionsChecked,
+                    "fixtureLightingVerified=" + yesNo(fixtureLightingVerified)
+                            + " lightBlocksPlaced=" + fixtureLightBlocksPlaced
+                            + " lightSamplesChecked=" + fixtureLightSamplesChecked
+                            + " minimumRepresentativeBlockLight="
+                            + minimumRepresentativeBlockLight,
                     "geometryFailureStage=" + geometryFailureStage
                             + " geometryFailureCoordinate=" + geometryFailureCoordinate,
                     "expectedBlock=" + expectedBlock + " actualBlock=" + actualBlock);

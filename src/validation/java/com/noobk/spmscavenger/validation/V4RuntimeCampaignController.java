@@ -16,7 +16,6 @@ import com.noobk.spmscavenger.village.VillageMemorySavedData;
 import com.noobk.spmscavenger.village.intent.VillageIntent;
 import com.noobk.spmscavenger.village.intent.VillageIntentRegistry;
 import com.noobk.spmscavenger.village.interaction.VillageInteractionDirector;
-import com.noobk.spmscavenger.village.trade.VillagerTradeAdapter;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -124,6 +123,12 @@ public final class V4RuntimeCampaignController {
                 throw new IllegalStateException(
                         "fixture geometry gate did not reach verified state");
             }
+            V4FixtureEnvironment.prepareBeforeEntityCreation(
+                    level, origin, preparing.fixtureEnvironmentDiagnostics);
+            if (!preparing.fixtureEnvironmentDiagnostics.readyForEntityCreation()) {
+                throw new IllegalStateException(
+                        "fixture environment gate did not reach verified state");
+            }
             V4FixtureEntityFactory.VerifiedFixture fixture =
                     V4FixtureEntityFactory.createAndVerify(
                             level, origin, preparing.fixtureCreationDiagnostics);
@@ -146,8 +151,7 @@ public final class V4RuntimeCampaignController {
             V4RuntimeWitnessTracker.arm(
                     subject.getUUID(), trader.getUUID(), backpack,
                     preparing.initialOffer, level.getGameTime());
-            V4TradeLivenessWitness.arm(
-                    subject.getUUID(), trader.getUUID(), backpack, level.getGameTime());
+            V4TradeLivenessWitness.arm(subject, trader, backpack, level.getGameTime());
             record(preparing, level.getGameTime(), "WITNESS_ARMED",
                     "beforeFirstSubjectTick=true subjectTickCount=" + subject.tickCount);
             preparing.state = State.WAITING_STARTUP_STABILITY;
@@ -469,29 +473,52 @@ public final class V4RuntimeCampaignController {
         session.bootstrapWarmupDemandResolved = session.bootstrapWarmupTradeExecuted
                 && countAll(subject, backpack, Items.IRON_PICKAXE) >= 1
                 && liveDemand.filter(V4RuntimeCampaignController::isExpectedDemand).isEmpty();
-        session.bootstrapPrematureRequiredTrade = witness.prematureRequiredTradeIntent()
-                || witness.prematureCommuteSeed();
-        session.bootstrapPrematureArrival = witness.prematureArrival();
-        if (session.bootstrapPrematureRequiredTrade || session.bootstrapPrematureArrival) {
-            finish(server, session, State.FIXTURE_FAILURE, now,
-                    "bootstrap staging allowed REQUIRED_TRADE before departure");
-            return;
+        Optional<VillageIntent> bootstrapIntent =
+                VillageIntentRegistry.current(subject.getUUID());
+        if (bootstrapIntent.isPresent()) {
+            VillageIntent current = bootstrapIntent.get();
+            if (session.lastBootstrapIntent != null && session.lastBootstrapIntent != current) {
+                V4RuntimeWitnessTracker.observeBootstrapIntentClosed(
+                        subject.getUUID(), session.lastBootstrapIntent, now);
+            }
+            session.lastBootstrapIntent = current;
+            boolean destinationMatches = session.settlementAnchor != null
+                    && current.destination().anchor().equals(session.settlementAnchor)
+                    && current.destination().dimension().equals(level.dimension());
+            boolean subjectRemainsLocal = session.settlementAnchor != null
+                    && horizontalDistance(subject.blockPosition(), session.settlementAnchor) <= 64.0
+                    && subject.distanceTo(trader) <= VillagerTradeAdapterDistance.localRadius();
+            if (!destinationMatches || !subjectRemainsLocal) {
+                finish(server, session, State.FIXTURE_FAILURE, now,
+                        "bootstrap REQUIRED_TRADE escaped local fixture boundary"
+                                + " destinationMatches=" + destinationMatches
+                                + " subjectRemainsLocal=" + subjectRemainsLocal);
+                return;
+            }
+        } else if (session.lastBootstrapIntent != null) {
+            VillageIntent closed = session.lastBootstrapIntent;
+            session.lastBootstrapIntent = null;
+            V4RuntimeWitnessTracker.observeBootstrapIntentClosed(
+                    subject.getUUID(), closed, now);
+            record(session, now, "BOOTSTRAP_LOCAL_INTENT_RELEASED_OR_CLOSED",
+                    "openedAt=" + closed.openedAtTick());
         }
+        witness = V4RuntimeWitnessTracker.snapshot();
         if (session.settlementAnchor != null
                 && session.bootstrapInitialBoardObserved
                 && session.bootstrapWarmupTradeExecuted
                 && session.bootstrapWarmupDemandResolved
-                && session.bootstrapCapabilityPersisted) {
+                && session.bootstrapCapabilityPersisted
+                && bootstrapIntent.isEmpty()) {
             openPhaseA(level, subject, trader, backpack, session, now);
             return;
         }
         if (now >= session.deadline) {
-            V4TradeLivenessWitness.observeFixtureFacts(
-                    trader.isAlive(), trader.getVillagerData().getProfession().toString(),
-                    trader.getVillagerData().getLevel(), subject.distanceTo(trader),
-                    VillagerTradeAdapter.available(trader),
-                    countAll(subject, backpack, Items.EMERALD),
-                    countAll(subject, backpack, Items.IRON_PICKAXE), now);
+            if (session.bootstrapWarmupDemandResolved && bootstrapIntent.isPresent()) {
+                finish(server, session, State.FAIL, now,
+                        "bootstrap-local REQUIRED_TRADE remained after warm-up demand resolved");
+                return;
+            }
             V4TradeLivenessWitness.Diagnosis diagnosis =
                     V4TradeLivenessWitness.classify(V4TradeLivenessWitness.snapshot());
             finish(server, session, State.INCOMPLETE, now,
@@ -514,6 +541,14 @@ public final class V4RuntimeCampaignController {
         Optional<WorkDemandPolicy.MaterialDemand> beforeDepartureDemand = selectLiveDemand(subject, backpack);
         if (beforeDepartureDemand.filter(V4RuntimeCampaignController::isExpectedDemand).isPresent()) {
             throw new IllegalStateException("second blocking demand existed before departure");
+        }
+        if (VillageIntentRegistry.current(subject.getUUID()).isPresent()) {
+            throw new IllegalStateException(
+                    "bootstrap-local intent remained at deliberate departure boundary");
+        }
+        if (V4RuntimeWitnessTracker.snapshot().intentIdentity() != null) {
+            throw new IllegalStateException(
+                    "Phase A witness retained a bootstrap intent binding");
         }
         BlockPos departure = session.origin.offset(DEPARTURE_OFFSET, 0, 0);
         subject.teleportTo(departure.getX() + 0.5, departure.getY(), departure.getZ() + 0.5);
@@ -925,10 +960,19 @@ public final class V4RuntimeCampaignController {
 
     private static void finish(
             MinecraftServer server, Session session, State state, long tick, String reason) {
-        session.state = state;
-        session.reason = reason;
+        captureTerminalFixtureFacts(server, session, tick);
+        ServerLevel level = server.getLevel(session.dimension);
+        boolean environmentRestored = level == null
+                ? !session.fixtureEnvironmentDiagnostics.doMobSpawningCaptured
+                : V4FixtureEnvironment.restore(level, session.fixtureEnvironmentDiagnostics);
+        State terminalState = environmentRestored ? state : State.FIXTURE_FAILURE;
+        String terminalReason = environmentRestored ? reason
+                : reason + "; fixture environment restore failed";
+        session.state = terminalState;
+        session.reason = terminalReason;
         session.terminalTick = tick;
-        record(session, tick, "FINAL", "state=" + state + " reason=" + reason);
+        record(session, tick, "FINAL",
+                "state=" + terminalState + " reason=" + terminalReason);
         V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
         List<String> witnessEvents = V4RuntimeWitnessTracker.events();
         V4TradeLivenessWitness.Snapshot tradeLiveness = V4TradeLivenessWitness.snapshot();
@@ -939,6 +983,35 @@ public final class V4RuntimeCampaignController {
         active = null;
         V4RuntimeWitnessTracker.reset();
         V4TradeLivenessWitness.reset();
+    }
+
+    private static void captureTerminalFixtureFacts(
+            MinecraftServer server, Session session, long tick) {
+        ServerLevel level = server.getLevel(session.dimension);
+        if (level == null || session.subjectId == null || session.traderId == null) {
+            V4TradeLivenessWitness.observeFixtureFacts(
+                    null, null, null, null, null, null, null, tick);
+            return;
+        }
+        Entity subjectEntity = level.getEntity(session.subjectId);
+        Entity traderEntity = level.getEntity(session.traderId);
+        if (!(subjectEntity instanceof Mob subject)
+                || !(traderEntity instanceof Villager trader)) {
+            V4TradeLivenessWitness.observeFixtureFacts(
+                    null, null, null, null, null, null, null, tick);
+            return;
+        }
+        Container backpack = PlayerMobs.backpack(subject);
+        Integer emeralds = backpack == null ? null
+                : countAll(subject, backpack, Items.EMERALD);
+        Integer pickaxes = backpack == null ? null
+                : countAll(subject, backpack, Items.IRON_PICKAXE);
+        V4TradeLivenessWitness.observeFixtureFacts(
+                trader.isAlive(), trader.getVillagerData().getProfession().toString(),
+                trader.getVillagerData().getLevel(), (double) subject.distanceTo(trader),
+                trader.isAlive() && !trader.isSleeping()
+                        && trader.getTradingPlayer() == null,
+                emeralds, pickaxes, tick);
     }
 
     private static void record(Session session, long tick, String event, String detail) {
@@ -962,8 +1035,12 @@ public final class V4RuntimeCampaignController {
                 "bootstrapWarmupTradeExecuted=" + session.bootstrapWarmupTradeExecuted,
                 "bootstrapWarmupDemandResolved=" + session.bootstrapWarmupDemandResolved,
                 "bootstrapCapabilityPersisted=" + session.bootstrapCapabilityPersisted,
-                "bootstrapPrematureRequiredTrade=" + session.bootstrapPrematureRequiredTrade,
-                "bootstrapPrematureArrival=" + session.bootstrapPrematureArrival,
+                "bootstrapLocalRequiredTradeCount="
+                        + witness.bootstrapLocalRequiredTradeCount(),
+                "bootstrapLocalCommuteSeedCount="
+                        + witness.bootstrapLocalCommuteSeedCount(),
+                "bootstrapLocalArrivalCount=" + witness.bootstrapLocalArrivalCount(),
+                "bootstrapLocalIntentReleased=" + witness.bootstrapLocalIntentReleased(),
                 "departureConfirmed=" + session.departureConfirmed,
                 "phaseASecondDemandOpened=" + session.phaseASecondDemandOpened,
                 "rememberedSettlement=" + printable(session.settlementAnchor),
@@ -1091,8 +1168,7 @@ public final class V4RuntimeCampaignController {
         boolean bootstrapWarmupTradeExecuted;
         boolean bootstrapWarmupDemandResolved;
         boolean bootstrapCapabilityPersisted;
-        boolean bootstrapPrematureRequiredTrade;
-        boolean bootstrapPrematureArrival;
+        VillageIntent lastBootstrapIntent;
         boolean departureConfirmed;
         boolean phaseASecondDemandOpened;
         double anchorTraderDistance = Double.NaN;
@@ -1111,6 +1187,8 @@ public final class V4RuntimeCampaignController {
                 new V4FixtureCleanup.Diagnostics();
         final V4FixtureGeometryBuilder.Diagnostics fixtureGeometryDiagnostics =
                 new V4FixtureGeometryBuilder.Diagnostics();
+        final V4FixtureEnvironment.Diagnostics fixtureEnvironmentDiagnostics =
+                new V4FixtureEnvironment.Diagnostics();
         final V4FixtureEntityFactory.Diagnostics fixtureCreationDiagnostics =
                 new V4FixtureEntityFactory.Diagnostics();
 
@@ -1138,8 +1216,6 @@ public final class V4RuntimeCampaignController {
             boolean bootstrapWarmupTradeExecuted,
             boolean bootstrapWarmupDemandResolved,
             boolean bootstrapCapabilityPersisted,
-            boolean bootstrapPrematureRequiredTrade,
-            boolean bootstrapPrematureArrival,
             boolean departureConfirmed,
             boolean phaseASecondDemandOpened,
             int phaseBAssociationCount,
@@ -1161,6 +1237,8 @@ public final class V4RuntimeCampaignController {
             String geometryFailureStage,
             boolean geometryVerified,
             List<String> fixtureGeometryDiagnostics,
+            boolean environmentIsolationVerified,
+            List<String> fixtureEnvironmentDiagnostics,
             String fixtureFailureStage,
             String fixtureFailureDetail,
             List<String> fixtureCreationDiagnostics,
@@ -1185,8 +1263,6 @@ public final class V4RuntimeCampaignController {
                     session.bootstrapWarmupTradeExecuted,
                     session.bootstrapWarmupDemandResolved,
                     session.bootstrapCapabilityPersisted,
-                    session.bootstrapPrematureRequiredTrade,
-                    session.bootstrapPrematureArrival,
                     session.departureConfirmed, session.phaseASecondDemandOpened,
                     session.phaseBAssociationCount, session.startTick, session.phaseAOpenTick,
                     session.phaseAPassTick, session.phaseBOpenTick, session.phaseBPassTick,
@@ -1203,6 +1279,8 @@ public final class V4RuntimeCampaignController {
                     session.fixtureGeometryDiagnostics.geometryFailureStage,
                     session.fixtureGeometryDiagnostics.ready(),
                     session.fixtureGeometryDiagnostics.lines(),
+                    session.fixtureEnvironmentDiagnostics.readyForEntityCreation(),
+                    session.fixtureEnvironmentDiagnostics.lines(),
                     session.fixtureCreationDiagnostics.failureStage,
                     session.fixtureCreationDiagnostics.failureDetail,
                     session.fixtureCreationDiagnostics.lines(), session.configSummary, witness,
@@ -1219,6 +1297,8 @@ public final class V4RuntimeCampaignController {
                     "fixtureCleanupPreflight=" + (cleanupVerified ? "PASS" : "FAIL"),
                     "fixtureGeometryPreflight=" + (geometryVerified ? "PASS" : "FAIL")
                             + " stage=" + geometryFailureStage,
+                    "fixtureEnvironmentPreflight="
+                            + (environmentIsolationVerified ? "PASS" : "FAIL"),
                     "fixtureEntityPreflight="
                             + ("NONE".equals(fixtureFailureStage) ? "PASS" : "FAIL")
                             + " stage=" + fixtureFailureStage
@@ -1240,6 +1320,8 @@ public final class V4RuntimeCampaignController {
             lines.addAll(teardownCleanupDiagnostics);
             lines.add("-- fixture geometry creation preflight --");
             lines.addAll(fixtureGeometryDiagnostics);
+            lines.add("-- fixture environment isolation --");
+            lines.addAll(fixtureEnvironmentDiagnostics);
             lines.add("-- fixture entity creation preflight --");
             lines.addAll(fixtureCreationDiagnostics);
             lines.add("rememberedSettlement=" + printable(settlementAnchor)
@@ -1259,8 +1341,14 @@ public final class V4RuntimeCampaignController {
             lines.add("bootstrapWarmupTradeExecuted=" + bootstrapWarmupTradeExecuted);
             lines.add("bootstrapWarmupDemandResolved=" + bootstrapWarmupDemandResolved);
             lines.add("bootstrapCapabilityPersisted=" + bootstrapCapabilityPersisted);
-            lines.add("bootstrapPrematureRequiredTrade=" + bootstrapPrematureRequiredTrade);
-            lines.add("bootstrapPrematureArrival=" + bootstrapPrematureArrival);
+            lines.add("bootstrapLocalRequiredTradeCount="
+                    + witness.bootstrapLocalRequiredTradeCount());
+            lines.add("bootstrapLocalCommuteSeedCount="
+                    + witness.bootstrapLocalCommuteSeedCount());
+            lines.add("bootstrapLocalArrivalCount="
+                    + witness.bootstrapLocalArrivalCount());
+            lines.add("bootstrapLocalIntentReleased="
+                    + witness.bootstrapLocalIntentReleased());
             lines.add("departureConfirmed=" + departureConfirmed);
             lines.add("phaseASecondDemandOpened=" + phaseASecondDemandOpened);
             lines.add("initialOfferFingerprint=" + printable(witness.initialOffer()));
@@ -1309,6 +1397,19 @@ public final class V4RuntimeCampaignController {
                     + " fixtureTraderIncluded=" + tradeLiveness.fixtureTraderIncluded()
                     + " fixtureTraderAvailable=" + tradeLiveness.fixtureTraderAvailable()
                     + " fixtureTraderDistance=" + format(tradeLiveness.fixtureTraderDistance()));
+            lines.add("querySubjectPos=" + measurement(tradeLiveness.querySubjectPos())
+                    + " queryFixtureTraderPos="
+                    + measurement(tradeLiveness.queryTraderPos())
+                    + " queryFixtureTraderDistance="
+                    + measurement(tradeLiveness.queryFixtureTraderDistance()));
+            lines.add("queryFixtureTraderAlive="
+                    + measurement(tradeLiveness.queryFixtureTraderAlive())
+                    + " queryFixtureTraderSleeping="
+                    + measurement(tradeLiveness.queryFixtureTraderSleeping())
+                    + " queryFixtureTraderTradingPlayerPresent="
+                    + measurement(tradeLiveness.queryFixtureTraderTradingPlayerPresent())
+                    + " queryFixtureTraderAvailable="
+                    + measurement(tradeLiveness.queryFixtureTraderAvailable()));
             lines.add("vanillaBoardReadReached=" + tradeLiveness.vanillaBoardReadReached()
                     + " knownTraderObservationReached="
                     + tradeLiveness.knownTraderObservationReached()
@@ -1347,12 +1448,20 @@ public final class V4RuntimeCampaignController {
                     + tradeLiveness.tradeSessionClaimReleased()
                     + " friendlyGreetRunningWhenTradeEligible="
                     + tradeLiveness.friendlyGreetRunningWhenTradeEligible());
-            lines.add("fixtureTraderAlive=" + tradeLiveness.fixtureTraderAlive()
-                    + " profession=" + tradeLiveness.fixtureTraderProfession()
-                    + " level=" + tradeLiveness.fixtureTraderLevel()
-                    + " subjectEmeraldCount=" + tradeLiveness.subjectEmeraldCount()
+            lines.add("combatTargetUUID=" + measurement(tradeLiveness.combatTargetUUID())
+                    + " combatTargetType=" + measurement(tradeLiveness.combatTargetType())
+                    + " combatTargetFixtureRole="
+                    + measurement(tradeLiveness.combatTargetFixtureRole()));
+            lines.add("fixtureTraderAlive=" + measurement(tradeLiveness.fixtureTraderAlive())
+                    + " profession=" + measurement(tradeLiveness.fixtureTraderProfession())
+                    + " level=" + measurement(tradeLiveness.fixtureTraderLevel())
+                    + " distance="
+                    + measurement(tradeLiveness.terminalFixtureTraderDistance())
+                    + " available="
+                    + measurement(tradeLiveness.terminalFixtureTraderAvailable())
+                    + " subjectEmeraldCount=" + measurement(tradeLiveness.subjectEmeraldCount())
                     + " subjectIronPickaxeCount="
-                    + tradeLiveness.subjectIronPickaxeCount());
+                    + measurement(tradeLiveness.subjectIronPickaxeCount()));
             lines.add("forcedChunksReleased=" + forcedChunksReleased);
             lines.add("-- controller transitions --");
             lines.addAll(controllerEvents);
@@ -1370,6 +1479,10 @@ public final class V4RuntimeCampaignController {
             addIfPresent(ids, helperId);
             addIfPresent(ids, interrupterId);
             return List.copyOf(ids);
+        }
+
+        private static String measurement(Object value) {
+            return value == null ? "NOT_MEASURED" : value.toString();
         }
     }
 }
