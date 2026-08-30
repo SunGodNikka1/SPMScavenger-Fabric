@@ -3,10 +3,14 @@ package com.noobk.spmscavenger.validation;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.UUID;
 import java.util.zip.ZipFile;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,25 +78,34 @@ class V4RuntimeFixtureBoundaryTest {
                 "an unchecked datapack summon must not stand in for subject creation");
         assertFalse(scenario.contains("summon minecraft:villager"),
                 "required trader/helper entities must use the same checked creation boundary");
+        assertFalse(scenario.contains("fill "),
+                "the documentation-only function must not remain a competing geometry owner");
+        assertFalse(scenario.contains("setblock "),
+                "mandatory geometry must be owned by the checked validation Java boundary");
 
         String controller = Files.readString(Path.of(
                 "src/validation/java/com/noobk/spmscavenger/validation/"
                         + "V4RuntimeCampaignController.java"));
-        int fixtureFunction = controller.indexOf("executeFixtureFunction(source.getServer()");
+        int checkedGeometry = controller.indexOf("V4FixtureGeometryBuilder.createAndVerify(");
         int checkedCreation = controller.indexOf("V4FixtureEntityFactory.createAndVerify(");
         int stability = controller.indexOf("preparing.state = State.WAITING_STARTUP_STABILITY");
         int stabilityMethod = controller.indexOf("private static void tickStartupStability(");
         int bootstrap = controller.indexOf(
                 "session.state = State.WAITING_SETTLEMENT_AND_INITIAL_BOARD", stabilityMethod);
-        assertTrue(fixtureFunction >= 0 && checkedCreation > fixtureFunction
+        assertTrue(checkedGeometry >= 0 && checkedCreation > checkedGeometry
                         && stability > checkedCreation && bootstrap > stabilityMethod,
-                "geometry/attachment must lead to startup stability, and only that lifecycle "
+                "verified geometry/attachment must lead to startup stability, and only that lifecycle "
                         + "gate may open bootstrap");
         int runStart = controller.indexOf("public static synchronized int run(");
         int statusStart = controller.indexOf("public static synchronized int status(");
-        assertFalse(controller.substring(runStart, statusStart)
+        String runMethod = controller.substring(runStart, statusStart);
+        assertFalse(runMethod
                         .contains("State.WAITING_SETTLEMENT_AND_INITIAL_BOARD"),
                 "run() must not open bootstrap from instantaneous attachment");
+        assertFalse(runMethod.contains("\"scenario/v4_g\""),
+                "run() must not infer geometry success from an unchecked mcfunction");
+        assertTrue(runMethod.contains("fixtureGeometryDiagnostics.ready()"),
+                "entity creation must remain behind the explicit geometry gate");
         assertFalse(controller.contains("fixture PlayerMob not found"));
         assertFalse(controller.contains("findTagged(level, origin"));
 
@@ -118,6 +131,79 @@ class V4RuntimeFixtureBoundaryTest {
             assertFalse(factory.contains(forbidden),
                     "fixture entity creation acquired production authority: " + forbidden);
         }
+    }
+
+    @Test
+    void geometryBuilderForcesExactChunksBeforeMutationAndVerifiesBeforeEntityCreation()
+            throws Exception {
+        String builder = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4FixtureGeometryBuilder.java"));
+        int acquire = builder.indexOf("acquireChunks(level, requiredChunks");
+        int mutation = builder.indexOf("diagnostics.geometryMutationAttempted = true");
+        int verify = builder.indexOf("verifyPostconditions(level, origin, diagnostics)");
+        assertTrue(acquire >= 0 && mutation > acquire && verify > mutation,
+                "all required chunks must be ready before mutation, then verified afterward");
+
+        for (String required : new String[] {
+                "RULE_COMMAND_MODIFICATION_BLOCK_LIMIT", "getForcedChunks()",
+                "setChunkForced(", "level.getChunk(chunk.x, chunk.z)",
+                "geometryChunksRequired", "geometryChunksReady",
+                "geometryMutationAttempted", "geometryMutationSucceeded",
+                "geometryVerified", "geometryFailureStage",
+                "geometryFailureCoordinate", "expectedBlock", "actualBlock",
+                "verifySpawnGeometry", "isFaceSturdy", "getCollisionShape"}) {
+            assertTrue(builder.contains(required), "missing geometry proof boundary: " + required);
+        }
+        for (String forbidden : new String[] {
+                "findSafe", "safe nearby", "spawn retry", "teleportTo(",
+                "VillageIntent", "designateHome(", "startSleeping(", "performResolvedTrade("}) {
+            assertFalse(builder.contains(forbidden),
+                    "geometry fixture exceeded setup authority: " + forbidden);
+        }
+
+        String controller = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeCampaignController.java"));
+        assertTrue(controller.indexOf("V4FixtureGeometryBuilder.createAndVerify(")
+                        < controller.indexOf("V4FixtureEntityFactory.createAndVerify("));
+        assertFalse(controller.contains("forceCorridorChunks("),
+                "the controller must not retain a second late chunk-forcing path");
+        assertFalse(controller.contains("geometryFunctionExecuted"),
+                "invocation must not be reported as successful geometry creation");
+    }
+
+    @Test
+    void geometryPlanCoversVillageCorridorDepartureAndExactPoiPostconditions() {
+        BlockPos origin = BlockPos.ZERO;
+        var chunks = V4FixtureGeometryBuilder.requiredChunks(origin);
+        assertEquals(46, chunks.size(), "exact union of village/corridor/departure chunks changed");
+        for (ChunkPos required : new ChunkPos[] {
+                new ChunkPos(-2, -2), new ChunkPos(1, 1),
+                new ChunkPos(0, -1), new ChunkPos(11, 0),
+                new ChunkPos(9, -2), new ChunkPos(12, 1)}) {
+            assertTrue(chunks.contains(required), "missing required geometry chunk " + required);
+        }
+
+        Map<String, V4FixtureGeometryBuilder.Postcondition> checks =
+                V4FixtureGeometryBuilder.representativePostconditions(origin).stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                V4FixtureGeometryBuilder.Postcondition::label, value -> value));
+        assertEquals(BlockPos.ZERO.offset(2, -1, 0), checks.get("subject-support").pos());
+        assertEquals("minecraft:stone", checks.get("subject-support").expected().description());
+        assertEquals(BlockPos.ZERO.offset(90, -1, 0), checks.get("corridor-floor-90").pos());
+        assertEquals("minecraft:air",
+                checks.get("corridor-head-clearance-180").expected().description());
+        assertEquals(BlockPos.ZERO.offset(202, -1, 22), checks.get("departure-floor").pos());
+        assertEquals("minecraft:bell", checks.get("bell").expected().description());
+        assertEquals("minecraft:smithing_table",
+                checks.get("workstation").expected().description());
+        assertEquals(6, checks.values().stream()
+                .filter(check -> check.expected().description().contains("_bed["))
+                .count(), "all six bed halves must carry exact final-state expectations");
+        assertTrue(checks.values().stream()
+                .filter(check -> check.expected().description().contains("_bed["))
+                .allMatch(check -> check.expected().description().contains("facing=south")));
     }
 
     @Test

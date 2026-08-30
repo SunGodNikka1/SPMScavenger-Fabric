@@ -111,8 +111,13 @@ public final class V4RuntimeCampaignController {
             preparing.configSummary = configSummary(config);
             validateFixtureConfig(config);
             executeFixtureFunction(source.getServer(), fixtureSource(source.getServer(), origin),
-                    "scenario/v4_g");
-            preparing.geometryFunctionExecuted = true;
+                    "cleanup");
+            V4FixtureGeometryBuilder.createAndVerify(
+                    level, origin, preparing.forcedChunks, preparing.fixtureGeometryDiagnostics);
+            if (!preparing.fixtureGeometryDiagnostics.ready()) {
+                throw new IllegalStateException(
+                        "fixture geometry gate did not reach verified state");
+            }
             V4FixtureEntityFactory.VerifiedFixture fixture =
                     V4FixtureEntityFactory.createAndVerify(
                             level, origin, preparing.fixtureCreationDiagnostics);
@@ -132,7 +137,6 @@ public final class V4RuntimeCampaignController {
             configureOffer(trader, INITIAL_PRICE);
             preparing.initialOffer = V4OfferFingerprint.of(trader.getOffers().getFirst());
             preparing.changedOffer = fingerprintForPrice(CHANGED_PRICE);
-            forceCorridorChunks(level, preparing);
             preparing.state = State.WAITING_STARTUP_STABILITY;
             preparing.startupStabilityDeadline =
                     level.getGameTime() + STARTUP_STABILITY_LIMIT;
@@ -140,6 +144,7 @@ public final class V4RuntimeCampaignController {
                     "origin=" + origin.toShortString() + " subject=" + subject.getUUID()
                             + " trader=" + trader.getUUID()
                             + " helper=" + fixture.helper().getUUID()
+                            + " geometryVerified=YES"
                             + " fixtureAttachmentGate=PASS");
             source.sendSuccess(() -> Component.literal(
                     "V4-G preparation started. Use /spmscavenger debug v4 status or report."), false);
@@ -760,20 +765,6 @@ public final class V4RuntimeCampaignController {
         return count;
     }
 
-    private static void forceCorridorChunks(ServerLevel level, Session session) {
-        int minX = (session.origin.getX() - 32) >> 4;
-        int maxX = (session.origin.getX() + DEPARTURE_OFFSET + 32) >> 4;
-        int minZ = (session.origin.getZ() - 32) >> 4;
-        int maxZ = (session.origin.getZ() + 32) >> 4;
-        for (int x = minX; x <= maxX; x++) {
-            for (int z = minZ; z <= maxZ; z++) {
-                if (level.setChunkForced(x, z, true)) {
-                    session.forcedChunks.add(new ChunkPos(x, z));
-                }
-            }
-        }
-    }
-
     private static int releaseChunks(MinecraftServer server, Session session) {
         ServerLevel level = server.getLevel(session.dimension);
         if (level == null) return 0;
@@ -837,6 +828,7 @@ public final class V4RuntimeCampaignController {
                 "VillageIntent=" + witness.intentIdentity(),
                 "COMMUTE source=" + witness.commuteSource(),
                 "next=" + next(session)));
+        lines.addAll(session.fixtureGeometryDiagnostics.lines());
         lines.addAll(session.fixtureCreationDiagnostics.lines());
         return List.copyOf(lines);
     }
@@ -936,7 +928,8 @@ public final class V4RuntimeCampaignController {
         long interruptionTick;
         boolean resumeObserved;
         int forcedChunksReleased;
-        boolean geometryFunctionExecuted;
+        final V4FixtureGeometryBuilder.Diagnostics fixtureGeometryDiagnostics =
+                new V4FixtureGeometryBuilder.Diagnostics();
         final V4FixtureEntityFactory.Diagnostics fixtureCreationDiagnostics =
                 new V4FixtureEntityFactory.Diagnostics();
 
@@ -972,7 +965,9 @@ public final class V4RuntimeCampaignController {
             String preBehaviorFailureClass,
             List<String> deathDiagnostics,
             int forcedChunksReleased,
-            boolean geometryFunctionExecuted,
+            String geometryFailureStage,
+            boolean geometryVerified,
+            List<String> fixtureGeometryDiagnostics,
             String fixtureFailureStage,
             String fixtureFailureDetail,
             List<String> fixtureCreationDiagnostics,
@@ -998,7 +993,9 @@ public final class V4RuntimeCampaignController {
                             ? List.of("deathDiagnostics=UNAVAILABLE")
                             : session.deathDiagnostics.lines(),
                     session.forcedChunksReleased,
-                    session.geometryFunctionExecuted,
+                    session.fixtureGeometryDiagnostics.geometryFailureStage,
+                    session.fixtureGeometryDiagnostics.ready(),
+                    session.fixtureGeometryDiagnostics.lines(),
                     session.fixtureCreationDiagnostics.failureStage,
                     session.fixtureCreationDiagnostics.failureDetail,
                     session.fixtureCreationDiagnostics.lines(), session.configSummary, witness,
@@ -1011,6 +1008,8 @@ public final class V4RuntimeCampaignController {
                     "state=" + state + " reason=" + reason,
                     "PhaseA=" + (phaseAPassTick >= 0 ? "PASS" : "NOT_PASS")
                             + " PhaseB=" + (phaseBPassTick >= 0 ? "PASS" : "NOT_PASS"),
+                    "fixtureGeometryPreflight=" + (geometryVerified ? "PASS" : "FAIL")
+                            + " stage=" + geometryFailureStage,
                     "fixtureEntityPreflight="
                             + ("NONE".equals(fixtureFailureStage) ? "PASS" : "FAIL")
                             + " stage=" + fixtureFailureStage
@@ -1026,7 +1025,8 @@ public final class V4RuntimeCampaignController {
             lines.add("config=" + configSummary);
             lines.add("subject=" + subjectId + " trader=" + traderId + " helper=" + helperId
                     + " origin=" + origin.toShortString());
-            lines.add("geometryFunctionExecuted=" + geometryFunctionExecuted);
+            lines.add("-- fixture geometry creation preflight --");
+            lines.addAll(fixtureGeometryDiagnostics);
             lines.add("-- fixture entity creation preflight --");
             lines.addAll(fixtureCreationDiagnostics);
             lines.add("rememberedSettlement=" + printable(settlementAnchor)

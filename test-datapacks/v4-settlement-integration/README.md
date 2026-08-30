@@ -12,11 +12,14 @@ the complete setup and passive witness lifecycle:
 ```
 
 The operator stands at the intended village-anchor end of a disposable test area in the Overworld.
-`run` invokes `spm_v4:scenario/v4_g` to create a flat 180-block corridor, three beds and a bell.
-The validation controller then creates the fixture trader, helper villager and PlayerMob through
-checked registered-entity spawn/finalization gates before bootstrap. It then supplies the controlled
-offer/inventory and waits for production behavior. It does not force intent, navigation, trade,
-sleep, or HOME.
+`run` first acquires the exact validation-owned chunk set, then
+`V4FixtureGeometryBuilder` creates and verifies the flat 180-block corridor, departure area, three
+beds, bell, workstation, and all required entity spawn spaces. Only after that geometry gate passes
+does the validation controller create the fixture trader, helper villager and PlayerMob through
+checked registered-entity spawn/finalization gates. Bootstrap remains behind a separate first-tick
+lifecycle stability gate. The legacy `spm_v4:scenario/v4_g` resource is documentation-only and is
+not a runtime geometry owner. The controller supplies the controlled offer/inventory and waits for
+production behavior; it does not force intent, navigation, trade, sleep, or HOME.
 
 Fixture-owned tagged entities are removed by `reset`. Placed blocks are deliberately preserved:
 after production begins, type/location alone is insufficient provenance for destructive rollback.
