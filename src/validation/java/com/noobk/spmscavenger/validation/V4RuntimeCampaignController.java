@@ -77,6 +77,7 @@ public final class V4RuntimeCampaignController {
         PREPARING,
         WAITING_FIXTURE_LIGHTING,
         WAITING_STARTUP_STABILITY,
+        WAITING_SETTLEMENT_MEMORY,
         WAITING_SETTLEMENT_AND_INITIAL_BOARD,
         PHASE_A_WAITING_INTENT,
         PHASE_A_COMMUTING,
@@ -367,6 +368,9 @@ public final class V4RuntimeCampaignController {
         switch (session.state) {
             case WAITING_SETTLEMENT_AND_INITIAL_BOARD ->
                     tickBootstrap(server, level, subject, trader, backpack, liveDemand, session, now);
+            case WAITING_SETTLEMENT_MEMORY ->
+                    tickSettlementMemory(server, level, subject, trader, backpack,
+                            liveDemand, session, now);
             case PHASE_A_WAITING_INTENT, PHASE_A_COMMUTING, PHASE_A_WAITING_LIVE_TRADE ->
                     tickPhaseA(server, level, subject, trader, backpack, session, now);
             case PHASE_B_PREPARING -> preparePhaseB(server, level, subject, session, now);
@@ -436,7 +440,7 @@ public final class V4RuntimeCampaignController {
         session.fixtureCreationTick = now;
         session.subjectTickCountAtCreation = subject.tickCount;
         session.backpackIdentity = backpack;
-        prepareSubjectInventory(subject, backpack, INITIAL_PRICE);
+        prepareSettlementMemoryInventory(subject, backpack);
         configureOffer(trader, INITIAL_PRICE);
         session.initialOffer = V4OfferFingerprint.of(trader.getOffers().getFirst());
         session.changedOffer = fingerprintForPrice(CHANGED_PRICE);
@@ -496,13 +500,72 @@ public final class V4RuntimeCampaignController {
                 }
                 session.startupStabilityPassed = true;
                 session.startupStabilityPassTick = now;
-                session.state = State.WAITING_SETTLEMENT_AND_INITIAL_BOARD;
+                session.state = State.WAITING_SETTLEMENT_MEMORY;
                 session.deadline = now + BOOTSTRAP_LIMIT;
-                session.reason = "startup stability passed; waiting settlement and initial board";
+                session.reason = "startup stability passed; waiting for production settlement memory";
                 record(session, now, "STARTUP_STABILITY_PASS",
                         "fixtureCreationTick=" + session.fixtureCreationTick
                                 + " subjectTickCount=" + subject.tickCount
                                 + " traderAlive=true helperAlive=true");
+            }
+        }
+    }
+
+    private static void tickSettlementMemory(
+            MinecraftServer server, ServerLevel level, Mob subject, Villager trader,
+            Container backpack, Optional<WorkDemandPolicy.MaterialDemand> liveDemand,
+            Session session, long now) {
+        Optional<MobVillageMemory> memory = memory(level, subject.getUUID());
+        int rememberedVillageCount = memory.map(value -> value.villages().size()).orElse(0);
+        boolean homePresent = memory.flatMap(MobVillageMemory::homeAnchor).isPresent();
+        BlockPos onlyAnchor = rememberedVillageCount == 1
+                ? memory.orElseThrow().villages().getFirst().anchor() : null;
+        double traderDistance = onlyAnchor == null ? Double.NaN
+                : horizontalDistance(onlyAnchor, trader.blockPosition());
+        boolean expectedDemandPresent = liveDemand.filter(
+                V4RuntimeCampaignController::isExpectedDemand).isPresent();
+        V4SettlementMemoryBootstrapGate.Assessment assessment =
+                V4SettlementMemoryBootstrapGate.evaluate(
+                        rememberedVillageCount, homePresent, expectedDemandPresent,
+                        liveDemand.isPresent(), Double.isFinite(traderDistance)
+                                && traderDistance <= VillagerTradeAdapterDistance.localRadius());
+        switch (assessment.verdict()) {
+            case WAITING -> {
+                session.preWarmupExpectedDemandAbsent = true;
+                session.reason = assessment.reason();
+                if (now >= session.deadline) {
+                    finish(server, session, State.INCOMPLETE, now,
+                            "settlement-memory bootstrap timeout rememberedVillageCount="
+                                    + rememberedVillageCount);
+                }
+            }
+            case FIXTURE_FAILURE -> finish(server, session, State.FIXTURE_FAILURE, now,
+                    assessment.reason());
+            case READY -> {
+                session.settlementAnchor = onlyAnchor;
+                session.anchorTraderDistance = traderDistance;
+                session.settlementMemoryReadyTick = now;
+                session.preWarmupExpectedDemandAbsent = true;
+                prepareSubjectInventory(subject, backpack, INITIAL_PRICE);
+                Optional<WorkDemandPolicy.MaterialDemand> armed =
+                        observeLiveDemand(level, subject, backpack, now);
+                if (armed.filter(V4RuntimeCampaignController::isExpectedDemand).isEmpty()) {
+                    finish(server, session, State.FIXTURE_FAILURE, now,
+                            "warm-up inventory did not open expected iron-pickaxe demand");
+                    return;
+                }
+                session.warmupDemandOpenedTick = now;
+                session.warmupDemandIdentity = armed.orElseThrow().identity();
+                session.state = State.WAITING_SETTLEMENT_AND_INITIAL_BOARD;
+                session.deadline = now + BOOTSTRAP_LIMIT;
+                session.reason = "settlement memory ready; warm-up demand deliberately armed";
+                record(session, now, "SETTLEMENT_MEMORY_READY",
+                        "rememberedVillageCount=1 anchor=" + onlyAnchor.toShortString()
+                                + " anchorTraderDistance=" + format(traderDistance)
+                                + " preWarmupExpectedDemandAbsent=true");
+                record(session, now, "WARMUP_DEMAND_OPENED",
+                        "identity=" + session.warmupDemandIdentity
+                                + " deadline=" + session.deadline);
             }
         }
     }
@@ -870,6 +933,15 @@ public final class V4RuntimeCampaignController {
         subject.setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
     }
 
+    private static void prepareSettlementMemoryInventory(Mob subject, Container backpack) {
+        backpack.clearContent();
+        backpack.setItem(0, new ItemStack(
+                Items.TORCH, Math.max(8, ScavengerConfig.get().torchStockTarget)));
+        backpack.setItem(1, new ItemStack(Items.DIAMOND_AXE));
+        subject.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_PICKAXE));
+        subject.setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+    }
+
     private static void configureOffer(Villager trader, int emeraldCost) {
         trader.setVillagerData(trader.getVillagerData()
                 .setProfession(VillagerProfession.TOOLSMITH).setLevel(2));
@@ -1094,6 +1166,12 @@ public final class V4RuntimeCampaignController {
                 "config=" + session.configSummary,
                 "homeBeforeTrade=" + homeMeasurement(session.homeBeforeTrade),
                 "bootstrapInitialBoardObserved=" + session.bootstrapInitialBoardObserved,
+                "initialBoardFingerprint="
+                        + printable(V4RuntimeWitnessTracker.snapshot().initialBoardFingerprint()),
+                "knownTraderObservationAttempted="
+                        + V4RuntimeWitnessTracker.snapshot().knownTraderObservationAttempted(),
+                "knownTraderObservationChanged="
+                        + V4RuntimeWitnessTracker.snapshot().knownTraderObservationChanged(),
                 "bootstrapWarmupTradeExecuted=" + session.bootstrapWarmupTradeExecuted,
                 "bootstrapWarmupDemandResolved=" + session.bootstrapWarmupDemandResolved,
                 "bootstrapCapabilityPersisted=" + session.bootstrapCapabilityPersisted,
@@ -1106,6 +1184,11 @@ public final class V4RuntimeCampaignController {
                 "departureConfirmed=" + session.departureConfirmed,
                 "phaseASecondDemandOpened=" + session.phaseASecondDemandOpened,
                 "rememberedSettlement=" + printable(session.settlementAnchor),
+                "settlementMemoryReadyTick=" + session.settlementMemoryReadyTick
+                        + " preWarmupExpectedDemandAbsent="
+                        + session.preWarmupExpectedDemandAbsent,
+                "warmupDemandOpenedTick=" + session.warmupDemandOpenedTick
+                        + " warmupDemandIdentity=" + session.warmupDemandIdentity,
                 "anchorTraderDistance=" + format(session.anchorTraderDistance),
                 "initialOfferFingerprint=" + printable(witness.initialOffer()),
                 "changedLiveOfferFingerprint=" + printable(witness.changedOffer()),
@@ -1143,6 +1226,8 @@ public final class V4RuntimeCampaignController {
                     "natural threaded block-light propagation before any fixture entity exists";
             case WAITING_SETTLEMENT_AND_INITIAL_BOARD ->
                     "production-owned local warm-up trade, resolved demand, and persisted capability";
+            case WAITING_SETTLEMENT_MEMORY ->
+                    "ordinary production perception of exactly one remembered settlement";
             case WAITING_STARTUP_STABILITY ->
                     "first normal subject/server tick with all required entities alive";
             case PHASE_A_WAITING_INTENT -> "production REQUIRED_TRADE intent/directive";
@@ -1232,6 +1317,10 @@ public final class V4RuntimeCampaignController {
         boolean bootstrapWarmupTradeExecuted;
         boolean bootstrapWarmupDemandResolved;
         boolean bootstrapCapabilityPersisted;
+        boolean preWarmupExpectedDemandAbsent;
+        long settlementMemoryReadyTick = -1L;
+        long warmupDemandOpenedTick = -1L;
+        WorkDemandPolicy.MaterialDemandIdentity warmupDemandIdentity;
         VillageIntent lastBootstrapIntent;
         boolean departureConfirmed;
         boolean phaseASecondDemandOpened;
@@ -1290,6 +1379,10 @@ public final class V4RuntimeCampaignController {
             long phaseBPassTick,
             long terminalTick,
             long fixtureCreationTick,
+            long settlementMemoryReadyTick,
+            long warmupDemandOpenedTick,
+            WorkDemandPolicy.MaterialDemandIdentity warmupDemandIdentity,
+            boolean preWarmupExpectedDemandAbsent,
             long startupStabilityPassTick,
             boolean startupStabilityPassed,
             String preBehaviorFailureClass,
@@ -1331,6 +1424,8 @@ public final class V4RuntimeCampaignController {
                     session.phaseBAssociationCount, session.startTick, session.phaseAOpenTick,
                     session.phaseAPassTick, session.phaseBOpenTick, session.phaseBPassTick,
                     session.terminalTick, session.fixtureCreationTick,
+                    session.settlementMemoryReadyTick, session.warmupDemandOpenedTick,
+                    session.warmupDemandIdentity, session.preWarmupExpectedDemandAbsent,
                     session.startupStabilityPassTick, session.startupStabilityPassed,
                     session.preBehaviorFailureClass,
                     session.deathDiagnostics == null
@@ -1394,7 +1489,11 @@ public final class V4RuntimeCampaignController {
                     + " phaseAPass=" + phaseAPassTick + " phaseBOpen=" + phaseBOpenTick
                     + " phaseBPass=" + phaseBPassTick + " terminal=" + terminalTick);
             lines.add("fixtureCreationTick=" + fixtureCreationTick
+                    + " settlementMemoryReadyTick=" + settlementMemoryReadyTick
+                    + " warmupDemandOpenedTick=" + warmupDemandOpenedTick
                     + " startupStabilityPassTick=" + startupStabilityPassTick);
+            lines.add("preWarmupExpectedDemandAbsent=" + preWarmupExpectedDemandAbsent
+                    + " warmupDemandIdentity=" + warmupDemandIdentity);
             lines.add("-- subject death diagnostics --");
             lines.addAll(deathDiagnostics);
             lines.add("homeBeforeTrade=" + homeMeasurement(homeBeforeTrade)
@@ -1402,6 +1501,12 @@ public final class V4RuntimeCampaignController {
                     + " phaseBAssociatedSettlementCount="
                     + (phaseBAssociationCount > 0 ? 1 : 0));
             lines.add("bootstrapInitialBoardObserved=" + bootstrapInitialBoardObserved);
+            lines.add("initialBoardFingerprint="
+                    + printable(witness.initialBoardFingerprint()));
+            lines.add("knownTraderObservationAttempted="
+                    + witness.knownTraderObservationAttempted());
+            lines.add("knownTraderObservationChanged="
+                    + witness.knownTraderObservationChanged());
             lines.add("bootstrapWarmupTradeExecuted=" + bootstrapWarmupTradeExecuted);
             lines.add("bootstrapWarmupDemandResolved=" + bootstrapWarmupDemandResolved);
             lines.add("bootstrapCapabilityPersisted=" + bootstrapCapabilityPersisted);

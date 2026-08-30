@@ -64,6 +64,8 @@ final class V4FixtureGeometryBuilder {
         writeVolume(level, origin.offset(158, -1, -22), origin.offset(202, -1, 22),
                 Blocks.STONE.defaultBlockState(), diagnostics);
 
+        placeArenaBoundary(level, origin, diagnostics);
+
         writeChecked(level, origin.offset(1, 0, 0), Blocks.BELL.defaultBlockState(), diagnostics);
         writeBed(level, origin.offset(-4, 0, 1), origin.offset(-4, 0, 2),
                 Blocks.RED_BED.defaultBlockState(), diagnostics);
@@ -75,6 +77,7 @@ final class V4FixtureGeometryBuilder {
                 Blocks.SMITHING_TABLE.defaultBlockState(), diagnostics);
         placeArenaLighting(level, origin, diagnostics);
         verifyPostconditions(level, origin, diagnostics);
+        verifyArenaBoundary(level, origin, diagnostics);
         verifyLightBlocksPresent(level, origin, diagnostics);
         diagnostics.geometryMutationSucceeded = true;
         diagnostics.geometryStructureVerified = true;
@@ -126,9 +129,9 @@ final class V4FixtureGeometryBuilder {
 
     static List<ChunkPos> requiredChunks(BlockPos origin) {
         Set<ChunkPos> chunks = new LinkedHashSet<>();
-        addChunkRectangle(chunks, origin.offset(-24, 0, -24), origin.offset(24, 0, 24));
-        addChunkRectangle(chunks, origin.offset(0, 0, -2), origin.offset(180, 0, 2));
-        addChunkRectangle(chunks, origin.offset(158, 0, -22), origin.offset(202, 0, 22));
+        addChunkRectangle(chunks, origin.offset(-25, 0, -25), origin.offset(25, 0, 25));
+        addChunkRectangle(chunks, origin.offset(-1, 0, -3), origin.offset(181, 0, 3));
+        addChunkRectangle(chunks, origin.offset(157, 0, -23), origin.offset(203, 0, 23));
         return chunks.stream()
                 .sorted(Comparator.comparingInt((ChunkPos chunk) -> chunk.x)
                         .thenComparingInt(chunk -> chunk.z))
@@ -293,6 +296,62 @@ final class V4FixtureGeometryBuilder {
             diagnostics.fixtureLightBlocksPlaced++;
         }
         placeLightGrid(level, origin, 158, 202, -22, 22, diagnostics, light);
+    }
+
+    private static void placeArenaBoundary(
+            ServerLevel level, BlockPos origin, Diagnostics diagnostics) {
+        for (BlockPos relative : arenaBoundaryOffsets()) {
+            writeChecked(level, origin.offset(relative), Blocks.BARRIER.defaultBlockState(), diagnostics);
+            diagnostics.fixtureBarrierBlocksPlaced++;
+        }
+    }
+
+    private static void verifyArenaBoundary(
+            ServerLevel level, BlockPos origin, Diagnostics diagnostics) {
+        for (BlockPos relative : arenaBoundaryOffsets()) {
+            BlockPos pos = origin.offset(relative);
+            BlockState actual = level.getBlockState(pos);
+            if (!actual.is(Blocks.BARRIER)) {
+                throw diagnostics.fail("arena_boundary", pos,
+                        "minecraft:barrier", actual.toString());
+            }
+            diagnostics.fixtureBarrierBlocksVerified++;
+        }
+        diagnostics.arenaBoundaryVerified = diagnostics.fixtureBarrierBlocksPlaced > 0
+                && diagnostics.fixtureBarrierBlocksVerified
+                        == diagnostics.fixtureBarrierBlocksPlaced;
+    }
+
+    static List<BlockPos> arenaBoundaryOffsets() {
+        List<BlockPos> boundary = new ArrayList<>();
+        for (int x = -25; x <= 203; x++) {
+            for (int y = 0; y <= 5; y++) {
+                for (int z = -25; z <= 25; z++) {
+                    if (arenaInterior(x, y, z)) {
+                        continue;
+                    }
+                    boolean adjacent = false;
+                    for (Direction direction : Direction.values()) {
+                        adjacent |= arenaInterior(x + direction.getStepX(),
+                                y + direction.getStepY(), z + direction.getStepZ());
+                    }
+                    if (adjacent) {
+                        boundary.add(new BlockPos(x, y, z));
+                    }
+                }
+            }
+        }
+        return List.copyOf(boundary);
+    }
+
+    static boolean arenaInterior(int x, int y, int z) {
+        boolean village = x >= -24 && x <= 24 && y >= 0 && y <= 4
+                && z >= -24 && z <= 24;
+        boolean corridor = x >= 0 && x <= 180 && y >= 0 && y <= 3
+                && z >= -2 && z <= 2;
+        boolean departure = x >= 158 && x <= 202 && y >= 0 && y <= 4
+                && z >= -22 && z <= 22;
+        return village || corridor || departure;
     }
 
     private static void placeLightGrid(
@@ -471,6 +530,9 @@ final class V4FixtureGeometryBuilder {
         int fixtureLightBlocksPlaced;
         int fixtureLightBlocksVerified;
         int fixtureLightSamplesChecked;
+        int fixtureBarrierBlocksPlaced;
+        int fixtureBarrierBlocksVerified;
+        boolean arenaBoundaryVerified;
         int minimumRepresentativeBlockLight = -1;
         boolean fixtureLightingVerified;
         boolean geometryStructureVerified;
@@ -492,6 +554,7 @@ final class V4FixtureGeometryBuilder {
                     && geometryMutationRejected == 0
                     && fixtureLightBlocksPlaced > 0
                     && fixtureLightBlocksVerified == fixtureLightBlocksPlaced
+                    && arenaBoundaryVerified
                     && geometryStructureVerified;
         }
 
@@ -529,6 +592,9 @@ final class V4FixtureGeometryBuilder {
                     "geometryStructureVerified=" + yesNo(geometryStructureVerified)
                             + " geometryVerified=" + yesNo(geometryVerified)
                             + " postconditionsChecked=" + geometryPostconditionsChecked,
+                    "arenaBoundaryVerified=" + yesNo(arenaBoundaryVerified)
+                            + " barrierBlocksPlaced=" + fixtureBarrierBlocksPlaced
+                            + " barrierBlocksVerified=" + fixtureBarrierBlocksVerified,
                     "fixtureLightingVerified=" + yesNo(fixtureLightingVerified)
                             + " lightBlocksPlaced=" + fixtureLightBlocksPlaced
                             + " lightBlocksVerified=" + fixtureLightBlocksVerified

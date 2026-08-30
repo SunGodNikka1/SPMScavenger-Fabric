@@ -175,12 +175,17 @@ class V4RuntimeFixtureBoundaryTest {
         int stabilityStart = controller.indexOf("private static void tickStartupStability(");
         String fixtureCreation = controller.substring(fixtureStart, stabilityStart);
         assertTrue(fixtureCreation.contains(
+                        "prepareSettlementMemoryInventory(subject, backpack)"),
+                "entity creation must begin with a demand-neutral perception inventory");
+        int memoryStart = controller.indexOf("private static void tickSettlementMemory(");
+        int bootstrapStart = controller.indexOf("private static void tickBootstrap(");
+        String memoryWait = controller.substring(memoryStart, bootstrapStart);
+        assertTrue(memoryWait.contains(
                         "prepareSubjectInventory(subject, backpack, INITIAL_PRICE)"),
-                "warmup must start with the exact live-offer funding amount");
+                "warmup funding may appear only after settlement-memory readiness");
         assertFalse(fixtureCreation.contains("performResolvedTrade("),
                 "the validation controller must not execute its warmup transaction");
 
-        int bootstrapStart = controller.indexOf("private static void tickBootstrap(");
         int phaseAStart = controller.indexOf("private static void openPhaseA(");
         String bootstrap = controller.substring(bootstrapStart, phaseAStart);
         for (String evidence : new String[] {
@@ -464,6 +469,55 @@ class V4RuntimeFixtureBoundaryTest {
                         "lighting grid left an uncovered gap");
             }
         }
+    }
+
+    @Test
+    void arenaBoundarySealsIngressWithoutClosingTheCommuteInterior() {
+        var boundary = new java.util.HashSet<>(
+                V4FixtureGeometryBuilder.arenaBoundaryOffsets());
+        assertFalse(boundary.isEmpty());
+        for (int x = 0; x <= 180; x++) {
+            assertTrue(V4FixtureGeometryBuilder.arenaInterior(x, 0, 0));
+            assertFalse(boundary.contains(new BlockPos(x, 0, 0)),
+                    "corridor centerline must remain navigable at x=" + x);
+        }
+        assertTrue(V4FixtureGeometryBuilder.arenaInterior(-1, 0, 0),
+                "fixture trader remains inside the sealed arena");
+        assertTrue(V4FixtureGeometryBuilder.arenaInterior(180, 0, 0),
+                "departure point remains connected to the corridor");
+        assertTrue(V4FixtureGeometryBuilder.arenaInterior(185, 0, 0),
+                "controlled interruption spawn area remains available");
+        assertTrue(boundary.contains(new BlockPos(-25, 0, 0)));
+        assertTrue(boundary.contains(new BlockPos(203, 0, 0)));
+        assertTrue(boundary.contains(new BlockPos(90, 4, 0)),
+                "corridor roof must prevent falling ingress");
+    }
+
+    @Test
+    void settlementMemoryOrderingAndBoardObservationRemainPassive() throws Exception {
+        String controller = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeCampaignController.java"));
+        assertTrue(controller.contains("WAITING_SETTLEMENT_MEMORY"));
+        assertTrue(controller.indexOf("prepareSettlementMemoryInventory(subject, backpack)")
+                < controller.indexOf("session.state = State.WAITING_STARTUP_STABILITY"));
+        assertTrue(controller.indexOf("session.settlementMemoryReadyTick = now")
+                < controller.indexOf("prepareSubjectInventory(subject, backpack, INITIAL_PRICE)"));
+        assertTrue(controller.indexOf("session.warmupDemandOpenedTick = now")
+                < controller.indexOf("session.deadline = now + BOOTSTRAP_LIMIT",
+                        controller.indexOf("session.warmupDemandOpenedTick = now")));
+        assertTrue(controller.contains("VillageMemorySavedData.peekInDimension(level)"));
+        assertFalse(controller.contains("VillageMemorySavedData.get(level)"));
+
+        String mixin = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/mixin/"
+                        + "V4KnownTraderObservationMixin.java"));
+        assertFalse(mixin.contains("if (!Boolean.TRUE.equals(cir.getReturnValue()))"));
+        assertTrue(mixin.contains("V4RuntimeWitnessTracker.observeBoardInvocation("));
+        assertTrue(mixin.contains("V4OfferFingerprint.of(offer),\n"
+                + "                        level.getGameTime()"));
+        assertFalse(mixin.contains("getOffers()"));
+        assertFalse(mixin.contains("getEntitiesOfClass"));
     }
 
     @Test

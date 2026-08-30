@@ -74,6 +74,31 @@ class V4RuntimeWitnessTrackerTest {
     }
 
     @Test
+    void boardReadIsEvidenceEvenWhenPersistenceReportsNoChange() {
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, new Object(), INITIAL, 10L);
+        V4RuntimeWitnessTracker.observeBoardInvocation(MOB, TRADER, false, 11L);
+        V4RuntimeWitnessTracker.observeBoard(MOB, TRADER, INITIAL, 11L);
+
+        V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
+        assertTrue(snapshot.initialBoardObserved());
+        assertEquals(INITIAL, snapshot.initialBoardFingerprint());
+        assertTrue(snapshot.knownTraderObservationAttempted());
+        assertFalse(snapshot.knownTraderObservationChanged());
+    }
+
+    @Test
+    void persistenceMutationIsReportedSeparatelyFromBoardRead() {
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, new Object(), INITIAL, 10L);
+        V4RuntimeWitnessTracker.observeBoardInvocation(MOB, TRADER, true, 11L);
+        V4RuntimeWitnessTracker.observeBoard(MOB, TRADER, INITIAL, 11L);
+
+        V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
+        assertTrue(snapshot.initialBoardObserved());
+        assertTrue(snapshot.knownTraderObservationAttempted());
+        assertTrue(snapshot.knownTraderObservationChanged());
+    }
+
+    @Test
     void firstTickBoardEvidenceSurvivesStartupStabilityWithoutRearming() {
         Object backpack = new Object();
         V4RuntimeWitnessTracker.arm(MOB, TRADER, backpack, INITIAL, 10L);

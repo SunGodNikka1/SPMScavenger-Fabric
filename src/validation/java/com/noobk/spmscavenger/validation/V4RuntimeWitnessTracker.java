@@ -35,8 +35,25 @@ public final class V4RuntimeWitnessTracker {
         if (session == null || offer == null) {
             return;
         }
+        observeBoardFingerprint(session, offer, tick);
+    }
+
+    public static synchronized void observeBoardInvocation(
+            UUID mobId, UUID traderId, boolean memoryChanged, long tick) {
+        Session session = matching(mobId, traderId);
+        if (session == null) {
+            return;
+        }
+        session.knownTraderObservationAttempted = true;
+        session.knownTraderObservationChanged |= memoryChanged;
+        event(tick, "KNOWN_TRADER_OBSERVATION", "memoryChanged=" + memoryChanged);
+    }
+
+    private static void observeBoardFingerprint(
+            Session session, V4OfferFingerprint offer, long tick) {
         if (!session.phaseAOpen && session.initialOffer.equals(offer)) {
             session.initialBoardObserved = true;
+            session.initialBoardFingerprint = offer;
             event(tick, "INITIAL_BOARD_OBSERVED", offer.compact());
         }
         if (session.phaseAOpen && offer.equals(session.changedOffer)) {
@@ -286,6 +303,9 @@ public final class V4RuntimeWitnessTracker {
             boolean phaseAOpen,
             long phaseAOpenTick,
             boolean initialBoardObserved,
+            V4OfferFingerprint initialBoardFingerprint,
+            boolean knownTraderObservationAttempted,
+            boolean knownTraderObservationChanged,
             boolean initialWarmupOfferExecuted,
             int bootstrapLocalRequiredTradeCount,
             int bootstrapLocalCommuteSeedCount,
@@ -316,7 +336,8 @@ public final class V4RuntimeWitnessTracker {
             int eventCount) {
 
         static Snapshot empty() {
-            return new Snapshot(false, false, -1L, false, false, 0, 0, 0, false,
+            return new Snapshot(false, false, -1L, false, null, false, false,
+                    false, 0, 0, 0, false,
                     false, null, null, null,
                     null, ExistingRouteFeasibility.ExistingRouteStatus.UNKNOWN, null,
                     false, "NONE", false, false, false, false, false, false, 0,
@@ -335,6 +356,9 @@ public final class V4RuntimeWitnessTracker {
         boolean phaseAOpen;
         long phaseAOpenTick = -1L;
         boolean initialBoardObserved;
+        V4OfferFingerprint initialBoardFingerprint;
+        boolean knownTraderObservationAttempted;
+        boolean knownTraderObservationChanged;
         boolean initialWarmupOfferExecuted;
         final java.util.Set<VillageIntent> bootstrapRequiredTradeIntents =
                 Collections.newSetFromMap(new IdentityHashMap<>());
@@ -383,6 +407,8 @@ public final class V4RuntimeWitnessTracker {
 
         Snapshot snapshot() {
             return new Snapshot(true, phaseAOpen, phaseAOpenTick, initialBoardObserved,
+                    initialBoardFingerprint, knownTraderObservationAttempted,
+                    knownTraderObservationChanged,
                     initialWarmupOfferExecuted, bootstrapLocalRequiredTradeCount,
                     bootstrapLocalCommuteSeedCount, bootstrapLocalArrivalCount,
                     bootstrapLocalIntentReleased, changedBoardRediscovered,

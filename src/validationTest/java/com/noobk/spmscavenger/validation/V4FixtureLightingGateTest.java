@@ -49,6 +49,7 @@ class V4FixtureLightingGateTest {
         diagnostics.geometryMutationSucceeded = true;
         diagnostics.fixtureLightBlocksPlaced = 3;
         diagnostics.fixtureLightBlocksVerified = 3;
+        diagnostics.arenaBoundaryVerified = true;
         diagnostics.geometryStructureVerified = true;
         return diagnostics;
     }

@@ -27,13 +27,14 @@ public abstract class V4KnownTraderObservationMixin {
         V4TradeLivenessWitness.observeKnownTraderObservation(
                 mobId, villager.getUUID(), Boolean.TRUE.equals(cir.getReturnValue()),
                 level.getGameTime());
-        if (!Boolean.TRUE.equals(cir.getReturnValue())) {
-            return;
-        }
+        V4RuntimeWitnessTracker.observeBoardInvocation(
+                mobId, villager.getUUID(), Boolean.TRUE.equals(cir.getReturnValue()),
+                level.getGameTime());
         board.stream()
                 .filter(offer -> offer.result().is(Items.IRON_PICKAXE))
                 .findFirst()
                 .ifPresent(offer -> V4RuntimeWitnessTracker.observeBoard(
-                        mobId, villager.getUUID(), V4OfferFingerprint.of(offer), level.getGameTime()));
+                        mobId, villager.getUUID(), V4OfferFingerprint.of(offer),
+                        level.getGameTime()));
     }
 }
