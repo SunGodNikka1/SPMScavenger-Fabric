@@ -521,6 +521,29 @@ class V4RuntimeFixtureBoundaryTest {
     }
 
     @Test
+    void transactionFingerprintIsInvocationLocalAndCapturedBeforeMutation() throws Exception {
+        String mixin = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/mixin/"
+                        + "V4VillagerTradeAdapterMixin.java"));
+        int head = mixin.indexOf("at = @At(\"HEAD\")");
+        int capture = mixin.indexOf(
+                "preTradeFingerprint.set(V4OfferFingerprint.of(live))", head);
+        int returned = mixin.indexOf("at = @At(\"RETURN\")", capture);
+        int submit = mixin.indexOf(
+                "backpack, villager.getUUID(), preTradeFingerprint.get()", returned);
+        assertTrue(head >= 0 && capture > head && returned > capture && submit > returned,
+                "the exact invocation must carry its immutable HEAD fingerprint to RETURN");
+        assertEquals(2, count(mixin, "@Share(\"preTradeFingerprint\")"));
+        for (String forbidden : new String[] {
+                "ThreadLocal", "ConcurrentHashMap", "Map<", "getOffers()",
+                "getEntitiesOfClass", "V4OfferFingerprint.of(live),\n"
+                        + "                cir.getReturnValue()"}) {
+            assertFalse(mixin.contains(forbidden),
+                    "transaction evidence acquired an unsafe cache/read: " + forbidden);
+        }
+    }
+
+    @Test
     void unknownSettlementMayOpenLocalBootstrapIntentWithoutBecomingPhaseAEvidence()
             throws Exception {
         String ranker = Files.readString(Path.of(

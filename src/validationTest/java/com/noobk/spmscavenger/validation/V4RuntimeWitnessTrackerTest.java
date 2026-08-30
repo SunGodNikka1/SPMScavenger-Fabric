@@ -6,14 +6,24 @@ import com.noobk.spmscavenger.village.routing.SettlementKey;
 import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.trading.ItemCost;
+import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class V4RuntimeWitnessTrackerTest {
@@ -24,6 +34,12 @@ class V4RuntimeWitnessTrackerTest {
             "minecraft:emerald", 8, "minecraft:iron_pickaxe", 1);
     private static final V4OfferFingerprint CHANGED = V4OfferFingerprint.simple(
             "minecraft:emerald", 10, "minecraft:iron_pickaxe", 1);
+
+    @BeforeAll
+    static void bootstrapMinecraft() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
 
     @AfterEach
     void reset() {
@@ -71,6 +87,76 @@ class V4RuntimeWitnessTrackerTest {
         assertTrue(snapshot.initialWarmupOfferExecuted());
         assertFalse(snapshot.cachedInitialOfferExecuted());
         assertFalse(snapshot.changedOfferExecuted());
+    }
+
+    @Test
+    void mutableLiveOfferIsAttributedByItsPreMutationFingerprint() {
+        Object backpack = new Object();
+        MerchantOffer live = offer(8, new ItemStack(Items.IRON_PICKAXE));
+        V4OfferFingerprint preMutation = V4OfferFingerprint.of(live);
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, backpack, preMutation, 10L);
+
+        live.increaseUses();
+        assertEquals(1, live.getUses());
+        assertNotEquals(preMutation, V4OfferFingerprint.of(live));
+        V4RuntimeWitnessTracker.observeTrade(
+                backpack, TRADER, preMutation, true, 12L);
+
+        assertTrue(V4RuntimeWitnessTracker.snapshot().initialWarmupOfferExecuted());
+        assertTrue(V4RuntimeWitnessTracker.events().stream()
+                .anyMatch(event -> event.contains("INITIAL_WARMUP_TRADE")));
+        assertFalse(V4RuntimeWitnessTracker.events().stream()
+                .anyMatch(event -> event.contains("PRE_PHASE_A_OTHER_TRADE")));
+    }
+
+    @Test
+    void phaseATradeUsesExactChangedPreMutationFingerprint() {
+        Object backpack = new Object();
+        MerchantOffer live = offer(10, new ItemStack(Items.IRON_PICKAXE));
+        V4OfferFingerprint changedPreMutation = V4OfferFingerprint.of(live);
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, backpack, INITIAL, 10L);
+        V4RuntimeWitnessTracker.markChangedOffer(changedPreMutation, 20L);
+        V4RuntimeWitnessTracker.openPhaseA(30L);
+
+        live.increaseUses();
+        V4RuntimeWitnessTracker.observeTrade(
+                backpack, TRADER, changedPreMutation, true, 40L);
+
+        assertTrue(V4RuntimeWitnessTracker.snapshot().changedOfferExecuted());
+        assertFalse(V4RuntimeWitnessTracker.snapshot().cachedInitialOfferExecuted());
+        assertEquals(changedPreMutation,
+                V4RuntimeWitnessTracker.snapshot().executedOffer());
+    }
+
+    @Test
+    void differentPriceResultOrComponentsRemainExactMismatches() {
+        Object backpack = new Object();
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, backpack, INITIAL, 10L);
+
+        ItemStack namedPickaxe = new ItemStack(Items.IRON_PICKAXE);
+        namedPickaxe.set(DataComponents.CUSTOM_NAME, Component.literal("different"));
+        for (V4OfferFingerprint mismatch : java.util.List.of(
+                V4OfferFingerprint.of(offer(9, new ItemStack(Items.IRON_PICKAXE))),
+                V4OfferFingerprint.of(offer(8, new ItemStack(Items.IRON_AXE))),
+                V4OfferFingerprint.of(offer(8, namedPickaxe)))) {
+            V4RuntimeWitnessTracker.observeTrade(
+                    backpack, TRADER, mismatch, true, 20L);
+        }
+
+        assertFalse(V4RuntimeWitnessTracker.snapshot().initialWarmupOfferExecuted());
+        assertEquals(3L, V4RuntimeWitnessTracker.events().stream()
+                .filter(event -> event.contains("PRE_PHASE_A_OTHER_TRADE")).count());
+    }
+
+    @Test
+    void nonTradedResultCreatesNoTransactionEvidence() {
+        Object backpack = new Object();
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, backpack, INITIAL, 10L);
+        V4RuntimeWitnessTracker.observeTrade(
+                backpack, TRADER, INITIAL, false, 20L);
+
+        assertFalse(V4RuntimeWitnessTracker.snapshot().initialWarmupOfferExecuted());
+        assertEquals(1, V4RuntimeWitnessTracker.snapshot().eventCount());
     }
 
     @Test
@@ -217,5 +303,10 @@ class V4RuntimeWitnessTrackerTest {
                 Optional.of(new WorkDemandPolicy.MaterialDemandIdentity(
                         ResourceLocation.parse("minecraft:iron_ingot"),
                         ResourceLocation.parse("spmscavenger:iron_pickaxe_upgrade"))));
+    }
+
+    private static MerchantOffer offer(int emeraldCost, ItemStack result) {
+        return new MerchantOffer(new ItemCost(Items.EMERALD, emeraldCost), Optional.empty(),
+                result, 12, 0, 0.05F);
     }
 }
