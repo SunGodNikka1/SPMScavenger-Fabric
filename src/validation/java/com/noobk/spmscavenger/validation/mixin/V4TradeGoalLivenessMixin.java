@@ -23,13 +23,13 @@ public abstract class V4TradeGoalLivenessMixin {
     @Shadow @Final private Mob mob;
     @Shadow @Final private TradeMarketDiscoveryCooldown marketDiscoveryCooldown;
 
-    @Inject(method = "canUse", at = @At("HEAD"))
+    @Inject(method = {"canUse", "method_6264"}, at = @At("HEAD"))
     private void spmscavenger_validation$tradeCanUseHead(CallbackInfoReturnable<Boolean> cir) {
         V4TradeLivenessWitness.enterTradeCanUse(
                 mob.getUUID(), marketDiscoveryCooldown, tick());
     }
 
-    @Inject(method = "canUse", at = @At("RETURN"))
+    @Inject(method = {"canUse", "method_6264"}, at = @At("RETURN"))
     private void spmscavenger_validation$tradeCanUseReturn(CallbackInfoReturnable<Boolean> cir) {
         V4TradeLivenessWitness.exitTradeCanUse(mob.getUUID(), cir.getReturnValue(), tick());
     }
@@ -63,17 +63,17 @@ public abstract class V4TradeGoalLivenessMixin {
                 mob.getUUID(), cir.getReturnValue().isPresent(), level.getGameTime());
     }
 
-    @Inject(method = "start", at = @At("HEAD"))
+    @Inject(method = {"start", "method_6269"}, at = @At("HEAD"))
     private void spmscavenger_validation$start(CallbackInfo ci) {
         V4TradeLivenessWitness.observeTradeStart(mob.getUUID(), tick());
     }
 
-    @Inject(method = "tick", at = @At("HEAD"))
+    @Inject(method = {"tick", "method_6268"}, at = @At("HEAD"))
     private void spmscavenger_validation$tick(CallbackInfo ci) {
         V4TradeLivenessWitness.observeTradeTick(mob.getUUID());
     }
 
-    @Inject(method = "stop", at = @At("HEAD"))
+    @Inject(method = {"stop", "method_6270"}, at = @At("HEAD"))
     private void spmscavenger_validation$stop(CallbackInfo ci) {
         V4TradeLivenessWitness.observeTradeStop(mob.getUUID(), tick());
     }

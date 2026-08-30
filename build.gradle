@@ -86,6 +86,7 @@ dependencies {
     validationImplementation sourceSets.main.output
     validationTestImplementation sourceSets.main.output
     validationTestImplementation sourceSets.validation.output
+    validationTestImplementation 'org.ow2.asm:asm:9.7.1'
 }
 
 processResources {
@@ -165,6 +166,43 @@ def remapValidationJar = tasks.register('remapValidationJar', RemapJarTask) {
     inputFile.set(validationDevJar.flatMap { it.archiveFile })
     archiveClassifier.set('validation')
     addNestedDependencies.set(false)
+}
+
+def verifyValidationRequiredMixinTargets = tasks.register(
+        'verifyValidationRequiredMixinTargets', JavaExec) {
+    description = 'Resolves every required validation injector against remapped runtime bytecode.'
+    group = 'verification'
+    dependsOn tasks.named('validationTestClasses')
+    dependsOn tasks.named('remapJar')
+    dependsOn remapValidationJar
+    classpath = sourceSets.validationTest.runtimeClasspath
+    mainClass.set('com.noobk.spmscavenger.validation.RequiredMixinTargetAudit')
+    doFirst {
+        def productionFile = tasks.named('remapJar').get().archiveFile.get().asFile
+        def validationFile = remapValidationJar.get().archiveFile.get().asFile
+        def cacheRoots = [
+                file('.gradle/loom-cache/minecraftMaven/net/minecraft'),
+                new File(gradle.gradleUserHomeDir,
+                        'caches/fabric-loom/minecraftMaven/net/minecraft')
+        ]
+        def runtimeMinecraftJars = cacheRoots.findAll { it.isDirectory() }
+                .collectMany { root ->
+                    fileTree(root) {
+                        include '**/*intermediary*/**/*.jar'
+                    }.files
+                }
+                .findAll { jar ->
+                    jar.name.contains(project.property('minecraft_version').toString())
+                            || jar.parentFile.name.startsWith(
+                                    project.property('minecraft_version').toString() + '-')
+                }
+                .sort { it.absolutePath }
+        if (runtimeMinecraftJars.empty) {
+            throw new GradleException('No pinned intermediary Minecraft runtime JAR found')
+        }
+        args = ([productionFile.absolutePath, validationFile.absolutePath]
+                + runtimeMinecraftJars.collect { it.absolutePath })
+    }
 }
 
 def auditProductionJar = tasks.register('auditProductionJar') {
@@ -260,6 +298,7 @@ tasks.named('check') {
     dependsOn validationTestTask
     dependsOn auditProductionJar
     dependsOn auditValidationJar
+    dependsOn verifyValidationRequiredMixinTargets
 }
 
 java {

@@ -20,12 +20,12 @@ public abstract class V4GatherHandoffLivenessMixin {
 
     @Shadow @Final private Mob mob;
 
-    @Inject(method = "canUse", at = @At("HEAD"))
+    @Inject(method = {"canUse", "method_6264"}, at = @At("HEAD"))
     private void spmscavenger_validation$gatherHead(CallbackInfoReturnable<Boolean> cir) {
         V4TradeLivenessWitness.enterGather(mob.getUUID());
     }
 
-    @Inject(method = "canUse", at = @At("RETURN"))
+    @Inject(method = {"canUse", "method_6264"}, at = @At("RETURN"))
     private void spmscavenger_validation$gatherReturn(CallbackInfoReturnable<Boolean> cir) {
         V4TradeLivenessWitness.exitGather(mob.getUUID(), cir.getReturnValue(), tick());
     }
@@ -37,7 +37,7 @@ public abstract class V4GatherHandoffLivenessMixin {
                 cir.getReturnValue().isPresent(), tick());
     }
 
-    @Inject(method = "stop", at = @At("HEAD"))
+    @Inject(method = {"stop", "method_6270"}, at = @At("HEAD"))
     private void spmscavenger_validation$gatherStop(CallbackInfo ci) {
         V4TradeLivenessWitness.observeGatherStop(mob.getUUID(), tick());
     }
