@@ -2,6 +2,7 @@ package com.noobk.spmscavenger.validation.mixin;
 
 import com.noobk.spmscavenger.validation.V4OfferFingerprint;
 import com.noobk.spmscavenger.validation.V4RuntimeWitnessTracker;
+import com.noobk.spmscavenger.validation.V4TradeLivenessWitness;
 import com.noobk.spmscavenger.village.KnownTraderMarketObservation;
 import com.noobk.spmscavenger.village.trade.OfferSnapshot;
 import net.minecraft.server.level.ServerLevel;
@@ -23,6 +24,9 @@ public abstract class V4KnownTraderObservationMixin {
     private static void spmscavenger_validation$observeBoard(
             ServerLevel level, UUID mobId, Villager villager, List<OfferSnapshot> board,
             CallbackInfoReturnable<Boolean> cir) {
+        V4TradeLivenessWitness.observeKnownTraderObservation(
+                mobId, villager.getUUID(), Boolean.TRUE.equals(cir.getReturnValue()),
+                level.getGameTime());
         if (!Boolean.TRUE.equals(cir.getReturnValue())) {
             return;
         }

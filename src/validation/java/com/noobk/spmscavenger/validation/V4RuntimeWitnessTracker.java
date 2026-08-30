@@ -69,7 +69,12 @@ public final class V4RuntimeWitnessTracker {
         }
         active.demandIdentity = identity;
         active.routeStatus = routeStatus;
-        event(tick, "LIVE_DEMAND", identity + " route=" + routeStatus);
+        if (!Objects.equals(active.lastLoggedDemandIdentity, identity)
+                || active.lastLoggedRouteStatus != routeStatus) {
+            active.lastLoggedDemandIdentity = identity;
+            active.lastLoggedRouteStatus = routeStatus;
+            event(tick, "LIVE_DEMAND", identity + " route=" + routeStatus);
+        }
     }
 
     public static synchronized void observeDirective(UUID mobId, VillageIntent intent, long tick) {
@@ -317,6 +322,9 @@ public final class V4RuntimeWitnessTracker {
         boolean changedBoardRediscovered;
         WorkDemandPolicy.MaterialDemandIdentity demandIdentity;
         ExistingRouteFeasibility.ExistingRouteStatus routeStatus =
+                ExistingRouteFeasibility.ExistingRouteStatus.UNKNOWN;
+        WorkDemandPolicy.MaterialDemandIdentity lastLoggedDemandIdentity;
+        ExistingRouteFeasibility.ExistingRouteStatus lastLoggedRouteStatus =
                 ExistingRouteFeasibility.ExistingRouteStatus.UNKNOWN;
         VillageIntent intent;
         String intentIdentity;

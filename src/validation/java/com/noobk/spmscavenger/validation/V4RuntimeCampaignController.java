@@ -16,7 +16,6 @@ import com.noobk.spmscavenger.village.VillageMemorySavedData;
 import com.noobk.spmscavenger.village.intent.VillageIntent;
 import com.noobk.spmscavenger.village.intent.VillageIntentRegistry;
 import com.noobk.spmscavenger.village.interaction.VillageInteractionDirector;
-import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
 import com.noobk.spmscavenger.village.trade.VillagerTradeAdapter;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -104,6 +103,7 @@ public final class V4RuntimeCampaignController {
         }
         lastReport = null;
         V4RuntimeWitnessTracker.reset();
+        V4TradeLivenessWitness.reset();
         ServerLevel level = source.getLevel();
         BlockPos origin = BlockPos.containing(source.getPosition());
         Session preparing = new Session(level.dimension(), origin, level.getGameTime());
@@ -146,6 +146,8 @@ public final class V4RuntimeCampaignController {
             V4RuntimeWitnessTracker.arm(
                     subject.getUUID(), trader.getUUID(), backpack,
                     preparing.initialOffer, level.getGameTime());
+            V4TradeLivenessWitness.arm(
+                    subject.getUUID(), trader.getUUID(), backpack, level.getGameTime());
             record(preparing, level.getGameTime(), "WITNESS_ARMED",
                     "beforeFirstSubjectTick=true subjectTickCount=" + subject.tickCount);
             preparing.state = State.WAITING_STARTUP_STABILITY;
@@ -189,7 +191,8 @@ public final class V4RuntimeCampaignController {
     public static synchronized int report(CommandSourceStack source) {
         if (active != null) {
             sendLines(source, CampaignReport.from(active, V4RuntimeWitnessTracker.snapshot(),
-                    V4RuntimeWitnessTracker.events()).lines());
+                    V4RuntimeWitnessTracker.events(), V4TradeLivenessWitness.snapshot(),
+                    V4TradeLivenessWitness.events()).lines());
             return 1;
         }
         if (lastReport == null) {
@@ -251,6 +254,7 @@ public final class V4RuntimeCampaignController {
             return 0;
         } finally {
             V4RuntimeWitnessTracker.reset();
+            V4TradeLivenessWitness.reset();
             active = null;
         }
         lastReport = null;
@@ -341,6 +345,7 @@ public final class V4RuntimeCampaignController {
             finish(server, active, State.ABORTED, currentTick(server, active), "server stopped");
         }
         V4RuntimeWitnessTracker.reset();
+        V4TradeLivenessWitness.reset();
     }
 
     private static void tick(MinecraftServer server, Session session) {
@@ -367,6 +372,7 @@ public final class V4RuntimeCampaignController {
                     "subject backpack identity changed/unavailable");
             return;
         }
+        V4TradeLivenessWitness.observeGoalSelector(subject, now);
 
         Optional<WorkDemandPolicy.MaterialDemand> liveDemand =
                 observeLiveDemand(level, subject, backpack, now);
@@ -480,12 +486,21 @@ public final class V4RuntimeCampaignController {
             return;
         }
         if (now >= session.deadline) {
+            V4TradeLivenessWitness.observeFixtureFacts(
+                    trader.isAlive(), trader.getVillagerData().getProfession().toString(),
+                    trader.getVillagerData().getLevel(), subject.distanceTo(trader),
+                    VillagerTradeAdapter.available(trader),
+                    countAll(subject, backpack, Items.EMERALD),
+                    countAll(subject, backpack, Items.IRON_PICKAXE), now);
+            V4TradeLivenessWitness.Diagnosis diagnosis =
+                    V4TradeLivenessWitness.classify(V4TradeLivenessWitness.snapshot());
             finish(server, session, State.INCOMPLETE, now,
                     "bootstrap timeout settlement=" + (session.settlementAnchor != null)
                             + " initialBoard=" + session.bootstrapInitialBoardObserved
                             + " warmupTrade=" + session.bootstrapWarmupTradeExecuted
                             + " demandResolved=" + session.bootstrapWarmupDemandResolved
-                            + " capability=" + session.bootstrapCapabilityPersisted);
+                            + " capability=" + session.bootstrapCapabilityPersisted
+                            + " tradeLiveness=" + diagnosis);
         }
     }
 
@@ -670,9 +685,8 @@ public final class V4RuntimeCampaignController {
         if (demand.isEmpty()) {
             return demand;
         }
-        ExistingRouteFeasibility.ExistingRouteStatus status = ExistingRouteFeasibility.status(
-                level, subject.getUUID(), demand.get(), backpack,
-                subject.getMainHandItem(), subject.getOffhandItem(), ScavengerConfig.get());
+        com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility.ExistingRouteStatus status =
+                V4TradeLivenessWitness.snapshot().routeStatus();
         V4RuntimeWitnessTracker.observeDemand(demand.get().identity(), status, now);
         return demand;
     }
@@ -917,10 +931,14 @@ public final class V4RuntimeCampaignController {
         record(session, tick, "FINAL", "state=" + state + " reason=" + reason);
         V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
         List<String> witnessEvents = V4RuntimeWitnessTracker.events();
+        V4TradeLivenessWitness.Snapshot tradeLiveness = V4TradeLivenessWitness.snapshot();
+        List<String> tradeLivenessEvents = V4TradeLivenessWitness.events();
         session.forcedChunksReleased += releaseChunks(server, session);
-        lastReport = CampaignReport.from(session, snapshot, witnessEvents);
+        lastReport = CampaignReport.from(
+                session, snapshot, witnessEvents, tradeLiveness, tradeLivenessEvents);
         active = null;
         V4RuntimeWitnessTracker.reset();
+        V4TradeLivenessWitness.reset();
     }
 
     private static void record(Session session, long tick, String event, String detail) {
@@ -932,6 +950,7 @@ public final class V4RuntimeCampaignController {
 
     private static List<String> activeLines(Session session) {
         V4RuntimeWitnessTracker.Snapshot witness = V4RuntimeWitnessTracker.snapshot();
+        V4TradeLivenessWitness.Snapshot tradeLiveness = V4TradeLivenessWitness.snapshot();
         List<String> lines = new ArrayList<>(List.of(
                 "=== V4-G Runtime Campaign Status ===",
                 "state=" + session.state + " reason=" + session.reason,
@@ -953,6 +972,23 @@ public final class V4RuntimeCampaignController {
                 "changedLiveOfferFingerprint=" + printable(witness.changedOffer()),
                 "liveDemandIdentity=" + witness.demandIdentity(),
                 "ExistingRouteStatus=" + witness.routeStatus(),
+                "tradeLivenessDiagnosis=" + tradeLiveness.diagnosis(),
+                "tradeCanUseCalls=" + tradeLiveness.tradeCanUseCalls()
+                        + " true=" + tradeLiveness.tradeCanUseTrue()
+                        + " authorizedCandidateCalls="
+                        + tradeLiveness.authorizedCandidateCalls(),
+                "villagerQueryReached=" + tradeLiveness.villagerQueryReached()
+                        + " boardReadReached=" + tradeLiveness.vanillaBoardReadReached()
+                        + " marketCooldownActive="
+                        + tradeLiveness.marketDiscoveryCooldownActive(),
+                "moveHolder=" + tradeLiveness.moveHolderClass()
+                        + "@" + tradeLiveness.moveHolderPriority()
+                        + " lookHolder=" + tradeLiveness.lookHolderClass()
+                        + "@" + tradeLiveness.lookHolderPriority(),
+                "gatherHandoff published="
+                        + tradeLiveness.gatherRouteExhaustionPublished()
+                        + " yielded=" + tradeLiveness.gatherYieldedToTradeHandoff()
+                        + " reacquired=" + tradeLiveness.gatherReacquiredAfterHandoff(),
                 "VillageIntent=" + witness.intentIdentity(),
                 "COMMUTE source=" + witness.commuteSource(),
                 "next=" + next(session)));
@@ -1130,12 +1166,16 @@ public final class V4RuntimeCampaignController {
             List<String> fixtureCreationDiagnostics,
             String configSummary,
             V4RuntimeWitnessTracker.Snapshot witness,
+            V4TradeLivenessWitness.Snapshot tradeLiveness,
             List<String> controllerEvents,
-            List<String> witnessEvents) {
+            List<String> witnessEvents,
+            List<String> tradeLivenessEvents) {
 
         static CampaignReport from(
                 Session session, V4RuntimeWitnessTracker.Snapshot witness,
-                List<String> witnessEvents) {
+                List<String> witnessEvents,
+                V4TradeLivenessWitness.Snapshot tradeLiveness,
+                List<String> tradeLivenessEvents) {
             return new CampaignReport(session.state, session.reason, session.subjectId,
                     session.traderId, session.helperId, session.interrupterId,
                     session.dimension.location().toString(), session.origin,
@@ -1166,7 +1206,8 @@ public final class V4RuntimeCampaignController {
                     session.fixtureCreationDiagnostics.failureStage,
                     session.fixtureCreationDiagnostics.failureDetail,
                     session.fixtureCreationDiagnostics.lines(), session.configSummary, witness,
-                    List.copyOf(session.events), List.copyOf(witnessEvents));
+                    tradeLiveness, List.copyOf(session.events), List.copyOf(witnessEvents),
+                    List.copyOf(tradeLivenessEvents));
         }
 
         List<String> summaryLines() {
@@ -1245,11 +1286,80 @@ public final class V4RuntimeCampaignController {
                     + " sleeping=" + witness.sleepingObserved()
                     + " homePromotion=" + witness.homePromotionObserved()
                     + " bedPos=" + witness.sleepBed());
+            lines.add("-- V4 bootstrap trade liveness --");
+            lines.add("tradeLivenessDiagnosis=" + tradeLiveness.diagnosis());
+            lines.add("tradeCanUseCalls=" + tradeLiveness.tradeCanUseCalls()
+                    + " true=" + tradeLiveness.tradeCanUseTrue()
+                    + " false=" + tradeLiveness.tradeCanUseFalse()
+                    + " firstTick=" + tradeLiveness.firstTradeCanUseTick()
+                    + " lastTick=" + tradeLiveness.lastTradeCanUseTick());
+            lines.add("tradeGateDemandPresent=" + tradeLiveness.tradeGateDemandPresent()
+                    + " identity=" + tradeLiveness.tradeGateDemandIdentity()
+                    + " routeMayDisplace=" + tradeLiveness.tradeGateRouteMayDisplace()
+                    + " backpackPresent=" + tradeLiveness.tradeGateBackpackPresent()
+                    + " marketCooldown=" + tradeLiveness.tradeGateMarketCooldown());
+            lines.add("authorizedCandidateCalls=" + tradeLiveness.authorizedCandidateCalls()
+                    + " present=" + tradeLiveness.authorizedCandidatePresent()
+                    + " empty=" + tradeLiveness.authorizedCandidateEmpty());
+            lines.add("tradeStartCalls=" + tradeLiveness.tradeStartCalls()
+                    + " tradeTickCalls=" + tradeLiveness.tradeTickCalls()
+                    + " tradeStopCalls=" + tradeLiveness.tradeStopCalls());
+            lines.add("villagerQueryReached=" + tradeLiveness.villagerQueryReached()
+                    + " candidateCount=" + tradeLiveness.villagerQueryCandidateCount()
+                    + " fixtureTraderIncluded=" + tradeLiveness.fixtureTraderIncluded()
+                    + " fixtureTraderAvailable=" + tradeLiveness.fixtureTraderAvailable()
+                    + " fixtureTraderDistance=" + format(tradeLiveness.fixtureTraderDistance()));
+            lines.add("vanillaBoardReadReached=" + tradeLiveness.vanillaBoardReadReached()
+                    + " knownTraderObservationReached="
+                    + tradeLiveness.knownTraderObservationReached()
+                    + " knownTraderObservationChanged="
+                    + tradeLiveness.knownTraderObservationChanged());
+            lines.add("marketDiscoveryEmptyRecorded="
+                    + tradeLiveness.marketDiscoveryEmptyRecorded()
+                    + " marketDiscoveryCooldownActive="
+                    + tradeLiveness.marketDiscoveryCooldownActive()
+                    + " marketDiscoveryCooldownUntil="
+                    + tradeLiveness.marketDiscoveryCooldownUntil());
+            lines.add("moveHolderClass=" + tradeLiveness.moveHolderClass()
+                    + " moveHolderPriority=" + tradeLiveness.moveHolderPriority()
+                    + " lookHolderClass=" + tradeLiveness.lookHolderClass()
+                    + " lookHolderPriority=" + tradeLiveness.lookHolderPriority()
+                    + " requestedRunning=" + tradeLiveness.requestedRunning());
+            lines.add("gatherMandatoryDemandSeen="
+                    + tradeLiveness.gatherMandatoryDemandSeen()
+                    + " gatherRouteExhaustionPublished="
+                    + tradeLiveness.gatherRouteExhaustionPublished()
+                    + " exhaustionTick=" + tradeLiveness.gatherRouteExhaustionTick()
+                    + " gatherYieldWindowOpened="
+                    + tradeLiveness.gatherYieldWindowOpened()
+                    + " gatherYieldedToTradeHandoff="
+                    + tradeLiveness.gatherYieldedToTradeHandoff()
+                    + " gatherStoppedAfterHandoff="
+                    + tradeLiveness.gatherStoppedAfterHandoff()
+                    + " gatherReacquiredAfterHandoff="
+                    + tradeLiveness.gatherReacquiredAfterHandoff());
+            lines.add("routeEvidenceIdentity=" + tradeLiveness.routeEvidenceIdentity()
+                    + " generation=" + tradeLiveness.routeEvidenceGeneration()
+                    + " readIdentity=" + tradeLiveness.routeEvidenceReadIdentity()
+                    + " readGeneration=" + tradeLiveness.routeEvidenceReadGeneration());
+            lines.add("tradeSessionClaimOpened=" + tradeLiveness.tradeSessionClaimOpened()
+                    + " tradeSessionClaimReleased="
+                    + tradeLiveness.tradeSessionClaimReleased()
+                    + " friendlyGreetRunningWhenTradeEligible="
+                    + tradeLiveness.friendlyGreetRunningWhenTradeEligible());
+            lines.add("fixtureTraderAlive=" + tradeLiveness.fixtureTraderAlive()
+                    + " profession=" + tradeLiveness.fixtureTraderProfession()
+                    + " level=" + tradeLiveness.fixtureTraderLevel()
+                    + " subjectEmeraldCount=" + tradeLiveness.subjectEmeraldCount()
+                    + " subjectIronPickaxeCount="
+                    + tradeLiveness.subjectIronPickaxeCount());
             lines.add("forcedChunksReleased=" + forcedChunksReleased);
             lines.add("-- controller transitions --");
             lines.addAll(controllerEvents);
             lines.add("-- passive witness transitions --");
             lines.addAll(witnessEvents);
+            lines.add("-- passive trade liveness transitions --");
+            lines.addAll(tradeLivenessEvents);
             return List.copyOf(lines);
         }
 

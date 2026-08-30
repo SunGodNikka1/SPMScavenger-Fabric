@@ -8,7 +8,16 @@
     "V4VillageInteractionDirectorMixin",
     "V4ExploringGoalWitnessMixin",
     "V4VillagerTradeAdapterMixin",
-    "V4FirstHomePromotionMixin"
+    "V4FirstHomePromotionMixin",
+    "V4TradeGoalLivenessMixin",
+    "V4BackpackLivenessMixin",
+    "V4TradeMarketCooldownMixin",
+    "V4EntityQueryLivenessMixin",
+    "V4VanillaBoardLivenessMixin",
+    "V4GatherHandoffLivenessMixin",
+    "V4MandatoryHandoffLivenessMixin",
+    "V4RouteEvidenceLivenessMixin",
+    "V4TradeClaimLivenessMixin"
   ],
   "injectors": {
     "defaultRequire": 1
