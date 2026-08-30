@@ -34,8 +34,8 @@ public final class SpmScavengerValidation implements ModInitializer {
             if (entity instanceof Mob mob && PlayerMobs.isPlayerMob(mob)) {
                 V3RuntimeCampaignController.onSubjectUnavailable(
                         mob.level().getServer(), mob.getUUID(), "death", mob.level().getGameTime());
-                V4RuntimeCampaignController.onSubjectUnavailable(
-                        mob.level().getServer(), mob.getUUID(), "death", mob.level().getGameTime());
+                V4RuntimeCampaignController.onSubjectDeath(
+                        mob.level().getServer(), mob, damageSource, mob.level().getGameTime());
             }
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(

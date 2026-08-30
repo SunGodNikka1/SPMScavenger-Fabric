@@ -34,6 +34,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -63,6 +64,7 @@ public final class V4RuntimeCampaignController {
     private static final int CHANGED_PRICE = 10;
     private static final int DEPARTURE_OFFSET = 180;
     private static final long BOOTSTRAP_LIMIT = 2_400L;
+    private static final long STARTUP_STABILITY_LIMIT = 20L;
     private static final long PHASE_A_LIMIT = 2_400L;
     private static final long PHASE_B_LIMIT = 2_400L;
     private static final int MAX_EVENTS = 96;
@@ -72,6 +74,7 @@ public final class V4RuntimeCampaignController {
 
     enum State {
         PREPARING,
+        WAITING_STARTUP_STABILITY,
         WAITING_SETTLEMENT_AND_INITIAL_BOARD,
         PHASE_A_WAITING_INTENT,
         PHASE_A_COMMUTING,
@@ -122,17 +125,17 @@ public final class V4RuntimeCampaignController {
             preparing.subjectId = subject.getUUID();
             preparing.traderId = trader.getUUID();
             preparing.helperId = fixture.helper().getUUID();
+            preparing.fixtureCreationTick = level.getGameTime();
+            preparing.subjectTickCountAtCreation = subject.tickCount;
             preparing.backpackIdentity = backpack;
             prepareSubjectInventory(subject, backpack, false);
             configureOffer(trader, INITIAL_PRICE);
             preparing.initialOffer = V4OfferFingerprint.of(trader.getOffers().getFirst());
             preparing.changedOffer = fingerprintForPrice(CHANGED_PRICE);
-            V4RuntimeWitnessTracker.arm(
-                    subject.getUUID(), trader.getUUID(), backpack,
-                    preparing.initialOffer, level.getGameTime());
             forceCorridorChunks(level, preparing);
-            preparing.state = State.WAITING_SETTLEMENT_AND_INITIAL_BOARD;
-            preparing.deadline = level.getGameTime() + BOOTSTRAP_LIMIT;
+            preparing.state = State.WAITING_STARTUP_STABILITY;
+            preparing.startupStabilityDeadline =
+                    level.getGameTime() + STARTUP_STABILITY_LIMIT;
             record(preparing, level.getGameTime(), "START",
                     "origin=" + origin.toShortString() + " subject=" + subject.getUUID()
                             + " trader=" + trader.getUUID()
@@ -236,8 +239,48 @@ public final class V4RuntimeCampaignController {
     public static synchronized void onSubjectUnavailable(
             MinecraftServer server, UUID mobId, String reason, long tick) {
         if (active != null && active.subjectId != null && active.subjectId.equals(mobId)) {
-            finish(server, active, State.INCOMPLETE, tick, "subject unavailable: " + reason);
+            boolean beforeStability = !active.startupStabilityPassed;
+            if (beforeStability) {
+                active.preBehaviorFailureClass = "CREATION_INITIAL_LIFECYCLE";
+            }
+            finish(server, active,
+                    beforeStability ? State.FIXTURE_FAILURE : State.INCOMPLETE,
+                    tick, (beforeStability
+                            ? "creation/initial-lifecycle failure: "
+                            : "subject unavailable after startup stability: ") + reason);
         }
+    }
+
+    public static synchronized void onSubjectDeath(
+            MinecraftServer server, Mob subject, DamageSource damageSource, long tick) {
+        if (active == null || active.subjectId == null
+                || !active.subjectId.equals(subject.getUUID())) {
+            return;
+        }
+        ServerLevel level = server.getLevel(active.dimension);
+        if (level == null) {
+            active.preBehaviorFailureClass = active.startupStabilityPassed
+                    ? "POST_STABILITY_UNAVAILABLE" : "CREATION_INITIAL_LIFECYCLE";
+            finish(server, active,
+                    active.startupStabilityPassed ? State.INCOMPLETE : State.FIXTURE_FAILURE,
+                    tick, "subject death callback dimension unavailable");
+            return;
+        }
+        active.deathDiagnostics = V4SubjectDeathDiagnostics.capture(
+                level, subject, damageSource, active.fixtureCreationTick, tick);
+        record(active, tick, "SUBJECT_DEATH",
+                "damageType=" + active.deathDiagnostics.damageType()
+                        + " messageId=" + active.deathDiagnostics.damageMessageId()
+                        + " ticksSinceFixtureCreation="
+                        + active.deathDiagnostics.ticksSinceFixtureCreation());
+        boolean beforeStability = !active.startupStabilityPassed;
+        active.preBehaviorFailureClass = beforeStability
+                ? "CREATION_INITIAL_LIFECYCLE" : "POST_STABILITY_SUBJECT_DEATH";
+        finish(server, active,
+                beforeStability ? State.FIXTURE_FAILURE : State.INCOMPLETE,
+                tick, beforeStability
+                        ? "creation/initial-lifecycle failure: subject died before startup stability"
+                        : "subject died after startup stability");
     }
 
     public static synchronized void shutdownServerState(MinecraftServer server) {
@@ -254,6 +297,10 @@ public final class V4RuntimeCampaignController {
             return;
         }
         long now = level.getGameTime();
+        if (session.state == State.WAITING_STARTUP_STABILITY) {
+            tickStartupStability(server, level, session, now);
+            return;
+        }
         Entity entity = level.getEntity(session.subjectId);
         Entity merchant = level.getEntity(session.traderId);
         if (!(entity instanceof Mob subject) || !PlayerMobs.isPlayerMob(subject)
@@ -283,6 +330,56 @@ public final class V4RuntimeCampaignController {
             case PHASE_B_PREPARING -> preparePhaseB(server, level, subject, session, now);
             case PHASE_B_WAITING_REAL_SLEEP -> tickPhaseB(server, level, subject, session, now);
             default -> { }
+        }
+    }
+
+    private static void tickStartupStability(
+            MinecraftServer server, ServerLevel level, Session session, long now) {
+        Entity subjectEntity = level.getEntity(session.subjectId);
+        Entity traderEntity = level.getEntity(session.traderId);
+        Entity helperEntity = level.getEntity(session.helperId);
+        boolean subjectReady = subjectEntity instanceof Mob subject
+                && PlayerMobs.isPlayerMob(subject) && subject.isAlive() && !subject.isRemoved();
+        boolean traderReady = traderEntity instanceof Villager trader
+                && trader.isAlive() && !trader.isRemoved();
+        boolean helperReady = helperEntity instanceof Villager helper
+                && helper.isAlive() && !helper.isRemoved();
+        int subjectTickCount = subjectEntity == null
+                ? session.subjectTickCountAtCreation : subjectEntity.tickCount;
+        V4StartupStabilityGate.Assessment assessment = V4StartupStabilityGate.evaluate(
+                session.fixtureCreationTick, now, session.startupStabilityDeadline,
+                session.subjectTickCountAtCreation, subjectTickCount,
+                subjectReady, traderReady, helperReady);
+        switch (assessment.verdict()) {
+            case WAITING -> session.reason = assessment.reason();
+            case FIXTURE_FAILURE -> {
+                session.preBehaviorFailureClass = "CREATION_INITIAL_LIFECYCLE";
+                finish(server, session, State.FIXTURE_FAILURE, now,
+                        "creation/initial-lifecycle failure: " + assessment.reason());
+            }
+            case PASS -> {
+                Mob subject = (Mob) subjectEntity;
+                Villager trader = (Villager) traderEntity;
+                Container backpack = PlayerMobs.backpack(subject);
+                if (backpack == null || backpack != session.backpackIdentity) {
+                    session.preBehaviorFailureClass = "CREATION_INITIAL_LIFECYCLE";
+                    finish(server, session, State.FIXTURE_FAILURE, now,
+                            "creation/initial-lifecycle failure: backpack identity changed");
+                    return;
+                }
+                session.startupStabilityPassed = true;
+                session.startupStabilityPassTick = now;
+                session.state = State.WAITING_SETTLEMENT_AND_INITIAL_BOARD;
+                session.deadline = now + BOOTSTRAP_LIMIT;
+                session.reason = "startup stability passed; waiting settlement and initial board";
+                V4RuntimeWitnessTracker.arm(
+                        subject.getUUID(), trader.getUUID(), backpack,
+                        session.initialOffer, now);
+                record(session, now, "STARTUP_STABILITY_PASS",
+                        "fixtureCreationTick=" + session.fixtureCreationTick
+                                + " subjectTickCount=" + subject.tickCount
+                                + " traderAlive=true helperAlive=true");
+            }
         }
     }
 
@@ -748,6 +845,8 @@ public final class V4RuntimeCampaignController {
         return switch (session.state) {
             case WAITING_SETTLEMENT_AND_INITIAL_BOARD ->
                     "natural settlement + Gather exhaustion + V2 initial board observation";
+            case WAITING_STARTUP_STABILITY ->
+                    "first normal subject/server tick with all required entities alive";
             case PHASE_A_WAITING_INTENT -> "production REQUIRED_TRADE intent/directive";
             case PHASE_A_COMMUTING -> "physical return, optional interruption/resume, anchor arrival";
             case PHASE_A_WAITING_LIVE_TRADE -> "V2 changed-board rediscovery and live transaction";
@@ -818,6 +917,13 @@ public final class V4RuntimeCampaignController {
         long phaseBOpenTick = -1L;
         long phaseBPassTick = -1L;
         long terminalTick = -1L;
+        long fixtureCreationTick = -1L;
+        long startupStabilityDeadline = -1L;
+        long startupStabilityPassTick = -1L;
+        int subjectTickCountAtCreation;
+        boolean startupStabilityPassed;
+        String preBehaviorFailureClass = "NONE";
+        V4SubjectDeathDiagnostics deathDiagnostics;
         boolean dayAdvanced;
         boolean homeBeforeTrade;
         boolean homeBeforeSleep;
@@ -860,6 +966,11 @@ public final class V4RuntimeCampaignController {
             long phaseBOpenTick,
             long phaseBPassTick,
             long terminalTick,
+            long fixtureCreationTick,
+            long startupStabilityPassTick,
+            boolean startupStabilityPassed,
+            String preBehaviorFailureClass,
+            List<String> deathDiagnostics,
             int forcedChunksReleased,
             boolean geometryFunctionExecuted,
             String fixtureFailureStage,
@@ -880,7 +991,13 @@ public final class V4RuntimeCampaignController {
                     session.homeBeforeTrade, session.homeBeforeSleep,
                     session.phaseBAssociationCount, session.startTick, session.phaseAOpenTick,
                     session.phaseAPassTick, session.phaseBOpenTick, session.phaseBPassTick,
-                    session.terminalTick, session.forcedChunksReleased,
+                    session.terminalTick, session.fixtureCreationTick,
+                    session.startupStabilityPassTick, session.startupStabilityPassed,
+                    session.preBehaviorFailureClass,
+                    session.deathDiagnostics == null
+                            ? List.of("deathDiagnostics=UNAVAILABLE")
+                            : session.deathDiagnostics.lines(),
+                    session.forcedChunksReleased,
                     session.geometryFunctionExecuted,
                     session.fixtureCreationDiagnostics.failureStage,
                     session.fixtureCreationDiagnostics.failureDetail,
@@ -898,6 +1015,8 @@ public final class V4RuntimeCampaignController {
                             + ("NONE".equals(fixtureFailureStage) ? "PASS" : "FAIL")
                             + " stage=" + fixtureFailureStage
                             + " detail=" + fixtureFailureDetail,
+                    "startupStability=" + (startupStabilityPassed ? "PASS" : "NOT_PASS")
+                            + " preBehaviorFailureClass=" + preBehaviorFailureClass,
                     "VERDICT=" + state);
         }
 
@@ -915,6 +1034,10 @@ public final class V4RuntimeCampaignController {
             lines.add("ticks start=" + startTick + " phaseAOpen=" + phaseAOpenTick
                     + " phaseAPass=" + phaseAPassTick + " phaseBOpen=" + phaseBOpenTick
                     + " phaseBPass=" + phaseBPassTick + " terminal=" + terminalTick);
+            lines.add("fixtureCreationTick=" + fixtureCreationTick
+                    + " startupStabilityPassTick=" + startupStabilityPassTick);
+            lines.add("-- subject death diagnostics --");
+            lines.addAll(deathDiagnostics);
             lines.add("homeBeforeTrade=" + (homeBeforeTrade ? "ABSENT" : "PRESENT")
                     + " homeBeforeSleep=" + (homeBeforeSleep ? "ABSENT" : "PRESENT")
                     + " phaseBAssociatedSettlementCount="
