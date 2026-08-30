@@ -87,17 +87,19 @@ class V4RuntimeFixtureBoundaryTest {
                 "src/validation/java/com/noobk/spmscavenger/validation/"
                         + "V4RuntimeCampaignController.java"));
         int checkedCleanup = controller.indexOf("V4FixtureCleanup.prepareForStartup(");
-        int checkedGeometry = controller.indexOf("V4FixtureGeometryBuilder.createAndVerify(");
+        int checkedGeometry = controller.indexOf(
+                "V4FixtureGeometryBuilder.createAndVerifyStructure(");
+        int lightingState = controller.indexOf(
+                "preparing.state = State.WAITING_FIXTURE_LIGHTING");
         int checkedCreation = controller.indexOf("V4FixtureEntityFactory.createAndVerify(");
-        int stability = controller.indexOf("preparing.state = State.WAITING_STARTUP_STABILITY");
+        int stability = controller.indexOf("session.state = State.WAITING_STARTUP_STABILITY");
         int stabilityMethod = controller.indexOf("private static void tickStartupStability(");
         int bootstrap = controller.indexOf(
                 "session.state = State.WAITING_SETTLEMENT_AND_INITIAL_BOARD", stabilityMethod);
         assertTrue(checkedCleanup >= 0 && checkedGeometry > checkedCleanup
-                        && checkedCreation > checkedGeometry
+                        && lightingState > checkedGeometry && checkedCreation > lightingState
                         && stability > checkedCreation && bootstrap > stabilityMethod,
-                "verified cleanup/geometry/attachment must lead to startup stability, and only that lifecycle "
-                        + "gate may open bootstrap");
+                "cleanup/structure must enter threaded-light wait before entity attachment and stability");
         int runStart = controller.indexOf("public static synchronized int run(");
         int statusStart = controller.indexOf("public static synchronized int status(");
         String runMethod = controller.substring(runStart, statusStart);
@@ -106,16 +108,21 @@ class V4RuntimeFixtureBoundaryTest {
                 "run() must not open bootstrap from instantaneous attachment");
         assertFalse(runMethod.contains("\"scenario/v4_g\""),
                 "run() must not infer geometry success from an unchecked mcfunction");
-        assertTrue(runMethod.contains("fixtureGeometryDiagnostics.ready()"),
-                "entity creation must remain behind the explicit geometry gate");
+        assertTrue(runMethod.contains("fixtureGeometryDiagnostics.readyForLightingWait()"),
+                "lighting wait must remain behind the explicit structure gate");
+        assertFalse(runMethod.contains("V4FixtureEntityFactory.createAndVerify("),
+                "run() must not create fixture entities before threaded lighting PASS");
         assertTrue(runMethod.contains("startupCleanupDiagnostics.ready()"),
                 "geometry creation must remain behind the synchronous cleanup gate");
         assertFalse(controller.contains("fixture PlayerMob not found"));
         assertFalse(controller.contains("findTagged(level, origin"));
 
-        int initialOffer = runMethod.indexOf("configureOffer(trader, INITIAL_PRICE)");
-        int earlyArm = runMethod.indexOf("V4RuntimeWitnessTracker.arm(");
-        int stabilityState = runMethod.indexOf("State.WAITING_STARTUP_STABILITY");
+        int createStart = controller.indexOf("private static void createFixtureEntitiesAndArm(");
+        int stabilityMethodStart = controller.indexOf("private static void tickStartupStability(");
+        String createMethod = controller.substring(createStart, stabilityMethodStart);
+        int initialOffer = createMethod.indexOf("configureOffer(trader, INITIAL_PRICE)");
+        int earlyArm = createMethod.indexOf("V4RuntimeWitnessTracker.arm(");
+        int stabilityState = createMethod.indexOf("State.WAITING_STARTUP_STABILITY");
         assertTrue(initialOffer >= 0 && earlyArm > initialOffer && stabilityState > earlyArm,
                 "passive witness must arm after fixture inventory/offer setup and before first-tick stability");
         String stabilityBody = controller.substring(stabilityMethod,
@@ -164,9 +171,13 @@ class V4RuntimeFixtureBoundaryTest {
         int runStart = controller.indexOf("public static synchronized int run(");
         int statusStart = controller.indexOf("public static synchronized int status(");
         String run = controller.substring(runStart, statusStart);
-        assertTrue(run.contains("prepareSubjectInventory(subject, backpack, INITIAL_PRICE)"),
+        int fixtureStart = controller.indexOf("private static void createFixtureEntitiesAndArm(");
+        int stabilityStart = controller.indexOf("private static void tickStartupStability(");
+        String fixtureCreation = controller.substring(fixtureStart, stabilityStart);
+        assertTrue(fixtureCreation.contains(
+                        "prepareSubjectInventory(subject, backpack, INITIAL_PRICE)"),
                 "warmup must start with the exact live-offer funding amount");
-        assertFalse(run.contains("performResolvedTrade("),
+        assertFalse(fixtureCreation.contains("performResolvedTrade("),
                 "the validation controller must not execute its warmup transaction");
 
         int bootstrapStart = controller.indexOf("private static void tickBootstrap(");
@@ -237,7 +248,8 @@ class V4RuntimeFixtureBoundaryTest {
                 "src/validation/java/com/noobk/spmscavenger/validation/"
                         + "V4RuntimeCampaignController.java"));
         int cleanupGate = controller.indexOf("V4FixtureCleanup.prepareForStartup(");
-        int geometry = controller.indexOf("V4FixtureGeometryBuilder.createAndVerify(");
+        int geometry = controller.indexOf(
+                "V4FixtureGeometryBuilder.createAndVerifyStructure(");
         int environment = controller.indexOf(
                 "V4FixtureEnvironment.prepareBeforeEntityCreation(");
         int entities = controller.indexOf("V4FixtureEntityFactory.createAndVerify(");
@@ -321,16 +333,18 @@ class V4RuntimeFixtureBoundaryTest {
                 "setChunkForced(", "level.getChunk(chunk.x, chunk.z)",
                 "geometryChunksRequired", "geometryChunksReady",
                 "geometryMutationAttempted", "geometryMutationSucceeded",
-                "geometryVerified", "geometryFailureStage",
+                "geometryStructureVerified", "geometryVerified", "geometryFailureStage",
                 "geometryFailureCoordinate", "expectedBlock", "actualBlock",
                 "verifySpawnGeometry", "isFaceSturdy", "getCollisionShape",
-                "Blocks.LIGHT", "LightBlock.LEVEL", "runLightUpdates()",
+                "Blocks.LIGHT", "LightBlock.LEVEL", "verifyLightBlocksPresent",
+                "verifyPropagatedLighting",
                 "fixtureLightingVerified", "minimumRepresentativeBlockLight"}) {
             assertTrue(builder.contains(required), "missing geometry proof boundary: " + required);
         }
         for (String forbidden : new String[] {
                 "findSafe", "safe nearby", "spawn retry", "teleportTo(",
-                "VillageIntent", "designateHome(", "startSleeping(", "performResolvedTrade("}) {
+                "VillageIntent", "designateHome(", "startSleeping(", "performResolvedTrade(",
+                "runLightUpdates", "method_15516", ".join()", ".get()", "Thread.sleep("}) {
             assertFalse(builder.contains(forbidden),
                     "geometry fixture exceeded setup authority: " + forbidden);
         }
@@ -338,12 +352,76 @@ class V4RuntimeFixtureBoundaryTest {
         String controller = Files.readString(Path.of(
                 "src/validation/java/com/noobk/spmscavenger/validation/"
                         + "V4RuntimeCampaignController.java"));
-        assertTrue(controller.indexOf("V4FixtureGeometryBuilder.createAndVerify(")
+        assertTrue(controller.indexOf("V4FixtureGeometryBuilder.createAndVerifyStructure(")
                         < controller.indexOf("V4FixtureEntityFactory.createAndVerify("));
         assertFalse(controller.contains("forceCorridorChunks("),
                 "the controller must not retain a second late chunk-forcing path");
         assertFalse(controller.contains("geometryFunctionExecuted"),
                 "invocation must not be reported as successful geometry creation");
+    }
+
+    @Test
+    void threadedLightingIsABoundedPreEntityLifecycleRatherThanASynchronousFlush()
+            throws Exception {
+        String validation = readTree(Path.of("src/validation/java"));
+        assertFalse(validation.contains("runLightUpdates("),
+                "ThreadedLevelLightEngine must process queued work on its own lifecycle");
+        assertFalse(validation.contains("method_15516"),
+                "the intermediary alias must not bypass the same threaded-light restriction");
+        for (String blocking : new String[] {
+                ".join()", "future.get(", "Thread.sleep(", "LockSupport.park", "while (!"}) {
+            assertFalse(validation.contains(blocking),
+                    "lighting readiness must not block/spin the server thread: " + blocking);
+        }
+
+        String controller = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeCampaignController.java"));
+        int runStart = controller.indexOf("public static synchronized int run(");
+        int statusStart = controller.indexOf("public static synchronized int status(");
+        String run = controller.substring(runStart, statusStart);
+        assertTrue(run.contains("State.WAITING_FIXTURE_LIGHTING"));
+        assertTrue(run.contains("LIGHTING_PROPAGATION_LIMIT = 200L")
+                        || controller.contains("LIGHTING_PROPAGATION_LIMIT = 200L"));
+        assertFalse(run.contains("V4FixtureEnvironment.prepareBeforeEntityCreation("));
+        assertFalse(run.contains("V4FixtureEntityFactory.createAndVerify("));
+        assertFalse(run.contains("startupStabilityDeadline"));
+        assertFalse(run.contains("BOOTSTRAP_LIMIT"));
+
+        int tickStart = controller.indexOf("private static void tickFixtureLighting(");
+        int createStart = controller.indexOf("private static void createFixtureEntitiesAndArm(");
+        int stabilityStart = controller.indexOf("private static void tickStartupStability(");
+        String lightingTick = controller.substring(tickStart, createStart);
+        String postLighting = controller.substring(createStart, stabilityStart);
+        assertTrue(lightingTick.indexOf("verifyPropagatedLighting(")
+                        < lightingTick.indexOf("case PASS ->"));
+        assertTrue(lightingTick.indexOf("case PASS ->")
+                        < lightingTick.indexOf("createFixtureEntitiesAndArm("));
+        assertTrue(lightingTick.contains("fixture lighting propagation timeout"));
+        assertTrue(lightingTick.contains("State.FIXTURE_FAILURE"));
+        assertTrue(postLighting.indexOf("V4FixtureEnvironment.prepareBeforeEntityCreation(")
+                        < postLighting.indexOf("V4FixtureEntityFactory.createAndVerify("));
+        assertEquals(1, count(controller,
+                "V4FixtureEnvironment.prepareBeforeEntityCreation("));
+        assertEquals(1, count(controller, "V4FixtureEntityFactory.createAndVerify("));
+        assertTrue(postLighting.indexOf("session.fixtureCreationTick = now")
+                        < postLighting.indexOf("session.startupStabilityDeadline = now"));
+
+        int releaseStart = controller.indexOf("private static int releaseChunks(");
+        int finishStart = controller.indexOf("private static void finish(");
+        String lightingOnly = controller.substring(tickStart, createStart);
+        assertFalse(lightingOnly.contains("setChunkForced("));
+        assertFalse(lightingOnly.contains("forcedChunks.clear()"));
+        assertTrue(controller.indexOf("session.forcedChunks.clear()", releaseStart) >= 0);
+        assertTrue(controller.indexOf("releaseChunks(server, session)", finishStart) >= 0,
+                "timeout/stop finish paths must release the chunks retained through lighting wait");
+
+        String environment = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4FixtureEnvironment.java"));
+        assertTrue(environment.contains("RULE_DOMOBSPAWNING"));
+        assertTrue(controller.contains("V4FixtureEnvironment.restore("),
+                "a captured environment lease must still restore on terminal finish");
     }
 
     @Test
@@ -436,7 +514,8 @@ class V4RuntimeFixtureBoundaryTest {
         String controller = Files.readString(Path.of(
                 "src/validation/java/com/noobk/spmscavenger/validation/"
                         + "V4RuntimeCampaignController.java"));
-        int geometry = controller.indexOf("V4FixtureGeometryBuilder.createAndVerify(");
+        int geometry = controller.indexOf(
+                "V4FixtureGeometryBuilder.createAndVerifyStructure(");
         int isolate = controller.indexOf("V4FixtureEnvironment.prepareBeforeEntityCreation(");
         int entities = controller.indexOf("V4FixtureEntityFactory.createAndVerify(");
         assertTrue(geometry >= 0 && isolate > geometry && entities > isolate);

@@ -9534,3 +9534,34 @@ targets; production and validation package audits pass. Production SHA-256 remai
 `918CA885EBD5FA985FBE234DE11D05E983DFAF882A4092921BA15F46B59E089B`; replacement validation
 SHA-256 is `04497D8F7C2B755A65EF8F638692D8764D533C65FEB6E926BB283FEF5FDA6207`. Minecraft was not
 launched and V4-G physical closure remains `UNVERIFIED`.
+
+#### V4-G threaded-lighting lifecycle repair — `Agent_Codex`, 2026-08-30
+
+**Runtime classification:** `VALIDATION_FIXTURE_LIGHTING_LIFECYCLE_DEFECT`; zero production V4
+behavior was observed. The real `ServerLevel` uses `ThreadedLevelLightEngine`, whose
+`runLightUpdates` call rejected the validation builder with `UnsupportedOperationException: Ran
+automatically on a different thread!` after block mutation but before environment/entity setup.
+
+The validation lifecycle is now:
+
+```text
+cleanup → force chunks → mutate/verify structure + Light blocks
+→ WAITING_FIXTURE_LIGHTING (≤200 ordinary server ticks)
+→ natural threaded propagation + passive full walkable-light sampling
+→ environment isolation → entity attachment → startup stability → bootstrap
+```
+
+No validation production path calls `runLightUpdates` or `method_15516`, waits on a future, sleeps,
+or spins. Structure readiness and propagated-light readiness are separate facts. Fixture entities,
+environment gamerule capture, startup-stability time, and the 2,400-tick behavioral bootstrap do
+not begin before lighting PASS. PASS at the deadline wins; otherwise timeout is
+`FIXTURE_FAILURE`, records exact timing/sample/minimum-light evidence, and releases the forced
+chunks through the ordinary terminal path.
+
+**Static/package acceptance:** focused V4 tests and final `clean build` pass 1,719 production + 100
+validation tests with zero failures/errors/skips. Production and validation package audits pass;
+all 32 required validation Mixin injectors resolve against packaged runtime targets. Production
+SHA-256 remains `918CA885EBD5FA985FBE234DE11D05E983DFAF882A4092921BA15F46B59E089B`;
+replacement validation SHA-256 is
+`2EA58B7A50D6B5E30CF4A9D840A0EC9EF6C988C1C4787C9DD8BF7AC12D32DC27`. Minecraft was not
+launched, so real threaded propagation timing and V4-G behavior remain `UNVERIFIED`.

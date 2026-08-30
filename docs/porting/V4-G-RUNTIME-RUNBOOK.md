@@ -13,7 +13,7 @@
 | Fabric API | `0.116.4+1.21.1` |
 | Social Player Mobs | `playermob` `0.96.0`; SHA-256 `508EDA58611A2A0738E257F98C2E14C5032C6EFBF5B1A985C9F93EE295131097` |
 | Production addon | `build/libs/spmscavenger-1.11.0.jar`; SHA-256 `918CA885EBD5FA985FBE234DE11D05E983DFAF882A4092921BA15F46B59E089B` |
-| Validation sidecar | `build/libs/spmscavenger-1.11.0-validation.jar`; SHA-256 `04497D8F7C2B755A65EF8F638692D8764D533C65FEB6E926BB283FEF5FDA6207` |
+| Validation sidecar | `build/libs/spmscavenger-1.11.0-validation.jar`; SHA-256 `2EA58B7A50D6B5E30CF4A9D840A0EC9EF6C988C1C4787C9DD8BF7AC12D32DC27` |
 
 The runtime command records the actual relevant Scavenger configuration in `status` and `report`.
 Preflight requires `enabled`, `gatherResources`, `craftTools`, `seekShelter`, and `sleepInBeds`; a
@@ -32,11 +32,14 @@ run:
 ```
 
 The command creates one fixture and then requires no operator babysitting. Before entity creation,
-the validation sidecar temporarily disables `doMobSpawning`, discards unrelated hostile entities
-already inside the owned arena without damage, creates non-obstructing level-15 Light blocks across
-the settlement/corridor/departure geometry, and verifies representative block-light and hostile
-absence postconditions. It restores the original gamerule during every terminal, stop, and reset
-path. It does not change difficulty or continuously delete entities after bootstrap begins.
+the validation sidecar forces the owned chunks, creates structural geometry plus non-obstructing
+level-15 Light blocks, and enters `WAITING_FIXTURE_LIGHTING` for at most 200 ordinary server ticks.
+Minecraft's threaded light engine propagates naturally; validation samples block light once per
+tick and never calls or blocks on a synchronous light-engine flush. Only after light reaches the
+minimum threshold does validation disable `doMobSpawning`, discard unrelated hostile entities
+already inside the owned arena without damage, and create the required fixture entities. It
+restores the original gamerule during every terminal, stop, and reset path. It does not change
+difficulty or continuously delete entities after bootstrap begins.
 
 The controller then performs:
 
@@ -44,9 +47,11 @@ The controller then performs:
 2. Phase A REQUIRED_TRADE return and changed-live-offer transaction, bounded to 2,400 ticks;
 3. Phase B real shelter sleep and first-HOME promotion, bounded to 2,400 ticks.
 
-The maximum planned evidence duration is therefore 7,200 ticks after successful setup. This is a
-tick budget, not a wall-clock promise. The subject is moved exactly once to the declared departure
-point before Phase A opens and is never steered afterward.
+The maximum planned behavioral evidence duration is therefore 7,200 ticks after successful setup,
+preceded by at most 200 lighting-readiness ticks during which no fixture entities exist. The
+lighting window does not consume startup-stability or behavioral bootstrap time. These are tick
+budgets, not wall-clock promises. The subject is moved exactly once to the declared departure point
+before Phase A opens and is never steered afterward.
 
 Optional progress inspection:
 
@@ -109,6 +114,9 @@ result.
 
 - Canonical anchor farther than 16 blocks from the fixture trader: `FIXTURE_FAILURE` with exact
   distance; no stale trader-position navigation is substituted.
+- Threaded block light remains below seven after 200 ticks: `FIXTURE_FAILURE` with lighting start,
+  deadline, wait, sample, and minimum-light evidence. No subject/trader/helper is created, and the
+  owned forced chunks are released by normal teardown.
 - Natural settlement/board observation or Gather exhaustion absent within bootstrap budget:
   `INCOMPLETE`, not product failure.
 - A bootstrap-local REQUIRED_TRADE that outlives demand resolution: retained as product evidence;

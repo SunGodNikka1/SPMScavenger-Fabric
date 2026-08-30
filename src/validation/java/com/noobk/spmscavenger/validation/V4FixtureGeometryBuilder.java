@@ -35,7 +35,7 @@ final class V4FixtureGeometryBuilder {
     private V4FixtureGeometryBuilder() {
     }
 
-    static void createAndVerify(
+    static void createAndVerifyStructure(
             ServerLevel level,
             BlockPos origin,
             Set<ChunkPos> ownedForcedChunks,
@@ -74,16 +74,54 @@ final class V4FixtureGeometryBuilder {
         writeChecked(level, origin.offset(-1, 0, 4),
                 Blocks.SMITHING_TABLE.defaultBlockState(), diagnostics);
         placeArenaLighting(level, origin, diagnostics);
-        level.getLightEngine().runLightUpdates();
-        diagnostics.geometryMutationSucceeded = true;
-
         verifyPostconditions(level, origin, diagnostics);
-        verifyArenaLighting(level, origin, diagnostics);
-        diagnostics.geometryVerified = true;
+        verifyLightBlocksPresent(level, origin, diagnostics);
+        diagnostics.geometryMutationSucceeded = true;
+        diagnostics.geometryStructureVerified = true;
         diagnostics.geometryFailureStage = "NONE";
         diagnostics.geometryFailureCoordinate = "NONE";
         diagnostics.expectedBlock = "NONE";
         diagnostics.actualBlock = "NONE";
+    }
+
+    static boolean verifyPropagatedLighting(
+            ServerLevel level, BlockPos origin, long now, Diagnostics diagnostics) {
+        diagnostics.fixtureLightSamplesChecked = 0;
+        int minimum = 15;
+        minimum = Math.min(minimum,
+                sampleLitWalkableVolume(level, origin, -24, 24, -24, 24, diagnostics));
+        minimum = Math.min(minimum,
+                sampleLitWalkableVolume(level, origin, 0, 180, -2, 2, diagnostics));
+        minimum = Math.min(minimum,
+                sampleLitWalkableVolume(level, origin, 158, 202, -22, 22, diagnostics));
+        diagnostics.minimumRepresentativeBlockLight = minimum;
+        diagnostics.fixtureLightingVerified = minimum >= 7;
+        diagnostics.lightingWaitTicks = diagnostics.lightingWaitStartedTick < 0L
+                ? 0L : Math.max(0L, now - diagnostics.lightingWaitStartedTick);
+        if (diagnostics.fixtureLightingVerified) {
+            diagnostics.lightingReadyTick = now;
+            diagnostics.geometryVerified = true;
+            diagnostics.geometryFailureStage = "NONE";
+            diagnostics.geometryFailureCoordinate = "NONE";
+            diagnostics.expectedBlock = "NONE";
+            diagnostics.actualBlock = "NONE";
+        }
+        return diagnostics.fixtureLightingVerified;
+    }
+
+    static void beginLightingWait(Diagnostics diagnostics, long startTick, long deadline) {
+        diagnostics.lightingWaitStartedTick = startTick;
+        diagnostics.lightingWaitDeadline = deadline;
+        diagnostics.lightingReadyTick = -1L;
+        diagnostics.lightingWaitTicks = 0L;
+    }
+
+    static void markLightingTimeout(Diagnostics diagnostics, BlockPos origin, long now) {
+        diagnostics.lightingWaitTicks = Math.max(0L, now - diagnostics.lightingWaitStartedTick);
+        diagnostics.geometryFailureStage = "lighting_propagation_timeout";
+        diagnostics.geometryFailureCoordinate = origin.toShortString();
+        diagnostics.expectedBlock = "minimum block light >= 7";
+        diagnostics.actualBlock = Integer.toString(diagnostics.minimumRepresentativeBlockLight);
     }
 
     static List<ChunkPos> requiredChunks(BlockPos origin) {
@@ -269,6 +307,36 @@ final class V4FixtureGeometryBuilder {
         }
     }
 
+    private static void verifyLightBlocksPresent(
+            ServerLevel level, BlockPos origin, Diagnostics diagnostics) {
+        verifyLightGrid(level, origin, -24, 24, -24, 24, diagnostics);
+        for (int x : coveredAxis(0, 180)) {
+            verifyLightBlock(level, origin.offset(x, 2, 0), diagnostics);
+        }
+        verifyLightGrid(level, origin, 158, 202, -22, 22, diagnostics);
+    }
+
+    private static void verifyLightGrid(
+            ServerLevel level, BlockPos origin,
+            int minX, int maxX, int minZ, int maxZ,
+            Diagnostics diagnostics) {
+        for (int x : coveredAxis(minX, maxX)) {
+            for (int z : coveredAxis(minZ, maxZ)) {
+                verifyLightBlock(level, origin.offset(x, 2, z), diagnostics);
+            }
+        }
+    }
+
+    private static void verifyLightBlock(
+            ServerLevel level, BlockPos pos, Diagnostics diagnostics) {
+        BlockState actual = level.getBlockState(pos);
+        if (!actual.is(Blocks.LIGHT) || actual.getValue(LightBlock.LEVEL) != 15) {
+            throw diagnostics.fail("light_block", pos,
+                    "minecraft:light[level=15]", actual.toString());
+        }
+        diagnostics.fixtureLightBlocksVerified++;
+    }
+
     /** Six-block spacing keeps every collision-free floor sample at block light seven or higher. */
     static List<Integer> coveredAxis(int min, int max) {
         List<Integer> values = new ArrayList<>();
@@ -281,24 +349,7 @@ final class V4FixtureGeometryBuilder {
         return List.copyOf(values);
     }
 
-    private static void verifyArenaLighting(
-            ServerLevel level, BlockPos origin, Diagnostics diagnostics) {
-        int minimum = 15;
-        minimum = Math.min(minimum,
-                verifyLitWalkableVolume(level, origin, -24, 24, -24, 24, diagnostics));
-        minimum = Math.min(minimum,
-                verifyLitWalkableVolume(level, origin, 0, 180, -2, 2, diagnostics));
-        minimum = Math.min(minimum,
-                verifyLitWalkableVolume(level, origin, 158, 202, -22, 22, diagnostics));
-        diagnostics.minimumRepresentativeBlockLight = minimum;
-        diagnostics.fixtureLightingVerified = minimum >= 7;
-        if (!diagnostics.fixtureLightingVerified) {
-            throw diagnostics.fail("lighting", origin,
-                    "minimum block light >= 7", Integer.toString(minimum));
-        }
-    }
-
-    private static int verifyLitWalkableVolume(
+    private static int sampleLitWalkableVolume(
             ServerLevel level, BlockPos origin,
             int minX, int maxX, int minZ, int maxZ,
             Diagnostics diagnostics) {
@@ -314,10 +365,6 @@ final class V4FixtureGeometryBuilder {
                 int blockLight = level.getBrightness(LightLayer.BLOCK, feet);
                 diagnostics.fixtureLightSamplesChecked++;
                 minimum = Math.min(minimum, blockLight);
-                if (blockLight < 7) {
-                    throw diagnostics.fail("lighting", feet,
-                            "block light >= 7", Integer.toString(blockLight));
-                }
             }
         }
         return minimum;
@@ -422,21 +469,34 @@ final class V4FixtureGeometryBuilder {
         int geometryMutationRejected;
         int geometryPostconditionsChecked;
         int fixtureLightBlocksPlaced;
+        int fixtureLightBlocksVerified;
         int fixtureLightSamplesChecked;
         int minimumRepresentativeBlockLight = -1;
         boolean fixtureLightingVerified;
+        boolean geometryStructureVerified;
         boolean geometryVerified;
+        long lightingWaitStartedTick = -1L;
+        long lightingWaitDeadline = -1L;
+        long lightingReadyTick = -1L;
+        long lightingWaitTicks = -1L;
         String geometryFailureStage = "NOT_RUN";
         String geometryFailureCoordinate = "UNAVAILABLE";
         String expectedBlock = "UNAVAILABLE";
         String actualBlock = "UNAVAILABLE";
 
-        boolean ready() {
+        boolean readyForLightingWait() {
             return geometryChunksRequired > 0
                     && geometryChunksReady == geometryChunksRequired
                     && geometryMutationAttempted
                     && geometryMutationSucceeded
                     && geometryMutationRejected == 0
+                    && fixtureLightBlocksPlaced > 0
+                    && fixtureLightBlocksVerified == fixtureLightBlocksPlaced
+                    && geometryStructureVerified;
+        }
+
+        boolean ready() {
+            return readyForLightingWait()
                     && fixtureLightingVerified
                     && geometryVerified;
         }
@@ -466,13 +526,19 @@ final class V4FixtureGeometryBuilder {
                             + " changed=" + geometryMutationChanged
                             + " alreadyMatched=" + geometryMutationAlreadyMatched
                             + " rejected=" + geometryMutationRejected,
-                    "geometryVerified=" + yesNo(geometryVerified)
+                    "geometryStructureVerified=" + yesNo(geometryStructureVerified)
+                            + " geometryVerified=" + yesNo(geometryVerified)
                             + " postconditionsChecked=" + geometryPostconditionsChecked,
                     "fixtureLightingVerified=" + yesNo(fixtureLightingVerified)
                             + " lightBlocksPlaced=" + fixtureLightBlocksPlaced
+                            + " lightBlocksVerified=" + fixtureLightBlocksVerified
                             + " lightSamplesChecked=" + fixtureLightSamplesChecked
                             + " minimumRepresentativeBlockLight="
                             + minimumRepresentativeBlockLight,
+                    "lightingWaitStartedTick=" + lightingWaitStartedTick
+                            + " lightingWaitDeadline=" + lightingWaitDeadline
+                            + " lightingReadyTick=" + lightingReadyTick
+                            + " lightingWaitTicks=" + lightingWaitTicks,
                     "geometryFailureStage=" + geometryFailureStage
                             + " geometryFailureCoordinate=" + geometryFailureCoordinate,
                     "expectedBlock=" + expectedBlock + " actualBlock=" + actualBlock);

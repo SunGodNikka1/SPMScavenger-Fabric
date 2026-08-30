@@ -59,6 +59,7 @@ public final class V4RuntimeCampaignController {
     private static final int INITIAL_PRICE = 8;
     private static final int CHANGED_PRICE = 10;
     private static final int DEPARTURE_OFFSET = 180;
+    private static final long LIGHTING_PROPAGATION_LIMIT = 200L;
     private static final long BOOTSTRAP_LIMIT = 2_400L;
     private static final long STARTUP_STABILITY_LIMIT = 20L;
     private static final long PHASE_A_LIMIT = 2_400L;
@@ -74,6 +75,7 @@ public final class V4RuntimeCampaignController {
 
     enum State {
         PREPARING,
+        WAITING_FIXTURE_LIGHTING,
         WAITING_STARTUP_STABILITY,
         WAITING_SETTLEMENT_AND_INITIAL_BOARD,
         PHASE_A_WAITING_INTENT,
@@ -117,55 +119,26 @@ public final class V4RuntimeCampaignController {
                 throw new IllegalStateException(
                         "fixture cleanup gate did not reach verified state");
             }
-            V4FixtureGeometryBuilder.createAndVerify(
+            V4FixtureGeometryBuilder.createAndVerifyStructure(
                     level, origin, preparing.forcedChunks, preparing.fixtureGeometryDiagnostics);
-            if (!preparing.fixtureGeometryDiagnostics.ready()) {
+            if (!preparing.fixtureGeometryDiagnostics.readyForLightingWait()) {
                 throw new IllegalStateException(
-                        "fixture geometry gate did not reach verified state");
+                        "fixture geometry structure gate did not reach verified state");
             }
-            V4FixtureEnvironment.prepareBeforeEntityCreation(
-                    level, origin, preparing.fixtureEnvironmentDiagnostics);
-            if (!preparing.fixtureEnvironmentDiagnostics.readyForEntityCreation()) {
-                throw new IllegalStateException(
-                        "fixture environment gate did not reach verified state");
-            }
-            V4FixtureEntityFactory.VerifiedFixture fixture =
-                    V4FixtureEntityFactory.createAndVerify(
-                            level, origin, preparing.fixtureCreationDiagnostics);
-            Mob subject = fixture.subject();
-            Villager trader = fixture.trader();
-            Container backpack = PlayerMobs.backpack(subject);
-            if (backpack == null) {
-                throw new IllegalStateException("fixture PlayerMob backpack unavailable");
-            }
-            preparing.subjectId = subject.getUUID();
-            preparing.traderId = trader.getUUID();
-            preparing.helperId = fixture.helper().getUUID();
-            preparing.fixtureCreationTick = level.getGameTime();
-            preparing.subjectTickCountAtCreation = subject.tickCount;
-            preparing.backpackIdentity = backpack;
-            prepareSubjectInventory(subject, backpack, INITIAL_PRICE);
-            configureOffer(trader, INITIAL_PRICE);
-            preparing.initialOffer = V4OfferFingerprint.of(trader.getOffers().getFirst());
-            preparing.changedOffer = fingerprintForPrice(CHANGED_PRICE);
-            V4RuntimeWitnessTracker.arm(
-                    subject.getUUID(), trader.getUUID(), backpack,
-                    preparing.initialOffer, level.getGameTime());
-            V4TradeLivenessWitness.arm(subject, trader, backpack, level.getGameTime());
-            record(preparing, level.getGameTime(), "WITNESS_ARMED",
-                    "beforeFirstSubjectTick=true subjectTickCount=" + subject.tickCount);
-            preparing.state = State.WAITING_STARTUP_STABILITY;
-            preparing.startupStabilityDeadline =
-                    level.getGameTime() + STARTUP_STABILITY_LIMIT;
-            record(preparing, level.getGameTime(), "START",
-                    "origin=" + origin.toShortString() + " subject=" + subject.getUUID()
-                            + " trader=" + trader.getUUID()
-                            + " helper=" + fixture.helper().getUUID()
-                            + " cleanupGate=PASS"
-                            + " geometryVerified=YES"
-                            + " fixtureAttachmentGate=PASS");
+            long lightingStart = level.getGameTime();
+            V4FixtureGeometryBuilder.beginLightingWait(
+                    preparing.fixtureGeometryDiagnostics, lightingStart,
+                    lightingStart + LIGHTING_PROPAGATION_LIMIT);
+            preparing.state = State.WAITING_FIXTURE_LIGHTING;
+            preparing.reason = "geometry structure verified; waiting for threaded lighting";
+            record(preparing, lightingStart, "WAITING_FIXTURE_LIGHTING",
+                    "deadline=" + (lightingStart + LIGHTING_PROPAGATION_LIMIT)
+                            + " forcedChunks=" + preparing.forcedChunks.size()
+                            + " lightBlocksPlaced="
+                            + preparing.fixtureGeometryDiagnostics.fixtureLightBlocksPlaced);
             source.sendSuccess(() -> Component.literal(
-                    "V4-G preparation started. Use /spmscavenger debug v4 status or report."), false);
+                    "V4-G geometry prepared; waiting for threaded fixture lighting. "
+                            + "Use /spmscavenger debug v4 status or report."), false);
             return 1;
         } catch (VirtualMachineError | ThreadDeath fatal) {
             throw fatal;
@@ -359,6 +332,10 @@ public final class V4RuntimeCampaignController {
             return;
         }
         long now = level.getGameTime();
+        if (session.state == State.WAITING_FIXTURE_LIGHTING) {
+            tickFixtureLighting(server, level, session, now);
+            return;
+        }
         if (session.state == State.WAITING_STARTUP_STABILITY) {
             tickStartupStability(server, level, session, now);
             return;
@@ -396,6 +373,91 @@ public final class V4RuntimeCampaignController {
             case PHASE_B_WAITING_REAL_SLEEP -> tickPhaseB(server, level, subject, session, now);
             default -> { }
         }
+    }
+
+    private static void tickFixtureLighting(
+            MinecraftServer server, ServerLevel level, Session session, long now) {
+        V4FixtureGeometryBuilder.Diagnostics diagnostics =
+                session.fixtureGeometryDiagnostics;
+        boolean lightingVerified = V4FixtureGeometryBuilder.verifyPropagatedLighting(
+                level, session.origin, now, diagnostics);
+        switch (V4FixtureLightingGate.evaluate(
+                lightingVerified, now, diagnostics.lightingWaitDeadline)) {
+            case PASS -> {
+                record(session, now, "FIXTURE_LIGHTING_PASS",
+                        "lightingReadyTick=" + diagnostics.lightingReadyTick
+                                + " lightingWaitTicks=" + diagnostics.lightingWaitTicks
+                                + " minimumBlockLight="
+                                + diagnostics.minimumRepresentativeBlockLight
+                                + " samples=" + diagnostics.fixtureLightSamplesChecked);
+                try {
+                    createFixtureEntitiesAndArm(level, session, now);
+                } catch (VirtualMachineError | ThreadDeath fatal) {
+                    throw fatal;
+                } catch (Throwable failure) {
+                    SpmScavenger.LOGGER.error("{} event=POST_LIGHTING_STARTUP_FAILURE",
+                            LOG_PREFIX, failure);
+                    discardPartiallyCreatedFixture(level, session, failure);
+                    finish(server, session, State.FIXTURE_FAILURE, now,
+                            "post-lighting startup exception=" + concise(failure));
+                }
+            }
+            case TIMEOUT -> {
+                V4FixtureGeometryBuilder.markLightingTimeout(diagnostics, session.origin, now);
+                finish(server, session, State.FIXTURE_FAILURE, now,
+                        "fixture lighting propagation timeout");
+            }
+            case WAITING -> session.reason =
+                    "waiting for threaded fixture lighting; minimumBlockLight="
+                            + diagnostics.minimumRepresentativeBlockLight;
+        }
+    }
+
+    private static void createFixtureEntitiesAndArm(
+            ServerLevel level, Session session, long now) {
+        V4FixtureEnvironment.prepareBeforeEntityCreation(
+                level, session.origin, session.fixtureEnvironmentDiagnostics);
+        if (!session.fixtureEnvironmentDiagnostics.readyForEntityCreation()) {
+            throw new IllegalStateException(
+                    "fixture environment gate did not reach verified state");
+        }
+        V4FixtureEntityFactory.VerifiedFixture fixture =
+                V4FixtureEntityFactory.createAndVerify(
+                        level, session.origin, session.fixtureCreationDiagnostics);
+        Mob subject = fixture.subject();
+        Villager trader = fixture.trader();
+        Container backpack = PlayerMobs.backpack(subject);
+        if (backpack == null) {
+            throw new IllegalStateException("fixture PlayerMob backpack unavailable");
+        }
+        session.subjectId = subject.getUUID();
+        session.traderId = trader.getUUID();
+        session.helperId = fixture.helper().getUUID();
+        session.fixtureCreationTick = now;
+        session.subjectTickCountAtCreation = subject.tickCount;
+        session.backpackIdentity = backpack;
+        prepareSubjectInventory(subject, backpack, INITIAL_PRICE);
+        configureOffer(trader, INITIAL_PRICE);
+        session.initialOffer = V4OfferFingerprint.of(trader.getOffers().getFirst());
+        session.changedOffer = fingerprintForPrice(CHANGED_PRICE);
+        V4RuntimeWitnessTracker.arm(
+                subject.getUUID(), trader.getUUID(), backpack,
+                session.initialOffer, now);
+        V4TradeLivenessWitness.arm(subject, trader, backpack, now);
+        record(session, now, "WITNESS_ARMED",
+                "beforeFirstSubjectTick=true subjectTickCount=" + subject.tickCount);
+        session.state = State.WAITING_STARTUP_STABILITY;
+        session.startupStabilityDeadline = now + STARTUP_STABILITY_LIMIT;
+        session.reason = "fixture lighting/environment/entity gates passed; waiting startup stability";
+        record(session, now, "START",
+                "origin=" + session.origin.toShortString() + " subject=" + subject.getUUID()
+                        + " trader=" + trader.getUUID()
+                        + " helper=" + fixture.helper().getUUID()
+                        + " cleanupGate=PASS"
+                        + " geometryVerified=YES"
+                        + " lightingGate=PASS"
+                        + " environmentGate=PASS"
+                        + " fixtureAttachmentGate=PASS");
     }
 
     private static void tickStartupStability(
@@ -1077,6 +1139,8 @@ public final class V4RuntimeCampaignController {
 
     private static String next(Session session) {
         return switch (session.state) {
+            case WAITING_FIXTURE_LIGHTING ->
+                    "natural threaded block-light propagation before any fixture entity exists";
             case WAITING_SETTLEMENT_AND_INITIAL_BOARD ->
                     "production-owned local warm-up trade, resolved demand, and persisted capability";
             case WAITING_STARTUP_STABILITY ->
