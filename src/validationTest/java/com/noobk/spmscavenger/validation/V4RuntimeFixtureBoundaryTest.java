@@ -113,6 +113,16 @@ class V4RuntimeFixtureBoundaryTest {
         assertFalse(controller.contains("fixture PlayerMob not found"));
         assertFalse(controller.contains("findTagged(level, origin"));
 
+        int initialOffer = runMethod.indexOf("configureOffer(trader, INITIAL_PRICE)");
+        int earlyArm = runMethod.indexOf("V4RuntimeWitnessTracker.arm(");
+        int stabilityState = runMethod.indexOf("State.WAITING_STARTUP_STABILITY");
+        assertTrue(initialOffer >= 0 && earlyArm > initialOffer && stabilityState > earlyArm,
+                "passive witness must arm after fixture inventory/offer setup and before first-tick stability");
+        String stabilityBody = controller.substring(stabilityMethod,
+                controller.indexOf("private static void tickBootstrap(", stabilityMethod));
+        assertFalse(stabilityBody.contains("V4RuntimeWitnessTracker.arm("),
+                "startup stability must not reset first-tick witness evidence");
+
         String factory = Files.readString(Path.of(
                 "src/validation/java/com/noobk/spmscavenger/validation/"
                         + "V4FixtureEntityFactory.java"));
@@ -134,6 +144,66 @@ class V4RuntimeFixtureBoundaryTest {
                 "startSleeping(", "designateHome(", "moveTo(subject"}) {
             assertFalse(factory.contains(forbidden),
                     "fixture entity creation acquired production authority: " + forbidden);
+        }
+    }
+
+    @Test
+    void phaseAStagingUsesProductionWarmupAndOpensSecondDemandOnlyAfterDeparture()
+            throws Exception {
+        String controller = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeCampaignController.java"));
+        String geometry = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4FixtureGeometryBuilder.java"));
+        assertTrue(geometry.contains("level.setDayTime(dayBase + 1_000L)"));
+        assertFalse(geometry.contains("dayBase + 18_000L"));
+        assertFalse(controller.contains("DAY_ADVANCED"),
+                "daytime must be a fixture precondition, not a delayed bootstrap workaround");
+
+        int runStart = controller.indexOf("public static synchronized int run(");
+        int statusStart = controller.indexOf("public static synchronized int status(");
+        String run = controller.substring(runStart, statusStart);
+        assertTrue(run.contains("prepareSubjectInventory(subject, backpack, INITIAL_PRICE)"),
+                "warmup must start with the exact live-offer funding amount");
+        assertFalse(run.contains("performResolvedTrade("),
+                "the validation controller must not execute its warmup transaction");
+
+        int bootstrapStart = controller.indexOf("private static void tickBootstrap(");
+        int phaseAStart = controller.indexOf("private static void openPhaseA(");
+        String bootstrap = controller.substring(bootstrapStart, phaseAStart);
+        for (String evidence : new String[] {
+                "initialWarmupOfferExecuted()", "countAll(subject, backpack, Items.IRON_PICKAXE)",
+                "bootstrapWarmupDemandResolved", "bootstrapCapabilityPersisted",
+                "bootstrap staging allowed REQUIRED_TRADE before departure"}) {
+            assertTrue(bootstrap.contains(evidence), "missing warmup boundary: " + evidence);
+        }
+
+        int phaseAEnd = controller.indexOf("private static void tickPhaseA(", phaseAStart);
+        String open = controller.substring(phaseAStart, phaseAEnd);
+        int noDemandBefore = open.indexOf("second blocking demand existed before departure");
+        int teleport = open.indexOf("subject.teleportTo(");
+        int departureCheck = open.indexOf("session.departureConfirmed");
+        int changeOffer = open.indexOf("configureOffer(trader, CHANGED_PRICE)");
+        int markChanged = open.indexOf("V4RuntimeWitnessTracker.markChangedOffer(");
+        int openWitness = open.indexOf("V4RuntimeWitnessTracker.openPhaseA(now)");
+        int replaceInventory = open.indexOf(
+                "prepareSubjectInventory(subject, backpack, CHANGED_PRICE)");
+        int verifySecondDemand = open.indexOf("session.phaseASecondDemandOpened");
+        assertTrue(noDemandBefore >= 0 && teleport > noDemandBefore
+                        && departureCheck > teleport && changeOffer > departureCheck
+                        && markChanged > changeOffer && openWitness > markChanged
+                        && replaceInventory > openWitness && verifySecondDemand > replaceInventory,
+                "Phase A must depart while satisfied, change the live board, open evidence, then create demand");
+        assertTrue(open.contains("departure did not leave settlement/trader locality"));
+        assertTrue(open.contains("second blocking demand did not open after departure"));
+
+        for (String reportLine : new String[] {
+                "bootstrapInitialBoardObserved=", "bootstrapWarmupTradeExecuted=",
+                "bootstrapWarmupDemandResolved=", "bootstrapCapabilityPersisted=",
+                "bootstrapPrematureRequiredTrade=", "bootstrapPrematureArrival=",
+                "departureConfirmed=", "phaseASecondDemandOpened=", "NOT_MEASURED"}) {
+            assertTrue(controller.contains(reportLine), "missing report evidence: " + reportLine);
         }
     }
 

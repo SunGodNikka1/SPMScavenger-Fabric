@@ -60,6 +60,50 @@ class V4RuntimeWitnessTrackerTest {
     }
 
     @Test
+    void initialTradeBeforePhaseAIsWarmupNotCachedAuthorityFailure() {
+        Object backpack = new Object();
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, backpack, INITIAL, 10L);
+        V4RuntimeWitnessTracker.observeBoard(MOB, TRADER, INITIAL, 11L);
+        V4RuntimeWitnessTracker.observeTrade(backpack, TRADER, INITIAL, true, 12L);
+
+        V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
+        assertTrue(snapshot.initialBoardObserved());
+        assertTrue(snapshot.initialWarmupOfferExecuted());
+        assertFalse(snapshot.cachedInitialOfferExecuted());
+        assertFalse(snapshot.changedOfferExecuted());
+    }
+
+    @Test
+    void firstTickBoardEvidenceSurvivesStartupStabilityWithoutRearming() {
+        Object backpack = new Object();
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, backpack, INITIAL, 10L);
+        V4RuntimeWitnessTracker.observeBoard(MOB, TRADER, INITIAL, 11L);
+
+        // Startup stability is a controller lifecycle transition, not a new witness session.
+        V4RuntimeWitnessTracker.Snapshot afterStability = V4RuntimeWitnessTracker.snapshot();
+        assertTrue(afterStability.armed());
+        assertTrue(afterStability.initialBoardObserved());
+        assertEquals(2, afterStability.eventCount());
+    }
+
+    @Test
+    void prePhaseAIntentCommuteAndArrivalAreFixtureContaminationOnly() {
+        VillageIntent intent = requiredTradeIntent();
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, new Object(), INITIAL, 10L);
+        V4RuntimeWitnessTracker.observeDirective(MOB, intent, 20L);
+        V4RuntimeWitnessTracker.observeCommuteSeed(MOB, intent, true, 21L);
+        V4RuntimeWitnessTracker.observeArrival(MOB, intent, true, 22L);
+
+        V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
+        assertTrue(snapshot.prematureRequiredTradeIntent());
+        assertTrue(snapshot.prematureCommuteSeed());
+        assertTrue(snapshot.prematureArrival());
+        assertEquals(null, snapshot.intentIdentity());
+        assertFalse(snapshot.commuteSeeded());
+        assertFalse(snapshot.arrivalObserved());
+    }
+
+    @Test
     void exactIntentBindingSurvivesInterruptionAndFailureEvidenceDoesNotAppear() {
         WorkDemandPolicy.MaterialDemandIdentity demand = new WorkDemandPolicy.MaterialDemandIdentity(
                 ResourceLocation.parse("minecraft:iron_ingot"),
@@ -73,6 +117,7 @@ class V4RuntimeWitnessTrackerTest {
         V4RuntimeWitnessTracker.arm(MOB, TRADER, backpack, INITIAL, 10L);
         V4RuntimeWitnessTracker.observeDemand(
                 demand, ExistingRouteFeasibility.ExistingRouteStatus.INFEASIBLE, 90L);
+        V4RuntimeWitnessTracker.openPhaseA(99L);
         V4RuntimeWitnessTracker.observeDirective(MOB, intent, 100L);
         V4RuntimeWitnessTracker.observeCommuteSeed(MOB, intent, true, 101L);
         V4RuntimeWitnessTracker.observeInterruption(MOB, intent, 120L);
@@ -97,6 +142,7 @@ class V4RuntimeWitnessTrackerTest {
                         ResourceLocation.parse("minecraft:iron_ingot"),
                         ResourceLocation.parse("spmscavenger:iron_pickaxe_upgrade"))));
         V4RuntimeWitnessTracker.arm(MOB, TRADER, new Object(), INITIAL, 10L);
+        V4RuntimeWitnessTracker.openPhaseA(19L);
         V4RuntimeWitnessTracker.observeDirective(MOB, intent, 20L);
         V4RuntimeWitnessTracker.observeResume(MOB, intent, 21L);
 
@@ -112,5 +158,15 @@ class V4RuntimeWitnessTrackerTest {
         V4RuntimeWitnessTracker.reset();
         assertFalse(V4RuntimeWitnessTracker.snapshot().armed());
         assertEquals(0, V4RuntimeWitnessTracker.snapshot().eventCount());
+    }
+
+    private static VillageIntent requiredTradeIntent() {
+        return new VillageIntent(
+                VillageIntent.Kind.REQUIRED_TRADE,
+                new SettlementKey(Level.OVERWORLD, BlockPos.ZERO),
+                100L,
+                Optional.of(new WorkDemandPolicy.MaterialDemandIdentity(
+                        ResourceLocation.parse("minecraft:iron_ingot"),
+                        ResourceLocation.parse("spmscavenger:iron_pickaxe_upgrade"))));
     }
 }

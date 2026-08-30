@@ -76,6 +76,11 @@ public final class V4RuntimeWitnessTracker {
         if (!matchingMob(mobId) || intent == null) {
             return;
         }
+        if (!active.phaseAOpen) {
+            active.prematureRequiredTradeIntent = true;
+            event(tick, "PREMATURE_REQUIRED_TRADE_INTENT", identity(intent));
+            return;
+        }
         if (active.intent == null) {
             active.intent = intent;
             active.intentIdentity = identity(intent);
@@ -88,6 +93,11 @@ public final class V4RuntimeWitnessTracker {
     public static synchronized void observeCommuteSeed(
             UUID mobId, VillageIntent intent, boolean seeded, long tick) {
         if (!matchingMob(mobId) || intent == null || !seeded) {
+            return;
+        }
+        if (!active.phaseAOpen) {
+            active.prematureCommuteSeed = true;
+            event(tick, "PREMATURE_COMMUTE_SEED", identity(intent));
             return;
         }
         active.commuteSeeded = true;
@@ -116,6 +126,14 @@ public final class V4RuntimeWitnessTracker {
     }
 
     public static synchronized void observeArrival(UUID mobId, VillageIntent intent, boolean released, long tick) {
+        if (!matchingMob(mobId) || intent == null) {
+            return;
+        }
+        if (!active.phaseAOpen) {
+            active.prematureArrival = true;
+            event(tick, "PREMATURE_ARRIVAL", "binding=" + identity(intent) + " released=" + released);
+            return;
+        }
         if (!matchingExact(mobId, intent)) {
             return;
         }
@@ -156,6 +174,15 @@ public final class V4RuntimeWitnessTracker {
             boolean traded, long tick) {
         if (active == null || active.backpackIdentity != backpackIdentity
                 || !active.traderId.equals(traderId) || offer == null || !traded) {
+            return;
+        }
+        if (!active.phaseAOpen) {
+            if (offer.equals(active.initialOffer)) {
+                active.initialWarmupOfferExecuted = true;
+                event(tick, "INITIAL_WARMUP_TRADE", offer.compact());
+            } else {
+                event(tick, "PRE_PHASE_A_OTHER_TRADE", offer.compact());
+            }
             return;
         }
         active.executedOffer = offer;
@@ -235,6 +262,10 @@ public final class V4RuntimeWitnessTracker {
             boolean phaseAOpen,
             long phaseAOpenTick,
             boolean initialBoardObserved,
+            boolean initialWarmupOfferExecuted,
+            boolean prematureRequiredTradeIntent,
+            boolean prematureCommuteSeed,
+            boolean prematureArrival,
             boolean changedBoardRediscovered,
             V4OfferFingerprint initialOffer,
             V4OfferFingerprint changedOffer,
@@ -260,7 +291,8 @@ public final class V4RuntimeWitnessTracker {
             int eventCount) {
 
         static Snapshot empty() {
-            return new Snapshot(false, false, -1L, false, false, null, null, null,
+            return new Snapshot(false, false, -1L, false, false, false, false, false,
+                    false, null, null, null,
                     null, ExistingRouteFeasibility.ExistingRouteStatus.UNKNOWN, null,
                     false, "NONE", false, false, false, false, false, false, 0,
                     false, false, false, false, false, null, 0);
@@ -278,6 +310,10 @@ public final class V4RuntimeWitnessTracker {
         boolean phaseAOpen;
         long phaseAOpenTick = -1L;
         boolean initialBoardObserved;
+        boolean initialWarmupOfferExecuted;
+        boolean prematureRequiredTradeIntent;
+        boolean prematureCommuteSeed;
+        boolean prematureArrival;
         boolean changedBoardRediscovered;
         WorkDemandPolicy.MaterialDemandIdentity demandIdentity;
         ExistingRouteFeasibility.ExistingRouteStatus routeStatus =
@@ -312,7 +348,9 @@ public final class V4RuntimeWitnessTracker {
 
         Snapshot snapshot() {
             return new Snapshot(true, phaseAOpen, phaseAOpenTick, initialBoardObserved,
-                    changedBoardRediscovered, initialOffer, changedOffer, executedOffer,
+                    initialWarmupOfferExecuted, prematureRequiredTradeIntent,
+                    prematureCommuteSeed, prematureArrival, changedBoardRediscovered,
+                    initialOffer, changedOffer, executedOffer,
                     demandIdentity, routeStatus, intentIdentity, commuteSeeded, commuteSource,
                     interrupted, navigationDiscarded, resumed, sameBindingResumed, arrivalObserved,
                     intentReleasedAtArrival, routeFailurePublications, changedOfferExecuted,

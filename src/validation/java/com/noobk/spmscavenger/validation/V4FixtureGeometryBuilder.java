@@ -178,7 +178,7 @@ final class V4FixtureGeometryBuilder {
         level.getGameRules().getRule(GameRules.RULE_MOBGRIEFING).set(true, level.getServer());
         level.setWeatherParameters(0, 0, false, false);
         long dayBase = Math.floorDiv(level.getDayTime(), 24_000L) * 24_000L;
-        level.setDayTime(dayBase + 18_000L);
+        level.setDayTime(dayBase + 1_000L);
     }
 
     private static void writeVolume(
