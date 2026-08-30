@@ -86,6 +86,25 @@ class V4RuntimeFixtureBoundaryTest {
         assertTrue(mixins.contains("afterSuccessfulSleep"));
     }
 
+    @Test
+    void exploringGoalStopWitnessNamesReadableAndIntermediaryTargetsAndRemainsRequired()
+            throws Exception {
+        String mixin = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/mixin/"
+                        + "V4ExploringGoalWitnessMixin.java"));
+        assertTrue(mixin.contains("method = {\"stop\", \"method_6270\"}"),
+                "ExploringGoal overrides Goal.stop, which is method_6270 in the remapped "
+                        + "production JAR; both namespaces are required for the validation sidecar");
+
+        String config = Files.readString(Path.of(
+                "src/validation/resources/spmscavenger.validation.mixins.json"));
+        assertTrue(config.contains("\"required\": true"));
+        assertTrue(config.contains("\"defaultRequire\": 1"),
+                "the runtime witness must fail closed if neither namespace target attaches");
+        assertFalse(mixin.contains("require = 0"),
+                "namespace compatibility must not turn the witness into an optional no-op");
+    }
+
     private static int count(String source, String token) {
         int count = 0;
         for (int at = 0; (at = source.indexOf(token, at)) >= 0; at += token.length()) {

@@ -28,7 +28,11 @@ public abstract class V4ExploringGoalWitnessMixin {
                 Boolean.TRUE.equals(cir.getReturnValue()), now);
     }
 
-    @Inject(method = "stop", at = @At("TAIL"))
+    // ExploringGoal overrides Goal.stop(). The production Fabric JAR exposes that inherited
+    // Minecraft method under its intermediary name, while validation development uses the
+    // readable name. Keep both selectors and retain the required-injector contract so failure to
+    // attach remains fatal instead of silently weakening the runtime witness.
+    @Inject(method = {"stop", "method_6270"}, at = @At("TAIL"))
     private void spmscavenger_validation$observeNavigationDiscard(CallbackInfo ci) {
         if (mob.level() instanceof ServerLevel level) {
             V4RuntimeWitnessTracker.observeNavigationStop(mob.getUUID(), level.getGameTime());
