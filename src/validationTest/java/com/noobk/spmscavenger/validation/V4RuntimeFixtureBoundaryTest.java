@@ -2,6 +2,7 @@ package com.noobk.spmscavenger.validation;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -60,6 +61,71 @@ class V4RuntimeFixtureBoundaryTest {
         assertTrue(Files.exists(pack.resolve(
                 "data/spm_v4/function/scenario/v4_g.mcfunction")));
         assertTrue(Files.exists(pack.resolve("data/spm_v4/function/cleanup.mcfunction")));
+    }
+
+    @Test
+    void requiredFixtureEntitiesCrossCheckedAttachmentGateBeforeBootstrap() throws Exception {
+        Path scenarioPath = Path.of("test-datapacks/v4-settlement-integration/data/spm_v4/"
+                + "function/scenario/v4_g.mcfunction");
+        String scenario = Files.readString(scenarioPath);
+        assertFalse(scenario.contains("summon playermob:player_mob"),
+                "an unchecked datapack summon must not stand in for subject creation");
+        assertFalse(scenario.contains("summon minecraft:villager"),
+                "required trader/helper entities must use the same checked creation boundary");
+
+        String controller = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeCampaignController.java"));
+        int fixtureFunction = controller.indexOf("executeFixtureFunction(source.getServer()");
+        int checkedCreation = controller.indexOf("V4FixtureEntityFactory.createAndVerify(");
+        int bootstrap = controller.indexOf(
+                "preparing.state = State.WAITING_SETTLEMENT_AND_INITIAL_BOARD");
+        assertTrue(fixtureFunction >= 0 && checkedCreation > fixtureFunction
+                        && bootstrap > checkedCreation,
+                "geometry preparation must be followed by verified entity attachment before "
+                        + "the controller can enter bootstrap");
+        assertFalse(controller.contains("fixture PlayerMob not found"));
+        assertFalse(controller.contains("findTagged(level, origin"));
+
+        String factory = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4FixtureEntityFactory.java"));
+        for (String required : new String[] {
+                "playermob", "player_mob", "BuiltInRegistries.ENTITY_TYPE.getOptional",
+                ".create(level)", "MobSpawnType.COMMAND", "finalizeSpawn(",
+                "addFreshEntity(", "level.getEntity(", "expectedTagsPresent",
+                "PlayerMobs.isPlayerMob", "traderCreated", "helperCreated"}) {
+            assertTrue(factory.contains(required), "missing fixture creation proof: " + required);
+        }
+        for (String forbidden : new String[] {
+                "VillageIntent", "SettlementDestinationRanker", "performResolvedTrade(",
+                "startSleeping(", "designateHome(", "moveTo(subject"}) {
+            assertFalse(factory.contains(forbidden),
+                    "fixture entity creation acquired production authority: " + forbidden);
+        }
+    }
+
+    @Test
+    void attachmentGateRejectsAnyUnverifiedRequiredObject() {
+        V4FixtureEntityFactory.Diagnostics diagnostics =
+                new V4FixtureEntityFactory.Diagnostics();
+        diagnostics.entityTypePresent = true;
+        diagnostics.spawnAttempted = true;
+        diagnostics.spawnSucceeded = true;
+        diagnostics.spawnedUUID = UUID.randomUUID();
+        diagnostics.expectedTagsPresent = true;
+        diagnostics.levelEntityResolvable = true;
+        diagnostics.playerMobsCompatibilityAvailable = true;
+        diagnostics.playerMobsIsPlayerMob = true;
+        diagnostics.traderCreated = true;
+        diagnostics.traderUUID = UUID.randomUUID();
+
+        assertFalse(diagnostics.ready(),
+                "bootstrap must remain closed while the required helper is unverified");
+        diagnostics.helperCreated = true;
+        diagnostics.helperUUID = UUID.randomUUID();
+        assertTrue(diagnostics.ready(),
+                "the gate opens only after subject, trader and helper are all verified");
     }
 
     @Test

@@ -28,7 +28,6 @@ import java.util.UUID;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.functions.CommandFunction;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -50,7 +49,6 @@ import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -60,8 +58,6 @@ import net.minecraft.world.phys.Vec3;
 public final class V4RuntimeCampaignController {
 
     private static final String LOG_PREFIX = "[spmscavenger/v4-campaign]";
-    private static final String SUBJECT_TAG = "spm_v4.subject";
-    private static final String TRADER_TAG = "spm_v4.trader";
     private static final String INTERRUPTER_TAG = "spm_v4.interrupter";
     private static final int INITIAL_PRICE = 8;
     private static final int CHANGED_PRICE = 10;
@@ -113,19 +109,19 @@ public final class V4RuntimeCampaignController {
             validateFixtureConfig(config);
             executeFixtureFunction(source.getServer(), fixtureSource(source.getServer(), origin),
                     "scenario/v4_g");
-            Mob subject = findTagged(level, origin, SUBJECT_TAG, Mob.class)
-                    .orElseThrow(() -> new IllegalStateException("fixture PlayerMob not found"));
-            if (!PlayerMobs.isPlayerMob(subject)) {
-                throw new IllegalStateException("fixture subject is not a Social Player Mob");
-            }
-            Villager trader = findTagged(level, origin, TRADER_TAG, Villager.class)
-                    .orElseThrow(() -> new IllegalStateException("fixture trader not found"));
+            preparing.geometryFunctionExecuted = true;
+            V4FixtureEntityFactory.VerifiedFixture fixture =
+                    V4FixtureEntityFactory.createAndVerify(
+                            level, origin, preparing.fixtureCreationDiagnostics);
+            Mob subject = fixture.subject();
+            Villager trader = fixture.trader();
             Container backpack = PlayerMobs.backpack(subject);
             if (backpack == null) {
                 throw new IllegalStateException("fixture PlayerMob backpack unavailable");
             }
             preparing.subjectId = subject.getUUID();
             preparing.traderId = trader.getUUID();
+            preparing.helperId = fixture.helper().getUUID();
             preparing.backpackIdentity = backpack;
             prepareSubjectInventory(subject, backpack, false);
             configureOffer(trader, INITIAL_PRICE);
@@ -139,7 +135,9 @@ public final class V4RuntimeCampaignController {
             preparing.deadline = level.getGameTime() + BOOTSTRAP_LIMIT;
             record(preparing, level.getGameTime(), "START",
                     "origin=" + origin.toShortString() + " subject=" + subject.getUUID()
-                            + " trader=" + trader.getUUID());
+                            + " trader=" + trader.getUUID()
+                            + " helper=" + fixture.helper().getUUID()
+                            + " fixtureAttachmentGate=PASS");
             source.sendSuccess(() -> Component.literal(
                     "V4-G preparation started. Use /spmscavenger debug v4 status or report."), false);
             return 1;
@@ -665,13 +663,6 @@ public final class V4RuntimeCampaignController {
         return count;
     }
 
-    private static <T extends Entity> Optional<T> findTagged(
-            ServerLevel level, BlockPos origin, String tag, Class<T> type) {
-        return level.getEntitiesOfClass(type, new AABB(origin).inflate(32.0),
-                        entity -> entity.getTags().contains(tag))
-                .stream().findFirst();
-    }
-
     private static void forceCorridorChunks(ServerLevel level, Session session) {
         int minX = (session.origin.getX() - 32) >> 4;
         int maxX = (session.origin.getX() + DEPARTURE_OFFSET + 32) >> 4;
@@ -733,10 +724,11 @@ public final class V4RuntimeCampaignController {
 
     private static List<String> activeLines(Session session) {
         V4RuntimeWitnessTracker.Snapshot witness = V4RuntimeWitnessTracker.snapshot();
-        return List.of(
+        List<String> lines = new ArrayList<>(List.of(
                 "=== V4-G Runtime Campaign Status ===",
                 "state=" + session.state + " reason=" + session.reason,
-                "subject=" + session.subjectId + " trader=" + session.traderId,
+                "subject=" + session.subjectId + " trader=" + session.traderId
+                        + " helper=" + session.helperId,
                 "config=" + session.configSummary,
                 "homeBeforeTrade=" + (session.homeBeforeTrade ? "ABSENT" : "PRESENT"),
                 "rememberedSettlement=" + printable(session.settlementAnchor),
@@ -747,7 +739,9 @@ public final class V4RuntimeCampaignController {
                 "ExistingRouteStatus=" + witness.routeStatus(),
                 "VillageIntent=" + witness.intentIdentity(),
                 "COMMUTE source=" + witness.commuteSource(),
-                "next=" + next(session));
+                "next=" + next(session)));
+        lines.addAll(session.fixtureCreationDiagnostics.lines());
+        return List.copyOf(lines);
     }
 
     private static String next(Session session) {
@@ -812,6 +806,7 @@ public final class V4RuntimeCampaignController {
         String configSummary = "UNREAD";
         UUID subjectId;
         UUID traderId;
+        UUID helperId;
         Object backpackIdentity;
         BlockPos settlementAnchor;
         BlockPos departure;
@@ -835,6 +830,9 @@ public final class V4RuntimeCampaignController {
         long interruptionTick;
         boolean resumeObserved;
         int forcedChunksReleased;
+        boolean geometryFunctionExecuted;
+        final V4FixtureEntityFactory.Diagnostics fixtureCreationDiagnostics =
+                new V4FixtureEntityFactory.Diagnostics();
 
         Session(ResourceKey<Level> dimension, BlockPos origin, long startTick) {
             this.dimension = dimension;
@@ -848,6 +846,7 @@ public final class V4RuntimeCampaignController {
             String reason,
             UUID subjectId,
             UUID traderId,
+            UUID helperId,
             String dimension,
             BlockPos origin,
             BlockPos settlementAnchor,
@@ -862,6 +861,10 @@ public final class V4RuntimeCampaignController {
             long phaseBPassTick,
             long terminalTick,
             int forcedChunksReleased,
+            boolean geometryFunctionExecuted,
+            String fixtureFailureStage,
+            String fixtureFailureDetail,
+            List<String> fixtureCreationDiagnostics,
             String configSummary,
             V4RuntimeWitnessTracker.Snapshot witness,
             List<String> controllerEvents,
@@ -871,12 +874,17 @@ public final class V4RuntimeCampaignController {
                 Session session, V4RuntimeWitnessTracker.Snapshot witness,
                 List<String> witnessEvents) {
             return new CampaignReport(session.state, session.reason, session.subjectId,
-                    session.traderId, session.dimension.location().toString(), session.origin,
+                    session.traderId, session.helperId,
+                    session.dimension.location().toString(), session.origin,
                     session.settlementAnchor, session.anchorTraderDistance,
                     session.homeBeforeTrade, session.homeBeforeSleep,
                     session.phaseBAssociationCount, session.startTick, session.phaseAOpenTick,
                     session.phaseAPassTick, session.phaseBOpenTick, session.phaseBPassTick,
-                    session.terminalTick, session.forcedChunksReleased, session.configSummary, witness,
+                    session.terminalTick, session.forcedChunksReleased,
+                    session.geometryFunctionExecuted,
+                    session.fixtureCreationDiagnostics.failureStage,
+                    session.fixtureCreationDiagnostics.failureDetail,
+                    session.fixtureCreationDiagnostics.lines(), session.configSummary, witness,
                     List.copyOf(session.events), List.copyOf(witnessEvents));
         }
 
@@ -886,6 +894,10 @@ public final class V4RuntimeCampaignController {
                     "state=" + state + " reason=" + reason,
                     "PhaseA=" + (phaseAPassTick >= 0 ? "PASS" : "NOT_PASS")
                             + " PhaseB=" + (phaseBPassTick >= 0 ? "PASS" : "NOT_PASS"),
+                    "fixtureEntityPreflight="
+                            + ("NONE".equals(fixtureFailureStage) ? "PASS" : "FAIL")
+                            + " stage=" + fixtureFailureStage
+                            + " detail=" + fixtureFailureDetail,
                     "VERDICT=" + state);
         }
 
@@ -893,8 +905,11 @@ public final class V4RuntimeCampaignController {
             List<String> lines = new ArrayList<>(summaryLines());
             lines.add("environment=minecraft:1.21.1 spm:0.96.0 dimension=" + dimension);
             lines.add("config=" + configSummary);
-            lines.add("subject=" + subjectId + " trader=" + traderId
+            lines.add("subject=" + subjectId + " trader=" + traderId + " helper=" + helperId
                     + " origin=" + origin.toShortString());
+            lines.add("geometryFunctionExecuted=" + geometryFunctionExecuted);
+            lines.add("-- fixture entity creation preflight --");
+            lines.addAll(fixtureCreationDiagnostics);
             lines.add("rememberedSettlement=" + printable(settlementAnchor)
                     + " anchorTraderDistance=" + format(anchorTraderDistance));
             lines.add("ticks start=" + startTick + " phaseAOpen=" + phaseAOpenTick

@@ -24,8 +24,4 @@ setblock ~-10 ~ ~1 minecraft:white_bed[part=head,facing=south]
 setblock ~-10 ~ ~2 minecraft:white_bed[part=foot,facing=south]
 setblock ~-1 ~ ~4 minecraft:smithing_table
 
-summon playermob:player_mob ~2 ~ ~ {Tags:["spm_v4.fixture","spm_v4.subject"],PersistenceRequired:1b}
-summon minecraft:villager ~-1 ~ ~ {Tags:["spm_v4.fixture","spm_v4.trader"],PersistenceRequired:1b,Age:0}
-summon minecraft:villager ~-7 ~ ~1 {Tags:["spm_v4.fixture","spm_v4.helper"],PersistenceRequired:1b,Age:0}
-
-tellraw @a [{"text":"[spm_v4] V4-G fixture created; validation controller owns the remaining preflight.","color":"gold"}]
+tellraw @a [{"text":"[spm_v4] V4-G geometry prepared; validation controller now performs checked entity creation.","color":"gold"}]

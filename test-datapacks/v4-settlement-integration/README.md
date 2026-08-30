@@ -12,8 +12,9 @@ the complete setup and passive witness lifecycle:
 ```
 
 The operator stands at the intended village-anchor end of a disposable test area in the Overworld.
-`run` invokes `spm_v4:scenario/v4_g`, creates a flat 180-block corridor, three beds, a bell, one
-fixture trader, one helper villager and one PlayerMob. The controller then supplies the controlled
+`run` invokes `spm_v4:scenario/v4_g` to create a flat 180-block corridor, three beds and a bell.
+The validation controller then creates the fixture trader, helper villager and PlayerMob through
+checked registered-entity spawn/finalization gates before bootstrap. It then supplies the controlled
 offer/inventory and waits for production behavior. It does not force intent, navigation, trade,
 sleep, or HOME.
 
