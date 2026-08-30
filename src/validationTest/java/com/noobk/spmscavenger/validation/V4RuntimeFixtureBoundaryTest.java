@@ -86,15 +86,17 @@ class V4RuntimeFixtureBoundaryTest {
         String controller = Files.readString(Path.of(
                 "src/validation/java/com/noobk/spmscavenger/validation/"
                         + "V4RuntimeCampaignController.java"));
+        int checkedCleanup = controller.indexOf("V4FixtureCleanup.prepareForStartup(");
         int checkedGeometry = controller.indexOf("V4FixtureGeometryBuilder.createAndVerify(");
         int checkedCreation = controller.indexOf("V4FixtureEntityFactory.createAndVerify(");
         int stability = controller.indexOf("preparing.state = State.WAITING_STARTUP_STABILITY");
         int stabilityMethod = controller.indexOf("private static void tickStartupStability(");
         int bootstrap = controller.indexOf(
                 "session.state = State.WAITING_SETTLEMENT_AND_INITIAL_BOARD", stabilityMethod);
-        assertTrue(checkedGeometry >= 0 && checkedCreation > checkedGeometry
+        assertTrue(checkedCleanup >= 0 && checkedGeometry > checkedCleanup
+                        && checkedCreation > checkedGeometry
                         && stability > checkedCreation && bootstrap > stabilityMethod,
-                "verified geometry/attachment must lead to startup stability, and only that lifecycle "
+                "verified cleanup/geometry/attachment must lead to startup stability, and only that lifecycle "
                         + "gate may open bootstrap");
         int runStart = controller.indexOf("public static synchronized int run(");
         int statusStart = controller.indexOf("public static synchronized int status(");
@@ -106,6 +108,8 @@ class V4RuntimeFixtureBoundaryTest {
                 "run() must not infer geometry success from an unchecked mcfunction");
         assertTrue(runMethod.contains("fixtureGeometryDiagnostics.ready()"),
                 "entity creation must remain behind the explicit geometry gate");
+        assertTrue(runMethod.contains("startupCleanupDiagnostics.ready()"),
+                "geometry creation must remain behind the synchronous cleanup gate");
         assertFalse(controller.contains("fixture PlayerMob not found"));
         assertFalse(controller.contains("findTagged(level, origin"));
 
@@ -131,6 +135,92 @@ class V4RuntimeFixtureBoundaryTest {
             assertFalse(factory.contains(forbidden),
                     "fixture entity creation acquired production authority: " + forbidden);
         }
+    }
+
+    @Test
+    void cleanupIsDirectSynchronousNonDamagingAndPrecedesAllFixtureCreation() throws Exception {
+        String cleanup = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/V4FixtureCleanup.java"));
+        for (String required : new String[] {
+                "getScheduledEvents()", "getEventsIds()", ".remove(legacyId)",
+                "entity.discard()", "cleanupCompletedSynchronously",
+                "staleFixtureEntitiesRemaining", "legacyCleanupSchedulePresentAfter",
+                "cleanupOwner=VALIDATION_JAVA", "cleanupCommandFunctionInvoked=NO"}) {
+            assertTrue(cleanup.contains(required), "missing cleanup proof: " + required);
+        }
+        for (String forbidden : new String[] {
+                ".hurt(", ".damage(", "setHealth(", "heal(", "kill @e[",
+                ".schedule(", "getCommands().perform", "getFunctions().execute"}) {
+            assertFalse(cleanup.contains(forbidden),
+                    "validation teardown must not use damage/delay/commands: " + forbidden);
+        }
+
+        String controller = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeCampaignController.java"));
+        int cleanupGate = controller.indexOf("V4FixtureCleanup.prepareForStartup(");
+        int geometry = controller.indexOf("V4FixtureGeometryBuilder.createAndVerify(");
+        int entities = controller.indexOf("V4FixtureEntityFactory.createAndVerify(");
+        assertTrue(cleanupGate >= 0 && geometry > cleanupGate && entities > geometry);
+        assertFalse(controller.contains("executeFixtureFunction("));
+        assertFalse(controller.contains("getFunctions().execute("));
+        assertFalse(controller.contains("\"spm_v4:cleanup\""));
+        assertTrue(count(controller, "discardOwnedFixture(") >= 3,
+                "stop/reset/startup rollback must share exact-owned Java cleanup");
+
+        String resource = Files.readString(Path.of(
+                "test-datapacks/v4-settlement-integration/data/spm_v4/function/cleanup.mcfunction"));
+        assertFalse(resource.contains("kill @e[tag=spm_v4.fixture]"));
+        assertFalse(resource.lines().anyMatch(line -> {
+            String command = line.stripLeading();
+            return !command.isEmpty() && !command.startsWith("#");
+        }), "legacy cleanup resource must be documentation-only");
+
+        String production = readTree(Path.of("src/main/java"));
+        assertFalse(production.contains("V4FixtureCleanup"));
+        assertFalse(production.contains("spm_v4.fixture"));
+    }
+
+    @Test
+    void cleanupGateRejectsRemainingTimerOrEntityState() {
+        V4FixtureCleanup.Diagnostics diagnostics = new V4FixtureCleanup.Diagnostics();
+        diagnostics.cleanupAttempted = true;
+        diagnostics.cleanupCompletedSynchronously = true;
+        diagnostics.cleanupCompletedTick = 42L;
+        diagnostics.legacyCleanupScheduleCleared = true;
+
+        diagnostics.legacyCleanupSchedulePresentAfter = true;
+        assertFalse(diagnostics.ready(), "a remaining legacy timer must block fixture creation");
+        diagnostics.legacyCleanupSchedulePresentAfter = false;
+        diagnostics.staleFixtureEntitiesRemaining = 1;
+        assertFalse(diagnostics.ready(), "a remaining stale fixture must block fixture creation");
+        diagnostics.staleFixtureEntitiesRemaining = 0;
+        assertTrue(diagnostics.ready(), "only synchronous empty cleanup may open the gate");
+    }
+
+    @Test
+    void intentionalTeardownCannotBeClassifiedAsBehavioralSubjectDeath() throws Exception {
+        String controller = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeCampaignController.java"));
+        int unavailable = controller.indexOf("public static synchronized void onSubjectUnavailable(");
+        int death = controller.indexOf("public static synchronized void onSubjectDeath(");
+        int shutdown = controller.indexOf("public static synchronized void shutdownServerState(");
+        String unavailableBody = controller.substring(unavailable, death);
+        String deathBody = controller.substring(death, shutdown);
+        assertTrue(unavailableBody.indexOf("active.intentionalTeardown")
+                < unavailableBody.indexOf("finish(server, active"));
+        assertTrue(deathBody.indexOf("active.intentionalTeardown")
+                < deathBody.indexOf("V4SubjectDeathDiagnostics.capture("));
+        int teardownHelper = controller.indexOf(
+                "private static void discardOwnedFixture(");
+        String teardownBody = controller.substring(teardownHelper,
+                controller.indexOf("private static void discardPartiallyCreatedFixture(",
+                        teardownHelper));
+        assertTrue(teardownBody.indexOf("session.intentionalTeardown = true")
+                < teardownBody.indexOf("V4FixtureCleanup.discardOwned("));
+        assertTrue(controller.contains("TEARDOWN_UNLOAD_IGNORED"));
+        assertTrue(controller.contains("TEARDOWN_DEATH_CALLBACK_IGNORED"));
     }
 
     @Test

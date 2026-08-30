@@ -25,6 +25,12 @@ Fixture-owned tagged entities are removed by `reset`. Placed blocks are delibera
 after production begins, type/location alone is insufficient provenance for destructive rollback.
 Use a disposable world or restore a backup.
 
+Cleanup is validation-Java-owned and synchronous. Before startup it directly purges any persisted
+legacy cleanup timer, discards stale tagged fixture entities inside the bounded fixture region,
+and verifies both the timer and entity postconditions. Once UUID ownership exists, `stop` and
+`reset` discard those exact owned entities. The packaged documentation-only cleanup function has
+no executable commands; teardown never uses `/kill`, damage, or lethal health mutation.
+
 Expected bounded windows:
 
 - settlement + natural Gather/initial-board bootstrap: at most 2,400 ticks;

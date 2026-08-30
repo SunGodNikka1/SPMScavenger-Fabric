@@ -26,11 +26,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.functions.CommandFunction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -50,7 +48,6 @@ import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.Vec3;
 
 /**
  * Validation-only V4-G controller. Fixture methods mutate declared setup only; every product
@@ -110,8 +107,12 @@ public final class V4RuntimeCampaignController {
             ScavengerConfig config = ScavengerConfig.get();
             preparing.configSummary = configSummary(config);
             validateFixtureConfig(config);
-            executeFixtureFunction(source.getServer(), fixtureSource(source.getServer(), origin),
-                    "cleanup");
+            V4FixtureCleanup.prepareForStartup(
+                    level, origin, preparing.startupCleanupDiagnostics);
+            if (!preparing.startupCleanupDiagnostics.ready()) {
+                throw new IllegalStateException(
+                        "fixture cleanup gate did not reach verified state");
+            }
             V4FixtureGeometryBuilder.createAndVerify(
                     level, origin, preparing.forcedChunks, preparing.fixtureGeometryDiagnostics);
             if (!preparing.fixtureGeometryDiagnostics.ready()) {
@@ -144,6 +145,7 @@ public final class V4RuntimeCampaignController {
                     "origin=" + origin.toShortString() + " subject=" + subject.getUUID()
                             + " trader=" + trader.getUUID()
                             + " helper=" + fixture.helper().getUUID()
+                            + " cleanupGate=PASS"
                             + " geometryVerified=YES"
                             + " fixtureAttachmentGate=PASS");
             source.sendSuccess(() -> Component.literal(
@@ -153,6 +155,7 @@ public final class V4RuntimeCampaignController {
             throw fatal;
         } catch (Throwable failure) {
             SpmScavenger.LOGGER.error("{} event=STARTUP_FAILURE", LOG_PREFIX, failure);
+            discardPartiallyCreatedFixture(level, preparing, failure);
             finish(source.getServer(), preparing, State.FIXTURE_FAILURE,
                     level.getGameTime(), "startup exception=" + concise(failure));
             sendLines(source, lastReport.lines());
@@ -192,23 +195,45 @@ public final class V4RuntimeCampaignController {
             source.sendFailure(Component.literal("No active V4-G campaign to stop."));
             return 0;
         }
-        finish(source.getServer(), active, State.ABORTED,
+        Session stopping = active;
+        try {
+            discardOwnedFixture(source.getServer().overworld(), stopping);
+        } catch (VirtualMachineError | ThreadDeath fatal) {
+            throw fatal;
+        } catch (Throwable failure) {
+            SpmScavenger.LOGGER.error("{} event=STOP_CLEANUP_FAILURE", LOG_PREFIX, failure);
+            finish(source.getServer(), stopping, State.FIXTURE_FAILURE,
+                    source.getLevel().getGameTime(), "stop cleanup failed=" + concise(failure));
+            source.sendFailure(Component.literal("V4-G stop cleanup failed: " + concise(failure)));
+            return 0;
+        }
+        finish(source.getServer(), stopping, State.ABORTED,
                 source.getLevel().getGameTime(), "operator stopped campaign");
         source.sendSuccess(() -> Component.literal(
-                "V4-G stopped; use reset to remove exact tagged fixture entities."), false);
+                "V4-G stopped; exact owned fixture entities were discarded without damage."), false);
         return 1;
     }
 
     public static synchronized int reset(CommandSourceStack source) {
         BlockPos origin = active != null ? active.origin
                 : lastReport != null ? lastReport.origin : BlockPos.containing(source.getPosition());
-        if (active != null) {
-            finish(source.getServer(), active, State.ABORTED,
-                    source.getLevel().getGameTime(), "operator reset campaign");
-        }
         try {
-            executeFixtureFunction(source.getServer(), fixtureSource(source.getServer(), origin),
-                    "cleanup");
+            if (active != null) {
+                Session resetting = active;
+                discardOwnedFixture(source.getServer().overworld(), resetting);
+                finish(source.getServer(), resetting, State.ABORTED,
+                        source.getLevel().getGameTime(), "operator reset campaign");
+            } else if (lastReport != null) {
+                V4FixtureCleanup.Diagnostics resetDiagnostics =
+                        new V4FixtureCleanup.Diagnostics();
+                V4FixtureCleanup.discardOwned(source.getServer().overworld(),
+                        lastReport.ownedFixtureIds(), resetDiagnostics);
+            } else {
+                V4FixtureCleanup.Diagnostics resetDiagnostics =
+                        new V4FixtureCleanup.Diagnostics();
+                V4FixtureCleanup.prepareForStartup(
+                        source.getServer().overworld(), origin, resetDiagnostics);
+            }
         } catch (VirtualMachineError | ThreadDeath fatal) {
             throw fatal;
         } catch (Throwable failure) {
@@ -220,7 +245,8 @@ public final class V4RuntimeCampaignController {
         }
         lastReport = null;
         source.sendSuccess(() -> Component.literal(
-                "V4-G state reset; exact tagged entities removed, placed blocks preserved."), false);
+                "V4-G state reset; exact fixture entities discarded without damage; "
+                        + "placed blocks preserved."), false);
         return 1;
     }
 
@@ -244,6 +270,11 @@ public final class V4RuntimeCampaignController {
     public static synchronized void onSubjectUnavailable(
             MinecraftServer server, UUID mobId, String reason, long tick) {
         if (active != null && active.subjectId != null && active.subjectId.equals(mobId)) {
+            if (active.intentionalTeardown) {
+                record(active, tick, "TEARDOWN_UNLOAD_IGNORED",
+                        "uuid=" + mobId + " reason=" + reason);
+                return;
+            }
             boolean beforeStability = !active.startupStabilityPassed;
             if (beforeStability) {
                 active.preBehaviorFailureClass = "CREATION_INITIAL_LIFECYCLE";
@@ -260,6 +291,13 @@ public final class V4RuntimeCampaignController {
             MinecraftServer server, Mob subject, DamageSource damageSource, long tick) {
         if (active == null || active.subjectId == null
                 || !active.subjectId.equals(subject.getUUID())) {
+            return;
+        }
+        if (active.intentionalTeardown) {
+            record(active, tick, "TEARDOWN_DEATH_CALLBACK_IGNORED",
+                    "uuid=" + subject.getUUID()
+                            + " damageType=" + damageSource.typeHolder().unwrapKey()
+                                    .map(key -> key.location().toString()).orElse("UNKEYED"));
             return;
         }
         ServerLevel level = server.getLevel(active.dimension);
@@ -610,7 +648,7 @@ public final class V4RuntimeCampaignController {
         }
         zombie.moveTo(subject.getX() + 3.0, subject.getY(), subject.getZ(), 180.0F, 0.0F);
         zombie.addTag(INTERRUPTER_TAG);
-        zombie.addTag("spm_v4.fixture");
+        zombie.addTag(V4FixtureCleanup.FIXTURE_TAG);
         zombie.setPersistenceRequired();
         zombie.setTarget(subject);
         if (!level.addFreshEntity(zombie)) {
@@ -776,17 +814,48 @@ public final class V4RuntimeCampaignController {
         return released;
     }
 
-    private static void executeFixtureFunction(
-            MinecraftServer server, CommandSourceStack source, String path) {
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("spm_v4", path);
-        CommandFunction<CommandSourceStack> function = server.getFunctions().get(id)
-                .orElseThrow(() -> new IllegalStateException("fixture function not loaded: " + id));
-        server.getFunctions().execute(function, source);
+    private static void discardOwnedFixture(ServerLevel level, Session session) {
+        session.intentionalTeardown = true;
+        V4FixtureCleanup.discardOwned(
+                level, ownedFixtureIds(session), session.teardownCleanupDiagnostics);
     }
 
-    private static CommandSourceStack fixtureSource(MinecraftServer server, BlockPos origin) {
-        return server.createCommandSourceStack().withLevel(server.overworld())
-                .withPosition(Vec3.atLowerCornerOf(origin)).withSuppressedOutput();
+    private static void discardPartiallyCreatedFixture(
+            ServerLevel level, Session session, Throwable startupFailure) {
+        if (ownedFixtureIds(session).isEmpty()) {
+            return;
+        }
+        try {
+            discardOwnedFixture(level, session);
+        } catch (VirtualMachineError | ThreadDeath fatal) {
+            throw fatal;
+        } catch (Throwable cleanupFailure) {
+            startupFailure.addSuppressed(cleanupFailure);
+            SpmScavenger.LOGGER.error("{} event=STARTUP_ROLLBACK_FAILURE",
+                    LOG_PREFIX, cleanupFailure);
+        }
+    }
+
+    private static List<UUID> ownedFixtureIds(Session session) {
+        List<UUID> ids = new ArrayList<>();
+        addIfPresent(ids, firstNonNull(session.subjectId,
+                session.fixtureCreationDiagnostics.spawnedUUID));
+        addIfPresent(ids, firstNonNull(session.traderId,
+                session.fixtureCreationDiagnostics.traderUUID));
+        addIfPresent(ids, firstNonNull(session.helperId,
+                session.fixtureCreationDiagnostics.helperUUID));
+        addIfPresent(ids, session.interrupterId);
+        return List.copyOf(ids);
+    }
+
+    private static UUID firstNonNull(UUID primary, UUID fallback) {
+        return primary != null ? primary : fallback;
+    }
+
+    private static void addIfPresent(List<UUID> ids, UUID id) {
+        if (id != null) {
+            ids.add(id);
+        }
     }
 
     private static void finish(
@@ -828,6 +897,7 @@ public final class V4RuntimeCampaignController {
                 "VillageIntent=" + witness.intentIdentity(),
                 "COMMUTE source=" + witness.commuteSource(),
                 "next=" + next(session)));
+        lines.addAll(session.startupCleanupDiagnostics.lines());
         lines.addAll(session.fixtureGeometryDiagnostics.lines());
         lines.addAll(session.fixtureCreationDiagnostics.lines());
         return List.copyOf(lines);
@@ -927,7 +997,12 @@ public final class V4RuntimeCampaignController {
         boolean interruptionObserved;
         long interruptionTick;
         boolean resumeObserved;
+        boolean intentionalTeardown;
         int forcedChunksReleased;
+        final V4FixtureCleanup.Diagnostics startupCleanupDiagnostics =
+                new V4FixtureCleanup.Diagnostics();
+        final V4FixtureCleanup.Diagnostics teardownCleanupDiagnostics =
+                new V4FixtureCleanup.Diagnostics();
         final V4FixtureGeometryBuilder.Diagnostics fixtureGeometryDiagnostics =
                 new V4FixtureGeometryBuilder.Diagnostics();
         final V4FixtureEntityFactory.Diagnostics fixtureCreationDiagnostics =
@@ -946,6 +1021,7 @@ public final class V4RuntimeCampaignController {
             UUID subjectId,
             UUID traderId,
             UUID helperId,
+            UUID interrupterId,
             String dimension,
             BlockPos origin,
             BlockPos settlementAnchor,
@@ -965,6 +1041,9 @@ public final class V4RuntimeCampaignController {
             String preBehaviorFailureClass,
             List<String> deathDiagnostics,
             int forcedChunksReleased,
+            boolean cleanupVerified,
+            List<String> startupCleanupDiagnostics,
+            List<String> teardownCleanupDiagnostics,
             String geometryFailureStage,
             boolean geometryVerified,
             List<String> fixtureGeometryDiagnostics,
@@ -980,7 +1059,7 @@ public final class V4RuntimeCampaignController {
                 Session session, V4RuntimeWitnessTracker.Snapshot witness,
                 List<String> witnessEvents) {
             return new CampaignReport(session.state, session.reason, session.subjectId,
-                    session.traderId, session.helperId,
+                    session.traderId, session.helperId, session.interrupterId,
                     session.dimension.location().toString(), session.origin,
                     session.settlementAnchor, session.anchorTraderDistance,
                     session.homeBeforeTrade, session.homeBeforeSleep,
@@ -993,6 +1072,9 @@ public final class V4RuntimeCampaignController {
                             ? List.of("deathDiagnostics=UNAVAILABLE")
                             : session.deathDiagnostics.lines(),
                     session.forcedChunksReleased,
+                    session.startupCleanupDiagnostics.ready(),
+                    session.startupCleanupDiagnostics.lines(),
+                    session.teardownCleanupDiagnostics.lines(),
                     session.fixtureGeometryDiagnostics.geometryFailureStage,
                     session.fixtureGeometryDiagnostics.ready(),
                     session.fixtureGeometryDiagnostics.lines(),
@@ -1008,6 +1090,7 @@ public final class V4RuntimeCampaignController {
                     "state=" + state + " reason=" + reason,
                     "PhaseA=" + (phaseAPassTick >= 0 ? "PASS" : "NOT_PASS")
                             + " PhaseB=" + (phaseBPassTick >= 0 ? "PASS" : "NOT_PASS"),
+                    "fixtureCleanupPreflight=" + (cleanupVerified ? "PASS" : "FAIL"),
                     "fixtureGeometryPreflight=" + (geometryVerified ? "PASS" : "FAIL")
                             + " stage=" + geometryFailureStage,
                     "fixtureEntityPreflight="
@@ -1025,6 +1108,10 @@ public final class V4RuntimeCampaignController {
             lines.add("config=" + configSummary);
             lines.add("subject=" + subjectId + " trader=" + traderId + " helper=" + helperId
                     + " origin=" + origin.toShortString());
+            lines.add("-- fixture startup cleanup preflight --");
+            lines.addAll(startupCleanupDiagnostics);
+            lines.add("-- fixture teardown cleanup --");
+            lines.addAll(teardownCleanupDiagnostics);
             lines.add("-- fixture geometry creation preflight --");
             lines.addAll(fixtureGeometryDiagnostics);
             lines.add("-- fixture entity creation preflight --");
@@ -1071,6 +1158,15 @@ public final class V4RuntimeCampaignController {
             lines.add("-- passive witness transitions --");
             lines.addAll(witnessEvents);
             return List.copyOf(lines);
+        }
+
+        List<UUID> ownedFixtureIds() {
+            List<UUID> ids = new ArrayList<>();
+            addIfPresent(ids, subjectId);
+            addIfPresent(ids, traderId);
+            addIfPresent(ids, helperId);
+            addIfPresent(ids, interrupterId);
+            return List.copyOf(ids);
         }
     }
 }

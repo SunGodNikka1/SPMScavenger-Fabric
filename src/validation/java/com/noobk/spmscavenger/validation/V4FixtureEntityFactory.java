@@ -33,7 +33,6 @@ final class V4FixtureEntityFactory {
             "games.brennan.playermob.entity.PlayerMobSummon";
     static final ResourceLocation PLAYER_MOB_ID =
             ResourceLocation.fromNamespaceAndPath("playermob", "player_mob");
-    private static final String FIXTURE_TAG = "spm_v4.fixture";
     private static final String SUBJECT_TAG = "spm_v4.subject";
     private static final String TRADER_TAG = "spm_v4.trader";
     private static final String HELPER_TAG = "spm_v4.helper";
@@ -90,11 +89,12 @@ final class V4FixtureEntityFactory {
                     "registered type created non-Mob runtime class "
                             + diagnostics.spawnedRuntimeClass);
         }
-        List.of(FIXTURE_TAG, SUBJECT_TAG).forEach(subject::addTag);
+        List.of(V4FixtureCleanup.FIXTURE_TAG, SUBJECT_TAG).forEach(subject::addTag);
         subject.setPersistenceRequired();
         diagnostics.levelEntityResolvable = level.getEntity(subject.getUUID()) == subject;
         diagnostics.spawnSucceeded = diagnostics.levelEntityResolvable;
-        diagnostics.expectedTagsPresent = hasTags(subject, FIXTURE_TAG, SUBJECT_TAG);
+        diagnostics.expectedTagsPresent = hasTags(
+                subject, V4FixtureCleanup.FIXTURE_TAG, SUBJECT_TAG);
         diagnostics.playerMobsIsPlayerMob = PlayerMobs.isPlayerMob(subject);
         if (!diagnostics.levelEntityResolvable) {
             throw diagnostics.fail("subject_attach",
@@ -148,12 +148,13 @@ final class V4FixtureEntityFactory {
         if (villager == null) {
             throw diagnostics.fail(role + "_construct", "EntityType.VILLAGER.create returned null");
         }
-        spawnMob(level, villager, pos, List.of(FIXTURE_TAG, roleTag), diagnostics, role);
+        spawnMob(level, villager, pos,
+                List.of(V4FixtureCleanup.FIXTURE_TAG, roleTag), diagnostics, role);
         if (level.getEntity(villager.getUUID()) != villager) {
             throw diagnostics.fail(role + "_attach",
                     "level.getEntity(UUID) did not resolve the exact spawned " + role);
         }
-        if (!hasTags(villager, FIXTURE_TAG, roleTag)) {
+        if (!hasTags(villager, V4FixtureCleanup.FIXTURE_TAG, roleTag)) {
             throw diagnostics.fail(role + "_tags", "expected fixture/" + role + " tags are absent");
         }
         return villager;

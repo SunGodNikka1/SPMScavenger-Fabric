@@ -237,6 +237,16 @@ def auditValidationJar = tasks.register('auditValidationJar') {
             if (!metadata.depends?.containsKey('spmscavenger')) {
                 throw new GradleException('Validation metadata lacks spmscavenger dependency')
             }
+            def lethalCleanupResources = names.findAll {
+                it.startsWith('data/spm_v4/') && !it.endsWith('/')
+            }.findAll { entryName ->
+                zip.getInputStream(zip.getEntry(entryName)).getText('UTF-8')
+                        .contains('kill @e[tag=spm_v4.fixture]')
+            }
+            if (!lethalCleanupResources.empty) {
+                throw new GradleException(
+                        "Validation JAR contains lethal V4 fixture cleanup: ${lethalCleanupResources}")
+            }
         }
     }
 }
