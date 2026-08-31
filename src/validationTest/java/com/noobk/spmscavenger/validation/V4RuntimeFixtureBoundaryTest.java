@@ -823,6 +823,46 @@ class V4RuntimeFixtureBoundaryTest {
                 "namespace compatibility must not turn the witness into an optional no-op");
     }
 
+    @Test
+    void requiredTradePathWrapperObservesOneExistingCallWithoutChangingIt() throws Exception {
+        String mixin = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/mixin/"
+                        + "V4ExploringGoalWitnessMixin.java"));
+        assertTrue(mixin.contains("@WrapOperation("));
+        assertTrue(mixin.contains("method = \"planCurrentStage\""));
+        assertTrue(mixin.contains("PathNavigation;"));
+        assertTrue(mixin.contains("createPath(Lnet/minecraft/core/BlockPos;I)"));
+        assertEquals(1, count(mixin, "original.call(navigation, candidate, reach)"),
+                "the wrapper must invoke the exact production request once");
+        assertFalse(mixin.contains("navigation.createPath("),
+                "validation must not issue a second path request");
+        assertTrue(mixin.contains("return path;"),
+                "the original Path reference must pass back unchanged");
+        assertTrue(mixin.contains("mob.getUUID()"),
+                "the tracker must filter against the exact armed fixture UUID");
+        assertTrue(mixin.contains("mob.onGround()"));
+        assertTrue(mixin.contains("mob.isInWater()"));
+        assertTrue(mixin.contains("mob.isPassenger()"));
+    }
+
+    @Test
+    void operatorMilestonesAreGuardedOneTimeTransitions() throws Exception {
+        String controller = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeCampaignController.java"));
+        for (String guard : new String[] {
+                "phaseADepartureMessageSent", "commuteMessageSent", "terminalMessageSent"}) {
+            assertTrue(controller.contains("if (session." + guard),
+                    "missing one-time milestone guard: " + guard);
+        }
+        assertEquals(1, count(controller, "[V4-G] Phase A started."));
+        assertEquals(1, count(controller, "[V4-G] REQUIRED_TRADE commute admitted."));
+        assertEquals(1, count(controller, "[V4-G] Campaign finished: "));
+        assertTrue(controller.contains("No visual supervision is required."));
+        assertTrue(controller.contains("No player interaction required."));
+        assertFalse(controller.contains("follow the PlayerMob"));
+    }
+
     private static int count(String source, String token) {
         int count = 0;
         for (int at = 0; (at = source.indexOf(token, at)) >= 0; at += token.length()) {

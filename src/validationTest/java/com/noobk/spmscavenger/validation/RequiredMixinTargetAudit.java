@@ -33,6 +33,8 @@ public final class RequiredMixinTargetAudit {
 
     private static final String MIXIN = "Lorg/spongepowered/asm/mixin/Mixin;";
     private static final String INJECT = "Lorg/spongepowered/asm/mixin/injection/Inject;";
+    private static final String WRAP_OPERATION =
+            "Lcom/llamalad7/mixinextras/injector/wrapoperation/WrapOperation;";
     private static final String CONFIG = "spmscavenger.validation.mixins.json";
     private static final Pattern MIXIN_ARRAY = Pattern.compile(
             "\\\"mixins\\\"\\s*:\\s*\\[(.*?)]", Pattern.DOTALL);
@@ -244,7 +246,8 @@ public final class RequiredMixinTargetAudit {
                     @Override
                     public AnnotationVisitor visitAnnotation(
                             String annotationDescriptor, boolean visible) {
-                        if (!INJECT.equals(annotationDescriptor)) {
+                        if (!INJECT.equals(annotationDescriptor)
+                                && !WRAP_OPERATION.equals(annotationDescriptor)) {
                             return null;
                         }
                         List<String> selectors = new ArrayList<>();

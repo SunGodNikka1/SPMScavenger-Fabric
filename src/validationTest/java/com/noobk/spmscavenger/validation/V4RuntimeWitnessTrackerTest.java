@@ -295,6 +295,81 @@ class V4RuntimeWitnessTrackerTest {
         assertEquals(0, V4RuntimeWitnessTracker.snapshot().eventCount());
     }
 
+    @Test
+    void terminalFailureWithNoObservedPathCallMeansNoCandidatesReachedCreatePath() {
+        armPhaseA();
+
+        assertEquals(V4RuntimeWitnessTracker.PlanningFailureClass.NO_CANDIDATES,
+                V4RuntimeWitnessTracker.snapshot().pathPlanning().classify(true));
+        assertEquals(V4RuntimeWitnessTracker.PlanningFailureClass.UNKNOWN,
+                V4RuntimeWitnessTracker.snapshot().pathPlanning().classify(false));
+    }
+
+    @Test
+    void nullUnreachableAndAvailablePathResultsRemainDistinct() {
+        armPhaseA();
+        V4RuntimeWitnessTracker.observePathPlanningCall(MOB,
+                pathEvidence(20L, true, V4RuntimeWitnessTracker.PathResult.NULL, null));
+        assertEquals(V4RuntimeWitnessTracker.PlanningFailureClass.PATH_NULL,
+                V4RuntimeWitnessTracker.snapshot().pathPlanning().classify(true));
+
+        V4RuntimeWitnessTracker.reset();
+        armPhaseA();
+        V4RuntimeWitnessTracker.observePathPlanningCall(MOB,
+                pathEvidence(20L, true, V4RuntimeWitnessTracker.PathResult.NON_NULL, false));
+        assertEquals(V4RuntimeWitnessTracker.PlanningFailureClass.PATH_UNREACHABLE,
+                V4RuntimeWitnessTracker.snapshot().pathPlanning().classify(true));
+
+        V4RuntimeWitnessTracker.reset();
+        armPhaseA();
+        V4RuntimeWitnessTracker.observePathPlanningCall(MOB,
+                pathEvidence(20L, true, V4RuntimeWitnessTracker.PathResult.NON_NULL, true));
+        assertEquals(V4RuntimeWitnessTracker.PlanningFailureClass.PATH_AVAILABLE,
+                V4RuntimeWitnessTracker.snapshot().pathPlanning().classify(false));
+    }
+
+    @Test
+    void exactFixtureAndGroundingEvidenceArePassiveAndBounded() {
+        armPhaseA();
+        UUID other = UUID.fromString("00000000-0000-0000-0000-000000000070");
+        V4RuntimeWitnessTracker.observePathPlanningCall(other,
+                pathEvidence(19L, true, V4RuntimeWitnessTracker.PathResult.NULL, null));
+        for (int i = 0; i < 80; i++) {
+            V4RuntimeWitnessTracker.observePathPlanningCall(MOB,
+                    pathEvidence(20L + i, false,
+                            V4RuntimeWitnessTracker.PathResult.NULL, null));
+        }
+
+        V4RuntimeWitnessTracker.PathPlanningSnapshot path =
+                V4RuntimeWitnessTracker.snapshot().pathPlanning();
+        assertEquals(80, path.pathCallCount());
+        assertEquals(20L, path.firstPathCallTick());
+        assertEquals(99L, path.lastPathCallTick());
+        assertEquals(32, path.evidence().size());
+        assertEquals(V4RuntimeWitnessTracker.PlanningFailureClass.NAVIGATION_NOT_GROUNDED,
+                path.classify(true));
+    }
+
+    private static void armPhaseA() {
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, new Object(), INITIAL, 10L);
+        V4RuntimeWitnessTracker.openPhaseA(11L);
+        V4RuntimeWitnessTracker.observeDirective(MOB, requiredTradeIntent(), 12L);
+    }
+
+    private static V4RuntimeWitnessTracker.PathPlanningEvidence pathEvidence(
+            long tick, boolean onGround, V4RuntimeWitnessTracker.PathResult result,
+            Boolean canReach) {
+        return new V4RuntimeWitnessTracker.PathPlanningEvidence(
+                tick, "184,-60,17", onGround, false, false,
+                "net.minecraft.world.entity.ai.navigation.GroundPathNavigation", 32.0D,
+                "168,-60,17", 16.0D,
+                "Block{minecraft:air}", "Block{minecraft:air}",
+                "Block{minecraft:stone}", true, result, canReach,
+                result == V4RuntimeWitnessTracker.PathResult.NULL ? null : 4,
+                result == V4RuntimeWitnessTracker.PathResult.NULL ? null : "168,-60,17",
+                result == V4RuntimeWitnessTracker.PathResult.NULL ? null : 0.0D);
+    }
+
     private static VillageIntent requiredTradeIntent() {
         return new VillageIntent(
                 VillageIntent.Kind.REQUIRED_TRADE,

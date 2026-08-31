@@ -30,6 +30,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -710,6 +711,7 @@ public final class V4RuntimeCampaignController {
                         + " changed=" + changed.compact()
                         + " departure=" + departure.toShortString()
                         + " departureConfirmed=true phaseASecondDemandOpened=true");
+        sendPhaseADepartureMilestone(level.getServer(), session);
     }
 
     private static void tickPhaseA(
@@ -728,6 +730,9 @@ public final class V4RuntimeCampaignController {
         if (witness.intentIdentity() != null && session.state == State.PHASE_A_WAITING_INTENT) {
             session.state = State.PHASE_A_COMMUTING;
             record(session, now, "INTENT_OPEN", witness.intentIdentity());
+        }
+        if (witness.commuteSeeded()) {
+            sendCommuteMilestone(server, session);
         }
         if (witness.commuteSeeded() && !session.interrupterAttempted
                 && session.departure != null
@@ -1114,6 +1119,7 @@ public final class V4RuntimeCampaignController {
         session.forcedChunksReleased += releaseChunks(server, session);
         lastReport = CampaignReport.from(
                 session, snapshot, witnessEvents, tradeLiveness, tradeLivenessEvents);
+        sendTerminalMilestone(server, session, terminalState, terminalReason);
         active = null;
         V4RuntimeWitnessTracker.reset();
         V4TradeLivenessWitness.reset();
@@ -1153,6 +1159,54 @@ public final class V4RuntimeCampaignController {
         String line = "tick=" + tick + " event=" + event + " " + detail;
         session.events.add(line);
         SpmScavenger.LOGGER.info("{} {}", LOG_PREFIX, line);
+    }
+
+    private static void sendPhaseADepartureMilestone(MinecraftServer server, Session session) {
+        if (session.phaseADepartureMessageSent || session.departure == null
+                || session.settlementAnchor == null) {
+            return;
+        }
+        session.phaseADepartureMessageSent = true;
+        sendOperatorLines(server, List.of(
+                "[V4-G] Phase A started.",
+                "Subject deliberately moved to departure: " + session.departure.toShortString(),
+                "Settlement target: " + session.settlementAnchor.toShortString()
+                        + " (~" + format(horizontalDistance(
+                                session.departure, session.settlementAnchor)) + " blocks away).",
+                "No visual supervision is required. Waiting for REQUIRED_TRADE commute."));
+    }
+
+    private static void sendCommuteMilestone(MinecraftServer server, Session session) {
+        if (session.commuteMessageSent) {
+            return;
+        }
+        session.commuteMessageSent = true;
+        sendOperatorLines(server, List.of(
+                "[V4-G] REQUIRED_TRADE commute admitted.",
+                "The PlayerMob should return automatically. No player interaction required."));
+    }
+
+    private static void sendTerminalMilestone(
+            MinecraftServer server, Session session, State state, String reason) {
+        if (session.terminalMessageSent || state == State.ABORTED) {
+            return;
+        }
+        session.terminalMessageSent = true;
+        sendOperatorLines(server, List.of(
+                "[V4-G] Campaign finished: " + state,
+                "Reason: " + reason,
+                "Run /spmscavenger debug v4 report for full evidence."));
+    }
+
+    private static void sendOperatorLines(MinecraftServer server, List<String> lines) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!player.hasPermissions(2)) {
+                continue;
+            }
+            for (String line : lines) {
+                player.sendSystemMessage(Component.literal(line));
+            }
+        }
     }
 
     private static List<String> activeLines(Session session) {
@@ -1213,6 +1267,12 @@ public final class V4RuntimeCampaignController {
                         + " reacquired=" + tradeLiveness.gatherReacquiredAfterHandoff(),
                 "VillageIntent=" + witness.intentIdentity(),
                 "COMMUTE source=" + witness.commuteSource(),
+                "pathCallCount=" + witness.pathPlanning().pathCallCount()
+                        + " firstPathCallTick=" + witness.pathPlanning().firstPathCallTick()
+                        + " lastPathCallTick=" + witness.pathPlanning().lastPathCallTick()
+                        + " planningFailureClass="
+                        + witness.pathPlanning().classify(
+                                witness.routeFailurePublications() > 0),
                 "next=" + next(session)));
         lines.addAll(session.startupCleanupDiagnostics.lines());
         lines.addAll(session.fixtureGeometryDiagnostics.lines());
@@ -1339,6 +1399,9 @@ public final class V4RuntimeCampaignController {
         long interruptionTick;
         boolean resumeObserved;
         boolean intentionalTeardown;
+        boolean phaseADepartureMessageSent;
+        boolean commuteMessageSent;
+        boolean terminalMessageSent;
         int forcedChunksReleased;
         final V4FixtureCleanup.Diagnostics startupCleanupDiagnostics =
                 new V4FixtureCleanup.Diagnostics();
@@ -1535,6 +1598,18 @@ public final class V4RuntimeCampaignController {
             lines.add("VillageIntent=" + witness.intentIdentity()
                     + " CommuteDirectiveAdmission=" + witness.commuteSeeded()
                     + " COMMUTE source=" + witness.commuteSource());
+            V4RuntimeWitnessTracker.PathPlanningSnapshot pathPlanning =
+                    witness.pathPlanning();
+            lines.add("pathCallCount=" + pathPlanning.pathCallCount()
+                    + " firstPathCallTick=" + pathPlanning.firstPathCallTick()
+                    + " lastPathCallTick=" + pathPlanning.lastPathCallTick());
+            lines.add("planningFailureClass=" + pathPlanning.classify(
+                    witness.routeFailurePublications() > 0));
+            lines.add("-- REQUIRED_TRADE createPath call-site evidence --");
+            for (V4RuntimeWitnessTracker.PathPlanningEvidence evidence
+                    : pathPlanning.evidence()) {
+                lines.add(formatPathEvidence(evidence));
+            }
             lines.add("interrupted=" + witness.interrupted()
                     + " navigationDiscarded=" + witness.navigationDiscarded()
                     + " resumed=" + witness.resumed()
@@ -1645,6 +1720,31 @@ public final class V4RuntimeCampaignController {
             lines.add("-- passive trade liveness transitions --");
             lines.addAll(tradeLivenessEvents);
             return List.copyOf(lines);
+        }
+
+        private static String formatPathEvidence(
+                V4RuntimeWitnessTracker.PathPlanningEvidence evidence) {
+            return "tick=" + evidence.tick()
+                    + " mobPos=" + evidence.mobPos()
+                    + " onGround=" + evidence.mobOnGround()
+                    + " inWater=" + evidence.mobInWater()
+                    + " passenger=" + evidence.mobPassenger()
+                    + " navigation=" + evidence.navigationClass()
+                    + " followRange=" + format(evidence.followRange())
+                    + " candidate=" + evidence.candidatePos()
+                    + " candidateDistance=" + format(evidence.candidateDistance())
+                    + " feet=" + evidence.candidateFeetBlock()
+                    + " head=" + evidence.candidateHeadBlock()
+                    + " support=" + evidence.candidateSupportBlock()
+                    + " supportSturdy=" + evidence.candidateSupportSturdy()
+                    + " pathResult=" + evidence.pathResult()
+                    + " pathCanReach=" + measurement(evidence.pathCanReach())
+                    + " pathNodeCount=" + measurement(evidence.pathNodeCount())
+                    + " pathTarget=" + measurement(evidence.pathTarget())
+                    + " pathDistanceToTarget="
+                    + (evidence.pathDistanceToTarget() == null
+                            ? "NOT_MEASURED"
+                            : format(evidence.pathDistanceToTarget()));
         }
 
         List<UUID> ownedFixtureIds() {

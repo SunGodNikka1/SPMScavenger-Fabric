@@ -13,7 +13,7 @@
 | Fabric API | `0.116.4+1.21.1` |
 | Social Player Mobs | `playermob` `0.96.0`; SHA-256 `508EDA58611A2A0738E257F98C2E14C5032C6EFBF5B1A985C9F93EE295131097` |
 | Production addon | `build/libs/spmscavenger-1.11.0.jar`; SHA-256 `918CA885EBD5FA985FBE234DE11D05E983DFAF882A4092921BA15F46B59E089B` |
-| Validation sidecar | `build/libs/spmscavenger-1.11.0-validation.jar`; SHA-256 `2EA58B7A50D6B5E30CF4A9D840A0EC9EF6C988C1C4787C9DD8BF7AC12D32DC27` |
+| Validation sidecar | `build/libs/spmscavenger-1.11.0-validation.jar`; SHA-256 `9575D4B82F84491D8AE4D0523EB85D1482D1C691713001201FC1FE9D7166949B` |
 
 The runtime command records the actual relevant Scavenger configuration in `status` and `report`.
 Preflight requires `enabled`, `gatherResources`, `craftTools`, `seekShelter`, and `sleepInBeds`; a
@@ -53,6 +53,13 @@ lighting window does not consume startup-stability or behavioral bootstrap time.
 budgets, not wall-clock promises. The subject is moved exactly once to the declared departure point
 before Phase A opens and is never steered afterward.
 
+When Phase A opens, the validation controller deliberately teleports the fixture PlayerMob about
+180 blocks from the local village to create the remote-demand witness. Its apparent disappearance
+from the village is therefore expected fixture staging, not evidence that it despawned. The
+operator is not part of the witness: do not follow, chase, or interact with any fixture entity.
+Use only campaign `status` and `report`; transition-only chat announces the departure, production
+REQUIRED_TRADE commute admission, and the terminal result.
+
 Optional progress inspection:
 
 ```text
@@ -82,6 +89,13 @@ For an operator-aborted run use `stop`, save its report, then `reset`:
 `reset` removes only exact tagged fixture entities. It deliberately does not guess that matching
 world blocks are fixture-owned after production has run; restore the disposable world/backup for a
 full arena rollback.
+
+Normal terminal completion restores the original `doMobSpawning` value and releases all
+validation-owned forced chunks, but leaves the exact fixture entities in place so their terminal
+state remains inspectable. `stop` discards the active session's exact owned fixture UUIDs without
+damage before producing its aborted report. After evidence is saved, `reset` discards the exact
+owned fixture UUIDs retained by either the active session or last report, clears validation state,
+and preserves placed arena blocks.
 
 ## Verdict contract
 

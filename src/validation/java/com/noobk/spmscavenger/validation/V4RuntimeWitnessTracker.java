@@ -17,6 +17,7 @@ import java.util.UUID;
 public final class V4RuntimeWitnessTracker {
 
     private static final int MAX_EVENTS = 96;
+    private static final int MAX_PATH_EVENTS = 32;
     private static Session active;
 
     private V4RuntimeWitnessTracker() {
@@ -210,6 +211,37 @@ public final class V4RuntimeWitnessTracker {
         event(tick, "ROUTE_FAILURE_PUBLISHED", identity(intent));
     }
 
+    /**
+     * Records the result of the production path request already made by {@code ExploringGoal}.
+     * The validation Mixin supplies immutable observations only; this ledger never requests a
+     * path, changes a candidate, or retains the returned Path object.
+     */
+    public static synchronized void observePathPlanningCall(
+            UUID mobId, PathPlanningEvidence evidence) {
+        if (!matchingMob(mobId) || evidence == null || !active.phaseAOpen
+                || active.intent == null || active.arrivalObserved) {
+            return;
+        }
+        active.pathCallCount++;
+        if (active.firstPathCallTick < 0L) {
+            active.firstPathCallTick = evidence.tick();
+        }
+        active.lastPathCallTick = evidence.tick();
+        active.anyPathAvailable |= evidence.pathResult() == PathResult.NON_NULL
+                && Boolean.TRUE.equals(evidence.pathCanReach());
+        active.anyPathUnreachable |= evidence.pathResult() == PathResult.NON_NULL
+                && Boolean.FALSE.equals(evidence.pathCanReach());
+        active.allPathCallsNull &= evidence.pathResult() == PathResult.NULL;
+        active.allNullCallsNavigationNotGrounded &= evidence.pathResult() == PathResult.NULL
+                && evidence.navigationClass().endsWith("GroundPathNavigation")
+                && !evidence.mobOnGround()
+                && !evidence.mobInWater()
+                && !evidence.mobPassenger();
+        if (active.pathPlanningEvidence.size() < MAX_PATH_EVENTS) {
+            active.pathPlanningEvidence.add(evidence);
+        }
+    }
+
     public static synchronized void observeTrade(
             Object backpackIdentity, UUID traderId, V4OfferFingerprint offer,
             boolean traded, long tick) {
@@ -298,6 +330,78 @@ public final class V4RuntimeWitnessTracker {
         @Override public String toString() { return x + "," + y + "," + z; }
     }
 
+    public enum PathResult {
+        NULL,
+        NON_NULL
+    }
+
+    public enum PlanningFailureClass {
+        NO_CANDIDATES,
+        NAVIGATION_NOT_GROUNDED,
+        PATH_NULL,
+        PATH_UNREACHABLE,
+        PATH_AVAILABLE,
+        UNKNOWN
+    }
+
+    public record PathPlanningEvidence(
+            long tick,
+            String mobPos,
+            boolean mobOnGround,
+            boolean mobInWater,
+            boolean mobPassenger,
+            String navigationClass,
+            double followRange,
+            String candidatePos,
+            double candidateDistance,
+            String candidateFeetBlock,
+            String candidateHeadBlock,
+            String candidateSupportBlock,
+            boolean candidateSupportSturdy,
+            PathResult pathResult,
+            Boolean pathCanReach,
+            Integer pathNodeCount,
+            String pathTarget,
+            Double pathDistanceToTarget) {
+    }
+
+    public record PathPlanningSnapshot(
+            int pathCallCount,
+            long firstPathCallTick,
+            long lastPathCallTick,
+            boolean anyPathAvailable,
+            boolean anyPathUnreachable,
+            boolean allPathCallsNull,
+            boolean allNullCallsNavigationNotGrounded,
+            List<PathPlanningEvidence> evidence) {
+
+        static PathPlanningSnapshot empty() {
+            return new PathPlanningSnapshot(0, -1L, -1L,
+                    false, false, true, true, List.of());
+        }
+
+        PlanningFailureClass classify(boolean terminalPathFailure) {
+            if (pathCallCount == 0) {
+                return terminalPathFailure
+                        ? PlanningFailureClass.NO_CANDIDATES
+                        : PlanningFailureClass.UNKNOWN;
+            }
+            if (anyPathAvailable) {
+                return PlanningFailureClass.PATH_AVAILABLE;
+            }
+            if (anyPathUnreachable) {
+                return PlanningFailureClass.PATH_UNREACHABLE;
+            }
+            if (allPathCallsNull && allNullCallsNavigationNotGrounded) {
+                return PlanningFailureClass.NAVIGATION_NOT_GROUNDED;
+            }
+            if (allPathCallsNull) {
+                return PlanningFailureClass.PATH_NULL;
+            }
+            return PlanningFailureClass.UNKNOWN;
+        }
+    }
+
     record Snapshot(
             boolean armed,
             boolean phaseAOpen,
@@ -333,6 +437,7 @@ public final class V4RuntimeWitnessTracker {
             boolean sleepingObserved,
             boolean homePromotionObserved,
             BlockPosEvidence sleepBed,
+            PathPlanningSnapshot pathPlanning,
             int eventCount) {
 
         static Snapshot empty() {
@@ -341,7 +446,8 @@ public final class V4RuntimeWitnessTracker {
                     false, null, null, null,
                     null, ExistingRouteFeasibility.ExistingRouteStatus.UNKNOWN, null,
                     false, "NONE", false, false, false, false, false, false, 0,
-                    false, false, false, false, false, null, 0);
+                    false, false, false, false, false, null,
+                    PathPlanningSnapshot.empty(), 0);
         }
     }
 
@@ -396,6 +502,14 @@ public final class V4RuntimeWitnessTracker {
         boolean sleepingObserved;
         boolean homePromotionObserved;
         BlockPosEvidence sleepBed;
+        int pathCallCount;
+        long firstPathCallTick = -1L;
+        long lastPathCallTick = -1L;
+        boolean anyPathAvailable;
+        boolean anyPathUnreachable;
+        boolean allPathCallsNull = true;
+        boolean allNullCallsNavigationNotGrounded = true;
+        final List<PathPlanningEvidence> pathPlanningEvidence = new ArrayList<>();
 
         Session(UUID mobId, UUID traderId, Object backpackIdentity,
                 V4OfferFingerprint initialOffer, long tick) {
@@ -417,7 +531,12 @@ public final class V4RuntimeWitnessTracker {
                     interrupted, navigationDiscarded, resumed, sameBindingResumed, arrivalObserved,
                     intentReleasedAtArrival, routeFailurePublications, changedOfferExecuted,
                     cachedInitialOfferExecuted, seekShelterObserved, sleepingObserved,
-                    homePromotionObserved, sleepBed, events.size());
+                    homePromotionObserved, sleepBed,
+                    new PathPlanningSnapshot(pathCallCount, firstPathCallTick,
+                            lastPathCallTick, anyPathAvailable, anyPathUnreachable,
+                            allPathCallsNull, allNullCallsNavigationNotGrounded,
+                            List.copyOf(pathPlanningEvidence)),
+                    events.size());
         }
     }
 }
