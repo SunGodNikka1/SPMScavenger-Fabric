@@ -325,17 +325,21 @@ final class V4FixtureGeometryBuilder {
     static List<BlockPos> arenaBoundaryOffsets() {
         List<BlockPos> boundary = new ArrayList<>();
         for (int x = -25; x <= 203; x++) {
-            for (int y = 0; y <= 5; y++) {
-                for (int z = -25; z <= 25; z++) {
-                    if (arenaInterior(x, y, z)) {
-                        continue;
-                    }
-                    boolean adjacent = false;
-                    for (Direction direction : Direction.values()) {
-                        adjacent |= arenaInterior(x + direction.getStepX(),
-                                y + direction.getStepY(), z + direction.getStepZ());
-                    }
-                    if (adjacent) {
+            for (int z = -25; z <= 25; z++) {
+                if (arenaInteriorColumn(x, z)) {
+                    continue;
+                }
+                boolean horizontallyAdjacent = false;
+                for (Direction direction : new Direction[] {
+                        Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST}) {
+                    horizontallyAdjacent |= arenaInteriorColumn(
+                            x + direction.getStepX(), z + direction.getStepZ());
+                }
+                if (horizontallyAdjacent) {
+                    // Side wall only. Never cap an interior X/Z column: ExploringGoal resolves
+                    // landing Y from MOTION_BLOCKING_NO_LEAVES and must see the walkable surface,
+                    // not an unreachable validation-owned roof.
+                    for (int y = 0; y <= 4; y++) {
                         boundary.add(new BlockPos(x, y, z));
                     }
                 }
@@ -351,6 +355,13 @@ final class V4FixtureGeometryBuilder {
                 && z >= -2 && z <= 2;
         boolean departure = x >= 158 && x <= 202 && y >= 0 && y <= 4
                 && z >= -22 && z <= 22;
+        return village || corridor || departure;
+    }
+
+    static boolean arenaInteriorColumn(int x, int z) {
+        boolean village = x >= -24 && x <= 24 && z >= -24 && z <= 24;
+        boolean corridor = x >= 0 && x <= 180 && z >= -2 && z <= 2;
+        boolean departure = x >= 158 && x <= 202 && z >= -22 && z <= 22;
         return village || corridor || departure;
     }
 

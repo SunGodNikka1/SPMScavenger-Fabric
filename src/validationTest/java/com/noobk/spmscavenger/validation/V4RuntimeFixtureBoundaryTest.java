@@ -489,8 +489,73 @@ class V4RuntimeFixtureBoundaryTest {
                 "controlled interruption spawn area remains available");
         assertTrue(boundary.contains(new BlockPos(-25, 0, 0)));
         assertTrue(boundary.contains(new BlockPos(203, 0, 0)));
-        assertTrue(boundary.contains(new BlockPos(90, 4, 0)),
-                "corridor roof must prevent falling ingress");
+        assertFalse(boundary.contains(new BlockPos(90, 4, 0)),
+                "the corridor must remain open above its walkable interior");
+    }
+
+    @Test
+    void arenaIsOpenSkyButEveryGroundLevelHorizontalExitIsSealed() {
+        var boundary = new java.util.HashSet<>(
+                V4FixtureGeometryBuilder.arenaBoundaryOffsets());
+        var horizontal = new net.minecraft.core.Direction[] {
+                net.minecraft.core.Direction.NORTH, net.minecraft.core.Direction.SOUTH,
+                net.minecraft.core.Direction.WEST, net.minecraft.core.Direction.EAST};
+
+        for (int x = -24; x <= 202; x++) {
+            for (int z = -24; z <= 24; z++) {
+                if (!V4FixtureGeometryBuilder.arenaInteriorColumn(x, z)) {
+                    continue;
+                }
+                for (int y = 0; y <= 8; y++) {
+                    assertFalse(boundary.contains(new BlockPos(x, y, z)),
+                            "validation roof/interior Barrier at " + x + "," + y + "," + z);
+                }
+                for (net.minecraft.core.Direction direction : horizontal) {
+                    int outsideX = x + direction.getStepX();
+                    int outsideZ = z + direction.getStepZ();
+                    if (V4FixtureGeometryBuilder.arenaInteriorColumn(outsideX, outsideZ)) {
+                        continue;
+                    }
+                    for (int y : new int[] {0, 2, 4}) {
+                        assertTrue(boundary.contains(new BlockPos(outsideX, y, outsideZ)),
+                                "horizontal perimeter gap at " + outsideX + "," + y + ","
+                                        + outsideZ);
+                    }
+                }
+            }
+        }
+
+        assertTrue(V4FixtureGeometryBuilder.arenaInteriorColumn(24, 0));
+        assertTrue(V4FixtureGeometryBuilder.arenaInteriorColumn(25, 0),
+                "village-to-corridor transition must remain open");
+        assertTrue(V4FixtureGeometryBuilder.arenaInteriorColumn(157, 0));
+        assertTrue(V4FixtureGeometryBuilder.arenaInteriorColumn(158, 0),
+                "corridor-to-departure transition must remain open");
+        assertTrue(V4FixtureGeometryBuilder.arenaInteriorColumn(185, 0),
+                "controlled interrupter remains spawnable inside the departure area");
+    }
+
+    @Test
+    void isolationCannotReplaceHeightmapSurfaceAboveTravelColumns() throws Exception {
+        String exploring = Files.readString(Path.of(
+                "src/main/java/com/noobk/spmscavenger/goal/ExploringGoal.java"));
+        assertTrue(exploring.contains("Heightmap.Types.MOTION_BLOCKING_NO_LEAVES"),
+                "fixture invariant must remain tied to production landing resolution");
+
+        for (BlockPos barrier : V4FixtureGeometryBuilder.arenaBoundaryOffsets()) {
+            assertFalse(V4FixtureGeometryBuilder.arenaInteriorColumn(
+                            barrier.getX(), barrier.getZ()),
+                    "validation-owned motion-blocking isolation entered an intended travel column: "
+                            + barrier.toShortString());
+        }
+    }
+
+    @Test
+    void routeFailureWordingSeparatesTerminalPathFailureFromInterruptionEvidence() {
+        assertEquals("required-trade commute terminated with route-failure evidence",
+                V4RuntimeCampaignController.routeFailureReason(false));
+        assertEquals("interruption produced route-failure evidence",
+                V4RuntimeCampaignController.routeFailureReason(true));
     }
 
     @Test

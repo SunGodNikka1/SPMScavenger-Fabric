@@ -722,7 +722,7 @@ public final class V4RuntimeCampaignController {
         }
         if (witness.routeFailurePublications() > 0) {
             finish(server, session, State.FAIL, now,
-                    "interruption/commute published route-failure evidence");
+                    routeFailureReason(witness.interrupted()));
             return;
         }
         if (witness.intentIdentity() != null && session.state == State.PHASE_A_WAITING_INTENT) {
@@ -1275,6 +1275,12 @@ public final class V4RuntimeCampaignController {
         String message = failure.getMessage();
         return failure.getClass().getSimpleName()
                 + (message == null || message.isBlank() ? "" : ": " + message);
+    }
+
+    static String routeFailureReason(boolean interrupted) {
+        return interrupted
+                ? "interruption produced route-failure evidence"
+                : "required-trade commute terminated with route-failure evidence";
     }
 
     private static final class VillagerTradeAdapterDistance {
