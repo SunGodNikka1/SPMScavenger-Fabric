@@ -13,7 +13,7 @@
 | Fabric API | `0.116.4+1.21.1` |
 | Social Player Mobs | `playermob` `0.96.0`; SHA-256 `508EDA58611A2A0738E257F98C2E14C5032C6EFBF5B1A985C9F93EE295131097` |
 | Production addon | `build/libs/spmscavenger-1.11.0.jar`; SHA-256 `918CA885EBD5FA985FBE234DE11D05E983DFAF882A4092921BA15F46B59E089B` |
-| Validation sidecar | `build/libs/spmscavenger-1.11.0-validation.jar`; SHA-256 `9575D4B82F84491D8AE4D0523EB85D1482D1C691713001201FC1FE9D7166949B` |
+| Validation sidecar | `build/libs/spmscavenger-1.11.0-validation.jar`; SHA-256 `15DF669243E4F85532C892C57F50059414D0DA8635E4F13740398D9160E52E34` |
 
 The runtime command records the actual relevant Scavenger configuration in `status` and `report`.
 Preflight requires `enabled`, `gatherResources`, `craftTools`, `seekShelter`, and `sleepInBeds`; a
@@ -59,6 +59,11 @@ from the village is therefore expected fixture staging, not evidence that it des
 operator is not part of the witness: do not follow, chase, or interact with any fixture entity.
 Use only campaign `status` and `report`; transition-only chat announces the departure, production
 REQUIRED_TRADE commute admission, and the terminal result.
+
+The departure extension is the same five-block-wide travel band as the commute corridor. The
+controller records the subject's position and tick when production first seeds the Phase-A
+REQUIRED_TRADE commute; any controlled interruption is eligible only after at least eight blocks
+of later displacement toward the settlement. Movement before admission never counts.
 
 Optional progress inspection:
 

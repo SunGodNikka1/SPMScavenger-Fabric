@@ -433,11 +433,11 @@ class V4RuntimeFixtureBoundaryTest {
     void geometryPlanCoversVillageCorridorDepartureAndExactPoiPostconditions() {
         BlockPos origin = BlockPos.ZERO;
         var chunks = V4FixtureGeometryBuilder.requiredChunks(origin);
-        assertEquals(46, chunks.size(), "exact union of village/corridor/departure chunks changed");
+        assertEquals(38, chunks.size(), "exact union of village/corridor/departure chunks changed");
         for (ChunkPos required : new ChunkPos[] {
                 new ChunkPos(-2, -2), new ChunkPos(1, 1),
                 new ChunkPos(0, -1), new ChunkPos(11, 0),
-                new ChunkPos(9, -2), new ChunkPos(12, 1)}) {
+                new ChunkPos(9, -1), new ChunkPos(12, 0)}) {
             assertTrue(chunks.contains(required), "missing required geometry chunk " + required);
         }
 
@@ -450,7 +450,7 @@ class V4RuntimeFixtureBoundaryTest {
         assertEquals(BlockPos.ZERO.offset(90, -1, 0), checks.get("corridor-floor-90").pos());
         assertEquals("minecraft:air",
                 checks.get("corridor-head-clearance-180").expected().description());
-        assertEquals(BlockPos.ZERO.offset(202, -1, 22), checks.get("departure-floor").pos());
+        assertEquals(BlockPos.ZERO.offset(202, -1, 2), checks.get("departure-floor").pos());
         assertEquals("minecraft:bell", checks.get("bell").expected().description());
         assertEquals("minecraft:smithing_table",
                 checks.get("workstation").expected().description());
@@ -460,7 +460,7 @@ class V4RuntimeFixtureBoundaryTest {
         assertTrue(checks.values().stream()
                 .filter(check -> check.expected().description().contains("_bed["))
                 .allMatch(check -> check.expected().description().contains("facing=south")));
-        for (int[] range : new int[][] {{-24, 24}, {0, 180}, {158, 202}, {-22, 22}}) {
+        for (int[] range : new int[][] {{-24, 24}, {0, 180}, {158, 202}, {-2, 2}}) {
             var axis = V4FixtureGeometryBuilder.coveredAxis(range[0], range[1]);
             assertEquals(range[0], axis.getFirst());
             assertEquals(range[1], axis.getLast());
@@ -469,6 +469,49 @@ class V4RuntimeFixtureBoundaryTest {
                         "lighting grid left an uncovered gap");
             }
         }
+    }
+
+    @Test
+    void departureExtensionIsCorridorAlignedWithClearDirectHeadingAndOwnedFirstHops()
+            throws Exception {
+        var boundary = new java.util.HashSet<>(
+                V4FixtureGeometryBuilder.arenaBoundaryOffsets());
+        for (int x = V4FixtureGeometryBuilder.DEPARTURE_MIN_X;
+                x <= V4FixtureGeometryBuilder.DEPARTURE_MAX_X; x++) {
+            for (int z = V4FixtureGeometryBuilder.TRAVEL_MIN_Z;
+                    z <= V4FixtureGeometryBuilder.TRAVEL_MAX_Z; z++) {
+                assertTrue(V4FixtureGeometryBuilder.departureInteriorColumn(x, z));
+                assertTrue(V4FixtureGeometryBuilder.directHeadingClearFromDeparture(x, z),
+                        "direct settlement heading left fixture travel surface from " + x + "," + z);
+                BlockPos firstHop = V4FixtureGeometryBuilder.representativeFirstHop(x, z);
+                assertTrue(V4FixtureGeometryBuilder.arenaInteriorColumn(
+                                firstHop.getX(), firstHop.getZ()),
+                        "first hop left fixture-owned stone travel floor: " + firstHop);
+                assertFalse(boundary.contains(firstHop),
+                        "first hop intersected validation Barrier: " + firstHop);
+            }
+            for (int y = 0; y <= 4; y++) {
+                assertTrue(boundary.contains(new BlockPos(
+                                x, y, V4FixtureGeometryBuilder.TRAVEL_MIN_Z - 1)),
+                        "north departure perimeter gap at x=" + x);
+                assertTrue(boundary.contains(new BlockPos(
+                                x, y, V4FixtureGeometryBuilder.TRAVEL_MAX_Z + 1)),
+                        "south departure perimeter gap at x=" + x);
+            }
+        }
+        assertFalse(V4FixtureGeometryBuilder.departureInteriorColumn(180, -3));
+        assertFalse(V4FixtureGeometryBuilder.departureInteriorColumn(180, 3));
+        assertTrue(V4FixtureGeometryBuilder.arenaInteriorColumn(172, 0));
+        assertTrue(V4FixtureGeometryBuilder.arenaInteriorColumn(175, 0),
+                "controlled interrupter has legal same-lane spawn room after 8-block progress");
+
+        String geometry = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4FixtureGeometryBuilder.java"));
+        assertTrue(geometry.contains("verifyDepartureAlignment(level, origin, diagnostics)"));
+        assertTrue(geometry.contains("support.is(Blocks.STONE)"),
+                "runtime geometry gate must prove first-hop support is fixture-owned stone");
+        assertTrue(geometry.contains("departure_first_hop_support"));
     }
 
     @Test
@@ -554,8 +597,42 @@ class V4RuntimeFixtureBoundaryTest {
     void routeFailureWordingSeparatesTerminalPathFailureFromInterruptionEvidence() {
         assertEquals("required-trade commute terminated with route-failure evidence",
                 V4RuntimeCampaignController.routeFailureReason(false));
-        assertEquals("interruption produced route-failure evidence",
+        assertEquals("required-trade commute terminated with route-failure evidence after interruption",
                 V4RuntimeCampaignController.routeFailureReason(true));
+    }
+
+    @Test
+    void interruptionProgressUsesRealAdmissionPositionAndNeverAdmissionTick() throws Exception {
+        BlockPos settlement = new BlockPos(0, 0, 0);
+        BlockPos departure = new BlockPos(180, 0, 0);
+        BlockPos admissionAfterWander = new BlockPos(164, 0, 2);
+
+        assertFalse(V4RuntimeCampaignController.interruptionProgressEligible(
+                null, -1L, admissionAfterWander, settlement, 249L));
+        assertFalse(V4RuntimeCampaignController.interruptionProgressEligible(
+                admissionAfterWander, 249L, admissionAfterWander, settlement, 249L),
+                "interrupter must not spawn on the admission tick");
+        assertFalse(V4RuntimeCampaignController.interruptionProgressEligible(
+                admissionAfterWander, 249L, admissionAfterWander, settlement, 250L),
+                "movement from the earlier teleport coordinate must not count");
+        assertFalse(V4RuntimeCampaignController.interruptionProgressEligible(
+                admissionAfterWander, 249L, admissionAfterWander.offset(0, 0, 8),
+                settlement, 250L),
+                "eight lateral blocks away from the settlement are not commute progress");
+        assertTrue(V4RuntimeCampaignController.interruptionProgressEligible(
+                admissionAfterWander, 249L, admissionAfterWander.offset(-8, 0, 0),
+                settlement, 250L));
+
+        String controller = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeCampaignController.java"));
+        int seededGate = controller.indexOf("if (witness.commuteSeeded())");
+        int capture = controller.indexOf("captureCommuteAdmissionBaseline", seededGate);
+        assertTrue(seededGate >= 0 && capture > seededGate,
+                "admission baseline must come from the real Phase-A seeded commute");
+        assertFalse(controller.contains(
+                "horizontalDistance(session.departure, subject.blockPosition()) >= 8.0"));
+        assertTrue(controller.contains("now <= admissionTick"));
     }
 
     @Test

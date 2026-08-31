@@ -732,11 +732,13 @@ public final class V4RuntimeCampaignController {
             record(session, now, "INTENT_OPEN", witness.intentIdentity());
         }
         if (witness.commuteSeeded()) {
+            captureCommuteAdmissionBaseline(subject, session, now);
             sendCommuteMilestone(server, session);
         }
         if (witness.commuteSeeded() && !session.interrupterAttempted
-                && session.departure != null
-                && horizontalDistance(session.departure, subject.blockPosition()) >= 8.0) {
+                && interruptionProgressEligible(
+                        session.commuteAdmissionPosition, session.commuteAdmissionTick,
+                        subject.blockPosition(), session.settlementAnchor, now)) {
             session.interrupterAttempted = true;
             spawnInterrupter(level, subject, session, now);
         }
@@ -1186,6 +1188,30 @@ public final class V4RuntimeCampaignController {
                 "The PlayerMob should return automatically. No player interaction required."));
     }
 
+    private static void captureCommuteAdmissionBaseline(
+            Mob subject, Session session, long now) {
+        if (session.commuteAdmissionPosition != null) {
+            return;
+        }
+        session.commuteAdmissionPosition = subject.blockPosition().immutable();
+        session.commuteAdmissionTick = now;
+        record(session, now, "COMMUTE_ADMISSION_BASELINE",
+                "position=" + session.commuteAdmissionPosition.toShortString());
+    }
+
+    static boolean interruptionProgressEligible(
+            BlockPos admissionPosition, long admissionTick,
+            BlockPos currentPosition, BlockPos settlementAnchor, long now) {
+        if (admissionPosition == null || currentPosition == null || settlementAnchor == null
+                || admissionTick < 0L || now <= admissionTick) {
+            return false;
+        }
+        double displacement = horizontalDistance(admissionPosition, currentPosition);
+        double admissionDistance = horizontalDistance(admissionPosition, settlementAnchor);
+        double currentDistance = horizontalDistance(currentPosition, settlementAnchor);
+        return displacement >= 8.0D && currentDistance < admissionDistance;
+    }
+
     private static void sendTerminalMilestone(
             MinecraftServer server, Session session, State state, String reason) {
         if (session.terminalMessageSent || state == State.ABORTED) {
@@ -1267,6 +1293,8 @@ public final class V4RuntimeCampaignController {
                         + " reacquired=" + tradeLiveness.gatherReacquiredAfterHandoff(),
                 "VillageIntent=" + witness.intentIdentity(),
                 "COMMUTE source=" + witness.commuteSource(),
+                "commuteAdmissionPosition=" + printable(session.commuteAdmissionPosition)
+                        + " commuteAdmissionTick=" + session.commuteAdmissionTick,
                 "pathCallCount=" + witness.pathPlanning().pathCallCount()
                         + " firstPathCallTick=" + witness.pathPlanning().firstPathCallTick()
                         + " lastPathCallTick=" + witness.pathPlanning().lastPathCallTick()
@@ -1339,7 +1367,7 @@ public final class V4RuntimeCampaignController {
 
     static String routeFailureReason(boolean interrupted) {
         return interrupted
-                ? "interruption produced route-failure evidence"
+                ? "required-trade commute terminated with route-failure evidence after interruption"
                 : "required-trade commute terminated with route-failure evidence";
     }
 
@@ -1395,6 +1423,8 @@ public final class V4RuntimeCampaignController {
         UUID interrupterId;
         boolean interrupterAttempted;
         long interrupterSpawnTick;
+        BlockPos commuteAdmissionPosition;
+        long commuteAdmissionTick = -1L;
         boolean interruptionObserved;
         long interruptionTick;
         boolean resumeObserved;
@@ -1440,6 +1470,8 @@ public final class V4RuntimeCampaignController {
             boolean bootstrapCapabilityPersisted,
             boolean departureConfirmed,
             boolean phaseASecondDemandOpened,
+            BlockPos commuteAdmissionPosition,
+            long commuteAdmissionTick,
             int phaseBAssociationCount,
             long startTick,
             long phaseAOpenTick,
@@ -1490,6 +1522,7 @@ public final class V4RuntimeCampaignController {
                     session.bootstrapWarmupDemandResolved,
                     session.bootstrapCapabilityPersisted,
                     session.departureConfirmed, session.phaseASecondDemandOpened,
+                    session.commuteAdmissionPosition, session.commuteAdmissionTick,
                     session.phaseBAssociationCount, session.startTick, session.phaseAOpenTick,
                     session.phaseAPassTick, session.phaseBOpenTick, session.phaseBPassTick,
                     session.terminalTick, session.fixtureCreationTick,
@@ -1589,6 +1622,8 @@ public final class V4RuntimeCampaignController {
                     + witness.bootstrapLocalIntentReleased());
             lines.add("departureConfirmed=" + departureConfirmed);
             lines.add("phaseASecondDemandOpened=" + phaseASecondDemandOpened);
+            lines.add("commuteAdmissionPosition=" + printable(commuteAdmissionPosition)
+                    + " commuteAdmissionTick=" + commuteAdmissionTick);
             lines.add("initialOfferFingerprint=" + printable(witness.initialOffer()));
             lines.add("changedLiveOfferFingerprint=" + printable(witness.changedOffer()));
             lines.add("executedOfferFingerprint=" + printable(witness.executedOffer()));

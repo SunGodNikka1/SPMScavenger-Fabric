@@ -31,6 +31,11 @@ final class V4FixtureGeometryBuilder {
 
     private static final int MUTATION_FLAGS =
             Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
+    static final int DEPARTURE_MIN_X = 158;
+    static final int DEPARTURE_MAX_X = 202;
+    static final int TRAVEL_MIN_Z = -2;
+    static final int TRAVEL_MAX_Z = 2;
+    private static final BlockPos EXPECTED_SETTLEMENT_TARGET = new BlockPos(-3, 0, 1);
 
     private V4FixtureGeometryBuilder() {
     }
@@ -59,9 +64,13 @@ final class V4FixtureGeometryBuilder {
         writeVolume(level, origin.offset(0, 0, -2), origin.offset(180, 3, 2),
                 Blocks.AIR.defaultBlockState(), diagnostics);
 
-        writeVolume(level, origin.offset(158, -4, -22), origin.offset(202, 4, 22),
+        writeVolume(level,
+                origin.offset(DEPARTURE_MIN_X, -4, TRAVEL_MIN_Z),
+                origin.offset(DEPARTURE_MAX_X, 4, TRAVEL_MAX_Z),
                 Blocks.AIR.defaultBlockState(), diagnostics);
-        writeVolume(level, origin.offset(158, -1, -22), origin.offset(202, -1, 22),
+        writeVolume(level,
+                origin.offset(DEPARTURE_MIN_X, -1, TRAVEL_MIN_Z),
+                origin.offset(DEPARTURE_MAX_X, -1, TRAVEL_MAX_Z),
                 Blocks.STONE.defaultBlockState(), diagnostics);
 
         placeArenaBoundary(level, origin, diagnostics);
@@ -78,6 +87,7 @@ final class V4FixtureGeometryBuilder {
         placeArenaLighting(level, origin, diagnostics);
         verifyPostconditions(level, origin, diagnostics);
         verifyArenaBoundary(level, origin, diagnostics);
+        verifyDepartureAlignment(level, origin, diagnostics);
         verifyLightBlocksPresent(level, origin, diagnostics);
         diagnostics.geometryMutationSucceeded = true;
         diagnostics.geometryStructureVerified = true;
@@ -96,7 +106,9 @@ final class V4FixtureGeometryBuilder {
         minimum = Math.min(minimum,
                 sampleLitWalkableVolume(level, origin, 0, 180, -2, 2, diagnostics));
         minimum = Math.min(minimum,
-                sampleLitWalkableVolume(level, origin, 158, 202, -22, 22, diagnostics));
+                sampleLitWalkableVolume(level, origin,
+                        DEPARTURE_MIN_X, DEPARTURE_MAX_X,
+                        TRAVEL_MIN_Z, TRAVEL_MAX_Z, diagnostics));
         diagnostics.minimumRepresentativeBlockLight = minimum;
         diagnostics.fixtureLightingVerified = minimum >= 7;
         diagnostics.lightingWaitTicks = diagnostics.lightingWaitStartedTick < 0L
@@ -131,7 +143,9 @@ final class V4FixtureGeometryBuilder {
         Set<ChunkPos> chunks = new LinkedHashSet<>();
         addChunkRectangle(chunks, origin.offset(-25, 0, -25), origin.offset(25, 0, 25));
         addChunkRectangle(chunks, origin.offset(-1, 0, -3), origin.offset(181, 0, 3));
-        addChunkRectangle(chunks, origin.offset(157, 0, -23), origin.offset(203, 0, 23));
+        addChunkRectangle(chunks,
+                origin.offset(DEPARTURE_MIN_X - 1, 0, TRAVEL_MIN_Z - 1),
+                origin.offset(DEPARTURE_MAX_X + 1, 0, TRAVEL_MAX_Z + 1));
         return chunks.stream()
                 .sorted(Comparator.comparingInt((ChunkPos chunk) -> chunk.x)
                         .thenComparingInt(chunk -> chunk.z))
@@ -160,11 +174,11 @@ final class V4FixtureGeometryBuilder {
         }
 
         checks.add(new Postcondition("departure-floor",
-                origin.offset(202, -1, 22), ExpectedGeometry.STONE));
+                origin.offset(DEPARTURE_MAX_X, -1, TRAVEL_MAX_Z), ExpectedGeometry.STONE));
         checks.add(new Postcondition("departure-feet-clearance",
-                origin.offset(180, 0, 20), ExpectedGeometry.AIR));
+                origin.offset(180, 0, TRAVEL_MAX_Z), ExpectedGeometry.AIR));
         checks.add(new Postcondition("departure-head-clearance",
-                origin.offset(180, 3, 20), ExpectedGeometry.AIR));
+                origin.offset(180, 3, TRAVEL_MAX_Z), ExpectedGeometry.AIR));
 
         checks.add(new Postcondition("bell",
                 origin.offset(1, 0, 0), ExpectedGeometry.BELL));
@@ -295,7 +309,9 @@ final class V4FixtureGeometryBuilder {
             writeChecked(level, origin.offset(x, 2, 0), light, diagnostics);
             diagnostics.fixtureLightBlocksPlaced++;
         }
-        placeLightGrid(level, origin, 158, 202, -22, 22, diagnostics, light);
+        placeLightGrid(level, origin,
+                DEPARTURE_MIN_X, DEPARTURE_MAX_X,
+                TRAVEL_MIN_Z, TRAVEL_MAX_Z, diagnostics, light);
     }
 
     private static void placeArenaBoundary(
@@ -320,6 +336,35 @@ final class V4FixtureGeometryBuilder {
         diagnostics.arenaBoundaryVerified = diagnostics.fixtureBarrierBlocksPlaced > 0
                 && diagnostics.fixtureBarrierBlocksVerified
                         == diagnostics.fixtureBarrierBlocksPlaced;
+    }
+
+    private static void verifyDepartureAlignment(
+            ServerLevel level, BlockPos origin, Diagnostics diagnostics) {
+        Set<BlockPos> boundary = Set.copyOf(arenaBoundaryOffsets());
+        for (int x = DEPARTURE_MIN_X; x <= DEPARTURE_MAX_X; x++) {
+            for (int z = TRAVEL_MIN_Z; z <= TRAVEL_MAX_Z; z++) {
+                BlockPos start = new BlockPos(x, 0, z);
+                if (!directHeadingClearFromDeparture(x, z)) {
+                    throw diagnostics.fail("departure_direct_heading", origin.offset(start),
+                            "continuous fixture-owned heading to settlement",
+                            "heading left validation travel surface");
+                }
+                BlockPos firstHop = representativeFirstHop(x, z);
+                if (!arenaInteriorColumn(firstHop.getX(), firstHop.getZ())
+                        || boundary.contains(firstHop)) {
+                    throw diagnostics.fail("departure_first_hop", origin.offset(firstHop),
+                            "fixture-owned open travel column",
+                            "outside interior or occupied by Barrier");
+                }
+                BlockPos supportPos = origin.offset(firstHop).below();
+                BlockState support = level.getBlockState(supportPos);
+                if (!support.is(Blocks.STONE)) {
+                    throw diagnostics.fail("departure_first_hop_support", supportPos,
+                            "minecraft:stone", support.toString());
+                }
+                diagnostics.geometryPostconditionsChecked++;
+            }
+        }
     }
 
     static List<BlockPos> arenaBoundaryOffsets() {
@@ -352,17 +397,53 @@ final class V4FixtureGeometryBuilder {
         boolean village = x >= -24 && x <= 24 && y >= 0 && y <= 4
                 && z >= -24 && z <= 24;
         boolean corridor = x >= 0 && x <= 180 && y >= 0 && y <= 3
-                && z >= -2 && z <= 2;
-        boolean departure = x >= 158 && x <= 202 && y >= 0 && y <= 4
-                && z >= -22 && z <= 22;
+                && z >= TRAVEL_MIN_Z && z <= TRAVEL_MAX_Z;
+        boolean departure = x >= DEPARTURE_MIN_X && x <= DEPARTURE_MAX_X
+                && y >= 0 && y <= 4
+                && z >= TRAVEL_MIN_Z && z <= TRAVEL_MAX_Z;
         return village || corridor || departure;
     }
 
     static boolean arenaInteriorColumn(int x, int z) {
         boolean village = x >= -24 && x <= 24 && z >= -24 && z <= 24;
-        boolean corridor = x >= 0 && x <= 180 && z >= -2 && z <= 2;
-        boolean departure = x >= 158 && x <= 202 && z >= -22 && z <= 22;
+        boolean corridor = x >= 0 && x <= 180
+                && z >= TRAVEL_MIN_Z && z <= TRAVEL_MAX_Z;
+        boolean departure = departureInteriorColumn(x, z);
         return village || corridor || departure;
+    }
+
+    static boolean departureInteriorColumn(int x, int z) {
+        return x >= DEPARTURE_MIN_X && x <= DEPARTURE_MAX_X
+                && z >= TRAVEL_MIN_Z && z <= TRAVEL_MAX_Z;
+    }
+
+    static boolean directHeadingClearFromDeparture(int startX, int startZ) {
+        if (!departureInteriorColumn(startX, startZ)) {
+            return false;
+        }
+        int dx = EXPECTED_SETTLEMENT_TARGET.getX() - startX;
+        int dz = EXPECTED_SETTLEMENT_TARGET.getZ() - startZ;
+        int steps = Math.max(Math.abs(dx), Math.abs(dz));
+        for (int step = 0; step <= steps; step++) {
+            double fraction = steps == 0 ? 0.0D : (double) step / steps;
+            int x = (int) Math.round(startX + dx * fraction);
+            int z = (int) Math.round(startZ + dz * fraction);
+            if (!arenaInteriorColumn(x, z)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static BlockPos representativeFirstHop(int startX, int startZ) {
+        double dx = EXPECTED_SETTLEMENT_TARGET.getX() - startX;
+        double dz = EXPECTED_SETTLEMENT_TARGET.getZ() - startZ;
+        double length = Math.hypot(dx, dz);
+        double scale = Math.min(1.0D, 16.0D / length);
+        return new BlockPos(
+                (int) Math.round(startX + dx * scale),
+                0,
+                (int) Math.round(startZ + dz * scale));
     }
 
     private static void placeLightGrid(
@@ -383,7 +464,9 @@ final class V4FixtureGeometryBuilder {
         for (int x : coveredAxis(0, 180)) {
             verifyLightBlock(level, origin.offset(x, 2, 0), diagnostics);
         }
-        verifyLightGrid(level, origin, 158, 202, -22, 22, diagnostics);
+        verifyLightGrid(level, origin,
+                DEPARTURE_MIN_X, DEPARTURE_MAX_X,
+                TRAVEL_MIN_Z, TRAVEL_MAX_Z, diagnostics);
     }
 
     private static void verifyLightGrid(
