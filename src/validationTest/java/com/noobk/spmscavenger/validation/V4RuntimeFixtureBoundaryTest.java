@@ -60,6 +60,10 @@ class V4RuntimeFixtureBoundaryTest {
                 "only the declared pre-window departure placement may move the subject");
         assertTrue(controller.indexOf("subject.teleportTo(")
                 < controller.indexOf("V4RuntimeWitnessTracker.openPhaseA(now)"));
+        assertFalse(controller.contains("data.setDirty()"),
+                "Phase-B staging must not link inherited Minecraft dirtiness through a mod owner");
+        assertFalse(controller.contains("data.markDirty()"),
+                "validation must not require a widened production dirtiness API");
 
         Path pack = Path.of("test-datapacks/v4-settlement-integration");
         assertTrue(Files.exists(pack.resolve("pack.mcmeta")));

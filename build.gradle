@@ -205,6 +205,19 @@ def verifyValidationRequiredMixinTargets = tasks.register(
     }
 }
 
+def verifyValidationRuntimeLinkage = tasks.register(
+        'verifyValidationRuntimeLinkage', JavaExec) {
+    description = 'Rejects the unresolved inherited SavedData link in remapped V4 validation bytecode.'
+    group = 'verification'
+    dependsOn tasks.named('validationTestClasses')
+    dependsOn remapValidationJar
+    classpath = sourceSets.validationTest.runtimeClasspath
+    mainClass.set('com.noobk.spmscavenger.validation.ValidationRuntimeLinkageAudit')
+    doFirst {
+        args = [remapValidationJar.get().archiveFile.get().asFile.absolutePath]
+    }
+}
+
 def auditProductionJar = tasks.register('auditProductionJar') {
     dependsOn tasks.named('remapJar')
     inputs.file(tasks.named('remapJar').flatMap { it.archiveFile })
@@ -299,6 +312,7 @@ tasks.named('check') {
     dependsOn auditProductionJar
     dependsOn auditValidationJar
     dependsOn verifyValidationRequiredMixinTargets
+    dependsOn verifyValidationRuntimeLinkage
 }
 
 java {

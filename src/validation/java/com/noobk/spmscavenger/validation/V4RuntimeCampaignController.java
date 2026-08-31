@@ -793,7 +793,6 @@ public final class V4RuntimeCampaignController {
         int delta = Math.max(0, 600 - relationship.familiarityScore());
         relationship.bumpFamiliarity(delta, now);
         memory.get().putRelationship(session.settlementAnchor, relationship);
-        data.setDirty();
         int associations = associatedFixtureBeds(session, memory.get());
         session.phaseBAssociationCount = associations;
         session.homeBeforeSleep = memory.get().homeAnchor().isEmpty();
