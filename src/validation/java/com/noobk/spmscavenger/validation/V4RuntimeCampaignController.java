@@ -750,12 +750,16 @@ public final class V4RuntimeCampaignController {
         if (witness.changedOfferExecuted()) {
             int pickaxes = countAll(subject, backpack, Items.IRON_PICKAXE);
             int emeralds = countAll(subject, backpack, Items.EMERALD);
-            if (!witness.changedBoardRediscovered() || !witness.intentReleasedAtArrival()
-                    || pickaxes < 1 || emeralds != 0) {
+            if (!phaseATradeEvidenceComplete(witness, pickaxes, emeralds)) {
                 finish(server, session, State.FAIL, now,
                         "trade committed without complete changed-board/arrival/inventory evidence"
                                 + " changedBoard=" + witness.changedBoardRediscovered()
                                 + " released=" + witness.intentReleasedAtArrival()
+                                + " interrupted=" + witness.interrupted()
+                                + " exactResume=" + witness.sameBindingResumed()
+                                + " resumeMismatch=" + witness.resumeBindingMismatch()
+                                + " currentIntentAtTrade="
+                                + printable(witness.tradeIntentAtChangedExecution())
                                 + " pickaxes=" + pickaxes + " emeralds=" + emeralds);
                 return;
             }
@@ -877,7 +881,10 @@ public final class V4RuntimeCampaignController {
             record(session, now, "INTERRUPTION_INCOMPLETE", "zombie creation unavailable");
             return;
         }
-        zombie.moveTo(subject.getX() + 3.0, subject.getY(), subject.getZ(), 180.0F, 0.0F);
+        BlockPos spawn = interrupterSpawnPosition(
+                subject.blockPosition(), session.settlementAnchor);
+        zombie.moveTo(spawn.getX() + 0.5D, spawn.getY(), spawn.getZ() + 0.5D,
+                180.0F, 0.0F);
         zombie.addTag(INTERRUPTER_TAG);
         zombie.addTag(V4FixtureCleanup.FIXTURE_TAG);
         zombie.setPersistenceRequired();
@@ -888,14 +895,31 @@ public final class V4RuntimeCampaignController {
         }
         session.interrupterId = zombie.getUUID();
         session.interrupterSpawnTick = now;
-        record(session, now, "INTERRUPTER_SPAWNED", "uuid=" + zombie.getUUID());
+        record(session, now, "INTERRUPTER_SPAWNED",
+                "uuid=" + zombie.getUUID() + " pos=" + spawn.toShortString()
+                        + " trigger=natural hostile-target scan fighter=10");
+    }
+
+    static BlockPos interrupterSpawnPosition(BlockPos subject, BlockPos settlement) {
+        double dx = settlement.getX() - subject.getX();
+        double dz = settlement.getZ() - subject.getZ();
+        double length = Math.sqrt(dx * dx + dz * dz);
+        if (length < 0.001D) {
+            return subject.offset(-3, 0, 0);
+        }
+        return BlockPos.containing(
+                subject.getX() + 0.5D + dx * 3.0D / length,
+                subject.getY(),
+                subject.getZ() + 0.5D + dz * 3.0D / length);
     }
 
     private static void manageInterruption(
             ServerLevel level, Mob subject, Session session,
             V4RuntimeWitnessTracker.Snapshot witness, long now) {
         Optional<VillageIntent> intent = VillageIntentRegistry.current(subject.getUUID());
-        if (session.interrupterId != null && subject.getTarget() != null && intent.isPresent()
+        if (session.interrupterId != null && subject.getTarget() != null
+                && subject.getTarget().getUUID().equals(session.interrupterId)
+                && intent.isPresent()
                 && !session.interruptionObserved) {
             session.interruptionObserved = true;
             session.interruptionTick = now;
@@ -924,6 +948,19 @@ public final class V4RuntimeCampaignController {
                 record(session, now, "RESUME_OBSERVED", "sameBinding=true");
             }
         }
+    }
+
+    static boolean phaseATradeEvidenceComplete(
+            V4RuntimeWitnessTracker.Snapshot witness, int pickaxes, int emeralds) {
+        return witness.changedBoardRediscovered()
+                && witness.intentReleasedAtArrival()
+                && witness.interrupted()
+                && witness.navigationDiscarded()
+                && witness.sameBindingResumed()
+                && !witness.resumeBindingMismatch()
+                && witness.tradeIntentAbsentAtChangedExecution()
+                && pickaxes >= 1
+                && emeralds == 0;
     }
 
     private static void prepareSubjectInventory(Mob subject, Container backpack, int emeralds) {
@@ -1648,12 +1685,21 @@ public final class V4RuntimeCampaignController {
                     + " navigationDiscarded=" + witness.navigationDiscarded()
                     + " resumed=" + witness.resumed()
                     + " sameBinding=" + witness.sameBindingResumed()
+                    + " resumeBindingMismatch=" + witness.resumeBindingMismatch()
+                    + " interruptionBinding=" + witness.interruptionBindingIdentity()
                     + " routeFailurePublications=" + witness.routeFailurePublications());
+            lines.add("bindingTransitions accepted="
+                    + witness.bindingTransitionAcceptedCount()
+                    + " rejected=" + witness.bindingTransitionRejectedCount());
             lines.add("arrival=" + witness.arrivalObserved()
                     + " intentRelease=" + witness.intentReleasedAtArrival()
                     + " changedBoardRediscovery=" + witness.changedBoardRediscovered());
             lines.add("changedOfferExecuted=" + witness.changedOfferExecuted()
-                    + " cachedInitialOfferExecuted=" + witness.cachedInitialOfferExecuted());
+                    + " cachedInitialOfferExecuted=" + witness.cachedInitialOfferExecuted()
+                    + " currentIntentAbsentAtChangedTrade="
+                    + witness.tradeIntentAbsentAtChangedExecution()
+                    + " currentIntentAtChangedTrade="
+                    + printable(witness.tradeIntentAtChangedExecution()));
             lines.add("SeekShelterGoalRunning=" + witness.seekShelterObserved()
                     + " sleeping=" + witness.sleepingObserved()
                     + " homePromotion=" + witness.homePromotionObserved()

@@ -1,13 +1,16 @@
 package com.noobk.spmscavenger.validation;
 
 import com.noobk.spmscavenger.WorkDemandPolicy;
+import com.noobk.spmscavenger.village.VillageIdentityPolicy;
 import com.noobk.spmscavenger.village.intent.VillageIntent;
+import com.noobk.spmscavenger.village.intent.VillageIntentRegistry;
 import com.noobk.spmscavenger.village.trade.ExistingRouteFeasibility;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -108,11 +111,15 @@ public final class V4RuntimeWitnessTracker {
             }
             return;
         }
-        if (active.intent == null) {
-            active.intent = intent;
-            active.intentIdentity = identity(intent);
-            event(tick, "REQUIRED_TRADE_DIRECTIVE", active.intentIdentity);
-        } else if (active.intent == intent) {
+        if (acceptCurrentTravelBinding(active, intent, tick, "DIRECTIVE")) {
+            if (active.currentTravelBinding == intent
+                    && active.lastDirectiveEventBinding != intent) {
+                active.lastDirectiveEventBinding = intent;
+                event(tick, "REQUIRED_TRADE_DIRECTIVE", active.intentIdentity);
+            } else if (active.currentTravelBinding == intent) {
+                event(tick, "DIRECTIVE_REVALIDATED", active.intentIdentity);
+            }
+        } else if (active.currentTravelBinding == intent) {
             event(tick, "DIRECTIVE_REVALIDATED", active.intentIdentity);
         }
     }
@@ -129,29 +136,44 @@ public final class V4RuntimeWitnessTracker {
             }
             return;
         }
+        if (!acceptCurrentTravelBinding(active, intent, tick, "COMMUTE_SEED")) {
+            return;
+        }
         active.commuteSeeded = true;
         active.commuteSource = "REQUIRED_TRADE";
-        active.intent = active.intent == null ? intent : active.intent;
-        active.intentIdentity = identity(active.intent);
         event(tick, "COMMUTE_SEEDED", "source=REQUIRED_TRADE binding=" + identity(intent));
     }
 
     public static synchronized void observeInterruption(UUID mobId, VillageIntent intent, long tick) {
-        if (!matchingExact(mobId, intent)) {
+        if (!matchingCurrentTravel(mobId, intent)) {
+            return;
+        }
+        if (active.interruptedBinding != null && active.interruptedBinding != intent) {
+            event(tick, "INTERRUPTION_BINDING_REJECTED",
+                    "expected=" + identity(active.interruptedBinding)
+                            + " observed=" + identity(intent));
             return;
         }
         active.interrupted = true;
-        active.interruptedBinding = intent;
+        if (active.interruptedBinding == null) {
+            active.interruptedBinding = intent;
+            active.interruptedBindingIdentity = identity(intent);
+        }
         event(tick, "COMMUTE_INTERRUPTED", "binding=" + identity(intent));
     }
 
     public static synchronized void observeResume(UUID mobId, VillageIntent intent, long tick) {
-        if (!matchingExact(mobId, intent) || !active.interrupted) {
+        if (!matchingMob(mobId) || intent == null || !active.interrupted
+                || active.interruptedBinding == null || active.resumed) {
             return;
         }
         active.resumed = true;
         active.sameBindingResumed = active.interruptedBinding == intent;
-        event(tick, "COMMUTE_RESUMED", "sameBinding=" + active.sameBindingResumed);
+        active.resumeBindingMismatch = !active.sameBindingResumed;
+        event(tick, active.sameBindingResumed ? "COMMUTE_RESUMED" : "COMMUTE_RESUME_REJECTED",
+                "sameBinding=" + active.sameBindingResumed
+                        + " interrupted=" + active.interruptedBindingIdentity
+                        + " observed=" + identity(intent));
     }
 
     public static synchronized void observeArrival(UUID mobId, VillageIntent intent, boolean released, long tick) {
@@ -167,11 +189,18 @@ public final class V4RuntimeWitnessTracker {
             active.bootstrapLocalIntentReleased |= released;
             return;
         }
-        if (!matchingExact(mobId, intent)) {
+        if (!matchingCurrentTravel(mobId, intent)) {
+            event(tick, "ARRIVAL_BINDING_REJECTED",
+                    "current=" + identityOrNone(active.currentTravelBinding)
+                            + " observed=" + identity(intent));
             return;
         }
         active.arrivalObserved = true;
         active.intentReleasedAtArrival = released;
+        if (released) {
+            active.lastReleasedTravelBinding = active.currentTravelBinding;
+            active.currentTravelBinding = null;
+        }
         if (tick >= 0L) {
             active.arrivalStamped = true;
             event(tick, "SETTLEMENT_ARRIVAL", "intentReleased=" + released);
@@ -219,7 +248,7 @@ public final class V4RuntimeWitnessTracker {
     public static synchronized void observePathPlanningCall(
             UUID mobId, PathPlanningEvidence evidence) {
         if (!matchingMob(mobId) || evidence == null || !active.phaseAOpen
-                || active.intent == null || active.arrivalObserved) {
+                || active.currentTravelBinding == null || active.arrivalObserved) {
             return;
         }
         active.pathCallCount++;
@@ -245,6 +274,21 @@ public final class V4RuntimeWitnessTracker {
     public static synchronized void observeTrade(
             Object backpackIdentity, UUID traderId, V4OfferFingerprint offer,
             boolean traded, long tick) {
+        Optional<VillageIntent> currentIntent = active != null && active.phaseAOpen
+                ? VillageIntentRegistry.current(active.mobId)
+                : Optional.empty();
+        observeTradeLocked(backpackIdentity, traderId, offer, traded, currentIntent, tick);
+    }
+
+    static synchronized void observeTradeWithIntentState(
+            Object backpackIdentity, UUID traderId, V4OfferFingerprint offer,
+            boolean traded, Optional<VillageIntent> currentIntent, long tick) {
+        observeTradeLocked(backpackIdentity, traderId, offer, traded, currentIntent, tick);
+    }
+
+    private static void observeTradeLocked(
+            Object backpackIdentity, UUID traderId, V4OfferFingerprint offer,
+            boolean traded, Optional<VillageIntent> currentIntent, long tick) {
         if (active == null || active.backpackIdentity != backpackIdentity
                 || !active.traderId.equals(traderId) || offer == null || !traded) {
             return;
@@ -262,7 +306,20 @@ public final class V4RuntimeWitnessTracker {
         active.changedOfferExecuted = offer.equals(active.changedOffer);
         active.cachedInitialOfferExecuted = offer.equals(active.initialOffer)
                 && !offer.equals(active.changedOffer);
-        event(tick, "TRADE_COMMITTED", offer.compact());
+        if (active.changedOfferExecuted) {
+            Optional<VillageIntent> observedCurrent = currentIntent == null
+                    ? Optional.empty()
+                    : currentIntent;
+            active.tradeIntentAbsentAtChangedExecution = observedCurrent.isEmpty();
+            active.tradeIntentAtChangedExecution = observedCurrent
+                    .map(V4RuntimeWitnessTracker::identity)
+                    .orElse(null);
+        }
+        event(tick, "TRADE_COMMITTED", offer.compact()
+                + " currentIntent="
+                + (active.tradeIntentAtChangedExecution == null
+                        ? "EMPTY"
+                        : active.tradeIntentAtChangedExecution));
     }
 
     static synchronized void observeSeekShelterRunning(UUID mobId, long tick) {
@@ -308,8 +365,64 @@ public final class V4RuntimeWitnessTracker {
         return active != null && active.mobId.equals(mobId);
     }
 
-    private static boolean matchingExact(UUID mobId, VillageIntent intent) {
-        return matchingMob(mobId) && active.intent == intent;
+    private static boolean matchingCurrentTravel(UUID mobId, VillageIntent intent) {
+        return matchingMob(mobId) && active.currentTravelBinding == intent;
+    }
+
+    private static boolean acceptCurrentTravelBinding(
+            Session session, VillageIntent proposed, long tick, String source) {
+        VillageIntent current = session.currentTravelBinding;
+        if (current == proposed) {
+            return true;
+        }
+        if (current == null) {
+            VillageIntent previous = session.lastReleasedTravelBinding;
+            if (previous != null && !continuousRequiredTrade(previous, proposed)) {
+                session.bindingTransitionRejectedCount++;
+                event(tick, "CURRENT_TRAVEL_BINDING_REJECTED",
+                        "source=" + source + " reason=POST_RELEASE_DISCONTINUITY from="
+                                + identity(previous) + " to=" + identity(proposed));
+                return false;
+            }
+            session.currentTravelBinding = proposed;
+            session.intentIdentity = identity(proposed);
+            if (previous != null) {
+                session.bindingTransitionAcceptedCount++;
+                event(tick, "CURRENT_TRAVEL_BINDING_ADVANCED",
+                        "source=" + source + " reason=POST_ARRIVAL_REOPEN from="
+                                + identity(previous) + " to=" + identity(proposed));
+            }
+            return true;
+        }
+        if (!continuousRequiredTrade(current, proposed)) {
+            session.bindingTransitionRejectedCount++;
+            event(tick, "CURRENT_TRAVEL_BINDING_REJECTED",
+                    "source=" + source + " reason=UNRELATED_REPLACEMENT from="
+                            + identity(current) + " to=" + identity(proposed));
+            return false;
+        }
+        session.currentTravelBinding = proposed;
+        session.intentIdentity = identity(proposed);
+        session.bindingTransitionAcceptedCount++;
+        event(tick, "CURRENT_TRAVEL_BINDING_ADVANCED",
+                "source=" + source + " reason=SAME_SETTLEMENT_CANONICAL_REKEY from="
+                        + identity(current) + " to=" + identity(proposed));
+        return true;
+    }
+
+    private static boolean continuousRequiredTrade(VillageIntent previous, VillageIntent next) {
+        return previous != null
+                && next != null
+                && previous.kind() == VillageIntent.Kind.REQUIRED_TRADE
+                && next.kind() == VillageIntent.Kind.REQUIRED_TRADE
+                && previous.requiredTradeDemand().equals(next.requiredTradeDemand())
+                && previous.destination().dimension().equals(next.destination().dimension())
+                && VillageIdentityPolicy.sameSettlement(
+                        previous.destination().anchor(), next.destination().anchor());
+    }
+
+    private static String identityOrNone(VillageIntent intent) {
+        return intent == null ? "NONE" : identity(intent);
     }
 
     private static String identity(VillageIntent intent) {
@@ -428,11 +541,17 @@ public final class V4RuntimeWitnessTracker {
             boolean navigationDiscarded,
             boolean resumed,
             boolean sameBindingResumed,
+            boolean resumeBindingMismatch,
+            String interruptionBindingIdentity,
+            int bindingTransitionAcceptedCount,
+            int bindingTransitionRejectedCount,
             boolean arrivalObserved,
             boolean intentReleasedAtArrival,
             int routeFailurePublications,
             boolean changedOfferExecuted,
             boolean cachedInitialOfferExecuted,
+            boolean tradeIntentAbsentAtChangedExecution,
+            String tradeIntentAtChangedExecution,
             boolean seekShelterObserved,
             boolean sleepingObserved,
             boolean homePromotionObserved,
@@ -445,8 +564,9 @@ public final class V4RuntimeWitnessTracker {
                     false, 0, 0, 0, false,
                     false, null, null, null,
                     null, ExistingRouteFeasibility.ExistingRouteStatus.UNKNOWN, null,
-                    false, "NONE", false, false, false, false, false, false, 0,
-                    false, false, false, false, false, null,
+                    false, "NONE", false, false, false, false, false, null, 0, 0,
+                    false, false, 0,
+                    false, false, false, null, false, false, false, null,
                     PathPlanningSnapshot.empty(), 0);
         }
     }
@@ -483,7 +603,9 @@ public final class V4RuntimeWitnessTracker {
         WorkDemandPolicy.MaterialDemandIdentity lastLoggedDemandIdentity;
         ExistingRouteFeasibility.ExistingRouteStatus lastLoggedRouteStatus =
                 ExistingRouteFeasibility.ExistingRouteStatus.UNKNOWN;
-        VillageIntent intent;
+        VillageIntent currentTravelBinding;
+        VillageIntent lastReleasedTravelBinding;
+        VillageIntent lastDirectiveEventBinding;
         String intentIdentity;
         boolean commuteSeeded;
         String commuteSource = "NONE";
@@ -491,13 +613,19 @@ public final class V4RuntimeWitnessTracker {
         boolean navigationDiscarded;
         boolean arrivalStamped;
         VillageIntent interruptedBinding;
+        String interruptedBindingIdentity;
         boolean resumed;
         boolean sameBindingResumed;
+        boolean resumeBindingMismatch;
+        int bindingTransitionAcceptedCount;
+        int bindingTransitionRejectedCount;
         boolean arrivalObserved;
         boolean intentReleasedAtArrival;
         int routeFailurePublications;
         boolean changedOfferExecuted;
         boolean cachedInitialOfferExecuted;
+        boolean tradeIntentAbsentAtChangedExecution;
+        String tradeIntentAtChangedExecution;
         boolean seekShelterObserved;
         boolean sleepingObserved;
         boolean homePromotionObserved;
@@ -528,9 +656,12 @@ public final class V4RuntimeWitnessTracker {
                     bootstrapLocalIntentReleased, changedBoardRediscovered,
                     initialOffer, changedOffer, executedOffer,
                     demandIdentity, routeStatus, intentIdentity, commuteSeeded, commuteSource,
-                    interrupted, navigationDiscarded, resumed, sameBindingResumed, arrivalObserved,
+                    interrupted, navigationDiscarded, resumed, sameBindingResumed,
+                    resumeBindingMismatch, interruptedBindingIdentity,
+                    bindingTransitionAcceptedCount, bindingTransitionRejectedCount, arrivalObserved,
                     intentReleasedAtArrival, routeFailurePublications, changedOfferExecuted,
-                    cachedInitialOfferExecuted, seekShelterObserved, sleepingObserved,
+                    cachedInitialOfferExecuted, tradeIntentAbsentAtChangedExecution,
+                    tradeIntentAtChangedExecution, seekShelterObserved, sleepingObserved,
                     homePromotionObserved, sleepBed,
                     new PathPlanningSnapshot(pathCallCount, firstPathCallTick,
                             lastPathCallTick, anyPathAvailable, anyPathUnreachable,

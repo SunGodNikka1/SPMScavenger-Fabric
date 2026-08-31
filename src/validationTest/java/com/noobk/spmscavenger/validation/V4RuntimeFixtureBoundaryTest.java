@@ -829,6 +829,49 @@ class V4RuntimeFixtureBoundaryTest {
     }
 
     @Test
+    void controlledInterruptionUsesPinnedNaturalSpmHostileTargeting() throws Exception {
+        Path hostSource = Path.of("../references/SocialPlayerMobs-v0.96.0/src/main/java/");
+        String playerMob = Files.readString(hostSource.resolve(
+                "games/brennan/playermob/entity/PlayerMobEntity.java"));
+        String resolver = Files.readString(hostSource.resolve(
+                "games/brennan/playermob/entity/DispositionResolver.java"));
+        String traits = Files.readString(hostSource.resolve(
+                "games/brennan/playermob/entity/DispositionTraits.java"));
+        assertTrue(playerMob.contains("new HurtByTargetGoal(this)"));
+        assertTrue(playerMob.contains("new NearestAttackableTargetGoal<>("));
+        assertTrue(playerMob.contains("reactionToward(candidate) == Reaction.FIGHT"));
+        assertTrue(resolver.contains("case HOSTILE_MOBS:"));
+        assertTrue(resolver.contains("fightFlight >= FF_FIGHT ? Reaction.FIGHT : Reaction.FLEE"));
+        assertTrue(traits.contains("if (!fightFlightExplicit)"));
+        assertTrue(traits.contains("fightFlight = random.nextInt(MAX + 1)"));
+
+        String factory = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4FixtureEntityFactory.java"));
+        assertEquals(10, V4FixtureEntityFactory.SUBJECT_FIGHT_FLIGHT);
+        assertTrue(factory.contains("SUBJECT_FIGHT_FLIGHT, null, null"),
+                "the canonical host spawn must pin only the fixture's fighter disposition");
+
+        String controller = Files.readString(Path.of(
+                "src/validation/java/com/noobk/spmscavenger/validation/"
+                        + "V4RuntimeCampaignController.java"));
+        assertTrue(controller.contains("zombie.setTarget(subject)"));
+        assertFalse(controller.contains("subject.setTarget("),
+                "validation must not manufacture the PlayerMob's reciprocal target");
+        assertTrue(controller.contains(
+                "subject.getTarget().getUUID().equals(session.interrupterId)"));
+
+        BlockPos subject = new BlockPos(180, -60, 8);
+        BlockPos settlement = new BlockPos(0, -60, 8);
+        BlockPos spawn = V4RuntimeCampaignController.interrupterSpawnPosition(
+                subject, settlement);
+        assertTrue(spawn.getX() < subject.getX(),
+                "hostile must be placed ahead along the natural commute direction");
+        assertEquals(subject.getZ(), spawn.getZ());
+        assertTrue(subject.distSqr(spawn) <= 16.0D);
+    }
+
+    @Test
     void deathCallbackPreservesDamageSourceAndNeverMasksMortality() throws Exception {
         String bootstrap = Files.readString(Path.of(
                 "src/validation/java/com/noobk/spmscavenger/validation/"

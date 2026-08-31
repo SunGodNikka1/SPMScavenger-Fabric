@@ -268,6 +268,103 @@ class V4RuntimeWitnessTrackerTest {
     }
 
     @Test
+    void resumeMustUseTheExactInterruptedObjectEvenWithinOneSettlement() {
+        VillageIntent interrupted = requiredTradeIntent(BlockPos.ZERO, 100L, demand());
+        VillageIntent replacement = requiredTradeIntent(new BlockPos(3, 0, 1), 120L, demand());
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, new Object(), INITIAL, 10L);
+        V4RuntimeWitnessTracker.openPhaseA(20L);
+        V4RuntimeWitnessTracker.observeDirective(MOB, interrupted, 21L);
+        V4RuntimeWitnessTracker.observeInterruption(MOB, interrupted, 22L);
+        V4RuntimeWitnessTracker.observeDirective(MOB, replacement, 23L);
+        V4RuntimeWitnessTracker.observeResume(MOB, replacement, 24L);
+
+        V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
+        assertTrue(snapshot.resumed());
+        assertFalse(snapshot.sameBindingResumed());
+        assertTrue(snapshot.resumeBindingMismatch());
+        assertTrue(V4RuntimeWitnessTracker.events().stream()
+                .anyMatch(event -> event.contains("COMMUTE_RESUME_REJECTED")));
+    }
+
+    @Test
+    void sameSettlementRekeyAdvancesTravelWithoutErasingInterruptionCertificate() {
+        VillageIntent original = requiredTradeIntent(BlockPos.ZERO, 100L, demand());
+        VillageIntent rekeyed = requiredTradeIntent(new BlockPos(3, 0, 1), 140L, demand());
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, new Object(), INITIAL, 10L);
+        V4RuntimeWitnessTracker.openPhaseA(20L);
+        V4RuntimeWitnessTracker.observeDirective(MOB, original, 21L);
+        V4RuntimeWitnessTracker.observeInterruption(MOB, original, 22L);
+        V4RuntimeWitnessTracker.observeResume(MOB, original, 23L);
+        V4RuntimeWitnessTracker.observeDirective(MOB, rekeyed, 24L);
+        V4RuntimeWitnessTracker.observeArrival(MOB, rekeyed, true, 25L);
+
+        V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
+        assertTrue(snapshot.sameBindingResumed(),
+                "the exact A interruption certificate must survive later A->B rekeying");
+        assertFalse(snapshot.resumeBindingMismatch());
+        assertEquals(1, snapshot.bindingTransitionAcceptedCount());
+        assertEquals(0, snapshot.bindingTransitionRejectedCount());
+        assertTrue(snapshot.arrivalObserved());
+        assertTrue(snapshot.intentReleasedAtArrival());
+        assertTrue(snapshot.intentIdentity().contains("@140/"));
+        assertTrue(V4RuntimeWitnessTracker.events().stream()
+                .anyMatch(event -> event.contains("SAME_SETTLEMENT_CANONICAL_REKEY")));
+    }
+
+    @Test
+    void unrelatedDemandOrSettlementReplacementIsRejected() {
+        VillageIntent original = requiredTradeIntent(BlockPos.ZERO, 100L, demand());
+        VillageIntent otherSettlement = requiredTradeIntent(
+                new BlockPos(100, 0, 0), 120L, demand());
+        WorkDemandPolicy.MaterialDemandIdentity otherDemand =
+                new WorkDemandPolicy.MaterialDemandIdentity(
+                        ResourceLocation.parse("minecraft:iron_ingot"),
+                        ResourceLocation.parse("spmscavenger:iron_axe_upgrade"));
+        VillageIntent otherConsumer = requiredTradeIntent(
+                new BlockPos(2, 0, 0), 130L, otherDemand);
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, new Object(), INITIAL, 10L);
+        V4RuntimeWitnessTracker.openPhaseA(20L);
+        V4RuntimeWitnessTracker.observeDirective(MOB, original, 21L);
+        V4RuntimeWitnessTracker.observeDirective(MOB, otherSettlement, 22L);
+        V4RuntimeWitnessTracker.observeDirective(MOB, otherConsumer, 23L);
+
+        V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
+        assertEquals(2, snapshot.bindingTransitionRejectedCount());
+        assertEquals(0, snapshot.bindingTransitionAcceptedCount());
+        assertTrue(snapshot.intentIdentity().contains("@100/"));
+        V4RuntimeWitnessTracker.observeArrival(MOB, otherSettlement, true, 24L);
+        assertFalse(V4RuntimeWitnessTracker.snapshot().arrivalObserved());
+    }
+
+    @Test
+    void changedTradeCannotPassWhileRequiredTradeIntentRemainsCurrent() {
+        Object backpack = new Object();
+        VillageIntent intent = requiredTradeIntent();
+        prepareCompletePhaseAEvidence(backpack, intent);
+        V4RuntimeWitnessTracker.observeTradeWithIntentState(
+                backpack, TRADER, CHANGED, true, Optional.of(intent), 90L);
+
+        V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
+        assertFalse(snapshot.tradeIntentAbsentAtChangedExecution());
+        assertTrue(snapshot.tradeIntentAtChangedExecution().contains("REQUIRED_TRADE"));
+        assertFalse(V4RuntimeCampaignController.phaseATradeEvidenceComplete(snapshot, 1, 0));
+    }
+
+    @Test
+    void releasedArrivalAndEmptyCurrentIntentRemainEligibleForPhaseAPass() {
+        Object backpack = new Object();
+        VillageIntent intent = requiredTradeIntent();
+        prepareCompletePhaseAEvidence(backpack, intent);
+        V4RuntimeWitnessTracker.observeTradeWithIntentState(
+                backpack, TRADER, CHANGED, true, Optional.empty(), 90L);
+
+        V4RuntimeWitnessTracker.Snapshot snapshot = V4RuntimeWitnessTracker.snapshot();
+        assertTrue(snapshot.tradeIntentAbsentAtChangedExecution());
+        assertEquals(null, snapshot.tradeIntentAtChangedExecution());
+        assertTrue(V4RuntimeCampaignController.phaseATradeEvidenceComplete(snapshot, 1, 0));
+    }
+
+    @Test
     void activeRevalidationBeforeAnInterruptionDoesNotFabricateResumeEvidence() {
         VillageIntent intent = new VillageIntent(
                 VillageIntent.Kind.REQUIRED_TRADE,
@@ -371,13 +468,35 @@ class V4RuntimeWitnessTrackerTest {
     }
 
     private static VillageIntent requiredTradeIntent() {
+        return requiredTradeIntent(BlockPos.ZERO, 100L, demand());
+    }
+
+    private static VillageIntent requiredTradeIntent(
+            BlockPos anchor, long openedAtTick,
+            WorkDemandPolicy.MaterialDemandIdentity identity) {
         return new VillageIntent(
                 VillageIntent.Kind.REQUIRED_TRADE,
-                new SettlementKey(Level.OVERWORLD, BlockPos.ZERO),
-                100L,
-                Optional.of(new WorkDemandPolicy.MaterialDemandIdentity(
+                new SettlementKey(Level.OVERWORLD, anchor),
+                openedAtTick,
+                Optional.of(identity));
+    }
+
+    private static WorkDemandPolicy.MaterialDemandIdentity demand() {
+        return new WorkDemandPolicy.MaterialDemandIdentity(
                         ResourceLocation.parse("minecraft:iron_ingot"),
-                        ResourceLocation.parse("spmscavenger:iron_pickaxe_upgrade"))));
+                        ResourceLocation.parse("spmscavenger:iron_pickaxe_upgrade"));
+    }
+
+    private static void prepareCompletePhaseAEvidence(Object backpack, VillageIntent intent) {
+        V4RuntimeWitnessTracker.arm(MOB, TRADER, backpack, INITIAL, 10L);
+        V4RuntimeWitnessTracker.markChangedOffer(CHANGED, 20L);
+        V4RuntimeWitnessTracker.openPhaseA(30L);
+        V4RuntimeWitnessTracker.observeBoard(MOB, TRADER, CHANGED, 31L);
+        V4RuntimeWitnessTracker.observeDirective(MOB, intent, 32L);
+        V4RuntimeWitnessTracker.observeInterruption(MOB, intent, 40L);
+        V4RuntimeWitnessTracker.observeNavigationStop(MOB, 41L);
+        V4RuntimeWitnessTracker.observeResume(MOB, intent, 50L);
+        V4RuntimeWitnessTracker.observeArrival(MOB, intent, true, 80L);
     }
 
     private static MerchantOffer offer(int emeraldCost, ItemStack result) {

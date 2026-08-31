@@ -36,6 +36,7 @@ final class V4FixtureEntityFactory {
     private static final String SUBJECT_TAG = "spm_v4.subject";
     private static final String TRADER_TAG = "spm_v4.trader";
     private static final String HELPER_TAG = "spm_v4.helper";
+    static final int SUBJECT_FIGHT_FLIGHT = 10;
 
     private V4FixtureEntityFactory() {
     }
@@ -170,7 +171,7 @@ final class V4FixtureEntityFactory {
             diagnostics.canonicalHostSpawnApiPresent = true;
             Object result = summon.invoke(null,
                     level, pos.getX() + 0.5D, (double) pos.getY(), pos.getZ() + 0.5D, 0.0F,
-                    null, null, null);
+                    SUBJECT_FIGHT_FLIGHT, null, null);
             return result instanceof Entity entity ? entity : null;
         } catch (InvocationTargetException failure) {
             Throwable cause = failure.getCause() == null ? failure : failure.getCause();
@@ -301,6 +302,8 @@ final class V4FixtureEntityFactory {
                     + " canonicalHostSpawnReturned=" + yesNo(canonicalHostSpawnReturned)
                     + " spawnedUUID=" + printable(spawnedUUID)
                     + " spawnedRuntimeClass=" + spawnedRuntimeClass);
+            lines.add("subjectFightFlight=" + SUBJECT_FIGHT_FLIGHT
+                    + " source=canonical PlayerMobSummon explicit fixture trait");
             lines.add("expectedTagsPresent=" + yesNo(expectedTagsPresent)
                     + " levelEntityResolvable=" + yesNo(levelEntityResolvable)
                     + " PlayerMobs.isPlayerMob=" + yesNo(playerMobsIsPlayerMob));
